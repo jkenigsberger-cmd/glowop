@@ -47,6 +47,13 @@ const COFFEE_CORNER_RATE = 15;
 // ── helpers ───────────────────────────────────────────────────────────────────
 const parse = (str, fallback) => { try { const r = JSON.parse(str); return Array.isArray(r) ? r : fallback; } catch { return fallback; } };
 
+// Calculate nights between two date strings (YYYY-MM-DD)
+const calcNights = (arrival, departure) => {
+  if (!arrival || !departure) return 1;
+  const diff = (new Date(departure) - new Date(arrival)) / (1000 * 60 * 60 * 24);
+  return Math.max(1, Math.round(diff));
+};
+
 // Suggest weekend vs midweek from arrival date (Thu or Fri = weekend)
 // Returns a suggested rate_type string; does NOT hard-lock anything.
 const suggestLodgingRateType = (arrivalDate, groupType) => {
@@ -91,7 +98,7 @@ function RowTotal({ amount }) {
   return <div className="text-xs font-medium text-foreground whitespace-nowrap">₪{Math.round(amount).toLocaleString()}</div>;
 }
 
-function StudentLodgingSection({ lines, setLines, suggestedRateType, groupType }) {
+function StudentLodgingSection({ lines, setLines, suggestedRateType, groupType, defaultPax, defaultNights }) {
   const isDayUse = groupType === "DAY_USE";
 
   const update = (idx, field, val) => {
@@ -101,7 +108,7 @@ function StudentLodgingSection({ lines, setLines, suggestedRateType, groupType }
   const addRow = () => {
     const rateType = suggestedRateType || "midweek_lodging";
     const isDay = rateType === "day_activity";
-    setLines(p => [...p, { rate_type: rateType, pax: 0, nights: isDay ? 1 : 1 }]);
+    setLines(p => [...p, { rate_type: rateType, pax: defaultPax || 0, nights: isDay ? 1 : (defaultNights || 1) }]);
   };
 
   return (
@@ -152,7 +159,7 @@ function StudentLodgingSection({ lines, setLines, suggestedRateType, groupType }
   );
 }
 
-function AdultLodgingSection({ lines, setLines }) {
+function AdultLodgingSection({ lines, setLines, defaultNights }) {
   const update = (idx, field, val) => {
     setLines(prev => prev.map((r, i) => (i !== idx ? r : { ...r, [field]: val })));
   };
@@ -189,7 +196,7 @@ function AdultLodgingSection({ lines, setLines }) {
           </div>
         </div>
       ))}
-      <Button type="button" variant="outline" size="sm" onClick={() => setLines(p => [...p, { tent_type: "BED3", tent_count: 0, nights: 1 }])} className="gap-1 text-xs h-7">
+      <Button type="button" variant="outline" size="sm" onClick={() => setLines(p => [...p, { tent_type: "BED3", tent_count: 0, nights: defaultNights || 1 }])} className="gap-1 text-xs h-7">
         <Plus className="w-3 h-3" /> הוסף שורה
       </Button>
     </div>
@@ -424,7 +431,25 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
     quote ? (quote.coffee_corner_pax > 0) : false
   );
 
-  const [studentLodging, setStudentLodging] = useState(parse(quote?.student_lodging_lines, []));
+  // Pre-compute initial values for auto-fill (used only during useState init for new quotes)
+  const initArrival    = quote?.arrival_date    || group?.arrival_date    || "";
+  const initDeparture  = quote?.departure_date  || group?.departure_date  || "";
+  const initNights     = calcNights(initArrival, initDeparture);
+  const initEstPax     = Number(quote?.estimated_pax   ?? group?.total_pax    ?? 0);
+  const initStaff      = Number(quote?.staff_count     ?? group?.staff_count  ?? 0);
+  const initParticipants = Math.max(0, initEstPax - initStaff);
+  const initRateType   = suggestLodgingRateType(initArrival, group?.group_type || "LODGING");
+
+  // For new quotes with no saved lines, auto-create a pre-filled student lodging row
+  const initStudentLodging = () => {
+    const saved = parse(quote?.student_lodging_lines, null);
+    if (saved !== null) return saved; // editing: use saved data
+    if (initParticipants === 0 && initNights === 1) return []; // no useful data yet
+    const isDay = initRateType === "day_activity";
+    return [{ rate_type: initRateType, pax: initParticipants, nights: isDay ? 1 : initNights }];
+  };
+
+  const [studentLodging, setStudentLodging] = useState(initStudentLodging);
   const [adultLodging,   setAdultLodging]   = useState(parse(quote?.adult_lodging_lines,  []));
   const [workshops,      setWorkshops]      = useState(parse(quote?.workshop_lines,        []));
   const [lectures,       setLectures]       = useState(parse(quote?.lecture_lines,         []));
@@ -438,6 +463,9 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
   const estimatedPax   = Number(form.estimated_pax || 0);
   const staffCount     = Number(form.staff_count   || 0);
   const participantCount = Math.max(0, estimatedPax - staffCount);
+
+  // Nights from current form dates (live)
+  const nights = calcNights(form.arrival_date, form.departure_date);
 
   // Suggested lodging rate type from arrival date
   const suggestedRateType = suggestLodgingRateType(form.arrival_date, groupType);
@@ -578,8 +606,10 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
             setLines={setStudentLodging}
             suggestedRateType={suggestedRateType}
             groupType={groupType}
+            defaultPax={participantCount}
+            defaultNights={nights}
           />
-          <AdultLodgingSection   lines={adultLodging}   setLines={setAdultLodging} />
+          <AdultLodgingSection lines={adultLodging} setLines={setAdultLodging} defaultNights={nights} />
           <WorkshopSection       lines={workshops}       setLines={setWorkshops} />
           <LectureSection        lines={lectures}        setLines={setLectures} />
 
