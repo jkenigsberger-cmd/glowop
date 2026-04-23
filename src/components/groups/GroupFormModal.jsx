@@ -10,39 +10,61 @@ import { Textarea } from "@/components/ui/textarea";
 export default function GroupFormModal({ group, onClose, onSaved }) {
   const isEdit = !!group;
   const [form, setForm] = useState({
-    group_name: group?.group_name || "",
-    group_type: group?.group_type || "LODGING",
-    arrival_date: group?.arrival_date || "",
+    group_name:    group?.group_name    || "",
+    group_type:    group?.group_type    || "LODGING",
+    arrival_date:  group?.arrival_date  || "",
     departure_date: group?.departure_date || "",
-    total_pax: group?.total_pax || "",
-    staff_count: group?.staff_count || "",
-    participant_count: group?.participant_count || "",
-    boys_count: group?.boys_count || "",
-    girls_count: group?.girls_count || "",
-    contact_name: group?.contact_name || "",
+    total_pax:     group?.total_pax     ?? "",
+    staff_count:   group?.staff_count   ?? "",
+    boys_count:    group?.boys_count    ?? "",
+    girls_count:   group?.girls_count   ?? "",
+    contact_name:  group?.contact_name  || "",
     contact_phone: group?.contact_phone || "",
     contact_email: group?.contact_email || "",
     internal_notes: group?.internal_notes || "",
-    status: group?.status || "DRAFT",
+    status:        group?.status        || "DRAFT",
   });
   const [saving, setSaving] = useState(false);
 
-  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+  // ── Derived values ────────────────────────────────────────────────────────
+  const totalPax   = Number(form.total_pax   || 0);
+  const staffCount = Number(form.staff_count || 0);
+  const boysCount  = Number(form.boys_count  || 0);
+  const girlsCount = Number(form.girls_count || 0);
 
-  const paxMismatch = (() => {
-    const total = Number(form.total_pax);
-    const staff = Number(form.staff_count);
-    const pax = Number(form.participant_count);
-    if (!total || (!staff && !pax)) return false;
-    return (staff + pax) !== total;
-  })();
+  // participant_count is always derived, never manually entered
+  const participantCount = Math.max(0, totalPax - staffCount);
 
+  // Validation warnings
+  const staffExceedsTotal = staffCount > totalPax && totalPax > 0;
+  const genderExceedsPax  = (boysCount + girlsCount) > participantCount && participantCount > 0;
+
+  // ── Field setters with auto-fill logic ───────────────────────────────────
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const handleBoysChange = (val) => {
+    const boys = Math.max(0, Math.min(Number(val || 0), participantCount));
+    const girls = Math.max(0, participantCount - boys);
+    setForm(f => ({ ...f, boys_count: boys, girls_count: girls }));
+  };
+
+  const handleGirlsChange = (val) => {
+    const girls = Math.max(0, Math.min(Number(val || 0), participantCount));
+    const boys = Math.max(0, participantCount - girls);
+    setForm(f => ({ ...f, girls_count: girls, boys_count: boys }));
+  };
+
+  // ── Submit ────────────────────────────────────────────────────────────────
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
-    const payload = { ...form };
-    ["total_pax","staff_count","participant_count","boys_count","girls_count"].forEach(k => {
-      if (payload[k] !== "") payload[k] = Number(payload[k]);
+    const payload = {
+      ...form,
+      participant_count: participantCount,
+    };
+    // coerce numeric fields
+    ["total_pax", "staff_count", "participant_count", "boys_count", "girls_count"].forEach(k => {
+      if (payload[k] !== "" && payload[k] !== undefined) payload[k] = Number(payload[k]);
       else delete payload[k];
     });
     if (isEdit) await base44.entities.Group.update(group.id, payload);
@@ -51,6 +73,8 @@ export default function GroupFormModal({ group, onClose, onSaved }) {
     onSaved();
   };
 
+  const isDayUse = form.group_type === "DAY_USE";
+
   return (
     <Dialog open onOpenChange={onClose}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto" dir="rtl">
@@ -58,6 +82,7 @@ export default function GroupFormModal({ group, onClose, onSaved }) {
           <DialogTitle className="text-right">{isEdit ? "עריכת קבוצה" : "קבוצה חדשה"}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 text-sm">
+
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2 space-y-1">
               <Label>שם קבוצה *</Label>
@@ -89,17 +114,12 @@ export default function GroupFormModal({ group, onClose, onSaved }) {
               <Input type="date" value={form.arrival_date} onChange={e => set("arrival_date", e.target.value)} required />
             </div>
             <div className="space-y-1">
-              <Label>תאריך עזיבה</Label>
+              <Label>{isDayUse ? "תאריך האירוע (אופציונלי)" : "תאריך עזיבה"}</Label>
               <Input type="date" value={form.departure_date} onChange={e => set("departure_date", e.target.value)} />
             </div>
           </div>
 
-          {paxMismatch && (
-            <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
-              ⚠️ סה"כ משתתפים ({form.total_pax}) אינו שווה לצוות + חניכים ({Number(form.staff_count) + Number(form.participant_count)})
-            </div>
-          )}
-
+          {/* Participant counts */}
           <div className="grid grid-cols-3 gap-3">
             <div className="space-y-1">
               <Label>סה"כ משתתפים</Label>
@@ -110,19 +130,47 @@ export default function GroupFormModal({ group, onClose, onSaved }) {
               <Input type="number" min="0" value={form.staff_count} onChange={e => set("staff_count", e.target.value)} />
             </div>
             <div className="space-y-1">
-              <Label>חניכים</Label>
-              <Input type="number" min="0" value={form.participant_count} onChange={e => set("participant_count", e.target.value)} />
-            </div>
-            <div className="space-y-1">
-              <Label>בנים</Label>
-              <Input type="number" min="0" value={form.boys_count} onChange={e => set("boys_count", e.target.value)} />
-            </div>
-            <div className="space-y-1">
-              <Label>בנות</Label>
-              <Input type="number" min="0" value={form.girls_count} onChange={e => set("girls_count", e.target.value)} />
+              <Label>חניכים (מחושב)</Label>
+              <div className="h-9 flex items-center px-3 rounded-md border bg-muted/40 text-sm font-medium">
+                {participantCount}
+              </div>
             </div>
           </div>
 
+          {/* Warnings */}
+          {staffExceedsTotal && (
+            <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+              ⚠️ מספר הצוות ({staffCount}) גדול מסה"כ המשתתפים ({totalPax})
+            </div>
+          )}
+
+          {/* Gender split */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label>בנים</Label>
+              <Input
+                type="number" min="0" max={participantCount}
+                value={form.boys_count}
+                onChange={e => handleBoysChange(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>בנות</Label>
+              <Input
+                type="number" min="0" max={participantCount}
+                value={form.girls_count}
+                onChange={e => handleGirlsChange(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {genderExceedsPax && (
+            <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+              ⚠️ סה"כ בנים + בנות ({boysCount + girlsCount}) עולה על מספר החניכים ({participantCount})
+            </div>
+          )}
+
+          {/* Contact */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label>איש קשר</Label>

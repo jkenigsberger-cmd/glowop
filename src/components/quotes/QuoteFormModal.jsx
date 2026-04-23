@@ -47,6 +47,15 @@ const COFFEE_CORNER_RATE = 15;
 // ── helpers ───────────────────────────────────────────────────────────────────
 const parse = (str, fallback) => { try { const r = JSON.parse(str); return Array.isArray(r) ? r : fallback; } catch { return fallback; } };
 
+// Suggest weekend vs midweek from arrival date (Thu or Fri = weekend)
+// Returns a suggested rate_type string; does NOT hard-lock anything.
+const suggestLodgingRateType = (arrivalDate, groupType) => {
+  if (groupType === "DAY_USE") return "day_activity";
+  if (!arrivalDate) return "midweek_lodging";
+  const day = new Date(arrivalDate).getDay(); // 0=Sun … 6=Sat
+  return (day === 4 || day === 5) ? "weekend_lodging" : "midweek_lodging";
+};
+
 const calcStudentLodging = (r) => {
   const rate = STUDENT_LODGING_RATES[r.rate_type]?.rate ?? Number(r.rate ?? 0);
   const isDay = r.rate_type === "day_activity";
@@ -82,50 +91,61 @@ function RowTotal({ amount }) {
   return <div className="text-xs font-medium text-foreground whitespace-nowrap">₪{Math.round(amount).toLocaleString()}</div>;
 }
 
-function StudentLodgingSection({ lines, setLines }) {
+function StudentLodgingSection({ lines, setLines, suggestedRateType, groupType }) {
+  const isDayUse = groupType === "DAY_USE";
+
   const update = (idx, field, val) => {
-    setLines(prev => prev.map((r, i) => {
-      if (i !== idx) return r;
-      const u = { ...r, [field]: val };
-      return u;
-    }));
+    setLines(prev => prev.map((r, i) => (i !== idx ? r : { ...r, [field]: val })));
   };
+
+  const addRow = () => {
+    const rateType = suggestedRateType || "midweek_lodging";
+    const isDay = rateType === "day_activity";
+    setLines(p => [...p, { rate_type: rateType, pax: 0, nights: isDay ? 1 : 1 }]);
+  };
+
   return (
     <div className="space-y-2">
-      <SectionHeader title="לינה — תלמידים" subtitle="מחיר לאדם" />
-      {lines.map((r, idx) => (
-        <div key={idx} className="grid grid-cols-12 gap-2 items-end text-xs">
-          <div className="col-span-4 space-y-0.5">
-            <div className="text-muted-foreground text-[10px]">סוג</div>
-            <Select value={r.rate_type} onValueChange={v => update(idx, "rate_type", v)}>
-              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {Object.entries(STUDENT_LODGING_RATES).map(([k, v]) => (
-                  <SelectItem key={k} value={k}>{v.label} — ₪{v.rate}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="col-span-2 space-y-0.5">
-            <div className="text-muted-foreground text-[10px]">תלמידים</div>
-            <Input className="h-8 text-xs" type="number" min="0" value={r.pax} onChange={e => update(idx, "pax", e.target.value)} />
-          </div>
-          {r.rate_type !== "day_activity" && (
-            <div className="col-span-2 space-y-0.5">
-              <div className="text-muted-foreground text-[10px]">לילות</div>
-              <Input className="h-8 text-xs" type="number" min="1" value={r.nights} onChange={e => update(idx, "nights", e.target.value)} />
+      <SectionHeader
+        title="לינה — תלמידים"
+        subtitle={isDayUse ? "יום פעילות בלבד — ₪125 לאדם" : suggestedRateType === "weekend_lodging" ? "זוהה: לינת סוף שבוע (ניתן לשנות)" : "זוהה: לינת אמצע שבוע (ניתן לשנות)"}
+      />
+      {lines.map((r, idx) => {
+        const isDay = r.rate_type === "day_activity";
+        return (
+          <div key={idx} className="grid grid-cols-12 gap-2 items-end text-xs">
+            <div className="col-span-4 space-y-0.5">
+              <div className="text-muted-foreground text-[10px]">סוג</div>
+              <Select value={r.rate_type} onValueChange={v => update(idx, "rate_type", v)} disabled={isDayUse}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {Object.entries(STUDENT_LODGING_RATES).map(([k, v]) => (
+                    <SelectItem key={k} value={k}>{v.label} — ₪{v.rate}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-          )}
-          <div className={r.rate_type !== "day_activity" ? "col-span-3" : "col-span-5"} />
-          <div className="col-span-1 flex items-center gap-1 justify-end">
-            <RowTotal amount={calcStudentLodging(r)} />
-            <button type="button" onClick={() => setLines(p => p.filter((_, i) => i !== idx))} className="text-muted-foreground hover:text-red-500 mr-1">
-              <Trash2 className="w-3 h-3" />
-            </button>
+            <div className="col-span-2 space-y-0.5">
+              <div className="text-muted-foreground text-[10px]">תלמידים</div>
+              <Input className="h-8 text-xs" type="number" min="0" value={r.pax} onChange={e => update(idx, "pax", e.target.value)} />
+            </div>
+            {!isDay && (
+              <div className="col-span-2 space-y-0.5">
+                <div className="text-muted-foreground text-[10px]">לילות</div>
+                <Input className="h-8 text-xs" type="number" min="1" value={r.nights} onChange={e => update(idx, "nights", e.target.value)} />
+              </div>
+            )}
+            <div className={!isDay ? "col-span-3" : "col-span-5"} />
+            <div className="col-span-1 flex items-center gap-1 justify-end">
+              <RowTotal amount={calcStudentLodging(r)} />
+              <button type="button" onClick={() => setLines(p => p.filter((_, i) => i !== idx))} className="text-muted-foreground hover:text-red-500 mr-1">
+                <Trash2 className="w-3 h-3" />
+              </button>
+            </div>
           </div>
-        </div>
-      ))}
-      <Button type="button" variant="outline" size="sm" onClick={() => setLines(p => [...p, { rate_type: "midweek_lodging", pax: 0, nights: 1 }])} className="gap-1 text-xs h-7">
+        );
+      })}
+      <Button type="button" variant="outline" size="sm" onClick={addRow} className="gap-1 text-xs h-7">
         <Plus className="w-3 h-3" /> הוסף שורה
       </Button>
     </div>
@@ -379,6 +399,7 @@ function AdjustmentSection({ lines, setLines }) {
 // ── Main Modal ────────────────────────────────────────────────────────────────
 export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
   const isEdit = !!quote;
+  const groupType = group?.group_type || "LODGING";
 
   const [form, setForm] = useState({
     quote_number:    quote?.quote_number    || "",
@@ -390,15 +411,18 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
     client_tax_id:   quote?.client_tax_id   || "",
     arrival_date:    quote?.arrival_date    || group?.arrival_date   || "",
     departure_date:  quote?.departure_date  || group?.departure_date || "",
-    estimated_pax:   quote?.estimated_pax   || group?.total_pax     || "",
-    staff_count:     quote?.staff_count     || group?.staff_count   || "",
-    participant_count: quote?.participant_count || group?.participant_count || "",
-    coffee_corner_pax: quote?.coffee_corner_pax || "",
-    discount_percent:  quote?.discount_percent  || 0,
+    estimated_pax:   quote?.estimated_pax   ?? group?.total_pax     ?? "",
+    staff_count:     quote?.staff_count     ?? group?.staff_count   ?? "",
+    discount_percent: quote?.discount_percent ?? 0,
     payment_terms:   quote?.payment_terms   || "",
     valid_until:     quote?.valid_until     || "",
     internal_notes:  quote?.internal_notes  || "",
   });
+
+  // Coffee Corner: yes/no toggle (not a pax count input)
+  const [coffeeEnabled, setCoffeeEnabled] = useState(
+    quote ? (quote.coffee_corner_pax > 0) : false
+  );
 
   const [studentLodging, setStudentLodging] = useState(parse(quote?.student_lodging_lines, []));
   const [adultLodging,   setAdultLodging]   = useState(parse(quote?.adult_lodging_lines,  []));
@@ -410,12 +434,22 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
+  // Derived: participant_count = estimated_pax - staff_count
+  const estimatedPax   = Number(form.estimated_pax || 0);
+  const staffCount     = Number(form.staff_count   || 0);
+  const participantCount = Math.max(0, estimatedPax - staffCount);
+
+  // Suggested lodging rate type from arrival date
+  const suggestedRateType = suggestLodgingRateType(form.arrival_date, groupType);
+
+  // Coffee: staff_count × ₪15, only if enabled and staff_count > 0
+  const coffeeTotal = coffeeEnabled && staffCount > 0 ? staffCount * COFFEE_CORNER_RATE : 0;
+
   // Live totals
   const studentLodgingTotal = studentLodging.reduce((s, r) => s + calcStudentLodging(r), 0);
   const adultLodgingTotal   = adultLodging.reduce((s, r) => s + calcAdultLodging(r), 0);
   const workshopTotal       = workshops.reduce((s, r) => s + calcWorkshop(r), 0);
   const lectureTotal        = lectures.reduce((s, r) => s + calcLecture(r), 0);
-  const coffeeTotal         = Number(form.coffee_corner_pax || 0) * COFFEE_CORNER_RATE;
   const addonTotal          = addons.reduce((s, r) => s + calcAddon(r), 0);
   const adjustmentTotal     = adjustments.reduce((s, r) => s + Number(r.amount || 0), 0);
 
@@ -443,10 +477,11 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
       advance_payment:  advance,
       balance_payment:  balance,
       version:          Number(form.version),
-      estimated_pax:    form.estimated_pax    !== "" ? Number(form.estimated_pax)    : undefined,
-      staff_count:      form.staff_count      !== "" ? Number(form.staff_count)      : undefined,
-      participant_count: form.participant_count !== "" ? Number(form.participant_count) : undefined,
-      coffee_corner_pax: form.coffee_corner_pax !== "" ? Number(form.coffee_corner_pax) : undefined,
+      estimated_pax:    estimatedPax  || undefined,
+      staff_count:      staffCount    || undefined,
+      participant_count: participantCount || undefined,
+      // coffee_corner_pax stores staff_count when on, 0 when off
+      coffee_corner_pax: coffeeEnabled ? staffCount : 0,
       discount_percent: Number(form.discount_percent || 0),
     };
     if (isEdit) await base44.entities.Quote.update(quote.id, payload);
@@ -530,26 +565,47 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
               <Input type="number" min="0" value={form.staff_count} onChange={e => set("staff_count", e.target.value)} />
             </div>
             <div className="space-y-1">
-              <Label>תלמידים / חניכים</Label>
-              <Input type="number" min="0" value={form.participant_count} onChange={e => set("participant_count", e.target.value)} />
+              <Label>חניכים (מחושב)</Label>
+              <div className="h-9 flex items-center px-3 rounded-md border bg-muted/40 text-sm font-medium">
+                {participantCount}
+              </div>
             </div>
           </div>
 
           {/* ── Pricing sections ── */}
-          <StudentLodgingSection lines={studentLodging} setLines={setStudentLodging} />
+          <StudentLodgingSection
+            lines={studentLodging}
+            setLines={setStudentLodging}
+            suggestedRateType={suggestedRateType}
+            groupType={groupType}
+          />
           <AdultLodgingSection   lines={adultLodging}   setLines={setAdultLodging} />
           <WorkshopSection       lines={workshops}       setLines={setWorkshops} />
           <LectureSection        lines={lectures}        setLines={setLectures} />
 
           {/* Coffee Corner */}
           <div className="space-y-2">
-            <SectionHeader title="פינת קפה" subtitle={`₪${COFFEE_CORNER_RATE} לאדם`} />
-            <div className="flex items-end gap-4">
-              <div className="space-y-1 w-40">
-                <Label className="text-xs">מס' אנשים</Label>
-                <Input type="number" min="0" value={form.coffee_corner_pax} onChange={e => set("coffee_corner_pax", e.target.value)} />
-              </div>
-              <div className="text-sm font-semibold pb-2">= ₪{coffeeTotal.toLocaleString()}</div>
+            <SectionHeader title="פינת קפה" subtitle={`₪${COFFEE_CORNER_RATE} לאיש צוות`} />
+            <div className="flex items-center gap-4">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={coffeeEnabled}
+                  onChange={e => setCoffeeEnabled(e.target.checked)}
+                  className="w-4 h-4"
+                />
+                <span className="text-sm">כלול פינת קפה</span>
+              </label>
+              {coffeeEnabled && (
+                <span className="text-sm text-muted-foreground">
+                  {staffCount} אנשי צוות × ₪{COFFEE_CORNER_RATE}
+                  {" = "}
+                  <span className="font-semibold text-foreground">₪{coffeeTotal.toLocaleString()}</span>
+                </span>
+              )}
+              {coffeeEnabled && staffCount === 0 && (
+                <span className="text-xs text-amber-700">הזן מספר אנשי צוות לחישוב</span>
+              )}
             </div>
           </div>
 
