@@ -1,0 +1,31 @@
+{
+  "name": "Neighborhood",
+  "type": "object",
+  "properties": {
+    "code": {
+      "type": "string",
+      "description": "Canonical code: N1-N7, VIP"
+    },
+    "name": {
+      "type": "string",
+      "description": "Hebrew display name"
+    },
+    "sort_order": {
+      "type": "number",
+      "description": "Display order 1-8"
+    },
+    "is_vip": {
+      "type": "boolean",
+      "description": "True only for VIP neighborhood"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Admin notes"
+    }
+  },
+  "required": [
+    "code",
+    "name",
+    "sort_order"
+  ]
+}

@@ -1,0 +1,64 @@
+{
+  "name": "Facility",
+  "type": "object",
+  "properties": {
+    "facility_area_id": {
+      "type": "string",
+      "description": "FK to FacilityArea"
+    },
+    "code": {
+      "type": "string",
+      "description": "Canonical code e.g. area_dining_male_s1"
+    },
+    "label": {
+      "type": "string",
+      "description": "Display label e.g. \u05de\u05e7\u05dc\u05d7\u05ea 1"
+    },
+    "unit_number": {
+      "type": "number",
+      "description": "Sequential number within area"
+    },
+    "facility_type": {
+      "type": "string",
+      "enum": [
+        "SHOWER",
+        "TOILET"
+      ],
+      "default": "SHOWER"
+    },
+    "gender": {
+      "type": "string",
+      "enum": [
+        "MALE",
+        "FEMALE",
+        "UNISEX"
+      ],
+      "default": "UNISEX"
+    },
+    "is_accessible": {
+      "type": "boolean",
+      "default": false
+    },
+    "working_status": {
+      "type": "string",
+      "enum": [
+        "WORKING",
+        "BROKEN",
+        "MAINTENANCE",
+        "CLOSED"
+      ],
+      "default": "WORKING"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "facility_area_id",
+    "code",
+    "label",
+    "unit_number",
+    "facility_type",
+    "gender"
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "name": "FacilityArea",
+  "type": "object",
+  "properties": {
+    "code": {
+      "type": "string",
+      "description": "Canonical code e.g. area_dining_male"
+    },
+    "name": {
+      "type": "string",
+      "description": "Hebrew display name"
+    },
+    "gender": {
+      "type": "string",
+      "enum": [
+        "MALE",
+        "FEMALE",
+        "UNISEX"
+      ],
+      "default": "UNISEX"
+    },
+    "sort_order": {
+      "type": "number"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "code",
+    "name",
+    "gender",
+    "sort_order"
+  ]
+}

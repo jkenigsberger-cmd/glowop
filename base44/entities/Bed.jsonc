@@ -1,0 +1,60 @@
+{
+  "name": "Bed",
+  "type": "object",
+  "properties": {
+    "tent_id": {
+      "type": "string",
+      "description": "FK to Tent"
+    },
+    "code": {
+      "type": "string",
+      "description": "Canonical code e.g. 11\u05d0-1, 41-1"
+    },
+    "label": {
+      "type": "string",
+      "description": "Display label e.g. \u05de\u05d9\u05d8\u05d4 1"
+    },
+    "bed_type": {
+      "type": "string",
+      "enum": [
+        "SINGLE",
+        "BUNK_TOP",
+        "BUNK_BOTTOM"
+      ],
+      "default": "SINGLE"
+    },
+    "bunk_position": {
+      "type": "number",
+      "description": "1-4 for bunk pairs, null for singles"
+    },
+    "working_status": {
+      "type": "string",
+      "enum": [
+        "WORKING",
+        "BROKEN",
+        "MAINTENANCE",
+        "CLOSED"
+      ],
+      "default": "WORKING"
+    },
+    "bed_status": {
+      "type": "string",
+      "enum": [
+        "FREE",
+        "RESERVED",
+        "OCCUPIED",
+        "BLOCKED"
+      ],
+      "default": "FREE"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "tent_id",
+    "code",
+    "label",
+    "bed_type"
+  ]
+}

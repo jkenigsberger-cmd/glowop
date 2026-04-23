@@ -1,0 +1,48 @@
+{
+  "name": "ActivitySpace",
+  "type": "object",
+  "properties": {
+    "code": {
+      "type": "string",
+      "description": "Canonical code e.g. bunker_1, ohel_moed, dining_hall"
+    },
+    "name": {
+      "type": "string",
+      "description": "Hebrew display name"
+    },
+    "space_type": {
+      "type": "string",
+      "enum": [
+        "BUNKER",
+        "OHEL_MOED",
+        "DINING_HALL"
+      ],
+      "default": "BUNKER"
+    },
+    "capacity": {
+      "type": "number"
+    },
+    "is_bookable": {
+      "type": "boolean",
+      "default": true
+    },
+    "working_status": {
+      "type": "string",
+      "enum": [
+        "WORKING",
+        "BROKEN",
+        "MAINTENANCE",
+        "CLOSED"
+      ],
+      "default": "WORKING"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "code",
+    "name",
+    "space_type"
+  ]
+}

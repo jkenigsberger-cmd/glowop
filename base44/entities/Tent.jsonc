@@ -1,0 +1,65 @@
+{
+  "name": "Tent",
+  "type": "object",
+  "properties": {
+    "neighborhood_id": {
+      "type": "string",
+      "description": "FK to Neighborhood"
+    },
+    "code": {
+      "type": "string",
+      "description": "Canonical code e.g. 11\u05d0, 11\u05d1, 41, 80"
+    },
+    "tent_number": {
+      "type": "string",
+      "description": "Pair/group number e.g. 11, 21, 41"
+    },
+    "sub_label": {
+      "type": "string",
+      "description": "\u05d0 or \u05d1 for double tents, null for singles"
+    },
+    "tent_type": {
+      "type": "string",
+      "enum": [
+        "STANDARD",
+        "VIP"
+      ],
+      "default": "STANDARD"
+    },
+    "capacity": {
+      "type": "number",
+      "description": "Number of beds in this tent"
+    },
+    "has_private_bathroom": {
+      "type": "boolean",
+      "default": false
+    },
+    "has_private_shower": {
+      "type": "boolean",
+      "default": false
+    },
+    "is_accessible": {
+      "type": "boolean",
+      "default": false
+    },
+    "working_status": {
+      "type": "string",
+      "enum": [
+        "WORKING",
+        "BROKEN",
+        "MAINTENANCE",
+        "CLOSED"
+      ],
+      "default": "WORKING"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "neighborhood_id",
+    "code",
+    "tent_type",
+    "capacity"
+  ]
+}
