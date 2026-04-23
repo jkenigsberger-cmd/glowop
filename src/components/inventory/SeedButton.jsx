@@ -79,7 +79,7 @@ export default function SeedButton({ onSeeded }) {
                 <p>✅ {report.tents} אוהלים</p>
                 <p>✅ {report.beds} מיטות</p>
                 <p>✅ {report.facilityAreas} אזורי שירותים</p>
-                <p>✅ {report.facilities} מתקנים</p>
+                <p>✅ {report.facilities}/46 מתקנים</p>
                 <p>✅ {report.activitySpaces} מרחבי פעילות</p>
               </div>
               <Button className="w-full" onClick={() => { setOpen(false); setStatus("idle"); }}>

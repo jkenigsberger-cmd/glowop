@@ -202,64 +202,64 @@ export function generateBedsForTents(tents) {
 }
 
 // Facilities seed — 46 units across 6 areas
-// Source: Facilities_and_CommonSpaces_Map.md
+// Source: Facilities_and_CommonSpaces_Map.md (canonical)
 export const FACILITIES_SEED = [
-  // area_dining_male: 11 showers + 4 toilets = 15 units
-  { areaCode: "area_dining_male", code: "area_dining_male_s1", label: "מקלחת 1", unit_number: 1, facility_type: "SHOWER", gender: "MALE", is_accessible: false },
-  { areaCode: "area_dining_male", code: "area_dining_male_s2", label: "מקלחת 2", unit_number: 2, facility_type: "SHOWER", gender: "MALE", is_accessible: false },
-  { areaCode: "area_dining_male", code: "area_dining_male_s3", label: "מקלחת 3", unit_number: 3, facility_type: "SHOWER", gender: "MALE", is_accessible: false },
-  { areaCode: "area_dining_male", code: "area_dining_male_t4", label: "תא 4 ♿", unit_number: 4, facility_type: "TOILET", gender: "MALE", is_accessible: true },
-  { areaCode: "area_dining_male", code: "area_dining_male_s5", label: "מקלחת 5", unit_number: 5, facility_type: "SHOWER", gender: "MALE", is_accessible: false },
-  { areaCode: "area_dining_male", code: "area_dining_male_s6", label: "מקלחת 6", unit_number: 6, facility_type: "SHOWER", gender: "MALE", is_accessible: false },
-  { areaCode: "area_dining_male", code: "area_dining_male_s7", label: "מקלחת 7", unit_number: 7, facility_type: "SHOWER", gender: "MALE", is_accessible: false },
-  { areaCode: "area_dining_male", code: "area_dining_male_s8", label: "מקלחת 8", unit_number: 8, facility_type: "SHOWER", gender: "MALE", is_accessible: false },
-  { areaCode: "area_dining_male", code: "area_dining_male_s9", label: "מקלחת 9", unit_number: 9, facility_type: "SHOWER", gender: "MALE", is_accessible: false },
-  { areaCode: "area_dining_male", code: "area_dining_male_s10", label: "מקלחת 10", unit_number: 10, facility_type: "SHOWER", gender: "MALE", is_accessible: false },
-  { areaCode: "area_dining_male", code: "area_dining_male_s11", label: "מקלחת 11", unit_number: 11, facility_type: "SHOWER", gender: "MALE", is_accessible: false },
-  { areaCode: "area_dining_male", code: "area_dining_male_t12", label: "תא 12", unit_number: 12, facility_type: "TOILET", gender: "MALE", is_accessible: false },
-  { areaCode: "area_dining_male", code: "area_dining_male_t13", label: "תא 13", unit_number: 13, facility_type: "TOILET", gender: "MALE", is_accessible: false },
-  { areaCode: "area_dining_male", code: "area_dining_male_t14", label: "תא 14", unit_number: 14, facility_type: "TOILET", gender: "MALE", is_accessible: false },
-  { areaCode: "area_dining_male", code: "area_dining_male_t15", label: "תא 15", unit_number: 15, facility_type: "TOILET", gender: "MALE", is_accessible: false },
+  // area_dining_male: showers 1,2,3,5,6,7,8,9,10,11,12 + toilets 4(♿),13,14,15,16 = 16 units
+  { areaCode: "area_dining_male", code: "area_dining_male_s1",  label: "מקלחת 1",   unit_number: 1,  facility_type: "SHOWER", gender: "MALE", is_accessible: false },
+  { areaCode: "area_dining_male", code: "area_dining_male_s2",  label: "מקלחת 2",   unit_number: 2,  facility_type: "SHOWER", gender: "MALE", is_accessible: false },
+  { areaCode: "area_dining_male", code: "area_dining_male_s3",  label: "מקלחת 3",   unit_number: 3,  facility_type: "SHOWER", gender: "MALE", is_accessible: false },
+  { areaCode: "area_dining_male", code: "area_dining_male_t4",  label: "תא 4 ♿",    unit_number: 4,  facility_type: "TOILET", gender: "MALE", is_accessible: true  },
+  { areaCode: "area_dining_male", code: "area_dining_male_s5",  label: "מקלחת 5",   unit_number: 5,  facility_type: "SHOWER", gender: "MALE", is_accessible: false },
+  { areaCode: "area_dining_male", code: "area_dining_male_s6",  label: "מקלחת 6",   unit_number: 6,  facility_type: "SHOWER", gender: "MALE", is_accessible: false },
+  { areaCode: "area_dining_male", code: "area_dining_male_s7",  label: "מקלחת 7",   unit_number: 7,  facility_type: "SHOWER", gender: "MALE", is_accessible: false },
+  { areaCode: "area_dining_male", code: "area_dining_male_s8",  label: "מקלחת 8",   unit_number: 8,  facility_type: "SHOWER", gender: "MALE", is_accessible: false },
+  { areaCode: "area_dining_male", code: "area_dining_male_s9",  label: "מקלחת 9",   unit_number: 9,  facility_type: "SHOWER", gender: "MALE", is_accessible: false },
+  { areaCode: "area_dining_male", code: "area_dining_male_s10", label: "מקלחת 10",  unit_number: 10, facility_type: "SHOWER", gender: "MALE", is_accessible: false },
+  { areaCode: "area_dining_male", code: "area_dining_male_s11", label: "מקלחת 11",  unit_number: 11, facility_type: "SHOWER", gender: "MALE", is_accessible: false },
+  { areaCode: "area_dining_male", code: "area_dining_male_s12", label: "מקלחת 12",  unit_number: 12, facility_type: "SHOWER", gender: "MALE", is_accessible: false },
+  { areaCode: "area_dining_male", code: "area_dining_male_t13", label: "תא 13",      unit_number: 13, facility_type: "TOILET", gender: "MALE", is_accessible: false },
+  { areaCode: "area_dining_male", code: "area_dining_male_t14", label: "תא 14",      unit_number: 14, facility_type: "TOILET", gender: "MALE", is_accessible: false },
+  { areaCode: "area_dining_male", code: "area_dining_male_t15", label: "תא 15",      unit_number: 15, facility_type: "TOILET", gender: "MALE", is_accessible: false },
+  { areaCode: "area_dining_male", code: "area_dining_male_t16", label: "תא 16",      unit_number: 16, facility_type: "TOILET", gender: "MALE", is_accessible: false },
 
-  // area_dining_female: 6 showers + 5 toilets = 11 units
-  { areaCode: "area_dining_female", code: "area_dining_female_s1", label: "מקלחת 1", unit_number: 1, facility_type: "SHOWER", gender: "FEMALE", is_accessible: false },
-  { areaCode: "area_dining_female", code: "area_dining_female_s2", label: "מקלחת 2", unit_number: 2, facility_type: "SHOWER", gender: "FEMALE", is_accessible: false },
-  { areaCode: "area_dining_female", code: "area_dining_female_s3", label: "מקלחת 3", unit_number: 3, facility_type: "SHOWER", gender: "FEMALE", is_accessible: false },
-  { areaCode: "area_dining_female", code: "area_dining_female_t4", label: "תא 4 ♿", unit_number: 4, facility_type: "TOILET", gender: "FEMALE", is_accessible: true },
-  { areaCode: "area_dining_female", code: "area_dining_female_s5", label: "מקלחת 5", unit_number: 5, facility_type: "SHOWER", gender: "FEMALE", is_accessible: false },
-  { areaCode: "area_dining_female", code: "area_dining_female_s6", label: "מקלחת 6", unit_number: 6, facility_type: "SHOWER", gender: "FEMALE", is_accessible: false },
-  { areaCode: "area_dining_female", code: "area_dining_female_s7", label: "מקלחת 7", unit_number: 7, facility_type: "SHOWER", gender: "FEMALE", is_accessible: false },
-  { areaCode: "area_dining_female", code: "area_dining_female_t8", label: "תא 8", unit_number: 8, facility_type: "TOILET", gender: "FEMALE", is_accessible: false },
-  { areaCode: "area_dining_female", code: "area_dining_female_t9", label: "תא 9", unit_number: 9, facility_type: "TOILET", gender: "FEMALE", is_accessible: false },
-  { areaCode: "area_dining_female", code: "area_dining_female_t10", label: "תא 10", unit_number: 10, facility_type: "TOILET", gender: "FEMALE", is_accessible: false },
-  { areaCode: "area_dining_female", code: "area_dining_female_t11", label: "תא 11", unit_number: 11, facility_type: "TOILET", gender: "FEMALE", is_accessible: false },
+  // area_dining_female: toilets 1-5(♿) + showers 6-16 = 16 units
+  { areaCode: "area_dining_female", code: "area_dining_female_t1",  label: "תא 1",      unit_number: 1,  facility_type: "TOILET", gender: "FEMALE", is_accessible: false },
+  { areaCode: "area_dining_female", code: "area_dining_female_t2",  label: "תא 2",      unit_number: 2,  facility_type: "TOILET", gender: "FEMALE", is_accessible: false },
+  { areaCode: "area_dining_female", code: "area_dining_female_t3",  label: "תא 3",      unit_number: 3,  facility_type: "TOILET", gender: "FEMALE", is_accessible: false },
+  { areaCode: "area_dining_female", code: "area_dining_female_t4",  label: "תא 4",      unit_number: 4,  facility_type: "TOILET", gender: "FEMALE", is_accessible: false },
+  { areaCode: "area_dining_female", code: "area_dining_female_t5",  label: "תא 5 ♿",   unit_number: 5,  facility_type: "TOILET", gender: "FEMALE", is_accessible: true  },
+  { areaCode: "area_dining_female", code: "area_dining_female_s6",  label: "מקלחת 6",  unit_number: 6,  facility_type: "SHOWER", gender: "FEMALE", is_accessible: false },
+  { areaCode: "area_dining_female", code: "area_dining_female_s7",  label: "מקלחת 7",  unit_number: 7,  facility_type: "SHOWER", gender: "FEMALE", is_accessible: false },
+  { areaCode: "area_dining_female", code: "area_dining_female_s8",  label: "מקלחת 8",  unit_number: 8,  facility_type: "SHOWER", gender: "FEMALE", is_accessible: false },
+  { areaCode: "area_dining_female", code: "area_dining_female_s9",  label: "מקלחת 9",  unit_number: 9,  facility_type: "SHOWER", gender: "FEMALE", is_accessible: false },
+  { areaCode: "area_dining_female", code: "area_dining_female_s10", label: "מקלחת 10", unit_number: 10, facility_type: "SHOWER", gender: "FEMALE", is_accessible: false },
+  { areaCode: "area_dining_female", code: "area_dining_female_s11", label: "מקלחת 11", unit_number: 11, facility_type: "SHOWER", gender: "FEMALE", is_accessible: false },
+  { areaCode: "area_dining_female", code: "area_dining_female_s12", label: "מקלחת 12", unit_number: 12, facility_type: "SHOWER", gender: "FEMALE", is_accessible: false },
+  { areaCode: "area_dining_female", code: "area_dining_female_s13", label: "מקלחת 13", unit_number: 13, facility_type: "SHOWER", gender: "FEMALE", is_accessible: false },
+  { areaCode: "area_dining_female", code: "area_dining_female_s14", label: "מקלחת 14", unit_number: 14, facility_type: "SHOWER", gender: "FEMALE", is_accessible: false },
+  { areaCode: "area_dining_female", code: "area_dining_female_s15", label: "מקלחת 15", unit_number: 15, facility_type: "SHOWER", gender: "FEMALE", is_accessible: false },
+  { areaCode: "area_dining_female", code: "area_dining_female_s16", label: "מקלחת 16", unit_number: 16, facility_type: "SHOWER", gender: "FEMALE", is_accessible: false },
 
-  // area_n1_n2: 3 showers + 3 toilets = 6 units
-  { areaCode: "area_n1_n2", code: "area_n1_n2_s1", label: "מקלחת 1", unit_number: 1, facility_type: "SHOWER", gender: "UNISEX", is_accessible: false },
-  { areaCode: "area_n1_n2", code: "area_n1_n2_s2", label: "מקלחת 2", unit_number: 2, facility_type: "SHOWER", gender: "UNISEX", is_accessible: false },
-  { areaCode: "area_n1_n2", code: "area_n1_n2_s3", label: "מקלחת 3", unit_number: 3, facility_type: "SHOWER", gender: "UNISEX", is_accessible: false },
+  // area_n1_n2: 4 unisex toilets only
+  { areaCode: "area_n1_n2", code: "area_n1_n2_t1", label: "תא 1", unit_number: 1, facility_type: "TOILET", gender: "UNISEX", is_accessible: false },
+  { areaCode: "area_n1_n2", code: "area_n1_n2_t2", label: "תא 2", unit_number: 2, facility_type: "TOILET", gender: "UNISEX", is_accessible: false },
+  { areaCode: "area_n1_n2", code: "area_n1_n2_t3", label: "תא 3", unit_number: 3, facility_type: "TOILET", gender: "UNISEX", is_accessible: false },
   { areaCode: "area_n1_n2", code: "area_n1_n2_t4", label: "תא 4", unit_number: 4, facility_type: "TOILET", gender: "UNISEX", is_accessible: false },
-  { areaCode: "area_n1_n2", code: "area_n1_n2_t5", label: "תא 5", unit_number: 5, facility_type: "TOILET", gender: "UNISEX", is_accessible: false },
-  { areaCode: "area_n1_n2", code: "area_n1_n2_t6", label: "תא 6", unit_number: 6, facility_type: "TOILET", gender: "UNISEX", is_accessible: false },
 
-  // area_n3_n4: 2 showers + 2 toilets = 4 units
-  { areaCode: "area_n3_n4", code: "area_n3_n4_s1", label: "מקלחת 1", unit_number: 1, facility_type: "SHOWER", gender: "UNISEX", is_accessible: false },
-  { areaCode: "area_n3_n4", code: "area_n3_n4_s2", label: "מקלחת 2", unit_number: 2, facility_type: "SHOWER", gender: "UNISEX", is_accessible: false },
-  { areaCode: "area_n3_n4", code: "area_n3_n4_t3", label: "תא 3", unit_number: 3, facility_type: "TOILET", gender: "UNISEX", is_accessible: false },
-  { areaCode: "area_n3_n4", code: "area_n3_n4_t4", label: "תא 4", unit_number: 4, facility_type: "TOILET", gender: "UNISEX", is_accessible: false },
+  // area_n3_n4: 2 unisex toilets only
+  { areaCode: "area_n3_n4", code: "area_n3_n4_t1", label: "תא 1", unit_number: 1, facility_type: "TOILET", gender: "UNISEX", is_accessible: false },
+  { areaCode: "area_n3_n4", code: "area_n3_n4_t2", label: "תא 2", unit_number: 2, facility_type: "TOILET", gender: "UNISEX", is_accessible: false },
 
-  // area_white_tents: 0 showers + 4 toilets = 4 units
+  // area_white_tents: 4 unisex toilets only
   { areaCode: "area_white_tents", code: "area_white_tents_t1", label: "תא 1", unit_number: 1, facility_type: "TOILET", gender: "UNISEX", is_accessible: false },
   { areaCode: "area_white_tents", code: "area_white_tents_t2", label: "תא 2", unit_number: 2, facility_type: "TOILET", gender: "UNISEX", is_accessible: false },
   { areaCode: "area_white_tents", code: "area_white_tents_t3", label: "תא 3", unit_number: 3, facility_type: "TOILET", gender: "UNISEX", is_accessible: false },
   { areaCode: "area_white_tents", code: "area_white_tents_t4", label: "תא 4", unit_number: 4, facility_type: "TOILET", gender: "UNISEX", is_accessible: false },
 
-  // area_n4_n7: 0 showers + 6 toilets = 6 units
+  // area_n4_n7: 4 unisex toilets only
   { areaCode: "area_n4_n7", code: "area_n4_n7_t1", label: "תא 1", unit_number: 1, facility_type: "TOILET", gender: "UNISEX", is_accessible: false },
   { areaCode: "area_n4_n7", code: "area_n4_n7_t2", label: "תא 2", unit_number: 2, facility_type: "TOILET", gender: "UNISEX", is_accessible: false },
   { areaCode: "area_n4_n7", code: "area_n4_n7_t3", label: "תא 3", unit_number: 3, facility_type: "TOILET", gender: "UNISEX", is_accessible: false },
   { areaCode: "area_n4_n7", code: "area_n4_n7_t4", label: "תא 4", unit_number: 4, facility_type: "TOILET", gender: "UNISEX", is_accessible: false },
-  { areaCode: "area_n4_n7", code: "area_n4_n7_t5", label: "תא 5", unit_number: 5, facility_type: "TOILET", gender: "UNISEX", is_accessible: false },
-  { areaCode: "area_n4_n7", code: "area_n4_n7_t6", label: "תא 6", unit_number: 6, facility_type: "TOILET", gender: "UNISEX", is_accessible: false },
 ];
-// Total: 15 + 11 + 6 + 4 + 4 + 6 = 46 ✅
+// Total: 16 + 16 + 4 + 2 + 4 + 4 = 46 ✅
