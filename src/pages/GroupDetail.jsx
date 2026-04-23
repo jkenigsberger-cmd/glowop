@@ -9,6 +9,7 @@ import GroupStatusBadge from "@/components/groups/GroupStatusBadge";
 import GroupFormModal from "@/components/groups/GroupFormModal";
 import QuoteStatusBadge from "@/components/quotes/QuoteStatusBadge";
 import QuoteFormModal from "@/components/quotes/QuoteFormModal";
+import QuoteStatusActions from "@/components/quotes/QuoteStatusActions";
 import GuestFormSubmissionModal from "@/components/groups/GuestFormSubmissionModal";
 
 export default function GroupDetail() {
@@ -123,16 +124,19 @@ export default function GroupDetail() {
           ) : (
             <div className="space-y-2">
               {quotes.map(q => (
-                <div key={q.id} className="bg-card border border-border rounded-xl px-4 py-3 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <QuoteStatusBadge status={q.status} />
-                    <span className="text-sm">גרסה {q.version}</span>
-                    {q.valid_until && <span className="text-xs text-muted-foreground">בתוקף עד {format(new Date(q.valid_until), "dd/MM/yyyy")}</span>}
-                    {q.total_price > 0 && <span className="text-sm font-semibold">₪{q.total_price.toLocaleString()}</span>}
+                <div key={q.id} className="bg-card border border-border rounded-xl px-4 py-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-medium">גרסה {q.version}</span>
+                      {q.quote_number && <span className="text-xs text-muted-foreground">{q.quote_number}</span>}
+                      {q.valid_until && <span className="text-xs text-muted-foreground">בתוקף עד {format(new Date(q.valid_until), "dd/MM/yyyy")}</span>}
+                      {q.total_price > 0 && <span className="text-sm font-semibold text-primary">₪{Math.round(q.total_price).toLocaleString()}</span>}
+                    </div>
+                    <Button size="sm" variant="ghost" onClick={() => { setEditQuote(q); setShowQuoteForm(true); }} className="gap-1">
+                      <Pencil className="w-3 h-3" /> עריכה
+                    </Button>
                   </div>
-                  <Button size="sm" variant="ghost" onClick={() => { setEditQuote(q); setShowQuoteForm(true); }} className="gap-1">
-                    <Pencil className="w-3 h-3" /> עריכה
-                  </Button>
+                  <QuoteStatusActions quote={q} group={group} onUpdated={refetch} />
                 </div>
               ))}
             </div>
