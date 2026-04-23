@@ -4,7 +4,11 @@
   "properties": {
     "group_id": {
       "type": "string",
-      "description": "FK to Group"
+      "description": "FK to Group (required \u2014 Group is the prospect shell)"
+    },
+    "quote_number": {
+      "type": "string",
+      "description": "Human-readable reference e.g. Q-2026-047"
     },
     "version": {
       "type": "number",
@@ -21,35 +25,63 @@
       ],
       "default": "DRAFT"
     },
-    "client_details": {
+    "client_name": {
       "type": "string",
-      "description": "Client name/org as captured at quote time"
+      "description": "Contact/org name at quote time"
     },
-    "snapshot": {
-      "type": "string",
-      "description": "JSON snapshot of group data at quote creation"
+    "client_phone": {
+      "type": "string"
     },
-    "line_items": {
+    "client_email": {
+      "type": "string"
+    },
+    "arrival_date": {
       "type": "string",
-      "description": "JSON array of {description, quantity, unit_price, total}"
+      "format": "date",
+      "description": "Commercial estimate, copied from Group"
+    },
+    "departure_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "estimated_pax": {
+      "type": "number",
+      "description": "Total headcount for pricing purposes"
+    },
+    "staff_count": {
+      "type": "number"
+    },
+    "participant_count": {
+      "type": "number"
+    },
+    "lodging_lines": {
+      "type": "string",
+      "description": "JSON array: [{type, pax, nights, rate_per_person_per_night, total}]"
+    },
+    "activity_lines": {
+      "type": "string",
+      "description": "JSON array: [{name, pax, rate_per_person, fixed_price, total}]"
+    },
+    "catering_lines": {
+      "type": "string",
+      "description": "JSON array: [{type, pax, count, rate, notes, total}]"
+    },
+    "addon_lines": {
+      "type": "string",
+      "description": "JSON array: [{description, quantity, unit_price, total}]"
     },
     "subtotal": {
       "type": "number"
     },
-    "discount": {
+    "discount_amount": {
       "type": "number",
       "default": 0
     },
+    "discount_reason": {
+      "type": "string"
+    },
     "total_price": {
       "type": "number"
-    },
-    "includes_meals": {
-      "type": "boolean",
-      "default": false
-    },
-    "includes_activities": {
-      "type": "boolean",
-      "default": false
     },
     "payment_terms": {
       "type": "string"
@@ -60,6 +92,10 @@
     },
     "internal_notes": {
       "type": "string"
+    },
+    "snapshot": {
+      "type": "string",
+      "description": "JSON snapshot captured only when status transitions to APPROVED"
     }
   },
   "required": [
