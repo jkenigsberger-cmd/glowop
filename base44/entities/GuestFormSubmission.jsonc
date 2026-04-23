@@ -1,0 +1,77 @@
+{
+  "name": "GuestFormSubmission",
+  "type": "object",
+  "properties": {
+    "quote_id": {
+      "type": "string",
+      "description": "FK to Quote (primary link)"
+    },
+    "group_id": {
+      "type": "string",
+      "description": "FK to Group (operational reference)"
+    },
+    "contact_name": {
+      "type": "string"
+    },
+    "contact_phone": {
+      "type": "string"
+    },
+    "contact_email": {
+      "type": "string"
+    },
+    "total_pax": {
+      "type": "number"
+    },
+    "staff_count": {
+      "type": "number"
+    },
+    "participant_count": {
+      "type": "number"
+    },
+    "boys_count": {
+      "type": "number"
+    },
+    "girls_count": {
+      "type": "number"
+    },
+    "special_diets": {
+      "type": "string"
+    },
+    "tent_distribution_notes": {
+      "type": "string"
+    },
+    "schedule_notes": {
+      "type": "string"
+    },
+    "general_notes": {
+      "type": "string"
+    },
+    "submitted_at": {
+      "type": "string",
+      "description": "ISO datetime"
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "LINK",
+        "WHATSAPP",
+        "MANUAL"
+      ],
+      "default": "MANUAL"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "PENDING",
+        "SUBMITTED",
+        "REVIEWED"
+      ],
+      "default": "PENDING"
+    }
+  },
+  "required": [
+    "quote_id",
+    "group_id",
+    "status"
+  ]
+}

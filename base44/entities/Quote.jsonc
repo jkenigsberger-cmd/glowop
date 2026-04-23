@@ -1,0 +1,70 @@
+{
+  "name": "Quote",
+  "type": "object",
+  "properties": {
+    "group_id": {
+      "type": "string",
+      "description": "FK to Group"
+    },
+    "version": {
+      "type": "number",
+      "default": 1
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "DRAFT",
+        "SENT",
+        "APPROVED",
+        "REJECTED",
+        "EXPIRED"
+      ],
+      "default": "DRAFT"
+    },
+    "client_details": {
+      "type": "string",
+      "description": "Client name/org as captured at quote time"
+    },
+    "snapshot": {
+      "type": "string",
+      "description": "JSON snapshot of group data at quote creation"
+    },
+    "line_items": {
+      "type": "string",
+      "description": "JSON array of {description, quantity, unit_price, total}"
+    },
+    "subtotal": {
+      "type": "number"
+    },
+    "discount": {
+      "type": "number",
+      "default": 0
+    },
+    "total_price": {
+      "type": "number"
+    },
+    "includes_meals": {
+      "type": "boolean",
+      "default": false
+    },
+    "includes_activities": {
+      "type": "boolean",
+      "default": false
+    },
+    "payment_terms": {
+      "type": "string"
+    },
+    "valid_until": {
+      "type": "string",
+      "format": "date"
+    },
+    "internal_notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "group_id",
+    "status",
+    "version"
+  ]
+}

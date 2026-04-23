@@ -1,0 +1,68 @@
+{
+  "name": "Group",
+  "type": "object",
+  "properties": {
+    "group_name": {
+      "type": "string",
+      "description": "Group display name"
+    },
+    "group_type": {
+      "type": "string",
+      "enum": [
+        "LODGING",
+        "DAY_USE"
+      ],
+      "default": "LODGING"
+    },
+    "arrival_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "departure_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "total_pax": {
+      "type": "number"
+    },
+    "staff_count": {
+      "type": "number"
+    },
+    "participant_count": {
+      "type": "number"
+    },
+    "boys_count": {
+      "type": "number"
+    },
+    "girls_count": {
+      "type": "number"
+    },
+    "contact_name": {
+      "type": "string"
+    },
+    "contact_phone": {
+      "type": "string"
+    },
+    "contact_email": {
+      "type": "string"
+    },
+    "internal_notes": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "DRAFT",
+        "CONFIRMED",
+        "CANCELLED"
+      ],
+      "default": "DRAFT"
+    }
+  },
+  "required": [
+    "group_name",
+    "group_type",
+    "arrival_date",
+    "status"
+  ]
+}

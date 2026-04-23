@@ -1,0 +1,197 @@
+import { useState } from "react";
+import { useParams, Link } from "react-router-dom";
+import { base44 } from "@/api/base44Client";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Button } from "@/components/ui/button";
+import { ChevronRight, Calendar, Users, Phone, Mail, Pencil, Plus, FileText, ClipboardList } from "lucide-react";
+import { format } from "date-fns";
+import GroupStatusBadge from "@/components/groups/GroupStatusBadge";
+import GroupFormModal from "@/components/groups/GroupFormModal";
+import QuoteStatusBadge from "@/components/quotes/QuoteStatusBadge";
+import QuoteFormModal from "@/components/quotes/QuoteFormModal";
+import GuestFormSubmissionModal from "@/components/groups/GuestFormSubmissionModal";
+
+export default function GroupDetail() {
+  const { id } = useParams();
+  const queryClient = useQueryClient();
+
+  const [editGroup, setEditGroup] = useState(false);
+  const [showQuoteForm, setShowQuoteForm] = useState(false);
+  const [editQuote, setEditQuote] = useState(null);
+  const [showSubmissionForm, setShowSubmissionForm] = useState(false);
+  const [editSubmission, setEditSubmission] = useState(null);
+
+  const { data: group } = useQuery({
+    queryKey: ["group", id],
+    queryFn: () => base44.entities.Group.filter({ id }),
+    select: (r) => r[0],
+  });
+
+  const { data: quotes = [] } = useQuery({
+    queryKey: ["quotes", id],
+    queryFn: () => base44.entities.Quote.filter({ group_id: id }),
+  });
+
+  const { data: submissions = [] } = useQuery({
+    queryKey: ["submissions", id],
+    queryFn: () => base44.entities.GuestFormSubmission.filter({ group_id: id }),
+  });
+
+  const refetch = () => {
+    queryClient.invalidateQueries({ queryKey: ["group", id] });
+    queryClient.invalidateQueries({ queryKey: ["quotes", id] });
+    queryClient.invalidateQueries({ queryKey: ["submissions", id] });
+    queryClient.invalidateQueries({ queryKey: ["groups"] });
+  };
+
+  const activeQuote = quotes.find(q => q.status === "APPROVED") || quotes[0];
+
+  if (!group) return (
+    <div className="flex items-center justify-center min-h-screen">
+      <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
+
+  const GROUP_TYPE_LABEL = { LODGING: "לינה", DAY_USE: "יום כיף" };
+
+  return (
+    <div className="min-h-screen bg-background" dir="rtl">
+      {/* Header */}
+      <div className="border-b border-border bg-card">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-4">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-3">
+            <Link to="/groups" className="hover:text-foreground flex items-center gap-1">
+              <ChevronRight className="w-4 h-4" /> קבוצות
+            </Link>
+          </div>
+          <div className="flex items-start justify-between">
+            <div>
+              <div className="flex items-center gap-3">
+                <h1 className="text-2xl font-bold">{group.group_name}</h1>
+                <GroupStatusBadge status={group.status} />
+                <span className="text-xs bg-muted px-2 py-0.5 rounded text-muted-foreground">{GROUP_TYPE_LABEL[group.group_type]}</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-4 mt-2 text-sm text-muted-foreground">
+                {group.arrival_date && (
+                  <span className="flex items-center gap-1">
+                    <Calendar className="w-3.5 h-3.5" />
+                    {format(new Date(group.arrival_date), "dd/MM/yyyy")}
+                    {group.departure_date && ` — ${format(new Date(group.departure_date), "dd/MM/yyyy")}`}
+                  </span>
+                )}
+                {group.total_pax && <span className="flex items-center gap-1"><Users className="w-3.5 h-3.5" />{group.total_pax} משתתפים</span>}
+                {group.contact_phone && <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5" />{group.contact_phone}</span>}
+                {group.contact_email && <span className="flex items-center gap-1"><Mail className="w-3.5 h-3.5" />{group.contact_email}</span>}
+              </div>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => setEditGroup(true)} className="gap-1">
+              <Pencil className="w-3.5 h-3.5" /> עריכה
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+
+        {/* Summary Bar */}
+        <div className="grid grid-cols-3 gap-3">
+          <div className="bg-card border border-border rounded-xl px-4 py-3 text-center">
+            <p className="text-2xl font-bold">{group.total_pax || 0}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">משתתפים</p>
+          </div>
+          <div className="bg-card border border-border rounded-xl px-4 py-3 text-center">
+            <p className="text-2xl font-bold">{quotes.length}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">הצעות מחיר</p>
+            {activeQuote && <QuoteStatusBadge status={activeQuote.status} />}
+          </div>
+          <div className="bg-card border border-border rounded-xl px-4 py-3 text-center">
+            <p className="text-2xl font-bold">{submissions.length}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">טפסי קבלה</p>
+          </div>
+        </div>
+
+        {/* Quotes Section */}
+        <section>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-semibold flex items-center gap-2"><FileText className="w-4 h-4" /> הצעות מחיר</h2>
+            <Button size="sm" variant="outline" onClick={() => { setEditQuote(null); setShowQuoteForm(true); }} className="gap-1">
+              <Plus className="w-3.5 h-3.5" /> הצעה חדשה
+            </Button>
+          </div>
+          {quotes.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">אין הצעות מחיר עדיין.</p>
+          ) : (
+            <div className="space-y-2">
+              {quotes.map(q => (
+                <div key={q.id} className="bg-card border border-border rounded-xl px-4 py-3 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <QuoteStatusBadge status={q.status} />
+                    <span className="text-sm">גרסה {q.version}</span>
+                    {q.valid_until && <span className="text-xs text-muted-foreground">בתוקף עד {format(new Date(q.valid_until), "dd/MM/yyyy")}</span>}
+                    {q.total_price > 0 && <span className="text-sm font-semibold">₪{q.total_price.toLocaleString()}</span>}
+                  </div>
+                  <Button size="sm" variant="ghost" onClick={() => { setEditQuote(q); setShowQuoteForm(true); }} className="gap-1">
+                    <Pencil className="w-3 h-3" /> עריכה
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* GuestFormSubmissions Section */}
+        <section>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-semibold flex items-center gap-2"><ClipboardList className="w-4 h-4" /> טפסי קבלה</h2>
+            <Button size="sm" variant="outline" onClick={() => { setEditSubmission(null); setShowSubmissionForm(true); }} className="gap-1">
+              <Plus className="w-3.5 h-3.5" /> טופס חדש
+            </Button>
+          </div>
+          {submissions.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">אין טפסי קבלה עדיין.</p>
+          ) : (
+            <div className="space-y-2">
+              {submissions.map(s => (
+                <div key={s.id} className="bg-card border border-border rounded-xl px-4 py-3 flex items-center justify-between">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-medium">{s.contact_name || "ללא שם"}</span>
+                      <span className={`text-xs px-2 py-0.5 rounded border ${s.status === "REVIEWED" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : s.status === "SUBMITTED" ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-slate-100 text-slate-600 border-slate-200"}`}>
+                        {s.status === "REVIEWED" ? "נבדק" : s.status === "SUBMITTED" ? "הוגש" : "ממתין"}
+                      </span>
+                    </div>
+                    {s.total_pax && <p className="text-xs text-muted-foreground">{s.total_pax} משתתפים · {s.submitted_at ? format(new Date(s.submitted_at), "dd/MM/yyyy") : ""}</p>}
+                  </div>
+                  <Button size="sm" variant="ghost" onClick={() => { setEditSubmission(s); setShowSubmissionForm(true); }} className="gap-1">
+                    <Pencil className="w-3 h-3" /> עריכה
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* Internal Notes */}
+        {group.internal_notes && (
+          <section className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+            <p className="text-xs font-semibold text-amber-700 mb-1">הערות פנימיות</p>
+            <p className="text-sm text-amber-900">{group.internal_notes}</p>
+          </section>
+        )}
+      </div>
+
+      {/* Modals */}
+      {editGroup && <GroupFormModal group={group} onClose={() => setEditGroup(false)} onSaved={() => { refetch(); setEditGroup(false); }} />}
+      {showQuoteForm && <QuoteFormModal quote={editQuote} group={group} onClose={() => { setShowQuoteForm(false); setEditQuote(null); }} onSaved={() => { refetch(); setShowQuoteForm(false); setEditQuote(null); }} />}
+      {showSubmissionForm && (
+        <GuestFormSubmissionModal
+          submission={editSubmission}
+          quoteId={activeQuote?.id || quotes[0]?.id}
+          groupId={id}
+          onClose={() => { setShowSubmissionForm(false); setEditSubmission(null); }}
+          onSaved={() => { refetch(); setShowSubmissionForm(false); setEditSubmission(null); }}
+        />
+      )}
+    </div>
+  );
+}
