@@ -99,13 +99,13 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
           </div>
 
           <div className="space-y-1">
-            <Label>פרטי לקוח (snapshot)</Label>
+            <Label>פרטי לקוח <span className="text-muted-foreground font-normal">(טקסט חופשי — נשמר כ-string)</span></Label>
             <Input value={form.client_details} onChange={e => set("client_details", e.target.value)} />
           </div>
 
-          {/* Line Items */}
+          {/* Line Items — stored as JSON.stringify(array) string in the DB */}
           <div className="space-y-2">
-            <Label>סעיפי מחיר</Label>
+            <Label>סעיפי מחיר <span className="text-muted-foreground font-normal">(נשמרים כ-JSON string)</span></Label>
             <div className="space-y-2">
               {items.map((item, idx) => (
                 <div key={idx} className="grid grid-cols-12 gap-2 items-center">

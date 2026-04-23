@@ -143,9 +143,15 @@ export default function GroupDetail() {
         <section>
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold flex items-center gap-2"><ClipboardList className="w-4 h-4" /> טפסי קבלה</h2>
-            <Button size="sm" variant="outline" onClick={() => { setEditSubmission(null); setShowSubmissionForm(true); }} className="gap-1">
-              <Plus className="w-3.5 h-3.5" /> טופס חדש
-            </Button>
+            {quotes.length === 0 ? (
+              <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                יש ליצור הצעת מחיר תחילה
+              </span>
+            ) : (
+              <Button size="sm" variant="outline" onClick={() => { setEditSubmission(null); setShowSubmissionForm(true); }} className="gap-1">
+                <Plus className="w-3.5 h-3.5" /> טופס חדש
+              </Button>
+            )}
           </div>
           {submissions.length === 0 ? (
             <p className="text-sm text-muted-foreground py-4 text-center">אין טפסי קבלה עדיין.</p>

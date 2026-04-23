@@ -29,6 +29,14 @@ export default function GuestFormSubmissionModal({ submission, quoteId, groupId,
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
+  const paxMismatch = (() => {
+    const total = Number(form.total_pax);
+    const staff = Number(form.staff_count);
+    const pax = Number(form.participant_count);
+    if (!total || (!staff && !pax)) return false;
+    return (staff + pax) !== total;
+  })();
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
@@ -65,6 +73,12 @@ export default function GuestFormSubmissionModal({ submission, quoteId, groupId,
               <Input type="email" value={form.contact_email} onChange={e => set("contact_email", e.target.value)} />
             </div>
           </div>
+
+          {paxMismatch && (
+            <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+              ⚠️ סה"כ ({form.total_pax}) אינו שווה לצוות + חניכים ({Number(form.staff_count) + Number(form.participant_count)})
+            </div>
+          )}
 
           <div className="grid grid-cols-3 gap-3">
             {[["total_pax","סה\"כ"],["staff_count","צוות"],["participant_count","חניכים"],["boys_count","בנים"],["girls_count","בנות"]].map(([k, label]) => (

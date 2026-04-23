@@ -29,6 +29,14 @@ export default function GroupFormModal({ group, onClose, onSaved }) {
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
+  const paxMismatch = (() => {
+    const total = Number(form.total_pax);
+    const staff = Number(form.staff_count);
+    const pax = Number(form.participant_count);
+    if (!total || (!staff && !pax)) return false;
+    return (staff + pax) !== total;
+  })();
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
@@ -85,6 +93,12 @@ export default function GroupFormModal({ group, onClose, onSaved }) {
               <Input type="date" value={form.departure_date} onChange={e => set("departure_date", e.target.value)} />
             </div>
           </div>
+
+          {paxMismatch && (
+            <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+              ⚠️ סה"כ משתתפים ({form.total_pax}) אינו שווה לצוות + חניכים ({Number(form.staff_count) + Number(form.participant_count)})
+            </div>
+          )}
 
           <div className="grid grid-cols-3 gap-3">
             <div className="space-y-1">
