@@ -45,7 +45,7 @@ const VAT_RATE = 0.18;
 const COFFEE_CORNER_RATE = 15;
 
 // ── helpers ───────────────────────────────────────────────────────────────────
-const parse = (str, fallback) => { try { return JSON.parse(str); } catch { return fallback; } };
+const parse = (str, fallback) => { try { const r = JSON.parse(str); return Array.isArray(r) ? r : fallback; } catch { return fallback; } };
 
 const calcStudentLodging = (r) => {
   const rate = STUDENT_LODGING_RATES[r.rate_type]?.rate ?? Number(r.rate ?? 0);
