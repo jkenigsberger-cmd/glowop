@@ -35,53 +35,84 @@
     "client_email": {
       "type": "string"
     },
+    "client_tax_id": {
+      "type": "string",
+      "description": "\u05d7.\u05e4 / \u05e2.\u05de \u2014 used in documents and guest form pre-fill"
+    },
     "arrival_date": {
       "type": "string",
-      "format": "date",
-      "description": "Commercial estimate, copied from Group"
+      "format": "date"
     },
     "departure_date": {
       "type": "string",
       "format": "date"
     },
+    "nights": {
+      "type": "number",
+      "description": "Calculated from date range, stored for pricing"
+    },
     "estimated_pax": {
       "type": "number",
-      "description": "Total headcount for pricing purposes"
+      "description": "Total headcount for pricing"
     },
     "staff_count": {
       "type": "number"
     },
     "participant_count": {
-      "type": "number"
+      "type": "number",
+      "description": "Students / participants"
     },
-    "lodging_lines": {
+    "student_lodging_lines": {
       "type": "string",
-      "description": "JSON array: [{type, pax, nights, rate_per_person_per_night, total}]"
+      "description": "JSON array: [{rate_type: 'day_activity'|'midweek_lodging'|'weekend_lodging', pax, nights, rate, total}]"
     },
-    "activity_lines": {
+    "adult_lodging_lines": {
       "type": "string",
-      "description": "JSON array: [{name, pax, rate_per_person, fixed_price, total}]"
+      "description": "JSON array: [{tent_type: 'BED3'|'BED68', tent_count, nights, rate_per_tent_per_night, total}]"
     },
-    "catering_lines": {
+    "workshop_lines": {
       "type": "string",
-      "description": "JSON array: [{type, pax, count, rate, notes, total}]"
+      "description": "JSON array: [{name, audience: 'STUDENTS'|'ADULTS', rate, total}]"
+    },
+    "lecture_lines": {
+      "type": "string",
+      "description": "JSON array: [{name, lecturer, base_price, vat_included, vat_amount, total}]"
+    },
+    "coffee_corner_pax": {
+      "type": "number",
+      "description": "Number of people for Coffee Corner at \u20aa15/person"
     },
     "addon_lines": {
       "type": "string",
       "description": "JSON array: [{description, quantity, unit_price, total}]"
     },
+    "adjustment_lines": {
+      "type": "string",
+      "description": "JSON array of custom flat adjustments: [{description, amount}] \u2014 positive=surcharge, negative=discount"
+    },
     "subtotal": {
       "type": "number"
     },
+    "discount_percent": {
+      "type": "number",
+      "default": 0,
+      "description": "Percentage discount applied to subtotal"
+    },
     "discount_amount": {
       "type": "number",
-      "default": 0
-    },
-    "discount_reason": {
-      "type": "string"
+      "description": "Computed: subtotal \u00d7 discount_percent / 100"
     },
     "total_price": {
-      "type": "number"
+      "type": "number",
+      "description": "subtotal - discount_amount"
+    },
+    "advance_payment": {
+      "type": "number",
+      "description": "30% of total \u2014 computed"
+    },
+    "balance_payment": {
+      "type": "number",
+      "description": "70% of total \u2014 computed"
     },
     "payment_terms": {
       "type": "string"
