@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 
 export default function GuestForm() {
   const urlParams = new URLSearchParams(window.location.search);
-  const quoteId = urlParams.get("q");
+  const quoteId = urlParams.get("quote") || urlParams.get("q");
 
   const [quoteData, setQuoteData] = useState(null);
   const [loading, setLoading] = useState(true);

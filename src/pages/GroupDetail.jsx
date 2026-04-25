@@ -49,7 +49,7 @@ export default function GroupDetail() {
   const activeQuote = quotes.find(q => q.status === "APPROVED") || quotes[0];
 
   const copyGuestFormLink = (quoteId) => {
-    const url = `${window.location.origin}/guest-form?q=${quoteId}`;
+    const url = `${window.location.origin}/guest-form?quote=${quoteId}`;
     navigator.clipboard.writeText(url);
     toast.success("הלינק הועתק בהצלחה!");
   };
