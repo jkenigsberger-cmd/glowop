@@ -10,8 +10,8 @@ Deno.serve(async (req) => {
     return Response.json({ error: 'quote_id is required' }, { status: 400 });
   }
 
-  const quotes = await base44.asServiceRole.entities.Quote.list();
-  const quote = quotes.find(q => q.id === quote_id);
+  const quotes = await base44.asServiceRole.entities.Quote.filter({ id: quote_id });
+  const quote = quotes[0];
 
   if (!quote) {
     return Response.json({ error: 'Quote not found' }, { status: 404 });

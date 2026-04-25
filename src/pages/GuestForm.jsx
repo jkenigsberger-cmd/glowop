@@ -7,7 +7,32 @@ import GuestFormStep3 from "@/components/guest-form/GuestFormStep3";
 import GuestFormStep4 from "@/components/guest-form/GuestFormStep4";
 import GuestFormProgress from "@/components/guest-form/GuestFormProgress";
 import { Button } from "@/components/ui/button";
-import { differenceInCalendarDays } from "date-fns";
+import { differenceInCalendarDays, addDays, format, parseISO } from "date-fns";
+
+// Generate the default meal plan when quoteData first loads
+function buildInitialMeals(arrival, departure) {
+  if (!arrival || !departure) return [];
+  try {
+    const start = parseISO(arrival);
+    const end = parseISO(departure);
+    const nights = differenceInCalendarDays(end, start);
+    if (nights <= 0) return [];
+    const result = [];
+    for (let i = 0; i <= nights; i++) {
+      const date = format(addDays(start, i), "yyyy-MM-dd");
+      if (i === 0) {
+        result.push({ date, meal_type: "DINNER", sandwich_instead: false });
+      } else if (i === nights) {
+        result.push({ date, meal_type: "BREAKFAST", sandwich_instead: false });
+      } else {
+        result.push({ date, meal_type: "BREAKFAST", sandwich_instead: false });
+        result.push({ date, meal_type: "LUNCH", sandwich_instead: false });
+        result.push({ date, meal_type: "DINNER", sandwich_instead: false });
+      }
+    }
+    return result;
+  } catch { return []; }
+}
 
 // ── Field resolvers (snapshot > direct quote fields) ──────────────────────────
 const snap = (d) => { try { return d?.snapshot || null; } catch { return null; } };
@@ -74,6 +99,15 @@ export default function GuestForm() {
     if (!quoteId) { setError("קישור לא תקין"); setLoading(false); return; }
     base44.functions.invoke("getQuotePublicData", { quote_id: quoteId })
       .then(res => {
+        if (res.data?.error) {
+          // Function returned an error payload (e.g. 403 not approved, 404 not found)
+          const msg = res.data.error;
+          if (msg.includes('not found') || msg.includes('Not found')) setError("הטופס לא נמצא — בדקו שהקישור תקין");
+          else if (msg.includes('not available') || msg.includes('not approved')) setError("הצעת המחיר אינה מאושרת — הטופס זמין רק לאחר אישור הצעה");
+          else setError("הקישור אינו תקין");
+          setLoading(false);
+          return;
+        }
         const d = res.data;
         setQuoteData(d);
         // Prefill details using safe resolvers
@@ -85,6 +119,12 @@ export default function GuestForm() {
           contact_email:   "",
           client_org:      "",
         });
+        // Initialize meal plan for sleeping groups
+        const arr = d.arrival_date || '';
+        const dep = d.departure_date || '';
+        const nights = arr && dep ? differenceInCalendarDays(parseISO(dep), parseISO(arr)) : 0;
+        if (nights > 0) setMeals(buildInitialMeals(arr, dep));
+
         // Prefill participants from resolved estimate
         const studentsTotal = getParticipantCount(d) || 0;
         const staffTotal = getStaffCount(d) || 0;

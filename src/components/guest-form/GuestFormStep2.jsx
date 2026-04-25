@@ -41,12 +41,13 @@ export default function GuestFormStep2({ quoteData, mealOptions, setMealOptions,
     ? differenceInCalendarDays(parseISO(departure_date), parseISO(arrival_date))
     : 0;
 
-  // Regenerate meals when options change, preserving sandwich choices
+  // Regenerate meals on mount and whenever options/dates change, preserving sandwich choices
   useEffect(() => {
     if (!arrival_date || !departure_date) return;
     const prevMap = new Map(meals.map(m => [`${m.date}_${m.meal_type}`, m.sandwich_instead]));
     const fresh = generateMeals(arrival_date, departure_date, mealOptions.arrival_lunch, mealOptions.departure_lunch);
     setMeals(fresh.map(m => ({ ...m, sandwich_instead: prevMap.get(`${m.date}_${m.meal_type}`) || false })));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mealOptions.arrival_lunch, mealOptions.departure_lunch, arrival_date, departure_date]);
 
   const toggleSandwich = (date, meal_type) => {

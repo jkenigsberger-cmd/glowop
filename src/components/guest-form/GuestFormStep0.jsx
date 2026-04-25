@@ -44,8 +44,8 @@ export default function GuestFormStep0({ form, setForm, quoteData }) {
         </div>
       )}
 
-      {/* Group name — locked */}
-      <LockedField label="שם הקבוצה" value={form.group_name || quoteData?.client_name} />
+      {/* Group name — locked (never shows client_name here, resolver already handled it) */}
+      <LockedField label="שם הקבוצה" value={form.group_name || "—"} />
 
       {/* Group type — free text */}
       <Field label="אפיון קבוצה (לא חובה)">
