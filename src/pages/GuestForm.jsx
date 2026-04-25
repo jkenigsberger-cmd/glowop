@@ -46,6 +46,7 @@ const getBoysCount    = (d) => d?.boys_count  ?? null;
 const getGirlsCount   = (d) => d?.girls_count ?? null;
 const getContactName  = (d) => snap(d)?.clientName  || d?.contact_name  || '';
 const getContactPhone = (d) => snap(d)?.clientPhone || d?.contact_phone || '';
+const getContactEmail = (d) => snap(d)?.clientEmail || d?.contact_email || '';
 
 // Email format validator
 const isValidEmail = (v) => !v || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
@@ -116,7 +117,7 @@ export default function GuestForm() {
           group_type_label: "",
           contact_name:    getContactName(d),
           contact_phone:   getContactPhone(d),
-          contact_email:   "",
+          contact_email:   getContactEmail(d),
           client_org:      "",
         });
         // Initialize meal plan for sleeping groups

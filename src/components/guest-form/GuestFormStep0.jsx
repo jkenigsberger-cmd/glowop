@@ -24,7 +24,7 @@ function Field({ label, children }) {
 }
 
 export default function GuestFormStep0({ form, setForm, quoteData }) {
-  const [showExtra, setShowExtra] = useState(false);
+  const [showExtra, setShowExtra] = useState(true);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const hasDates = quoteData?.arrival_date && quoteData?.departure_date;
