@@ -216,18 +216,23 @@ function Page({ children, isLast }) {
   );
 }
 
+const LOGO_URL   = "https://media.base44.com/images/public/69ea08de3791d203c52ea3cc/107796e98_quote-logo.png";
+const FOOTER_URL = "https://media.base44.com/images/public/69ea08de3791d203c52ea3cc/c500ec249_quote-footer-photo.jpg";
+
 function DocHeader({ quoteNumber }) {
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18, borderBottom: "3px solid #1a56a0", paddingBottom: 12 }}>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18, borderBottom: "3px solid #1a56a0", paddingBottom: 12 }}>
       <div>
         <div style={{ fontSize: 20, fontWeight: 800, color: "#1a56a0", lineHeight: 1.2 }}>הצעת מחיר לסמינרים וימי עיון</div>
         <div style={{ fontSize: 14, fontWeight: 600, color: "#333", marginTop: 3 }}>לצוותי חינוך</div>
         {quoteNumber && <div style={{ fontSize: 10, color: "#888", marginTop: 4 }}>מס׳ הצעה: {quoteNumber}</div>}
       </div>
-      <div style={{ textAlign: "left" }}>
-        <div style={{ fontSize: 15, fontWeight: 700, color: "#1a56a0" }}>בית הדור הבא</div>
-        <div style={{ fontSize: 11, color: "#555" }}>חוות אהרונסון</div>
-      </div>
+      <img
+        src={LOGO_URL}
+        alt="בית הדור הבא"
+        style={{ height: 80, width: "auto" }}
+        onError={e => { e.target.style.display = "none"; }}
+      />
     </div>
   );
 }
@@ -463,8 +468,17 @@ function Page3() {
         </div>
       </div>
 
-      {/* Footer message */}
-      <div style={{ marginTop: 28, textAlign: "center", fontSize: 14, fontWeight: 700, color: "#1a56a0" }}>
+      {/* Footer postcard photo */}
+      <div style={{ marginTop: 24, borderRadius: 8, overflow: "hidden" }}
+           onError={() => {}}>
+        <img
+          src={FOOTER_URL}
+          alt="בית הדור הבא"
+          style={{ width: "100%", height: 180, objectFit: "cover", display: "block", borderRadius: 8 }}
+          onError={e => { e.target.parentElement.style.display = "none"; }}
+        />
+      </div>
+      <div style={{ marginTop: 12, textAlign: "center", fontSize: 14, fontWeight: 700, color: "#1a56a0" }}>
         מחכים לכם בבית הדור הבא 🌱
       </div>
 
