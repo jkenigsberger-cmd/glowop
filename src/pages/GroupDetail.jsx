@@ -4,6 +4,7 @@ import { base44 } from "@/api/base44Client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { ChevronRight, Calendar, Users, Phone, Mail, Pencil, Plus, FileText, ClipboardList, Copy } from "lucide-react";
+import QuotePdfButton from "@/components/quotes/QuotePdfButton";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import GroupStatusBadge from "@/components/groups/GroupStatusBadge";
@@ -150,6 +151,7 @@ export default function GroupDetail() {
                           <Copy className="w-3 h-3" /> העתק לינק לטופס לקוח
                         </Button>
                       )}
+                      <QuotePdfButton quote={q} group={group} />
                       <Button size="sm" variant="ghost" onClick={() => { setEditQuote(q); setShowQuoteForm(true); }} className="gap-1">
                         <Pencil className="w-3 h-3" /> עריכה
                       </Button>
