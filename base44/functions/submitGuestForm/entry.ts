@@ -22,26 +22,45 @@ Deno.serve(async (req) => {
     return Response.json({ error: 'This quote is not open for submission' }, { status: 403 });
   }
 
+  const num = (v) => (v !== undefined && v !== '' ? Number(v) : undefined);
   const now = new Date().toISOString();
 
   const submission = await base44.asServiceRole.entities.GuestFormSubmission.create({
     quote_id,
     group_id,
-    contact_name:               fields.contact_name              || '',
-    contact_phone:              fields.contact_phone             || '',
-    contact_email:              fields.contact_email             || '',
-    total_pax:                  fields.total_pax                 ? Number(fields.total_pax)        : undefined,
-    staff_count:                fields.staff_count               ? Number(fields.staff_count)      : undefined,
-    participant_count:          fields.participant_count         ? Number(fields.participant_count): undefined,
-    boys_count:                 fields.boys_count                ? Number(fields.boys_count)       : undefined,
-    girls_count:                fields.girls_count               ? Number(fields.girls_count)      : undefined,
-    special_diets:              fields.special_diets             || '',
-    tent_distribution_notes:    fields.tent_distribution_notes   || '',
-    schedule_notes:             fields.schedule_notes            || '',
-    general_notes:              fields.general_notes             || '',
-    submitted_at:               now,
-    source:                     'LINK',
-    status:                     'SUBMITTED',
+    // Contact
+    contact_name:            fields.contact_name       || '',
+    contact_phone:           fields.contact_phone      || '',
+    contact_email:           fields.contact_email      || '',
+    client_org:              fields.client_org         || '',
+    group_type_label:        fields.group_type_label   || '',
+    // Derived totals
+    total_pax:               num(fields.total_pax),
+    staff_count:             num(fields.staff_count),
+    participant_count:       num(fields.participant_count),
+    // Students
+    boys_count:              num(fields.boys_count),
+    girls_count:             num(fields.girls_count),
+    // Staff
+    staff_men_count:         num(fields.staff_men_count),
+    staff_women_count:       num(fields.staff_women_count),
+    // Drivers/security
+    drivers_men_count:       num(fields.drivers_men_count),
+    drivers_women_count:     num(fields.drivers_women_count),
+    // Flags
+    is_sleeping_group:       !!fields.is_sleeping_group,
+    arrival_lunch:           !!fields.arrival_lunch,
+    departure_lunch:         !!fields.departure_lunch,
+    // Serialized JSON fields
+    special_diets:           fields.special_diets            || '',
+    meal_plan:               fields.meal_plan                || '',
+    tent_distribution_notes: fields.tent_distribution_notes  || '',
+    schedule_notes:          fields.schedule_notes           || '',
+    general_notes:           fields.general_notes            || '',
+    // Metadata
+    submitted_at: now,
+    source:       'LINK',
+    status:       'SUBMITTED',
   });
 
   return Response.json({ success: true, submission_id: submission.id });
