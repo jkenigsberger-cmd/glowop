@@ -46,8 +46,8 @@ const fmtMoney = (n) => `₪${Math.round(Number(n) || 0).toLocaleString("he-IL")
 const fmtDate  = (d) => { if (!d) return null; try { return new Date(d).toLocaleDateString("he-IL"); } catch { return d; } };
 
 const calcNights = (arrival, departure) => {
-  if (!arrival || !departure) return 1;
-  return Math.max(1, Math.round((new Date(departure) - new Date(arrival)) / 86400000));
+  if (!arrival || !departure) return 0;
+  return Math.max(0, Math.round((new Date(departure) - new Date(arrival)) / 86400000));
 };
 const suggestLodgingRateType = (arrivalDate, groupType) => {
   if (groupType === "DAY_USE") return "day_activity";
@@ -371,8 +371,8 @@ function CalendarCard({ arrival, departure, nights }) {
             <span className="font-semibold text-slate-700">{fmtDate(departure)}</span>
           </div>
           <div className="mt-2 bg-primary/5 border border-primary/15 rounded-xl py-2 text-center">
-            <div className="text-2xl font-bold text-primary">{nights}</div>
-            <div className="text-xs text-slate-400">לילות</div>
+            <div className="text-2xl font-bold text-primary">{nights > 0 ? nights : "יום"}</div>
+            <div className="text-xs text-slate-400">{nights > 0 ? "לילות" : "פעילות"}</div>
           </div>
         </div>
       ) : (
@@ -509,7 +509,7 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
 
   const initArrival    = quote?.arrival_date    || group?.arrival_date    || "";
   const initDeparture  = quote?.departure_date  || group?.departure_date  || "";
-  const initNights     = calcNights(initArrival, initDeparture);
+  const initNights     = calcNights(initArrival, initDeparture) || 1; // default 1 for row init
   const initEstPax     = Number(quote?.estimated_pax ?? group?.total_pax    ?? 0);
   const initStaff      = Number(quote?.staff_count   ?? group?.staff_count  ?? 0);
   const initParticipants = Math.max(0, initEstPax - initStaff);
@@ -590,7 +590,7 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
     else onSaved();
   };
 
-  const groupNameDisplay = isNewGroupFlow ? groupForm.group_name : (group?.group_name || form.client_name);
+  const groupNameDisplay = isNewGroupFlow ? (groupForm.group_name || form.client_name) : (group?.group_name || form.client_name);
 
   return (
     <Dialog open onOpenChange={onClose}>

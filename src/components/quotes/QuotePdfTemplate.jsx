@@ -108,6 +108,8 @@ function resolveData(quote, group) {
     ? "תלמידים"
     : (quote?.staff_count ?? group?.staff_count) ? "מבוגרים" : "תלמידים";
 
+  const STATUS_HE = { DRAFT: "טיוטה", SENT: "נשלח", APPROVED: "מאושר", REJECTED: "נדחה", EXPIRED: "פג תוקף" };
+
   return {
     clientName:   snap?.clientName  || quote?.client_name  || group?.contact_name  || "—",
     clientOrg:    snap?.clientOrg   || group?.group_name   || quote?.client_name   || "—",
@@ -132,7 +134,7 @@ function resolveData(quote, group) {
     paymentTerms: quote?.payment_terms || "",
     quoteNumber:  quote?.quote_number || "",
     version:      quote?.version ?? 1,
-    status:       quote?.status || "",
+    status:       STATUS_HE[quote?.status] || quote?.status || "",
     validUntil:   quote?.valid_until || "",
   };
 }
@@ -287,7 +289,7 @@ function Page2({ d }) {
         { label: "קהל יעד",           value: d.audienceLabel },
         { label: "סוג פעילות",        value: d.activityTypeLabel },
         { label: "תאריכים",           value: dateRange },
-        { label: "מס׳ לילות",         value: d.nights > 0 ? String(d.nights) : "יום" },
+        { label: "מס׳ לילות",         value: d.nights > 0 ? String(d.nights) : (d.arrival === d.departure || !d.departure ? "יום" : "יום") },
         { label: 'סה"כ משתתפים',     value: d.totalPax ? String(d.totalPax) : "—" },
       ]} />
 

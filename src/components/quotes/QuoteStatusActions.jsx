@@ -25,6 +25,12 @@ const TRANSITIONS = {
  * Contains the commercial truth for the guest-form flow later.
  */
 function buildSnapshot(quote, group) {
+  // Calculate nights from stored dates (quote.nights field is never persisted)
+  const calcedNights = (() => {
+    if (!quote.arrival_date || !quote.departure_date) return 0;
+    return Math.max(0, Math.round((new Date(quote.departure_date) - new Date(quote.arrival_date)) / 86400000));
+  })();
+
   return JSON.stringify({
     capturedAt:    new Date().toISOString(),
     // group context
@@ -32,7 +38,7 @@ function buildSnapshot(quote, group) {
     groupType:     group?.group_type     || "",
     startDate:     quote.arrival_date    || "",
     endDate:       quote.departure_date  || "",
-    nights:        quote.nights          || 0,
+    nights:        calcedNights,
     // headcounts
     totalPax:      quote.estimated_pax   || 0,
     staffTotal:    quote.staff_count     || 0,
@@ -42,10 +48,13 @@ function buildSnapshot(quote, group) {
     clientPhone:   quote.client_phone    || "",
     clientEmail:   quote.client_email    || "",
     clientTaxId:   quote.client_tax_id   || "",
-    // pricing
-    total_price:   quote.total_price     || 0,
-    advance_payment: quote.advance_payment || 0,
-    balance_payment: quote.balance_payment || 0,
+    // pricing (line item detail for PDF)
+    subtotal:        quote.subtotal        || 0,
+    discount_percent: quote.discount_percent || 0,
+    discount_amount: quote.discount_amount  || 0,
+    total_price:     quote.total_price      || 0,
+    advance_payment: quote.advance_payment  || 0,
+    balance_payment: quote.balance_payment  || 0,
   });
 }
 
