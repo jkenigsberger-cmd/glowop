@@ -155,18 +155,18 @@ const pageStyle = {
 // Centered logo + title used on Page 1 only
 function CoverHeader({ quoteNumber }) {
   return (
-    <div style={{ textAlign: "center", marginBottom: 24 }}>
+    <div style={{ textAlign: "center", marginBottom: 24, direction: "ltr" }}>
       <img
         src={LOGO_URL}
         alt="בית הדור הבא"
-        style={{ height: 160, width: "auto", marginBottom: 16 }}
+        style={{ height: 160, width: "auto", marginBottom: 16, display: "block", margin: "0 auto 16px auto" }}
         onError={e => { e.target.style.display = "none"; }}
       />
-      <div style={{ fontSize: 26, fontWeight: 800, color: BLUE, marginBottom: 4 }}>
+      <div style={{ fontSize: 26, fontWeight: 800, color: BLUE, marginBottom: 4, direction: "rtl" }}>
         בית הדור הבא – חוות אהרונסון
       </div>
       {quoteNumber && (
-        <div style={{ fontSize: 10, color: "#888", marginTop: 2 }}>מס׳ הצעה: {quoteNumber}</div>
+        <div style={{ fontSize: 10, color: "#888", marginTop: 2, direction: "rtl" }}>מס׳ הצעה: {quoteNumber}</div>
       )}
     </div>
   );
