@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -406,7 +407,27 @@ function AdjustmentSection({ lines, setLines }) {
 // ── Main Modal ────────────────────────────────────────────────────────────────
 export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
   const isEdit = !!quote;
+  const isNewGroupFlow = !group; // creating Group + Quote together
   const groupType = group?.group_type || "LODGING";
+  const navigate = useNavigate();
+
+  // Group shell fields (only used when isNewGroupFlow)
+  const [groupForm, setGroupForm] = useState({
+    group_name:    "",
+    group_type:    "LODGING",
+    contact_name:  "",
+    contact_phone: "",
+    contact_email: "",
+  });
+  const setGroup = (k, v) => setGroupForm(f => ({ ...f, [k]: v }));
+
+  // Sync: when contact fields change in new-group flow, mirror to quote client fields
+  const handleGroupContactChange = (k, v) => {
+    setGroup(k, v);
+    // Mirror to quote client fields (they remain editable/overridable)
+    const mirrorMap = { contact_name: "client_name", contact_phone: "client_phone", contact_email: "client_email" };
+    if (mirrorMap[k]) setForm(f => ({ ...f, [mirrorMap[k]]: v }));
+  };
 
   const [form, setForm] = useState({
     quote_number:    quote?.quote_number    || "",
@@ -490,9 +511,32 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
-    const payload = {
+
+    let resolvedGroupId = group?.id;
+
+    // New-group flow: create Group shell first
+    if (isNewGroupFlow) {
+      const totalPax   = Number(form.estimated_pax || 0);
+      const staffPax   = Number(form.staff_count   || 0);
+      const newGroup = await base44.entities.Group.create({
+        group_name:        groupForm.group_name,
+        group_type:        groupForm.group_type,
+        arrival_date:      form.arrival_date  || undefined,
+        departure_date:    form.departure_date || undefined,
+        total_pax:         totalPax  || undefined,
+        staff_count:       staffPax  || undefined,
+        participant_count: Math.max(0, totalPax - staffPax) || undefined,
+        contact_name:      groupForm.contact_name  || undefined,
+        contact_phone:     groupForm.contact_phone || undefined,
+        contact_email:     groupForm.contact_email || undefined,
+        status:            "DRAFT",
+      });
+      resolvedGroupId = newGroup.id;
+    }
+
+    const quotePayload = {
       ...form,
-      group_id: group.id,
+      group_id: resolvedGroupId,
       student_lodging_lines: JSON.stringify(studentLodging),
       adult_lodging_lines:   JSON.stringify(adultLodging),
       workshop_lines:        JSON.stringify(workshops),
@@ -508,26 +552,81 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
       estimated_pax:    estimatedPax  || undefined,
       staff_count:      staffCount    || undefined,
       participant_count: participantCount || undefined,
-      // coffee_corner_pax stores staff_count when on, 0 when off
       coffee_corner_pax: coffeeEnabled ? staffCount : 0,
       discount_percent: Number(form.discount_percent || 0),
     };
-    if (isEdit) await base44.entities.Quote.update(quote.id, payload);
-    else await base44.entities.Quote.create(payload);
+
+    if (isEdit) {
+      await base44.entities.Quote.update(quote.id, quotePayload);
+    } else {
+      await base44.entities.Quote.create(quotePayload);
+    }
+
     setSaving(false);
-    onSaved();
+
+    if (isNewGroupFlow && resolvedGroupId) {
+      navigate(`/groups/${resolvedGroupId}`);
+      onClose();
+    } else {
+      onSaved();
+    }
   };
 
   return (
     <Dialog open onOpenChange={onClose}>
       <DialogContent className="max-w-3xl max-h-[92vh] overflow-y-auto" dir="rtl">
         <DialogHeader>
-          <DialogTitle className="text-right">{isEdit ? "עריכת הצעת מחיר" : "הצעת מחיר חדשה"}</DialogTitle>
+          <DialogTitle className="text-right">
+            {isEdit ? "עריכת הצעת מחיר" : isNewGroupFlow ? "יצירת הצעת מחיר — לקוח חדש" : "הצעת מחיר חדשה"}
+          </DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6 text-sm">
 
-          {/* ── Header ── */}
+          {/* ── Group Shell (new-group flow only) ── */}
+          {isNewGroupFlow && (
+            <div className="bg-muted/30 border border-border rounded-xl p-4 space-y-3">
+              <div className="text-xs font-semibold text-primary border-b border-primary/20 pb-1">פרטי קבוצה</div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2 space-y-1">
+                  <Label>שם קבוצה / ארגון *</Label>
+                  <Input
+                    required
+                    value={groupForm.group_name}
+                    onChange={e => setGroup("group_name", e.target.value)}
+                    placeholder="שם בית הספר / הארגון"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>סוג</Label>
+                  <Select value={groupForm.group_type} onValueChange={v => setGroup("group_type", v)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="LODGING">לינה</SelectItem>
+                      <SelectItem value="DAY_USE">יום כיף</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="text-xs font-semibold text-muted-foreground mt-2">איש קשר</div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label>שם איש קשר</Label>
+                  <Input value={groupForm.contact_name} onChange={e => handleGroupContactChange("contact_name", e.target.value)} />
+                </div>
+                <div className="space-y-1">
+                  <Label>טלפון</Label>
+                  <Input value={groupForm.contact_phone} onChange={e => handleGroupContactChange("contact_phone", e.target.value)} />
+                </div>
+                <div className="col-span-2 space-y-1">
+                  <Label>אימייל</Label>
+                  <Input type="email" value={groupForm.contact_email} onChange={e => handleGroupContactChange("contact_email", e.target.value)} />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Quote Header ── */}
           <div className="grid grid-cols-3 gap-3">
             <div className="space-y-1">
               <Label>מספר הצעה</Label>
