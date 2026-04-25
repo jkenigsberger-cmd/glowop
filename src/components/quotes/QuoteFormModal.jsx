@@ -418,6 +418,7 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
     contact_name:  "",
     contact_phone: "",
     contact_email: "",
+    client_tax_id: "",
   });
   const setGroup = (k, v) => setGroupForm(f => ({ ...f, [k]: v }));
 
@@ -425,7 +426,7 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
   const handleGroupContactChange = (k, v) => {
     setGroup(k, v);
     // Mirror to quote client fields (they remain editable/overridable)
-    const mirrorMap = { contact_name: "client_name", contact_phone: "client_phone", contact_email: "client_email" };
+    const mirrorMap = { contact_name: "client_name", contact_phone: "client_phone", contact_email: "client_email", client_tax_id: "client_tax_id" };
     if (mirrorMap[k]) setForm(f => ({ ...f, [mirrorMap[k]]: v }));
   };
 
@@ -608,17 +609,21 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
                   </Select>
                 </div>
               </div>
-              <div className="text-xs font-semibold text-muted-foreground mt-2">איש קשר</div>
+              <div className="text-xs font-semibold text-muted-foreground mt-2">איש קשר ופרטי חיוב</div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label>שם איש קשר</Label>
                   <Input value={groupForm.contact_name} onChange={e => handleGroupContactChange("contact_name", e.target.value)} />
                 </div>
                 <div className="space-y-1">
+                  <Label>ח.פ / ע.מ</Label>
+                  <Input value={groupForm.client_tax_id} onChange={e => handleGroupContactChange("client_tax_id", e.target.value)} placeholder="מספר חברה / עוסק" />
+                </div>
+                <div className="space-y-1">
                   <Label>טלפון</Label>
                   <Input value={groupForm.contact_phone} onChange={e => handleGroupContactChange("contact_phone", e.target.value)} />
                 </div>
-                <div className="col-span-2 space-y-1">
+                <div className="space-y-1">
                   <Label>אימייל</Label>
                   <Input type="email" value={groupForm.contact_email} onChange={e => handleGroupContactChange("contact_email", e.target.value)} />
                 </div>
