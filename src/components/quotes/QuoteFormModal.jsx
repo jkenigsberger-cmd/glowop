@@ -167,7 +167,12 @@ function AdultLodgingSection({ lines, setLines, defaultNights, adultsCount }) {
 
   // Capacity indicator
   const allocatedBeds = lines.reduce((sum, r) => {
-    const cap = ADULT_TENT_RATES[r.tent_type]?.capacity ?? 0;
+    let cap;
+    if (r.tent_type === "BED68") {
+      cap = r.actual_beds || 6;
+    } else {
+      cap = ADULT_TENT_RATES[r.tent_type]?.capacity ?? 0;
+    }
     return sum + (Number(r.tent_count) * cap);
   }, 0);
   const remaining = adultsCount - allocatedBeds;
@@ -209,11 +214,23 @@ function AdultLodgingSection({ lines, setLines, defaultNights, adultsCount }) {
             <div className="text-muted-foreground text-[10px]">מס' אוהלים</div>
             <Input className="h-8 text-xs" type="number" min="0" value={r.tent_count} onChange={e => update(idx, "tent_count", e.target.value)} />
           </div>
+          {r.tent_type === "BED68" && (
+            <div className="col-span-2 space-y-0.5">
+              <div className="text-muted-foreground text-[10px]">מיטות לאוהל</div>
+              <Select value={String(r.actual_beds || 6)} onValueChange={v => update(idx, "actual_beds", Number(v))}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="6">6 מיטות</SelectItem>
+                  <SelectItem value="8">8 מיטות</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <div className="col-span-2 space-y-0.5">
             <div className="text-muted-foreground text-[10px]">לילות</div>
             <Input className="h-8 text-xs" type="number" min="1" value={r.nights} onChange={e => update(idx, "nights", e.target.value)} />
           </div>
-          <div className="col-span-3" />
+          <div className={r.tent_type === "BED68" ? "col-span-1" : "col-span-3"} />
           <div className="col-span-1 flex items-center gap-1 justify-end">
             <RowTotal amount={calcAdultLodging(r)} />
             <button type="button" onClick={() => setLines(p => p.filter((_, i) => i !== idx))} className="text-muted-foreground hover:text-red-500 mr-1">
