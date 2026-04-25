@@ -159,7 +159,7 @@ function CoverHeader({ quoteNumber }) {
       <img
         src={LOGO_URL}
         alt="בית הדור הבא"
-        style={{ height: 110, width: "auto", marginBottom: 10 }}
+        style={{ height: 160, width: "auto", marginBottom: 16 }}
         onError={e => { e.target.style.display = "none"; }}
       />
       <div style={{ fontSize: 26, fontWeight: 800, color: BLUE, marginBottom: 4 }}>
