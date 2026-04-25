@@ -9,6 +9,22 @@ import GuestFormProgress from "@/components/guest-form/GuestFormProgress";
 import { Button } from "@/components/ui/button";
 import { differenceInCalendarDays } from "date-fns";
 
+// ── Field resolvers (snapshot > direct quote fields) ──────────────────────────
+const snap = (d) => { try { return d?.snapshot || null; } catch { return null; } };
+const getGroupName    = (d) => snap(d)?.groupName    || snap(d)?.group_name || d?.group_name || '';
+const getArrivalDate  = (d) => d?.arrival_date   || snap(d)?.startDate  || '';
+const getDepartureDate= (d) => d?.departure_date || snap(d)?.endDate    || '';
+const getTotalPax     = (d) => snap(d)?.totalPax      ?? d?.total_pax         ?? null;
+const getStaffCount   = (d) => snap(d)?.staffTotal    ?? d?.staff_count       ?? null;
+const getParticipantCount=(d)=> snap(d)?.studentsTotal ?? d?.participant_count ?? null;
+const getBoysCount    = (d) => d?.boys_count  ?? null;
+const getGirlsCount   = (d) => d?.girls_count ?? null;
+const getContactName  = (d) => snap(d)?.clientName  || d?.contact_name  || '';
+const getContactPhone = (d) => snap(d)?.clientPhone || d?.contact_phone || '';
+
+// Email format validator
+const isValidEmail = (v) => !v || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+
 const ALL_STEPS = [
   { key: "details",      label: "פרטי קבוצה" },
   { key: "diet",         label: "העדפות מזון" },
@@ -60,18 +76,18 @@ export default function GuestForm() {
       .then(res => {
         const d = res.data;
         setQuoteData(d);
-        // Prefill details
+        // Prefill details using safe resolvers
         setDetails({
-          group_name: d.client_name || "",
+          group_name:      getGroupName(d),
           group_type_label: "",
-          contact_name: d.client_name || "",
-          contact_phone: d.client_phone || "",
-          contact_email: "",
-          client_org: "",
+          contact_name:    getContactName(d),
+          contact_phone:   getContactPhone(d),
+          contact_email:   "",
+          client_org:      "",
         });
-        // Prefill participants from estimate
-        const studentsTotal = d.participant_count || 0;
-        const staffTotal = d.staff_count || 0;
+        // Prefill participants from resolved estimate
+        const studentsTotal = getParticipantCount(d) || 0;
+        const staffTotal = getStaffCount(d) || 0;
         setParticipants(p => ({
           ...p,
           boys_count: Math.floor(studentsTotal / 2) || "",
@@ -84,10 +100,25 @@ export default function GuestForm() {
       .finally(() => setLoading(false));
   }, [quoteId]);
 
-  // ── Sleeping detection ────────────────────────────────────────────────────
-  const isSleeping = quoteData?.arrival_date && quoteData?.departure_date
-    ? differenceInCalendarDays(new Date(quoteData.departure_date), new Date(quoteData.arrival_date)) > 0
+  // ── Sleeping detection (use resolvers) ───────────────────────────────────
+  const resolvedArrival   = getArrivalDate(quoteData);
+  const resolvedDeparture = getDepartureDate(quoteData);
+  const isSleeping = resolvedArrival && resolvedDeparture
+    ? differenceInCalendarDays(new Date(resolvedDeparture), new Date(resolvedArrival)) > 0
     : false;
+
+  // Resolved quoteData proxy passed to steps (avoids repeating resolver calls)
+  const resolvedQuoteData = quoteData ? {
+    ...quoteData,
+    arrival_date:      resolvedArrival,
+    departure_date:    resolvedDeparture,
+    group_name:        getGroupName(quoteData),
+    total_pax:         getTotalPax(quoteData),
+    staff_count:       getStaffCount(quoteData),
+    participant_count: getParticipantCount(quoteData),
+    boys_count:        getBoysCount(quoteData),
+    girls_count:       getGirlsCount(quoteData),
+  } : null;
 
   const activeSteps = isSleeping ? ALL_STEPS : ALL_STEPS.filter(s => s.key !== "meals");
 
@@ -98,8 +129,21 @@ export default function GuestForm() {
   const goNext = () => setStep(s => Math.min(s + 1, activeSteps.length - 1));
   const goBack = () => setStep(s => Math.max(s - 1, 0));
 
+  // ── Validation ───────────────────────────────────────────────────────────
+  const [validationError, setValidationError] = useState(null);
+
+  const validate = () => {
+    if (!details.contact_name?.trim()) return "נא להזין שם איש קשר";
+    if (!details.contact_phone?.trim()) return "נא להזין מספר טלפון";
+    if (!isValidEmail(details.contact_email)) return "כתובת האימייל אינה תקינה";
+    return null;
+  };
+
   // ── Submit ────────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
+    const err = validate();
+    if (err) { setValidationError(err); return; }
+    setValidationError(null);
     setSubmitting(true);
     const boys = Number(participants.boys_count) || 0;
     const girls = Number(participants.girls_count) || 0;
@@ -112,38 +156,43 @@ export default function GuestForm() {
     const driversTotal = driversMen + driversWomen;
     const totalPax = participantCount + staffCount + driversTotal;
 
-    await base44.functions.invoke("submitGuestForm", {
-      quote_id: quoteId,
-      group_id: quoteData.group_id,
-      contact_name: details.contact_name,
-      contact_phone: details.contact_phone,
-      contact_email: details.contact_email,
-      client_org: details.client_org,
-      group_type_label: details.group_type_label,
-      total_pax: totalPax,
-      participant_count: participantCount,
-      staff_count: staffCount,
-      boys_count: boys,
-      girls_count: girls,
-      staff_men_count: staffMen,
-      staff_women_count: staffWomen,
-      drivers_men_count: driversMen,
-      drivers_women_count: driversWomen,
-      is_sleeping_group: isSleeping,
-      arrival_lunch: mealOptions.arrival_lunch,
-      departure_lunch: mealOptions.departure_lunch,
-      special_diets: JSON.stringify(diet),
-      meal_plan: JSON.stringify(meals),
-      tent_distribution_notes: JSON.stringify({
-        student_sleeping_notes: participants.student_sleeping_notes,
-        staff_sleeping_notes: participants.staff_sleeping_notes,
-        drivers_lodging_notes: participants.drivers_lodging_notes,
-      }),
-      schedule_notes: JSON.stringify(schedule),
-      general_notes: generalNotes,
-    });
-    setSubmitted(true);
-    setSubmitting(false);
+    try {
+      await base44.functions.invoke("submitGuestForm", {
+        quote_id: quoteId,
+        group_id: quoteData.group_id,
+        contact_name: details.contact_name,
+        contact_phone: details.contact_phone,
+        contact_email: details.contact_email,
+        client_org: details.client_org,
+        group_type_label: details.group_type_label,
+        total_pax: totalPax,
+        participant_count: participantCount,
+        staff_count: staffCount,
+        boys_count: boys,
+        girls_count: girls,
+        staff_men_count: staffMen,
+        staff_women_count: staffWomen,
+        drivers_men_count: driversMen,
+        drivers_women_count: driversWomen,
+        is_sleeping_group: isSleeping,
+        arrival_lunch: mealOptions.arrival_lunch,
+        departure_lunch: mealOptions.departure_lunch,
+        special_diets: JSON.stringify(diet),
+        meal_plan: JSON.stringify(meals),
+        tent_distribution_notes: JSON.stringify({
+          student_sleeping_notes: participants.student_sleeping_notes,
+          staff_sleeping_notes: participants.staff_sleeping_notes,
+          drivers_lodging_notes: participants.drivers_lodging_notes,
+        }),
+        schedule_notes: JSON.stringify(schedule),
+        general_notes: generalNotes,
+      });
+      setSubmitted(true);
+    } catch {
+      setValidationError("שגיאה בשליחת הטופס. אנא נסו שוב או פנו אלינו ישירות.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   // ── States ────────────────────────────────────────────────────────────────
@@ -196,7 +245,7 @@ export default function GuestForm() {
             {currentStepKey === "details" && (
               <GuestFormStep0
                 form={details} setForm={setDetails}
-                quoteData={quoteData}
+                quoteData={resolvedQuoteData}
               />
             )}
             {currentStepKey === "diet" && (
@@ -204,7 +253,7 @@ export default function GuestForm() {
             )}
             {currentStepKey === "meals" && (
               <GuestFormStep2
-                quoteData={quoteData}
+                quoteData={resolvedQuoteData}
                 mealOptions={mealOptions} setMealOptions={setMealOptions}
                 meals={meals} setMeals={setMeals}
               />
@@ -212,13 +261,13 @@ export default function GuestForm() {
             {currentStepKey === "participants" && (
               <GuestFormStep3
                 form={participants} setForm={setParticipants}
-                quoteData={quoteData}
+                quoteData={resolvedQuoteData}
               />
             )}
             {currentStepKey === "schedule" && (
               <GuestFormStep4
                 rows={schedule} setRows={setSchedule}
-                quoteData={quoteData}
+                quoteData={resolvedQuoteData}
               />
             )}
           </div>
@@ -234,6 +283,13 @@ export default function GuestForm() {
               value={generalNotes}
               onChange={e => setGeneralNotes(e.target.value)}
             />
+          </div>
+        )}
+
+        {/* Validation error */}
+        {validationError && (
+          <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm text-center">
+            {validationError}
           </div>
         )}
 

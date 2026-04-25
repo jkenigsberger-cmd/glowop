@@ -62,7 +62,10 @@ export default function GuestFormStep3({ form, setForm, quoteData }) {
   const driversTotal = driversMen + driversWomen;
   const grandTotal = studentsTotal + staffTotal + driversTotal;
 
-  const estimatedTotal = quoteData?.estimated_pax || 0;
+  // Use resolved total_pax (snapshot > quote fields), fallback to participant+staff if available
+  const estimatedTotal = quoteData?.total_pax
+    ?? ((quoteData?.participant_count ?? 0) + (quoteData?.staff_count ?? 0))
+    ?? 0;
   const diff = grandTotal - estimatedTotal;
   const hasDiff = estimatedTotal > 0 && Math.abs(diff) > 2;
 

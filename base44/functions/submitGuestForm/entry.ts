@@ -18,7 +18,7 @@ Deno.serve(async (req) => {
     return Response.json({ error: 'Quote not found' }, { status: 404 });
   }
 
-  if (quote.status !== 'APPROVED') {
+  if (String(quote.status || '').toLowerCase() !== 'approved') {
     return Response.json({ error: 'This quote is not open for submission' }, { status: 403 });
   }
 
