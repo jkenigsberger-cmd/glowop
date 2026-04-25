@@ -10,6 +10,7 @@ import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import Inventory from "./pages/Inventory";
 import Groups from "./pages/Groups";
 import GroupDetail from "./pages/GroupDetail";
+import GuestForm from "./pages/GuestForm.jsx";
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -56,7 +57,12 @@ function App() {
     <AuthProvider>
       <QueryClientProvider client={queryClientInstance}>
         <Router>
-          <AuthenticatedApp />
+          <Routes>
+            {/* Public route — no auth required */}
+            <Route path="/guest-form" element={<GuestForm />} />
+            {/* All other routes require auth */}
+            <Route path="/*" element={<AuthenticatedApp />} />
+          </Routes>
         </Router>
         <Toaster />
       </QueryClientProvider>
