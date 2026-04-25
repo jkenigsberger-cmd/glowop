@@ -1,8 +1,7 @@
 /**
- * QuotePdfTemplate
- * A printable A4 RTL Hebrew document — 3 logical pages.
- * Rendered into a hidden div and printed via window.print().
- * No jsPDF used — Hebrew rendering via native browser print.
+ * QuotePdfTemplate — matches the reference PDF as closely as possible.
+ * Logo centered + large on Page 1. Table-style client/activity rows.
+ * Printable A4 RTL Hebrew via window.print().
  */
 
 const fmt = (n) => Math.round(Number(n) || 0).toLocaleString("he-IL");
@@ -12,7 +11,10 @@ const fmtDate = (d) => {
 };
 const parse = (str, fb = []) => { try { const r = JSON.parse(str); return Array.isArray(r) ? r : fb; } catch { return fb; } };
 
-// ── Safe resolvers: snapshot first, then quote direct fields ──────────────────
+const LOGO_URL   = "https://media.base44.com/images/public/69ea08de3791d203c52ea3cc/107796e98_quote-logo.png";
+const FOOTER_URL = "https://media.base44.com/images/public/69ea08de3791d203c52ea3cc/c500ec249_quote-footer-photo.jpg";
+
+// ── Safe resolvers ────────────────────────────────────────────────────────────
 function resolveData(quote, group) {
   let snap = null;
   try { snap = quote?.snapshot ? JSON.parse(quote.snapshot) : null; } catch {}
@@ -31,127 +33,95 @@ function resolveData(quote, group) {
   const adjustLines   = parse(quote?.adjustment_lines);
   const coffeeCornerPax = Number(quote?.coffee_corner_pax || 0);
 
-  // Build unified line items for the pricing table
-  const lineItems = [];
+  const STUDENT_RATES = {
+    day_activity:    { label: "יום פעילות",        rate: 125 },
+    midweek_lodging: { label: "לינה אמצע שבוע",    rate: 190 },
+    weekend_lodging: { label: "לינה סוף שבוע",      rate: 250 },
+  };
+  const ADULT_RATES = {
+    BED3:  { label: "אוהל 3 מיטות",   rate: 340 },
+    BED68: { label: "אוהל 6/8 מיטות", rate: 250 },
+  };
 
-  const STUDENT_RATES = { day_activity: { label: "יום פעילות", rate: 125 }, midweek_lodging: { label: "לינה אמצע שבוע", rate: 190 }, weekend_lodging: { label: "לינה סוף שבוע", rate: 250 } };
-  const ADULT_RATES   = { BED3: { label: "אוהל 3 מיטות", rate: 340 }, BED68: { label: "אוהל 6/8 מיטות", rate: 250 } };
+  const lineItems = [];
 
   studentLines.forEach(r => {
     const rateInfo = STUDENT_RATES[r.rate_type];
     const isDay = r.rate_type === "day_activity";
-    const qty = isDay ? Number(r.pax) : Number(r.pax) * Number(r.nights);
     const unitRate = rateInfo?.rate ?? Number(r.rate ?? 0);
+    const qty = isDay ? Number(r.pax) : Number(r.pax) * Number(r.nights);
     const total = qty * unitRate;
-    lineItems.push({
-      name: rateInfo?.label || r.rate_type,
-      detail: isDay ? `${r.pax} משתתפים` : `${r.pax} משתתפים × ${r.nights} לילות`,
-      qty: isDay ? r.pax : `${r.pax}×${r.nights}`,
-      unitPrice: unitRate,
-      total,
-      vatAmount: null,
-    });
+    // Label matches reference: "לינה אמצע שבוע - אירוח"
+    const label = (rateInfo?.label || r.rate_type) + " - אירוח";
+    lineItems.push({ name: label, qty, unitPrice: unitRate, total, vatAmount: null });
   });
 
   adultLines.forEach(r => {
     const rateInfo = ADULT_RATES[r.tent_type];
     const rate = rateInfo?.rate ?? Number(r.rate_per_tent_per_night ?? 0);
-    const total = Number(r.tent_count) * Number(r.nights) * rate;
-    lineItems.push({
-      name: rateInfo?.label || r.tent_type,
-      detail: `${r.tent_count} אוהלים × ${r.nights} לילות`,
-      qty: `${r.tent_count}×${r.nights}`,
-      unitPrice: rate,
-      total,
-      vatAmount: null,
-    });
+    const qty = Number(r.tent_count) * Number(r.nights);
+    const total = qty * rate;
+    lineItems.push({ name: rateInfo?.label || r.tent_type, qty: r.tent_count, unitPrice: rate, total, vatAmount: null });
   });
 
   workshopLines.forEach(r => {
-    lineItems.push({
-      name: r.name,
-      detail: r.audience === "ADULTS" ? "מבוגרים" : "תלמידים",
-      qty: 1,
-      unitPrice: Number(r.rate ?? 0),
-      total: Number(r.rate ?? 0),
-      vatAmount: null,
-    });
+    lineItems.push({ name: `סדנה: ${r.name}`, qty: 1, unitPrice: Number(r.rate ?? 0), total: Number(r.rate ?? 0), vatAmount: null });
   });
 
   lectureLines.forEach(r => {
     const base = Number(r.base_price ?? 0);
     const vatAmount = r.vat_included ? Math.round(base * 0.18) : null;
     const total = r.vat_included ? base + vatAmount : base;
-    lineItems.push({
-      name: r.name,
-      detail: r.lecturer || "",
-      qty: 1,
-      unitPrice: base,
-      total,
-      vatAmount,
-    });
+    const label = r.vat_included ? `הרצאה: ${r.name} (+ מע״מ)` : `הרצאה: ${r.name}`;
+    lineItems.push({ name: label, qty: 1, unitPrice: base, total, vatAmount });
   });
 
   if (coffeeCornerPax > 0) {
-    const coffeeTotal = coffeeCornerPax * 15;
-    lineItems.push({
-      name: "פינת קפה ועוגיות",
-      detail: `${coffeeCornerPax} אנשי צוות × ₪15`,
-      qty: coffeeCornerPax,
-      unitPrice: 15,
-      total: coffeeTotal,
-      vatAmount: null,
-    });
+    lineItems.push({ name: "פינת קפה ועוגיות", qty: coffeeCornerPax, unitPrice: 15, total: coffeeCornerPax * 15, vatAmount: null });
   }
 
   addonLines.forEach(r => {
-    lineItems.push({
-      name: r.description || "תוספת",
-      detail: "",
-      qty: Number(r.quantity ?? 1),
-      unitPrice: Number(r.unit_price ?? 0),
-      total: Number(r.quantity ?? 1) * Number(r.unit_price ?? 0),
-      vatAmount: null,
-    });
+    const qty = Number(r.quantity ?? 1);
+    const unit = Number(r.unit_price ?? 0);
+    lineItems.push({ name: r.description || "תוספת", qty, unitPrice: unit, total: qty * unit, vatAmount: null });
   });
 
   adjustLines.forEach(r => {
     const amt = Number(r.amount || 0);
-    lineItems.push({
-      name: r.description || "התאמה",
-      detail: "",
-      qty: 1,
-      unitPrice: amt,
-      total: amt,
-      vatAmount: null,
-      isAdjustment: true,
-    });
+    lineItems.push({ name: r.description || "התאמה", qty: 1, unitPrice: amt, total: amt, vatAmount: null, isAdjustment: true });
   });
 
-  const subtotal       = Number(quote?.subtotal ?? 0);
-  const discountPct    = Number(quote?.discount_percent ?? 0);
-  const discountAmt    = Number(quote?.discount_amount ?? 0);
-  const totalPrice     = Number(quote?.total_price ?? 0);
-  const advance        = Number(quote?.advance_payment ?? Math.round(totalPrice * 0.3));
-  const balance        = Number(quote?.balance_payment ?? (totalPrice - advance));
+  const subtotal    = Number(quote?.subtotal ?? 0);
+  const discountPct = Number(quote?.discount_percent ?? 0);
+  const discountAmt = Number(quote?.discount_amount ?? 0);
+  const totalPrice  = Number(quote?.total_price ?? 0);
+  const advance     = Number(quote?.advance_payment ?? Math.round(totalPrice * 0.3));
+  const balance     = Number(quote?.balance_payment ?? (totalPrice - advance));
+
+  // Activity type label from first student lodging line
+  const activityTypeLabel = studentLines.length > 0
+    ? (STUDENT_RATES[studentLines[0].rate_type]?.label || studentLines[0].rate_type)
+    : (group?.group_type === "DAY_USE" ? "יום כיף" : "לינה");
+
+  // Audience
+  const audienceLabel = (quote?.participant_count ?? group?.participant_count)
+    ? "תלמידים"
+    : (quote?.staff_count ?? group?.staff_count) ? "מבוגרים" : "תלמידים";
 
   return {
-    // Client
     clientName:   snap?.clientName  || quote?.client_name  || group?.contact_name  || "—",
-    clientOrg:    snap?.clientOrg   || quote?.client_name  || group?.group_name    || "—",
+    clientOrg:    snap?.clientOrg   || group?.group_name   || quote?.client_name   || "—",
     clientPhone:  snap?.clientPhone || quote?.client_phone || group?.contact_phone || "—",
     clientEmail:  snap?.clientEmail || quote?.client_email || group?.contact_email || "—",
     clientTaxId:  snap?.clientTaxId || quote?.client_tax_id || "",
     contactName:  snap?.clientName  || quote?.client_name  || group?.contact_name  || "—",
-    // Group / Activity
     groupName:    snap?.groupName   || snap?.group_name    || group?.group_name    || quote?.client_name || "—",
-    groupType:    group?.group_type === "DAY_USE" ? "יום כיף" : "לינה",
-    // Dates
+    activityTypeLabel,
+    audienceLabel,
     arrival,
     departure,
     nights,
-    totalPax:     snap?.totalPax    ?? quote?.estimated_pax ?? group?.total_pax ?? "—",
-    // Pricing
+    totalPax:     snap?.totalPax ?? quote?.estimated_pax ?? group?.total_pax ?? "—",
     lineItems,
     subtotal,
     discountPct,
@@ -160,337 +130,337 @@ function resolveData(quote, group) {
     advance,
     balance,
     paymentTerms: quote?.payment_terms || "",
-    // Meta
-    quoteNumber: quote?.quote_number || "",
-    version:     quote?.version ?? 1,
-    status:      quote?.status || "",
-    validUntil:  quote?.valid_until || "",
+    quoteNumber:  quote?.quote_number || "",
+    version:      quote?.version ?? 1,
+    status:       quote?.status || "",
+    validUntil:   quote?.valid_until || "",
   };
 }
 
-// ── Styled sections ───────────────────────────────────────────────────────────
+// ── Shared styles ─────────────────────────────────────────────────────────────
+const BASE_FONT = "'Arial Hebrew', 'Segoe UI', Arial, sans-serif";
+const BLUE = "#1a56a0";
 
-function SectionTitle({ children }) {
+const pageStyle = {
+  width: "210mm",
+  minHeight: "297mm",
+  padding: "14mm 16mm 20mm 16mm",
+  boxSizing: "border-box",
+  fontFamily: BASE_FONT,
+  direction: "rtl",
+  backgroundColor: "#fff",
+  position: "relative",
+};
+
+// Centered logo + title used on Page 1 only
+function CoverHeader({ quoteNumber }) {
   return (
-    <div style={{ borderBottom: "2px solid #1a56a0", marginBottom: 8, paddingBottom: 4, marginTop: 20 }}>
-      <span style={{ fontSize: 13, fontWeight: 700, color: "#1a56a0" }}>{children}</span>
+    <div style={{ textAlign: "center", marginBottom: 24 }}>
+      <img
+        src={LOGO_URL}
+        alt="בית הדור הבא"
+        style={{ height: 110, width: "auto", marginBottom: 10 }}
+        onError={e => { e.target.style.display = "none"; }}
+      />
+      <div style={{ fontSize: 26, fontWeight: 800, color: BLUE, marginBottom: 4 }}>
+        בית הדור הבא – חוות אהרונסון
+      </div>
+      {quoteNumber && (
+        <div style={{ fontSize: 10, color: "#888", marginTop: 2 }}>מס׳ הצעה: {quoteNumber}</div>
+      )}
     </div>
   );
 }
 
-function InfoRow({ label, value }) {
-  if (!value || value === "—" && !label) return null;
+// Compact header for pages 2 & 3
+function CompactHeader({ quoteNumber }) {
   return (
-    <div style={{ display: "flex", gap: 8, marginBottom: 4 }}>
-      <span style={{ minWidth: 120, fontSize: 11, color: "#555", fontWeight: 600 }}>{label}:</span>
-      <span style={{ fontSize: 11, color: "#1a1a1a" }}>{value}</span>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `2px solid ${BLUE}`, paddingBottom: 8, marginBottom: 16 }}>
+      <div style={{ fontSize: 14, fontWeight: 700, color: BLUE }}>בית הדור הבא – חוות אהרונסון</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        {quoteNumber && <span style={{ fontSize: 10, color: "#888" }}>מס׳ הצעה: {quoteNumber}</span>}
+        <img
+          src={LOGO_URL}
+          alt=""
+          style={{ height: 44, width: "auto" }}
+          onError={e => { e.target.style.display = "none"; }}
+        />
+      </div>
     </div>
   );
 }
 
-function BulletList({ items }) {
+// Section heading matching reference (blue text + full-width bottom border)
+function SectionHeading({ children }) {
   return (
-    <ul style={{ margin: "8px 0 8px 0", paddingRight: 20, fontSize: 11, lineHeight: 1.9, color: "#2d2d2d" }}>
-      {items.map((item, i) => (
-        <li key={i} style={{ listStyle: "disc", marginBottom: 2 }}>{item}</li>
-      ))}
-    </ul>
-  );
-}
-
-function Page({ children, isLast }) {
-  return (
-    <div style={{
-      width: "210mm",
-      minHeight: "297mm",
-      padding: "18mm 16mm 14mm 16mm",
-      boxSizing: "border-box",
-      fontFamily: "'Arial Hebrew', 'Segoe UI', Arial, sans-serif",
-      direction: "rtl",
-      backgroundColor: "#fff",
-      pageBreakAfter: isLast ? "auto" : "always",
-      position: "relative",
-    }}>
+    <div style={{ fontSize: 14, fontWeight: 700, color: BLUE, borderBottom: `2px solid ${BLUE}`, paddingBottom: 4, marginTop: 18, marginBottom: 0 }}>
       {children}
     </div>
   );
 }
 
-const LOGO_URL   = "https://media.base44.com/images/public/69ea08de3791d203c52ea3cc/107796e98_quote-logo.png";
-const FOOTER_URL = "https://media.base44.com/images/public/69ea08de3791d203c52ea3cc/c500ec249_quote-footer-photo.jpg";
-
-function DocHeader({ quoteNumber }) {
+// Table row for client/activity details — matches the bordered row style in the PDF
+function DetailTable({ rows }) {
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18, borderBottom: "3px solid #1a56a0", paddingBottom: 12 }}>
-      <div>
-        <div style={{ fontSize: 20, fontWeight: 800, color: "#1a56a0", lineHeight: 1.2 }}>הצעת מחיר לסמינרים וימי עיון</div>
-        <div style={{ fontSize: 14, fontWeight: 600, color: "#333", marginTop: 3 }}>לצוותי חינוך</div>
-        {quoteNumber && <div style={{ fontSize: 10, color: "#888", marginTop: 4 }}>מס׳ הצעה: {quoteNumber}</div>}
-      </div>
-      <img
-        src={LOGO_URL}
-        alt="בית הדור הבא"
-        style={{ height: 80, width: "auto" }}
-        onError={e => { e.target.style.display = "none"; }}
-      />
-    </div>
-  );
-}
-
-function PageFooter() {
-  return (
-    <div style={{ position: "absolute", bottom: "12mm", left: "16mm", right: "16mm", borderTop: "1px solid #ddd", paddingTop: 6, textAlign: "center" }}>
-      <span style={{ fontSize: 9, color: "#888" }}>בית הדור הבא – חוות אהרונסון | ח.פ: קרן שמש הדור הבא (ע"ר) — 580786812</span>
-    </div>
+    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+      <tbody>
+        {rows.filter(r => r.value && r.value !== "—").map(({ label, value }, i) => (
+          <tr key={i} style={{ borderBottom: "1px solid #dde8f5" }}>
+            <td style={{ padding: "7px 10px", fontWeight: 700, color: "#333", width: "35%", textAlign: "right" }}>{label}:</td>
+            <td style={{ padding: "7px 10px", color: "#111", textAlign: "right" }}>{value}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
 
 // ── Page 1 ────────────────────────────────────────────────────────────────────
 function Page1({ d }) {
   return (
-    <Page>
-      <DocHeader quoteNumber={d.quoteNumber} />
+    <div style={{ ...pageStyle, pageBreakAfter: "always" }}>
+      <CoverHeader quoteNumber={d.quoteNumber} />
 
-      <p style={{ fontSize: 11, color: "#333", lineHeight: 1.7, marginBottom: 14 }}>
+      {/* Intro */}
+      <div style={{ textAlign: "center", fontSize: 14, fontWeight: 700, color: BLUE, marginBottom: 6 }}>
+        הצעת מחיר לסמינרים וימי עיון לצוותי חינוך
+      </div>
+      <p style={{ fontSize: 11, color: "#333", lineHeight: 1.8, textAlign: "center", marginBottom: 18 }}>
         בית הדור הבא מציע מרחב לחיבור, העמקה ודיאלוג. בהמשך לשיחתנו, להלן הצעתנו עבור פעילות לצוותי חינוך:
       </p>
 
-      <SectionTitle>עקרונות החוויה בבית הדור הבא:</SectionTitle>
-      <BulletList items={[
-        "חיבור בין עשייה להעמקה — שילוב בין פעילות מעשית לשיח משמעותי",
-        "מרחב לקול האישי — יצירת הזדמנויות לביטוי אישי ולהקשבה",
-        "רב-מימדיות — שילוב מגוון החושים ליצירת חוויה עמוקה ועוצמתית",
-        "חיבור לערכי הליבה — אהבת המדינה ואנשיה, זיקה ליהדות וערכים ליברליים",
+      {/* Principles */}
+      <SectionHeading>עקרונות החוויה בבית הדור הבא:</SectionHeading>
+      <div style={{ fontSize: 11, lineHeight: 2, color: "#2d2d2d", textAlign: "center", marginTop: 8, marginBottom: 8 }}>
+        {[
+          "– חיבור בין עשייה להעמקה — שילוב בין פעילות מעשית לשיח משמעותי",
+          "– מרחב לקול האישי — יצירת הזדמנויות לביטוי אישי ולהקשבה",
+          "– רב-מימדיות — שילוב מגוון החושים ליצירת חוויה עמוקה ועוצמתית",
+          "– חיבור לערכי הליבה — אהבת המדינה ואנשיה, זיקה ליהדות וערכים ליברליים",
+        ].map((t, i) => <div key={i}>{t}</div>)}
+      </div>
+
+      {/* Tracks */}
+      <SectionHeading>יש לנו שלושה מסלולי תוכן אפשריים:</SectionHeading>
+      <div style={{ fontSize: 11, lineHeight: 2, color: "#2d2d2d", textAlign: "center", marginTop: 8, marginBottom: 8 }}>
+        <div><strong style={{ color: BLUE }}>שיבולת</strong> — תוכן מלא של הגוף המתארח, השתלבות בסדר היום של בית הדור הבא</div>
+        <div><strong style={{ color: BLUE }}>אלומה</strong> — תוכן של הגוף המתארח, עם סדנה מלאה אחת של בית הדור הבא ביום, והשתלבות בסדר היום של בית הדור הבא</div>
+        <div><strong style={{ color: BLUE }}>שדה</strong> — תוכן מלא ומותאם אישית של בית הדור הבא</div>
+      </div>
+
+      <div style={{ fontSize: 12, fontWeight: 700, color: BLUE, textAlign: "center", marginBottom: 18 }}>עלויות פעילות:</div>
+
+      {/* Client details */}
+      <SectionHeading>פרטי לקוח</SectionHeading>
+      <DetailTable rows={[
+        { label: "שם לקוח",   value: d.clientName },
+        { label: "ארגון",     value: d.clientOrg },
+        { label: "טלפון",     value: d.clientPhone },
+        { label: 'דוא"ל',    value: d.clientEmail },
+        { label: "איש קשר",   value: d.contactName },
+        ...(d.clientTaxId ? [{ label: "ח.פ / ע.מ", value: d.clientTaxId }] : []),
       ]} />
-
-      <SectionTitle>יש לנו שלושה מסלולי תוכן אפשריים:</SectionTitle>
-      <div style={{ fontSize: 11, lineHeight: 1.9, color: "#2d2d2d", marginBottom: 6 }}>
-        <div style={{ marginBottom: 6 }}>
-          <span style={{ fontWeight: 700, color: "#1a56a0" }}>שיבולת —</span>{" "}
-          תוכן מלא של הגוף המתארח, השתלבות בסדר היום של בית הדור הבא
-        </div>
-        <div style={{ marginBottom: 6 }}>
-          <span style={{ fontWeight: 700, color: "#1a56a0" }}>אלומה —</span>{" "}
-          תוכן של הגוף המתארח, עם סדנה מלאה אחת של בית הדור הבא ביום, והשתלבות בסדר היום של בית הדור הבא
-        </div>
-        <div style={{ marginBottom: 6 }}>
-          <span style={{ fontWeight: 700, color: "#1a56a0" }}>שדה —</span>{" "}
-          תוכן מלא ומותאם אישית של בית הדור הבא
-        </div>
-      </div>
-
-      <div style={{ fontSize: 11, fontWeight: 700, color: "#1a56a0", margin: "12px 0 4px 0" }}>עלויות פעילות:</div>
-
-      {/* Two-column layout for client + activity */}
-      <div style={{ display: "flex", gap: 16, marginTop: 10 }}>
-        <div style={{ flex: 1, background: "#f5f8ff", border: "1px solid #c7d8f5", borderRadius: 6, padding: "10px 12px" }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: "#1a56a0", marginBottom: 8, borderBottom: "1px solid #c7d8f5", paddingBottom: 4 }}>פרטי לקוח</div>
-          <InfoRow label="שם לקוח" value={d.clientName} />
-          <InfoRow label="ארגון" value={d.clientOrg !== d.clientName ? d.clientOrg : undefined} />
-          <InfoRow label="טלפון" value={d.clientPhone} />
-          <InfoRow label="דוא״ל" value={d.clientEmail} />
-          <InfoRow label="איש קשר" value={d.contactName} />
-          {d.clientTaxId && <InfoRow label="ח.פ / ע.מ" value={d.clientTaxId} />}
-        </div>
-
-        <div style={{ flex: 1, background: "#f5f8ff", border: "1px solid #c7d8f5", borderRadius: 6, padding: "10px 12px" }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: "#1a56a0", marginBottom: 8, borderBottom: "1px solid #c7d8f5", paddingBottom: 4 }}>פרטי פעילות</div>
-          <InfoRow label="שם קבוצה" value={d.groupName} />
-          <InfoRow label="סוג פעילות" value={d.groupType} />
-          <InfoRow label="תאריך הגעה" value={fmtDate(d.arrival)} />
-          <InfoRow label="תאריך עזיבה" value={fmtDate(d.departure)} />
-          <InfoRow label="מס׳ לילות" value={d.nights > 0 ? String(d.nights) : "יום"} />
-          <InfoRow label="סה״כ משתתפים" value={d.totalPax ? String(d.totalPax) : "—"} />
-        </div>
-      </div>
-
-      <PageFooter />
-    </Page>
+    </div>
   );
 }
 
 // ── Page 2 ────────────────────────────────────────────────────────────────────
-const tdStyle = { padding: "7px 10px", borderBottom: "1px solid #e0e8f5", fontSize: 11, verticalAlign: "middle" };
-const thStyle = { ...tdStyle, background: "#1a56a0", color: "#fff", fontWeight: 700, fontSize: 11 };
+const tdBase = { padding: "7px 10px", borderBottom: "1px solid #dde8f5", fontSize: 11, verticalAlign: "middle" };
+const thBase = { padding: "8px 10px", background: BLUE, color: "#fff", fontWeight: 700, fontSize: 11, textAlign: "right" };
 
 function Page2({ d }) {
   const deposit = d.advance || Math.round(d.totalPrice * 0.3);
   const bal     = d.balance || (d.totalPrice - deposit);
 
+  const dateRange = d.arrival && d.departure
+    ? `${fmtDate(d.departure)} - ${fmtDate(d.arrival)}`
+    : fmtDate(d.arrival);
+
   return (
-    <Page>
-      <DocHeader quoteNumber={d.quoteNumber} />
+    <div style={{ ...pageStyle, pageBreakAfter: "always" }}>
+      <CompactHeader quoteNumber={d.quoteNumber} />
 
-      <SectionTitle>פירוט תמחור</SectionTitle>
+      {/* Activity details table */}
+      <SectionHeading>פרטי פעילות</SectionHeading>
+      <DetailTable rows={[
+        { label: "שם קבוצה",         value: d.groupName },
+        { label: "קהל יעד",           value: d.audienceLabel },
+        { label: "סוג פעילות",        value: d.activityTypeLabel },
+        { label: "תאריכים",           value: dateRange },
+        { label: "מס׳ לילות",         value: d.nights > 0 ? String(d.nights) : "יום" },
+        { label: 'סה"כ משתתפים',     value: d.totalPax ? String(d.totalPax) : "—" },
+      ]} />
 
-      <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 8, border: "1px solid #c7d8f5" }}>
+      {/* Pricing table */}
+      <SectionHeading>פירוט תמחור</SectionHeading>
+      <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 6 }}>
         <thead>
           <tr>
-            <th style={{ ...thStyle, textAlign: "right", width: "40%" }}>פריט</th>
-            <th style={{ ...thStyle, textAlign: "center", width: "20%" }}>פירוט</th>
-            <th style={{ ...thStyle, textAlign: "center", width: "15%" }}>מחיר יחידה</th>
-            <th style={{ ...thStyle, textAlign: "left", width: "15%" }}>סה״כ</th>
+            <th style={{ ...thBase, width: "42%" }}>פריט</th>
+            <th style={{ ...thBase, textAlign: "center", width: "12%" }}>כמות</th>
+            <th style={{ ...thBase, textAlign: "center", width: "22%" }}>מחיר יחידה</th>
+            <th style={{ ...thBase, textAlign: "left",   width: "24%" }}>סה״כ</th>
           </tr>
         </thead>
         <tbody>
           {d.lineItems.map((item, i) => {
-            const bg = i % 2 === 0 ? "#fff" : "#f5f8ff";
+            const isDiscount = item.isAdjustment && item.total < 0;
             return (
-              <tr key={i} style={{ background: bg }}>
-                <td style={{ ...tdStyle, fontWeight: 600 }}>{item.name}</td>
-                <td style={{ ...tdStyle, textAlign: "center", color: "#666" }}>{item.detail}</td>
-                <td style={{ ...tdStyle, textAlign: "center" }}>
+              <tr key={i} style={{ background: i % 2 === 0 ? "#fff" : "#f5f8ff" }}>
+                <td style={{ ...tdBase }}>{item.name}</td>
+                <td style={{ ...tdBase, textAlign: "center" }}>{item.qty}</td>
+                <td style={{ ...tdBase, textAlign: "center" }}>
+                  ₪{fmt(item.unitPrice)}
+                </td>
+                <td style={{ ...tdBase, textAlign: "left", fontWeight: 600, color: isDiscount ? "#c00" : "#111" }}>
                   {item.vatAmount
                     ? `₪${fmt(item.unitPrice)} + ₪${fmt(item.vatAmount)} מע״מ`
-                    : item.isAdjustment
-                      ? (item.unitPrice < 0 ? `(₪${fmt(Math.abs(item.unitPrice))})` : `₪${fmt(item.unitPrice)}`)
-                      : `₪${fmt(item.unitPrice)}`
+                    : isDiscount
+                      ? `-₪${fmt(Math.abs(item.total))}`
+                      : `₪${fmt(item.total)}`
                   }
-                </td>
-                <td style={{ ...tdStyle, textAlign: "left", fontWeight: 600, color: item.isAdjustment && item.total < 0 ? "#c00" : "#1a1a1a" }}>
-                  {item.total < 0 ? `(₪${fmt(Math.abs(item.total))})` : `₪${fmt(item.total)}`}
                 </td>
               </tr>
             );
           })}
+
+          {/* Subtotal row (only when there's a discount) */}
+          {d.discountAmt > 0 && (
+            <tr style={{ background: "#f0f4fb" }}>
+              <td colSpan={3} style={{ ...tdBase, fontWeight: 700, textAlign: "right" }}>סה״כ לפני הנחה</td>
+              <td style={{ ...tdBase, textAlign: "left", fontWeight: 700 }}>₪{fmt(d.subtotal)}</td>
+            </tr>
+          )}
+          {/* Discount row */}
+          {d.discountAmt > 0 && (
+            <tr style={{ background: "#fff8f8" }}>
+              <td colSpan={3} style={{ ...tdBase, color: "#c00" }}>
+                הנחה {d.discountPct}%{d.paymentTerms ? ` (${d.paymentTerms})` : ""}
+              </td>
+              <td style={{ ...tdBase, textAlign: "left", color: "#c00", fontWeight: 600 }}>-₪{fmt(d.discountAmt)}</td>
+            </tr>
+          )}
+          {/* Grand total row */}
+          <tr style={{ background: "#e8f0fc" }}>
+            <td colSpan={3} style={{ ...tdBase, fontWeight: 800, fontSize: 13, color: BLUE }}>סה״כ לתשלום</td>
+            <td style={{ ...tdBase, textAlign: "left", fontWeight: 800, fontSize: 13, color: BLUE }}>₪{fmt(d.totalPrice)}</td>
+          </tr>
         </tbody>
       </table>
 
-      {/* Totals block */}
-      <div style={{ marginTop: 12, borderTop: "2px solid #1a56a0", paddingTop: 10 }}>
-        {d.subtotal > 0 && d.discountAmt > 0 && (
-          <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 10px", fontSize: 12 }}>
-            <span style={{ color: "#555" }}>סה״כ לפני הנחה</span>
-            <span style={{ fontWeight: 600 }}>₪{fmt(d.subtotal)}</span>
-          </div>
-        )}
-        {d.discountAmt > 0 && (
-          <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 10px", fontSize: 12, color: "#c00" }}>
-            <span>הנחה ({d.discountPct}%)</span>
-            <span style={{ fontWeight: 600 }}>−₪{fmt(d.discountAmt)}</span>
-          </div>
-        )}
-        <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 10px", background: "#1a56a0", borderRadius: 6, marginTop: 6 }}>
-          <span style={{ color: "#fff", fontWeight: 700, fontSize: 13 }}>סה״כ לתשלום</span>
-          <span style={{ color: "#fff", fontWeight: 800, fontSize: 14 }}>₪{fmt(d.totalPrice)}</span>
-        </div>
-      </div>
-
       {/* Payment terms */}
-      <SectionTitle>תנאי תשלום</SectionTitle>
-      <div style={{ background: "#f5f8ff", border: "1px solid #c7d8f5", borderRadius: 6, padding: "10px 12px", fontSize: 11 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-          <span style={{ fontWeight: 600 }}>מקדמה (30%):</span>
-          <span style={{ fontWeight: 700, color: "#1a56a0" }}>₪{fmt(deposit)}</span>
+      <div style={{ marginTop: 20 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: BLUE, marginBottom: 8 }}>תנאי תשלום</div>
+        <div style={{ fontSize: 12, lineHeight: 2 }}>
+          <div>מקדמה (30%): <strong>₪{fmt(deposit)}</strong></div>
+          <div>יתרה (70%): <strong>₪{fmt(bal)}</strong></div>
         </div>
-        <div style={{ display: "flex", justifyContent: "space-between" }}>
-          <span style={{ fontWeight: 600 }}>יתרה (70%):</span>
-          <span style={{ fontWeight: 700 }}>₪{fmt(bal)}</span>
+      </div>
+
+      {/* Meta + bank */}
+      <div style={{ marginTop: 16, fontSize: 11, color: "#555", lineHeight: 1.9 }}>
+        <div>גרסה: {d.version} | סטטוס: {d.status}</div>
+        <div style={{ marginTop: 8 }}>
+          <strong>ח.פ:</strong> קרן שמש הדור הבא (ע"ר) — 580786812
         </div>
-        {d.paymentTerms && (
-          <div style={{ marginTop: 8, color: "#555", fontSize: 10 }}>{d.paymentTerms}</div>
-        )}
+        <div>
+          <strong>פרטי חשבון הבנק:</strong> קרן שמש הדור הבא (ע"ר) בנק הפועלים- 12 סניף- 170 חשבון- 368365
+        </div>
       </div>
-
-      <div style={{ marginTop: 12, fontSize: 10, color: "#666", lineHeight: 1.7 }}>
-        <div style={{ fontWeight: 600 }}>גרסה: {d.version} | סטטוס: {d.status}</div>
-        {d.validUntil && <div>בתוקף עד: {fmtDate(d.validUntil)}</div>}
-      </div>
-
-      {/* Bank details */}
-      <div style={{ marginTop: 14, background: "#f0f4fb", border: "1px solid #c7d8f5", borderRadius: 6, padding: "10px 12px", fontSize: 11 }}>
-        <div style={{ fontWeight: 700, color: "#1a56a0", marginBottom: 6 }}>פרטי חשבון בנק</div>
-        <div>קרן שמש הדור הבא (ע"ר)</div>
-        <div>בנק הפועלים — 12 | סניף — 170 | חשבון — 368365</div>
-        <div style={{ marginTop: 4, color: "#555", fontSize: 10 }}>ח.פ: קרן שמש הדור הבא (ע"ר) — 580786812</div>
-      </div>
-
-      <PageFooter />
-    </Page>
+    </div>
   );
 }
 
 // ── Page 3 ────────────────────────────────────────────────────────────────────
-function TermsSection({ title, children }) {
+function TermBlock({ title, bullets }) {
   return (
-    <div style={{ marginBottom: 16 }}>
-      <div style={{ fontSize: 12, fontWeight: 700, color: "#1a56a0", marginBottom: 4, borderBottom: "1px solid #c7d8f5", paddingBottom: 3 }}>{title}</div>
-      <div style={{ fontSize: 10.5, color: "#2d2d2d", lineHeight: 1.8 }}>{children}</div>
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: BLUE, marginBottom: 6 }}>{title}</div>
+      {bullets.map((b, i) => (
+        <div key={i} style={{ fontSize: 11, color: "#2d2d2d", lineHeight: 1.8, paddingRight: 4 }}>
+          {bullets.length > 1 ? `• ${b}` : b}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SigLine({ label, wide }) {
+  return (
+    <div style={{ display: "inline-flex", alignItems: "flex-end", gap: 6, marginLeft: wide ? 0 : 24 }}>
+      <span style={{ fontSize: 11, fontWeight: 600, whiteSpace: "nowrap" }}>{label}:</span>
+      <span style={{ display: "inline-block", width: wide ? 180 : 120, borderBottom: "1px solid #555" }}>&nbsp;</span>
     </div>
   );
 }
 
 function Page3() {
   return (
-    <Page isLast>
-      <DocHeader />
+    <div style={{ ...pageStyle }}>
+      <CompactHeader />
 
-      <div style={{ fontSize: 13, fontWeight: 700, color: "#1a56a0", marginBottom: 16, textAlign: "center" }}>תנאי ההסכם</div>
+      <SectionHeading>תנאי ההסכם</SectionHeading>
+      <div style={{ marginTop: 10 }}>
 
-      <TermsSection title="כללי">
-        <p>הצעת המחיר תקפה למשך 14 יום מיום שליחתה בכתב.</p>
-        <p>רק שליחה חזרה של מסמך זה חתום משמעה סגירת ההזמנה.</p>
-      </TermsSection>
+        <TermBlock title="כללי" bullets={[
+          "הצעת המחיר תקפה למשך 14 יום מיום שליחתה בכתב.",
+          "רק שליחה חזרה של מסמך זה חתום משמעה סגירת ההזמנה.",
+        ]} />
 
-      <TermsSection title="תשלום">
-        <p>תשלום מקדמה - בסך 30% מערך העסקה - ישולם חודש לפני הגעה</p>
-        <p>שאר התשלום - 70% מערך העסקה - ישולם ביום ההגעה.</p>
-      </TermsSection>
+        <TermBlock title="תשלום" bullets={[
+          "תשלום מקדמה - בסך 30% מערך העסקה - ישולם חודש לפני הגעה | שאר התשלום - 70% מערך העסקה - ישולם ביום ההגעה.",
+        ]} />
 
-      <TermsSection title="ביטול עסקה">
-        <p>עד 7 ימים לפני ההגעה - ייגבו דמי ביטול בסך 5% או 100 ש״ח - הנמוך מביניהם</p>
-        <p>פחות מ-7 ימים לפני ההגעה - ייגבו דמי ביטול בסך של 25% מערך ההזמנה</p>
-      </TermsSection>
+        <TermBlock title="ביטול עסקה" bullets={[
+          "עד 7 ימים לפני ההגעה - ייגבו דמי ביטול בסך 5% או 100 ש״ח - הנמוך מביניהם",
+          "פחות מ-7 ימים לפני ההגעה - ייגבו דמי ביטול בסך של 25% מערך ההזמנה",
+        ]} />
 
-      <TermsSection title="שינויים">
-        <p>ניתן לעשות שינויים בהזמנה לרבות מספר משתתפים וארוחות עד 10 ימים לפני הפעילות בבית</p>
-        <p>דרישת התשלום תישלח לפי מספר המשתתפים שנמסר 10 ימים לפני תחילת הפעילות או לפי מספר המגיעים בפועל - לפי הגבוה מביניהם</p>
-        <p>ניתן לעדכן בהעדפות ואלרגיות למזון עד 10 ימים לפני, לאחר מכן לא ניתן להבטיח שיהיה אוכל מתאים</p>
-      </TermsSection>
+        <TermBlock title="שינויים" bullets={[
+          "ניתן לעשות שינויים בהזמנה לרבות מספר משתתפים וארוחות עד 10 ימים לפני הפעילות בבית",
+          "דרישת התשלום תישלח לפי מספר המשתתפים שנמסר 10 ימים לפני תחילת הפעילות או לפי מספר המגיעים בפועל - לפי הגבוה מביניהם",
+          "ניתן לעדכן בהעדפות ואלרגיות למזון עד 10 ימים לפני, לאחר מכן לא ניתן להבטיח שיהיה אוכל מתאים",
+        ]} />
 
-      <TermsSection title="כללי הבית">
-        <p>לא ניתן להכניס אוכל מכל סוג לבית הדור הבא</p>
-        <p>כל נזק לציוד או מתקני הבית יחויב בעלות תיקון הנזק</p>
-      </TermsSection>
+        <TermBlock title="כללי הבית" bullets={[
+          "לא ניתן להכניס אוכל מכל סוג לבית הדור הבא",
+          "כל נזק לציוד או מתקני הבית יחויב בעלות תיקון הנזק",
+        ]} />
+      </div>
 
-      {/* Signature block */}
-      <div style={{ marginTop: 20, border: "1px solid #c7d8f5", borderRadius: 6, padding: "12px 14px", background: "#f5f8ff" }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: "#1a56a0", marginBottom: 12, borderBottom: "1px solid #c7d8f5", paddingBottom: 4 }}>אישור ההצעה וחתימה</div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px 24px" }}>
-          {["שם מלא", "תפקיד", "שם הגוף המשלם", "ח.פ / ע.ר"].map(label => (
-            <div key={label} style={{ borderBottom: "1px solid #999", paddingBottom: 4 }}>
-              <div style={{ fontSize: 10, color: "#888", marginBottom: 14 }}>{label}</div>
-            </div>
-          ))}
+      {/* Signature block — inline style matching the reference */}
+      <div style={{ marginTop: 20 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: BLUE, marginBottom: 14 }}>אישור ההצעה וחתימה</div>
+        <div style={{ marginBottom: 18 }}>
+          <SigLine label="שם מלא" />
+          <SigLine label="תפקיד" />
+          <SigLine label="חתימה" />
         </div>
-        <div style={{ marginTop: 14, borderBottom: "1px solid #999", paddingBottom: 4 }}>
-          <div style={{ fontSize: 10, color: "#888", marginBottom: 20 }}>חתימה</div>
+        <div>
+          <SigLine label="שם הגוף המשלם" wide />
+          <SigLine label="ח.פ / ע.ר" wide />
         </div>
       </div>
 
-      {/* Footer postcard photo */}
-      <div style={{ marginTop: 24, borderRadius: 8, overflow: "hidden" }}
-           onError={() => {}}>
-        <img
-          src={FOOTER_URL}
-          alt="בית הדור הבא"
-          style={{ width: "100%", height: 180, objectFit: "cover", display: "block", borderRadius: 8 }}
-          onError={e => { e.target.parentElement.style.display = "none"; }}
-        />
+      {/* Footer text + photo */}
+      <div style={{ marginTop: 28, textAlign: "center" }}>
+        <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>מחכים לכם בבית הדור הבא</div>
+        <div style={{ display: "inline-block", width: "65%" }}>
+          <img
+            src={FOOTER_URL}
+            alt="חוות אהרונסון"
+            style={{ width: "100%", height: "auto", maxHeight: 220, objectFit: "cover", borderRadius: 6, display: "block" }}
+            onError={e => { e.target.parentElement.style.display = "none"; }}
+          />
+        </div>
       </div>
-      <div style={{ marginTop: 12, textAlign: "center", fontSize: 14, fontWeight: 700, color: "#1a56a0" }}>
-        מחכים לכם בבית הדור הבא 🌱
-      </div>
-
-      <PageFooter />
-    </Page>
+    </div>
   );
 }
 
 // ── Main export ───────────────────────────────────────────────────────────────
 export default function QuotePdfTemplate({ quote, group }) {
   const d = resolveData(quote, group);
-
   return (
     <div id="quote-pdf-root" style={{ background: "#fff" }}>
       <Page1 d={d} />
