@@ -18,8 +18,8 @@ const STUDENT_LODGING_RATES = {
 };
 
 const ADULT_TENT_RATES = {
-  BED3:  { label: "אוהל 3 מיטות", rate: 340 },
-  BED68: { label: "אוהל 6/8 מיטות", rate: 250 },
+  BED3:  { label: "אוהל 3 מיטות", rate: 340, capacity: 3 },
+  BED68: { label: "אוהל 6/8 מיטות", rate: 250, capacity: 6 },
 };
 
 const WORKSHOP_CATALOG = [
@@ -160,13 +160,38 @@ function StudentLodgingSection({ lines, setLines, suggestedRateType, groupType, 
   );
 }
 
-function AdultLodgingSection({ lines, setLines, defaultNights }) {
+function AdultLodgingSection({ lines, setLines, defaultNights, adultsCount }) {
   const update = (idx, field, val) => {
     setLines(prev => prev.map((r, i) => (i !== idx ? r : { ...r, [field]: val })));
   };
+
+  // Capacity indicator
+  const allocatedBeds = lines.reduce((sum, r) => {
+    const cap = ADULT_TENT_RATES[r.tent_type]?.capacity ?? 0;
+    return sum + (Number(r.tent_count) * cap);
+  }, 0);
+  const remaining = adultsCount - allocatedBeds;
+  const hasAdults = adultsCount > 0;
+
   return (
     <div className="space-y-2">
-      <SectionHeader title="לינה — מבוגרים" subtitle="מחיר לאוהל ללילה" />
+      <div className="flex items-center justify-between">
+        <SectionHeader title="לינה — מבוגרים" subtitle="מחיר לאוהל ללילה" />
+        {hasAdults && (
+          <div className={`text-xs px-2 py-1 rounded-md font-medium ${
+            remaining > 0 ? "bg-amber-50 text-amber-700 border border-amber-200" :
+            remaining === 0 ? "bg-green-50 text-green-700 border border-green-200" :
+            "bg-blue-50 text-blue-600 border border-blue-200"
+          }`}>
+            {remaining > 0
+              ? `חסרות ${remaining} מקומות (${adultsCount} צוות, ${allocatedBeds} מוקצות)`
+              : remaining === 0
+              ? `✓ כל ${adultsCount} מקומות מכוסות`
+              : `עודף ${Math.abs(remaining)} מקומות`
+            }
+          </div>
+        )}
+      </div>
       {lines.map((r, idx) => (
         <div key={idx} className="grid grid-cols-12 gap-2 items-end text-xs">
           <div className="col-span-4 space-y-0.5">
@@ -713,7 +738,7 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
             defaultPax={participantCount}
             defaultNights={nights}
           />
-          <AdultLodgingSection lines={adultLodging} setLines={setAdultLodging} defaultNights={nights} />
+          <AdultLodgingSection lines={adultLodging} setLines={setAdultLodging} defaultNights={nights} adultsCount={staffCount} />
           <WorkshopSection       lines={workshops}       setLines={setWorkshops} />
           <LectureSection        lines={lectures}        setLines={setLectures} />
 
