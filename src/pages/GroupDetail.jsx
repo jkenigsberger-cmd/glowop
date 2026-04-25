@@ -3,8 +3,9 @@ import { useParams, Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { ChevronRight, Calendar, Users, Phone, Mail, Pencil, Plus, FileText, ClipboardList } from "lucide-react";
+import { ChevronRight, Calendar, Users, Phone, Mail, Pencil, Plus, FileText, ClipboardList, Copy } from "lucide-react";
 import { format } from "date-fns";
+import { toast } from "sonner";
 import GroupStatusBadge from "@/components/groups/GroupStatusBadge";
 import GroupFormModal from "@/components/groups/GroupFormModal";
 import QuoteStatusBadge from "@/components/quotes/QuoteStatusBadge";
@@ -46,6 +47,12 @@ export default function GroupDetail() {
   };
 
   const activeQuote = quotes.find(q => q.status === "APPROVED") || quotes[0];
+
+  const copyGuestFormLink = (quoteId) => {
+    const url = `${window.location.origin}/guest-form?q=${quoteId}`;
+    navigator.clipboard.writeText(url);
+    toast.success("הלינק הועתק בהצלחה!");
+  };
 
   if (!group) return (
     <div className="flex items-center justify-center min-h-screen">
@@ -132,9 +139,21 @@ export default function GroupDetail() {
                       {q.valid_until && <span className="text-xs text-muted-foreground">בתוקף עד {format(new Date(q.valid_until), "dd/MM/yyyy")}</span>}
                       {q.total_price > 0 && <span className="text-sm font-semibold text-primary">₪{Math.round(q.total_price).toLocaleString()}</span>}
                     </div>
-                    <Button size="sm" variant="ghost" onClick={() => { setEditQuote(q); setShowQuoteForm(true); }} className="gap-1">
-                      <Pencil className="w-3 h-3" /> עריכה
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      {q.status === "APPROVED" && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => copyGuestFormLink(q.id)}
+                          className="gap-1"
+                        >
+                          <Copy className="w-3 h-3" /> העתק לינק לטופס לקוח
+                        </Button>
+                      )}
+                      <Button size="sm" variant="ghost" onClick={() => { setEditQuote(q); setShowQuoteForm(true); }} className="gap-1">
+                        <Pencil className="w-3 h-3" /> עריכה
+                      </Button>
+                    </div>
                   </div>
                   <QuoteStatusActions quote={q} group={group} onUpdated={refetch} />
                 </div>
