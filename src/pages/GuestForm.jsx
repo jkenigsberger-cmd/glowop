@@ -93,6 +93,7 @@ export default function GuestForm() {
   });
 
   const [schedule, setSchedule] = useState([]); // [{date,start_time,end_time,activity,location,pax,notes}]
+  const scheduleHasTimeErrors = schedule.some(r => r.start_time && r.end_time && r.start_time >= r.end_time);
   const [generalNotes, setGeneralNotes] = useState("");
 
   // ── Load quote ─────────────────────────────────────────────────────────────
@@ -346,7 +347,11 @@ export default function GuestForm() {
               {submitting ? "שולח..." : "שליחת הפרטים ✓"}
             </Button>
           ) : (
-            <Button onClick={goNext} className="flex-1">
+            <Button
+              onClick={goNext}
+              disabled={currentStepKey === "schedule" && scheduleHasTimeErrors}
+              className="flex-1"
+            >
               המשך ←
             </Button>
           )}

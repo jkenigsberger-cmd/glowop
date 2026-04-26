@@ -10,8 +10,12 @@ const LOCATION_OPTIONS = [
   { value: "מחוץ לחווה",   label: "מחוץ לחווה" },
 ];
 
-function ActivityRow({ row, index, onChange, onRemove }) {
+function ActivityRow({ row, index, onChange, onRemove, minDate, maxDate }) {
   const set = (k, v) => onChange(index, { ...row, [k]: v });
+
+  const timeError = row.start_time && row.end_time && row.start_time >= row.end_time
+    ? "שעת הסיום חייבת להיות אחרי שעת ההתחלה"
+    : null;
 
   return (
     <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3 shadow-sm">
@@ -44,6 +48,8 @@ function ActivityRow({ row, index, onChange, onRemove }) {
           <Input
             type="date"
             value={row.date}
+            min={minDate || undefined}
+            max={maxDate || undefined}
             onChange={e => set("date", e.target.value)}
           />
         </div>
@@ -77,7 +83,9 @@ function ActivityRow({ row, index, onChange, onRemove }) {
           <Input
             type="time"
             value={row.end_time}
+            min={row.start_time || undefined}
             onChange={e => set("end_time", e.target.value)}
+            className={timeError ? "border-red-400" : ""}
           />
         </div>
         <div className="space-y-1">
@@ -91,6 +99,10 @@ function ActivityRow({ row, index, onChange, onRemove }) {
           />
         </div>
       </div>
+
+      {timeError && (
+        <p className="text-xs text-red-500">{timeError}</p>
+      )}
 
       {/* Notes */}
       <div className="space-y-1">
@@ -121,6 +133,8 @@ function emptyRow(defaultDate, defaultPax) {
 export default function GuestFormStep4({ rows, setRows, quoteData }) {
   const defaultDate = quoteData?.arrival_date || "";
   const defaultPax  = quoteData?.total_pax    || quoteData?.participant_count || "";
+
+  const hasTimeErrors = rows.some(r => r.start_time && r.end_time && r.start_time >= r.end_time);
 
   const handleChange = (index, updated) => {
     setRows(prev => prev.map((r, i) => i === index ? updated : r));
@@ -155,6 +169,8 @@ export default function GuestFormStep4({ rows, setRows, quoteData }) {
           index={index}
           onChange={handleChange}
           onRemove={handleRemove}
+          minDate={quoteData?.arrival_date || undefined}
+          maxDate={quoteData?.departure_date || undefined}
         />
       ))}
 
@@ -167,6 +183,12 @@ export default function GuestFormStep4({ rows, setRows, quoteData }) {
         <Plus className="w-4 h-4" />
         הוסף פעילות
       </Button>
+
+      {hasTimeErrors && (
+        <div className="bg-red-50 border border-red-200 text-red-600 rounded-xl px-4 py-3 text-sm text-center">
+          ⚠️ יש שגיאות בשעות — שעת הסיום חייבת להיות אחרי שעת ההתחלה
+        </div>
+      )}
     </div>
   );
 }
