@@ -13,6 +13,7 @@ import QuoteStatusBadge from "@/components/quotes/QuoteStatusBadge";
 import QuoteFormModal from "@/components/quotes/QuoteFormModal";
 import QuoteStatusActions from "@/components/quotes/QuoteStatusActions";
 import GuestFormSubmissionModal from "@/components/groups/GuestFormSubmissionModal";
+import SubmissionReviewModal from "@/components/groups/SubmissionReviewModal";
 
 export default function GroupDetail() {
   const { id } = useParams();
@@ -23,6 +24,7 @@ export default function GroupDetail() {
   const [editQuote, setEditQuote] = useState(null);
   const [showSubmissionForm, setShowSubmissionForm] = useState(false);
   const [editSubmission, setEditSubmission] = useState(null);
+  const [reviewSubmission, setReviewSubmission] = useState(null);
   const [copiedId, setCopiedId] = useState(null);
 
   const { data: group } = useQuery({
@@ -198,8 +200,8 @@ export default function GroupDetail() {
                     </div>
                     {s.total_pax && <p className="text-xs text-muted-foreground">{s.total_pax} משתתפים · {s.submitted_at ? format(new Date(s.submitted_at), "dd/MM/yyyy") : ""}</p>}
                   </div>
-                  <Button size="sm" variant="ghost" onClick={() => { setEditSubmission(s); setShowSubmissionForm(true); }} className="gap-1">
-                    <Pencil className="w-3 h-3" /> עריכה
+                  <Button size="sm" variant="outline" onClick={() => setReviewSubmission(s)} className="gap-1">
+                    <Pencil className="w-3 h-3" /> צפייה / עריכה
                   </Button>
                 </div>
               ))}
@@ -219,6 +221,15 @@ export default function GroupDetail() {
       {/* Modals */}
       {editGroup && <GroupFormModal group={group} onClose={() => setEditGroup(false)} onSaved={() => { refetch(); setEditGroup(false); }} />}
       {showQuoteForm && <QuoteFormModal quote={editQuote} group={group} onClose={() => { setShowQuoteForm(false); setEditQuote(null); }} onSaved={() => { refetch(); setShowQuoteForm(false); setEditQuote(null); }} />}
+      {reviewSubmission && !showSubmissionForm && (
+        <SubmissionReviewModal
+          submission={reviewSubmission}
+          quoteData={activeQuote}
+          onClose={() => setReviewSubmission(null)}
+          onEdit={() => { setEditSubmission(reviewSubmission); setShowSubmissionForm(true); setReviewSubmission(null); }}
+          onSaved={() => { refetch(); setReviewSubmission(null); }}
+        />
+      )}
       {showSubmissionForm && (
         <GuestFormSubmissionModal
           submission={editSubmission}
