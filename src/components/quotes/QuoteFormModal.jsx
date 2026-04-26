@@ -532,9 +532,12 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
   const initStudentLodging = () => {
     const saved = parse(quote?.student_lodging_lines, null);
     if (saved !== null) return saved;
-    if (initParticipants === 0 && initNights === 1) return [];
-    const isDay = initRateType === "day_activity";
-    return [{ rate_type: initRateType, pax: initParticipants, nights: isDay ? 1 : initNights }];
+    const effectiveGroupType = isNewGroupFlow ? groupForm.group_type : (group?.group_type || "LODGING");
+    const effectiveRateType = suggestLodgingRateType(initArrival, effectiveGroupType);
+    const isDay = effectiveRateType === "day_activity";
+    // Always seed a row for DAY_USE; for LODGING only if there are participants
+    if (!isDay && initParticipants === 0) return [];
+    return [{ rate_type: effectiveRateType, pax: initParticipants, nights: isDay ? 1 : initNights }];
   };
 
   const [studentLodging, setStudentLodging] = useState(initStudentLodging);
