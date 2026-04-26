@@ -355,28 +355,39 @@ function AdjustmentSection({ lines, setLines }) {
 }
 
 // ── Right Sidebar ─────────────────────────────────────────────────────────────
-function CalendarCard({ arrival, departure, nights }) {
-  const hasRange = arrival && departure;
+function CalendarCard({ arrival, departure, nights, isDayUse }) {
+  const hasDate = arrival;
   return (
     <div className={`${CARD} p-4`}>
       <div className={SEC_TITLE}><CalendarDays className="w-4 h-4 text-primary" />תאריכי פעילות</div>
-      {hasRange ? (
+      {hasDate ? (
         <div className="space-y-2">
-          <div className="flex justify-between text-sm">
-            <span className="text-slate-400">הגעה</span>
-            <span className="font-semibold text-slate-700">{fmtDate(arrival)}</span>
-          </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-slate-400">עזיבה</span>
-            <span className="font-semibold text-slate-700">{fmtDate(departure)}</span>
-          </div>
+          {isDayUse ? (
+            <div className="flex justify-between text-sm">
+              <span className="text-slate-400">תאריך פעילות</span>
+              <span className="font-semibold text-slate-700">{fmtDate(arrival)}</span>
+            </div>
+          ) : (
+            <>
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-400">הגעה</span>
+                <span className="font-semibold text-slate-700">{fmtDate(arrival)}</span>
+              </div>
+              {departure && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-400">עזיבה</span>
+                  <span className="font-semibold text-slate-700">{fmtDate(departure)}</span>
+                </div>
+              )}
+            </>
+          )}
           <div className="mt-2 bg-primary/5 border border-primary/15 rounded-xl py-2 text-center">
-            <div className="text-2xl font-bold text-primary">{nights > 0 ? nights : "יום"}</div>
-            <div className="text-xs text-slate-400">{nights > 0 ? "לילות" : "פעילות"}</div>
+            <div className="text-2xl font-bold text-primary">{isDayUse ? "יום" : (nights > 0 ? nights : "יום")}</div>
+            <div className="text-xs text-slate-400">{isDayUse ? "פעילות" : (nights > 0 ? "לילות" : "פעילות")}</div>
           </div>
         </div>
       ) : (
-        <div className="text-sm text-slate-400 text-center py-4">בחר תאריכים בטופס</div>
+        <div className="text-sm text-slate-400 text-center py-4">בחר תאריך בטופס</div>
       )}
     </div>
   );
@@ -674,18 +685,33 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
                       <SelectContent>{["DRAFT","SENT","APPROVED","REJECTED","EXPIRED"].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-slate-500">תאריך הגעה</Label>
-                    <Input type="date" value={form.arrival_date} onChange={e => set("arrival_date", e.target.value)} />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-slate-500">תאריך עזיבה</Label>
-                    <Input type="date" value={form.departure_date} onChange={e => set("departure_date", e.target.value)} />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-slate-500">בתוקף עד</Label>
-                    <Input type="date" value={form.valid_until} onChange={e => set("valid_until", e.target.value)} />
-                  </div>
+                  {groupType === "DAY_USE" ? (
+                    <>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-slate-500">תאריך פעילות</Label>
+                        <Input type="date" value={form.arrival_date} onChange={e => { set("arrival_date", e.target.value); set("departure_date", e.target.value); }} />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-slate-500">בתוקף עד</Label>
+                        <Input type="date" value={form.valid_until} onChange={e => set("valid_until", e.target.value)} />
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-slate-500">תאריך הגעה</Label>
+                        <Input type="date" value={form.arrival_date} onChange={e => set("arrival_date", e.target.value)} />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-slate-500">תאריך עזיבה</Label>
+                        <Input type="date" value={form.departure_date} onChange={e => set("departure_date", e.target.value)} />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-slate-500">בתוקף עד</Label>
+                        <Input type="date" value={form.valid_until} onChange={e => set("valid_until", e.target.value)} />
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 {/* Client fields */}
@@ -793,7 +819,7 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
           {/* ── Right: sticky sidebar ── */}
           <div className="w-72 flex-shrink-0 bg-slate-50 border-r border-slate-200 overflow-y-auto px-4 py-5 space-y-4">
 
-            <CalendarCard arrival={form.arrival_date} departure={form.departure_date} nights={nights} />
+            <CalendarCard arrival={form.arrival_date} departure={form.departure_date} nights={nights} isDayUse={groupType === "DAY_USE"} />
 
             <SummaryCard
               groupName={groupNameDisplay}
