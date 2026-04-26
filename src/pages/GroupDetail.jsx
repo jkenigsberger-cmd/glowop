@@ -15,6 +15,7 @@ import QuoteStatusActions from "@/components/quotes/QuoteStatusActions";
 import GuestFormSubmissionModal from "@/components/groups/GuestFormSubmissionModal";
 import SubmissionReviewModal from "@/components/groups/SubmissionReviewModal";
 import OperationalProfileDisplay from "@/components/groups/OperationalProfileDisplay";
+import OperationalHoldCard from "@/components/groups/OperationalHoldCard";
 
 export default function GroupDetail() {
   const { id } = useParams();
@@ -212,6 +213,9 @@ export default function GroupDetail() {
 
         {/* Operational Profile */}
         <OperationalProfileDisplay groupId={id} />
+
+        {/* Operational Hold — admin debug card */}
+        <OperationalHoldCard groupId={id} />
 
         {/* Internal Notes */}
         {group.internal_notes && (
