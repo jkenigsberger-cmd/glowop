@@ -1,0 +1,88 @@
+{
+  "name": "OperationalGroupProfile",
+  "type": "object",
+  "properties": {
+    "group_id": {
+      "type": "string",
+      "description": "FK to Group"
+    },
+    "quote_id": {
+      "type": "string",
+      "description": "FK to Quote"
+    },
+    "guest_form_submission_id": {
+      "type": "string",
+      "description": "FK to GuestFormSubmission"
+    },
+    "total_pax": {
+      "type": "number"
+    },
+    "participant_count": {
+      "type": "number"
+    },
+    "staff_count": {
+      "type": "number"
+    },
+    "boys_count": {
+      "type": "number"
+    },
+    "girls_count": {
+      "type": "number"
+    },
+    "drivers_men_count": {
+      "type": "number"
+    },
+    "drivers_women_count": {
+      "type": "number"
+    },
+    "is_sleeping_group": {
+      "type": "boolean"
+    },
+    "arrival_lunch": {
+      "type": "boolean"
+    },
+    "departure_lunch": {
+      "type": "boolean"
+    },
+    "special_diets": {
+      "type": "string",
+      "description": "JSON string"
+    },
+    "meal_plan": {
+      "type": "string",
+      "description": "JSON array"
+    },
+    "tent_distribution_notes": {
+      "type": "string",
+      "description": "JSON string"
+    },
+    "schedule_requests": {
+      "type": "string",
+      "description": "JSON array of schedule rows from GuestForm"
+    },
+    "general_notes": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "ACCEPTED"
+      ],
+      "default": "ACCEPTED"
+    },
+    "accepted_at": {
+      "type": "string",
+      "description": "ISO datetime"
+    },
+    "accepted_by": {
+      "type": "string",
+      "description": "Email of admin who accepted"
+    }
+  },
+  "required": [
+    "group_id",
+    "quote_id",
+    "guest_form_submission_id",
+    "status"
+  ]
+}

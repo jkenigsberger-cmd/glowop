@@ -1,0 +1,27 @@
+{
+  "name": "SiteSettings",
+  "type": "object",
+  "properties": {
+    "max_sleeping_pax": {
+      "type": "number",
+      "description": "Maximum sleeping pax. 0 = not configured.",
+      "default": 335
+    },
+    "max_day_use_pax": {
+      "type": "number",
+      "description": "Maximum day-use pax. 0 = not configured.",
+      "default": 0
+    },
+    "max_meal_pax": {
+      "type": "number",
+      "description": "Maximum meal pax. 0 = not configured.",
+      "default": 0
+    },
+    "max_common_space_pax": {
+      "type": "number",
+      "description": "Maximum common-space pax. 0 = not configured.",
+      "default": 0
+    }
+  },
+  "required": []
+}

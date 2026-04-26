@@ -14,6 +14,7 @@ import QuoteFormModal from "@/components/quotes/QuoteFormModal";
 import QuoteStatusActions from "@/components/quotes/QuoteStatusActions";
 import GuestFormSubmissionModal from "@/components/groups/GuestFormSubmissionModal";
 import SubmissionReviewModal from "@/components/groups/SubmissionReviewModal";
+import OperationalProfileDisplay from "@/components/groups/OperationalProfileDisplay";
 
 export default function GroupDetail() {
   const { id } = useParams();
@@ -208,6 +209,9 @@ export default function GroupDetail() {
             </div>
           )}
         </section>
+
+        {/* Operational Profile */}
+        <OperationalProfileDisplay groupId={id} />
 
         {/* Internal Notes */}
         {group.internal_notes && (

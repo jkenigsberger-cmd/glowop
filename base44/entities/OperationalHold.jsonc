@@ -1,0 +1,93 @@
+{
+  "name": "OperationalHold",
+  "type": "object",
+  "properties": {
+    "quote_id": {
+      "type": "string",
+      "description": "FK to Quote"
+    },
+    "group_id": {
+      "type": "string",
+      "description": "FK to Group"
+    },
+    "arrival_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "departure_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "group_type": {
+      "type": "string",
+      "enum": [
+        "LODGING",
+        "DAY_USE"
+      ]
+    },
+    "hold_type": {
+      "type": "string",
+      "enum": [
+        "SITE_GENERAL"
+      ],
+      "default": "SITE_GENERAL"
+    },
+    "total_pax": {
+      "type": "number"
+    },
+    "participant_count": {
+      "type": "number"
+    },
+    "staff_count": {
+      "type": "number"
+    },
+    "includes_meals": {
+      "type": "boolean",
+      "default": false
+    },
+    "includes_activities": {
+      "type": "boolean",
+      "default": false
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "ACTIVE",
+        "RELEASED",
+        "CANCELLED"
+      ],
+      "default": "ACTIVE"
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "QUOTE_APPROVAL"
+      ],
+      "default": "QUOTE_APPROVAL"
+    },
+    "override_capacity_warning": {
+      "type": "boolean",
+      "default": false
+    },
+    "override_reason": {
+      "type": "string"
+    },
+    "notes": {
+      "type": "string"
+    },
+    "created_at": {
+      "type": "string",
+      "description": "ISO datetime"
+    }
+  },
+  "required": [
+    "quote_id",
+    "group_id",
+    "arrival_date",
+    "group_type",
+    "hold_type",
+    "total_pax",
+    "status",
+    "source"
+  ]
+}

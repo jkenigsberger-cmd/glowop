@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Plus, Trash2, CalendarDays, Users, Coffee, BookOpen, Mic2, Tag, SlidersHorizontal, ChevronDown, ChevronUp } from "lucide-react";
+import CapacityWarningBanner from "./CapacityWarningBanner";
 
 // ── Catalog ───────────────────────────────────────────────────────────────────
 const STUDENT_LODGING_RATES = {
@@ -547,6 +548,35 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
   const [addons,         setAddons]         = useState(parse(quote?.addon_lines,          []));
   const [adjustments,    setAdjustments]    = useState(parse(quote?.adjustment_lines,     []));
   const [saving, setSaving] = useState(false);
+  const [availabilityResult, setAvailabilityResult] = useState(null);
+  const [checkingAvailability, setCheckingAvailability] = useState(false);
+
+  // ── Capacity check ───────────────────────────────────────────────────────────
+  const checkAvailability = useCallback(async () => {
+    const pax = Number(form.estimated_pax);
+    if (!form.arrival_date || !pax || !groupType) return;
+    setCheckingAvailability(true);
+    const hasMealLines = parse(quote?.student_lodging_lines, []).length > 0 || parse(form.meal_plan, []).length > 0;
+    // includes_meals: true for LODGING groups (they always have meals)
+    const includesMeals = groupType === "LODGING";
+    try {
+      const res = await base44.functions.invoke("checkSiteAvailability", {
+        arrival_date:   form.arrival_date,
+        departure_date: form.departure_date || form.arrival_date,
+        total_pax:      pax,
+        group_type:     groupType,
+        includes_meals: includesMeals,
+        exclude_quote_id: quote?.id || undefined,
+      });
+      setAvailabilityResult(res.data);
+    } catch { /* fail silently */ }
+    setCheckingAvailability(false);
+  }, [form.arrival_date, form.departure_date, form.estimated_pax, groupType, quote?.id]);
+
+  useEffect(() => {
+    const timer = setTimeout(checkAvailability, 700);
+    return () => clearTimeout(timer);
+  }, [checkAvailability]);
 
   // ── Live calcs ──────────────────────────────────────────────────────────────
   const estimatedPax     = Number(form.estimated_pax || 0);
@@ -831,6 +861,8 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
           <div className="w-72 flex-shrink-0 bg-slate-50 border-r border-slate-200 overflow-y-auto px-4 py-5 space-y-4">
 
             <CalendarCard arrival={form.arrival_date} departure={form.departure_date} nights={nights} isDayUse={groupType === "DAY_USE"} />
+
+            <CapacityWarningBanner availabilityResult={availabilityResult} loading={checkingAvailability} />
 
             <SummaryCard
               groupName={groupNameDisplay}

@@ -3,7 +3,7 @@ import { base44 } from "@/api/base44Client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { format, parseISO } from "date-fns";
-import { Pencil, CheckCircle2 } from "lucide-react";
+import { Pencil, CheckCircle2, ShieldCheck } from "lucide-react";
 
 // ── Safe JSON parse ────────────────────────────────────────────────────────────
 function safeJson(str, fallback) {
@@ -207,6 +207,8 @@ function Divider() {
 // ── Main component ─────────────────────────────────────────────────────────────
 export default function SubmissionReviewModal({ submission, quoteData, onClose, onEdit, onSaved }) {
   const [markingReviewed, setMarkingReviewed] = useState(false);
+  const [acceptingProfile, setAcceptingProfile] = useState(false);
+  const [profileAccepted, setProfileAccepted] = useState(false);
 
   const driversMen   = Number(submission.drivers_men_count)   || 0;
   const driversWomen = Number(submission.drivers_women_count) || 0;
@@ -222,6 +224,49 @@ export default function SubmissionReviewModal({ submission, quoteData, onClose, 
     await base44.entities.GuestFormSubmission.update(submission.id, { status: "REVIEWED" });
     setMarkingReviewed(false);
     onSaved();
+  };
+
+  const acceptAsOperationalProfile = async () => {
+    setAcceptingProfile(true);
+    try {
+      const user = await base44.auth.me();
+      const profilePayload = {
+        group_id:                 submission.group_id,
+        quote_id:                 submission.quote_id,
+        guest_form_submission_id: submission.id,
+        total_pax:                submission.total_pax,
+        participant_count:        submission.participant_count,
+        staff_count:              submission.staff_count,
+        boys_count:               submission.boys_count,
+        girls_count:              submission.girls_count,
+        drivers_men_count:        submission.drivers_men_count,
+        drivers_women_count:      submission.drivers_women_count,
+        is_sleeping_group:        submission.is_sleeping_group,
+        arrival_lunch:            submission.arrival_lunch,
+        departure_lunch:          submission.departure_lunch,
+        special_diets:            submission.special_diets,
+        meal_plan:                submission.meal_plan,
+        tent_distribution_notes:  submission.tent_distribution_notes,
+        schedule_requests:        submission.schedule_notes, // schedule_notes from submission becomes schedule_requests in profile
+        general_notes:            submission.general_notes,
+        status:                   "ACCEPTED",
+        accepted_at:              new Date().toISOString(),
+        accepted_by:              user?.email || "",
+      };
+
+      // Check if a profile already exists for this group — update if so
+      const existing = await base44.entities.OperationalGroupProfile.filter({ group_id: submission.group_id });
+      if (existing.length > 0) {
+        await base44.entities.OperationalGroupProfile.update(existing[0].id, profilePayload);
+      } else {
+        await base44.entities.OperationalGroupProfile.create(profilePayload);
+      }
+
+      setProfileAccepted(true);
+      onSaved();
+    } finally {
+      setAcceptingProfile(false);
+    }
   };
 
   const submittedAt = submission.submitted_at
@@ -251,13 +296,22 @@ export default function SubmissionReviewModal({ submission, quoteData, onClose, 
               {submission.source && <span className="text-xs text-slate-400">{SOURCE_LABEL[submission.source] || submission.source}</span>}
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             {submission.status !== "REVIEWED" && (
               <Button size="sm" onClick={markReviewed} disabled={markingReviewed} className="gap-1 bg-emerald-600 hover:bg-emerald-700 text-white">
                 <CheckCircle2 className="w-3.5 h-3.5" />
                 {markingReviewed ? "..." : "סמן כנבדק"}
               </Button>
             )}
+            <Button
+              size="sm"
+              onClick={acceptAsOperationalProfile}
+              disabled={acceptingProfile || profileAccepted}
+              className="gap-1 bg-blue-700 hover:bg-blue-800 text-white"
+            >
+              <ShieldCheck className="w-3.5 h-3.5" />
+              {profileAccepted ? "✓ פרופיל אושר" : acceptingProfile ? "מאשר..." : "אשר כפרופיל תפעולי"}
+            </Button>
             <Button size="sm" variant="outline" onClick={onEdit} className="gap-1">
               <Pencil className="w-3.5 h-3.5" /> עריכה
             </Button>
