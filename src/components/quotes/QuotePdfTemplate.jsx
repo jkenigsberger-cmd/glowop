@@ -19,12 +19,6 @@ function resolveData(quote, group) {
   let snap = null;
   try { snap = quote?.snapshot ? JSON.parse(quote.snapshot) : null; } catch {}
 
-  const arrival   = quote?.arrival_date   || snap?.startDate   || group?.arrival_date   || "";
-  const departure = quote?.departure_date || snap?.endDate     || group?.departure_date  || "";
-  const nights    = (arrival && departure)
-    ? Math.max(0, Math.round((new Date(departure) - new Date(arrival)) / 86400000))
-    : (quote?.nights ?? 0);
-
   const studentLines  = parse(quote?.student_lodging_lines);
   const adultLines    = parse(quote?.adult_lodging_lines);
   const workshopLines = parse(quote?.workshop_lines);
@@ -32,6 +26,13 @@ function resolveData(quote, group) {
   const addonLines    = parse(quote?.addon_lines);
   const adjustLines   = parse(quote?.adjustment_lines);
   const coffeeCornerPax = Number(quote?.coffee_corner_pax || 0);
+
+  const isDayUse  = (group?.group_type === "DAY_USE") || (studentLines.length > 0 && studentLines[0].rate_type === "day_activity");
+  const arrival   = quote?.arrival_date   || snap?.startDate   || group?.arrival_date   || "";
+  const departure = isDayUse ? arrival : (quote?.departure_date || snap?.endDate || group?.departure_date || "");
+  const nights    = isDayUse ? 0 : (arrival && departure)
+    ? Math.max(0, Math.round((new Date(departure) - new Date(arrival)) / 86400000))
+    : (quote?.nights ?? 0);
 
   const STUDENT_RATES = {
     day_activity:    { label: "יום פעילות",        rate: 125 },
@@ -46,6 +47,7 @@ function resolveData(quote, group) {
   const lineItems = [];
 
   studentLines.forEach(r => {
+
     const rateInfo = STUDENT_RATES[r.rate_type];
     const isDay = r.rate_type === "day_activity";
     const unitRate = rateInfo?.rate ?? Number(r.rate ?? 0);
@@ -274,9 +276,9 @@ function Page2({ d }) {
   const deposit = d.advance || Math.round(d.totalPrice * 0.3);
   const bal     = d.balance || (d.totalPrice - deposit);
 
-  const dateRange = d.arrival && d.departure
-    ? `${fmtDate(d.departure)} - ${fmtDate(d.arrival)}`
-    : fmtDate(d.arrival);
+  const dateRange = (d.nights === 0 || !d.departure || d.arrival === d.departure)
+    ? fmtDate(d.arrival)
+    : `${fmtDate(d.departure)} - ${fmtDate(d.arrival)}`;
 
   return (
     <div style={{ ...pageStyle, pageBreakAfter: "always" }}>
@@ -289,7 +291,7 @@ function Page2({ d }) {
         { label: "קהל יעד",           value: d.audienceLabel },
         { label: "סוג פעילות",        value: d.activityTypeLabel },
         { label: "תאריכים",           value: dateRange },
-        { label: "מס׳ לילות",         value: d.nights > 0 ? String(d.nights) : (d.arrival === d.departure || !d.departure ? "יום" : "יום") },
+        { label: "מס׳ לילות",         value: d.nights > 0 ? String(d.nights) : "יום" },
         { label: 'סה"כ משתתפים',     value: d.totalPax ? String(d.totalPax) : "—" },
       ]} />
 
