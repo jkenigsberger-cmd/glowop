@@ -1,0 +1,78 @@
+{
+  "name": "SleepingAllocation",
+  "type": "object",
+  "properties": {
+    "operational_group_profile_id": {
+      "type": "string",
+      "description": "FK to OperationalGroupProfile"
+    },
+    "group_id": {
+      "type": "string",
+      "description": "FK to Group"
+    },
+    "tent_id": {
+      "type": "string",
+      "description": "FK to Tent"
+    },
+    "neighborhood_id": {
+      "type": "string",
+      "description": "FK to Neighborhood (denormalized for fast neighborhood-level checks)"
+    },
+    "arrival_date": {
+      "type": "string",
+      "format": "date",
+      "description": "First night of stay"
+    },
+    "departure_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Checkout day \u2014 exclusive (does not block this night)"
+    },
+    "allocated_pax": {
+      "type": "number",
+      "description": "Total people assigned to this tent"
+    },
+    "allocation_type": {
+      "type": "string",
+      "enum": [
+        "STUDENT",
+        "STAFF"
+      ],
+      "description": "Category of occupants"
+    },
+    "gender_group": {
+      "type": "string",
+      "enum": [
+        "BOYS",
+        "GIRLS",
+        "MEN",
+        "WOMEN"
+      ],
+      "description": "Single gender per tent \u2014 strictly enforced"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "DRAFT",
+        "CONFIRMED",
+        "CANCELLED"
+      ],
+      "default": "DRAFT"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "operational_group_profile_id",
+    "group_id",
+    "tent_id",
+    "neighborhood_id",
+    "arrival_date",
+    "departure_date",
+    "allocated_pax",
+    "allocation_type",
+    "gender_group",
+    "status"
+  ]
+}

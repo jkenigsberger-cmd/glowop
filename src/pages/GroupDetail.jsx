@@ -16,6 +16,7 @@ import GuestFormSubmissionModal from "@/components/groups/GuestFormSubmissionMod
 import SubmissionReviewModal from "@/components/groups/SubmissionReviewModal";
 import OperationalProfileDisplay from "@/components/groups/OperationalProfileDisplay";
 import OperationalHoldCard from "@/components/groups/OperationalHoldCard";
+import SleepingAllocationTab from "@/components/sleeping/SleepingAllocationTab";
 
 export default function GroupDetail() {
   const { id } = useParams();
@@ -28,6 +29,7 @@ export default function GroupDetail() {
   const [editSubmission, setEditSubmission] = useState(null);
   const [reviewSubmission, setReviewSubmission] = useState(null);
   const [copiedId, setCopiedId] = useState(null);
+  const [activeTab, setActiveTab] = useState("overview");
 
   const { data: group } = useQuery({
     queryKey: ["group", id],
@@ -106,7 +108,33 @@ export default function GroupDetail() {
         </div>
       </div>
 
+      {/* Tab navigation */}
+      <div className="border-b border-border bg-card">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 flex gap-0">
+          {[
+            { key: "overview", label: "סקירה כללית" },
+            { key: "sleeping", label: "🏕️ הקצאת לינה" },
+          ].map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === tab.key
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+
+        {activeTab === "sleeping" && <SleepingAllocationTab groupId={id} />}
+
+        {activeTab === "overview" && <>
 
         {/* Summary Bar */}
         <div className="grid grid-cols-3 gap-3">
@@ -224,6 +252,8 @@ export default function GroupDetail() {
             <p className="text-sm text-amber-900">{group.internal_notes}</p>
           </section>
         )}
+
+        </>}
       </div>
 
       {/* Modals */}
