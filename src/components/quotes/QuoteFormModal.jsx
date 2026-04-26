@@ -482,13 +482,16 @@ function PricingCard({ subtotal, discountAmount, discountPct, totalPrice, advanc
 export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
   const isEdit = !!quote;
   const isNewGroupFlow = !group;
-  const groupType = group?.group_type || "LODGING";
   const navigate = useNavigate();
 
   const [groupForm, setGroupForm] = useState({
     group_name: "", group_type: "LODGING",
     contact_name: "", contact_phone: "", contact_email: "", client_tax_id: "",
   });
+
+  // groupType is reactive: for new-group flow it comes from groupForm state
+  const groupType = isNewGroupFlow ? groupForm.group_type : (group?.group_type || "LODGING");
+  const isDayUse = groupType === "DAY_USE";
   const setGroupField = (k, v) => setGroupForm(f => ({ ...f, [k]: v }));
 
   const handleGroupContactChange = (k, v) => {
@@ -704,7 +707,12 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
                       </div>
                       <div className="space-y-1">
                         <Label className="text-xs text-slate-500">תאריך עזיבה</Label>
-                        <Input type="date" value={form.departure_date} onChange={e => set("departure_date", e.target.value)} />
+                        <Input
+                          type="date"
+                          value={form.departure_date}
+                          min={form.arrival_date || undefined}
+                          onChange={e => set("departure_date", e.target.value)}
+                        />
                       </div>
                       <div className="space-y-1">
                         <Label className="text-xs text-slate-500">בתוקף עד</Label>
