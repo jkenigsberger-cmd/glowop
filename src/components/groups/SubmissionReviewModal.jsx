@@ -142,7 +142,7 @@ function ScheduleSection({ raw }) {
             {r.pax && <span className="text-slate-400">{r.pax} משתתפים</span>}
           </div>
           {r.activity && <p className="font-semibold text-slate-800">{r.activity}</p>}
-          {r.location && <p className="text-slate-500 text-xs">📍 {r.location}</p>}
+          {r.location && <p className="text-slate-500 text-xs">📍 מיקום מבוקש: {r.location}</p>}
           {r.notes && <p className="text-slate-500 text-xs">הערות: {r.notes}</p>}
         </div>
       ))}
