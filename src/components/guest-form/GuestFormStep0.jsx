@@ -27,19 +27,23 @@ export default function GuestFormStep0({ form, setForm, quoteData }) {
   const [showExtra, setShowExtra] = useState(true);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
-  const hasDates = quoteData?.arrival_date && quoteData?.departure_date;
+  const isDayUse = quoteData?.group_type === "DAY_USE";
+  const hasDates = quoteData?.arrival_date;
 
   return (
     <div className="space-y-4">
       {/* Info banner */}
       {hasDates && (
         <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-sm text-blue-800 space-y-1">
-          <p className="font-semibold">📅 פרטי השהייה שלכם</p>
-          <p>
-            הגעה: <strong>{quoteData.arrival_date}</strong>
-            {" — "}
-            עזיבה: <strong>{quoteData.departure_date}</strong>
-          </p>
+          <p className="font-semibold">📅 פרטי הפעילות שלכם</p>
+          {isDayUse ? (
+            <p>תאריך פעילות: <strong>{quoteData.arrival_date}</strong></p>
+          ) : (
+            <p>
+              הגעה: <strong>{quoteData.arrival_date}</strong>
+              {quoteData.departure_date && <> {" — "} עזיבה: <strong>{quoteData.departure_date}</strong></>}
+            </p>
+          )}
           <p className="text-blue-600 text-xs">חלק מהשדות מולאו מראש מנתוני ההצעה — ניתן לתקן אם יש שינוי.</p>
         </div>
       )}

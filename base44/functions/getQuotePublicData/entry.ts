@@ -28,12 +28,29 @@ Deno.serve(async (req) => {
     try { snapshot = JSON.parse(quote.snapshot); } catch {}
   }
 
+  // Fetch the live group to get up-to-date group_type and dates
+  let group = null;
+  if (quote.group_id) {
+    const groups = await base44.asServiceRole.entities.Group.filter({ id: quote.group_id });
+    group = groups[0] || null;
+  }
+
   // Resolve group name safely: snapshot.groupName > snapshot.group_name > client_name
   const group_name =
     snapshot?.groupName ||
     snapshot?.group_name ||
     quote.client_name ||
     '';
+
+  // group_type: live group is authoritative
+  const group_type = group?.group_type || snapshot?.groupType || '';
+
+  // Dates: use live quote fields (most up-to-date), fall back to snapshot
+  const arrival_date   = quote.arrival_date   || snapshot?.startDate || '';
+  // For DAY_USE groups, departure = arrival (no overnight stay)
+  const departure_date = group_type === 'DAY_USE'
+    ? arrival_date
+    : (quote.departure_date || snapshot?.endDate || '');
 
   return Response.json({
     quote_id:          quote.id,
@@ -42,10 +59,10 @@ Deno.serve(async (req) => {
     snapshot,
     // Group identity
     group_name,
-    group_type:        snapshot?.groupType || quote.group_type || '',
+    group_type,
     // Dates
-    arrival_date:      quote.arrival_date   || snapshot?.startDate  || '',
-    departure_date:    quote.departure_date || snapshot?.endDate    || '',
+    arrival_date,
+    departure_date,
     // Headcounts — prefer snapshot (captured at approval), fall back to quote fields
     total_pax:         snapshot?.totalPax         ?? quote.estimated_pax    ?? null,
     staff_count:       snapshot?.staffTotal        ?? quote.staff_count      ?? null,
