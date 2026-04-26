@@ -3,7 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { ChevronRight, Calendar, Users, Phone, Mail, Pencil, Plus, FileText, ClipboardList, Copy } from "lucide-react";
+import { ChevronRight, Calendar, Users, Phone, Mail, Pencil, Plus, FileText, ClipboardList, Copy, Check } from "lucide-react";
 import QuotePdfButton from "@/components/quotes/QuotePdfButton";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -23,6 +23,7 @@ export default function GroupDetail() {
   const [editQuote, setEditQuote] = useState(null);
   const [showSubmissionForm, setShowSubmissionForm] = useState(false);
   const [editSubmission, setEditSubmission] = useState(null);
+  const [copiedId, setCopiedId] = useState(null);
 
   const { data: group } = useQuery({
     queryKey: ["group", id],
@@ -52,7 +53,8 @@ export default function GroupDetail() {
   const copyGuestFormLink = (quoteId) => {
     const url = `${window.location.origin}/guest-form?quote=${quoteId}`;
     navigator.clipboard.writeText(url);
-    toast.success("הלינק הועתק בהצלחה!");
+    setCopiedId(quoteId);
+    setTimeout(() => setCopiedId(null), 2000);
   };
 
   if (!group) return (
@@ -146,9 +148,12 @@ export default function GroupDetail() {
                           size="sm"
                           variant="outline"
                           onClick={() => copyGuestFormLink(q.id)}
-                          className="gap-1"
+                          className={`gap-1 transition-colors ${copiedId === q.id ? "border-green-400 text-green-600 bg-green-50" : ""}`}
                         >
-                          <Copy className="w-3 h-3" /> העתק לינק לטופס לקוח
+                          {copiedId === q.id
+                            ? <><Check className="w-3 h-3" /> הועתק!</>
+                            : <><Copy className="w-3 h-3" /> העתק לינק לטופס לקוח</>
+                          }
                         </Button>
                       )}
                       <QuotePdfButton quote={q} group={group} />
