@@ -158,6 +158,37 @@ export default function OperationalProfileDisplay({ groupId }) {
             </div>
           )}
 
+          {/* Schedule requests from client */}
+          {(() => {
+            const scheduleReqs = safeJson(profile.schedule_requests, []);
+            const items = Array.isArray(scheduleReqs) ? scheduleReqs.filter(r => r.activity || r.date) : [];
+            return (
+              <div>
+                <p className="text-xs font-semibold text-slate-400 mb-2">📅 לוח זמנים מהלקוח</p>
+                {items.length === 0 ? (
+                  <p className="text-xs text-slate-400 italic px-1">לא נמסר לוח זמנים</p>
+                ) : (
+                  <div className="space-y-2">
+                    {items.map((r, i) => (
+                      <div key={i} className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-xs space-y-1">
+                        <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-slate-500">
+                          {r.date && <span className="font-medium text-slate-700">{(() => { try { return new Date(r.date).toLocaleDateString("he-IL"); } catch { return r.date; } })()}</span>}
+                          {(r.start_time || r.end_time) && (
+                            <span>{r.start_time || ""}{r.start_time && r.end_time ? " — " : ""}{r.end_time || ""}</span>
+                          )}
+                          {r.pax && <span>👥 {r.pax} משתתפים</span>}
+                        </div>
+                        {r.activity && <p className="font-semibold text-slate-800">{r.activity}</p>}
+                        {r.location && <p className="text-slate-500">📍 מיקום מבוקש: {r.location}</p>}
+                        {r.notes && <p className="text-slate-400">הערות: {r.notes}</p>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
           {/* General notes */}
           {profile.general_notes && (
             <div>
