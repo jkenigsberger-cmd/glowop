@@ -16,29 +16,39 @@ async function upsertByCode(entity, seedItems, transformFn) {
     if (item.code) existingByCode[item.code] = item;
   }
 
-  let created = 0;
-  let updated = 0;
-  const resultMap = {}; // code → id
+  const toCreate = [];
+  const toUpdate = [];
+  const resultMap = {}; // code → id (populated after operations)
 
   for (const seed of seedItems) {
     const data = transformFn ? transformFn(seed) : seed;
     const code = data.code;
     if (existingByCode[code]) {
-      // Already exists — update to ensure canonical values
-      await entity.update(existingByCode[code].id, data);
+      toUpdate.push({ id: existingByCode[code].id, code, data });
       resultMap[code] = existingByCode[code].id;
-      updated++;
     } else {
-      const created_item = await entity.create(data);
-      resultMap[code] = created_item.id;
-      created++;
+      toCreate.push({ code, data });
     }
   }
 
-  return { created, updated, total: seedItems.length, resultMap };
+  // Bulk create missing items
+  if (toCreate.length > 0) {
+    const created = await entity.bulkCreate(toCreate.map((x) => x.data));
+    for (let i = 0; i < created.length; i++) {
+      resultMap[toCreate[i].code] = created[i].id;
+    }
+  }
+
+  // Update existing items (in parallel batches of 20)
+  for (let i = 0; i < toUpdate.length; i += 20) {
+    const batch = toUpdate.slice(i, i + 20);
+    await Promise.all(batch.map(({ id, data }) => entity.update(id, data)));
+  }
+
+  return { created: toCreate.length, updated: toUpdate.length, total: seedItems.length, resultMap };
 }
 
-// Beds use tent_code + bed_number as stable code — upsert similarly
+// Beds use tent_code + bed_number as stable code — upsert with bulkCreate for missing
 async function upsertBeds(bedsData, tentMap, onProgress) {
   const existing = await base44.entities.Bed.list("-created_date", 500);
   const existingByCode = {};
@@ -46,33 +56,44 @@ async function upsertBeds(bedsData, tentMap, onProgress) {
     if (b.code) existingByCode[b.code] = b;
   }
 
-  let created = 0;
-  let updated = 0;
+  const toCreate = [];
+  const toUpdate = [];
 
-  // Process in batches of 20 to avoid timeout
-  for (let i = 0; i < bedsData.length; i += 20) {
-    const batch = bedsData.slice(i, i + 20);
-    for (const b of batch) {
-      const tent_id = tentMap[b.tentCode];
-      if (!tent_id) continue; // skip if tent wasn't created (shouldn't happen)
-      const data = {
-        tent_id,
-        code: b.code,
-        label: b.label,
-        bed_type: b.bed_type,
-        bunk_position: b.bunk_position ?? null,
-        working_status: "WORKING",
-        bed_status: "FREE",
-      };
-      if (existingByCode[b.code]) {
-        await base44.entities.Bed.update(existingByCode[b.code].id, data);
-        updated++;
-      } else {
-        await base44.entities.Bed.create(data);
-        created++;
-      }
+  for (const b of bedsData) {
+    const tent_id = tentMap[b.tentCode];
+    if (!tent_id) continue;
+    const data = {
+      tent_id,
+      code: b.code,
+      label: b.label,
+      bed_type: b.bed_type,
+      bunk_position: b.bunk_position ?? null,
+      working_status: "WORKING",
+      bed_status: "FREE",
+    };
+    if (existingByCode[b.code]) {
+      toUpdate.push({ id: existingByCode[b.code].id, data });
+    } else {
+      toCreate.push(data);
     }
-    onProgress?.(`מיטות... ${Math.min(i + 20, bedsData.length)}/${bedsData.length}`);
+  }
+
+  // Bulk create missing beds in batches of 50
+  let created = 0;
+  for (let i = 0; i < toCreate.length; i += 50) {
+    const batch = toCreate.slice(i, i + 50);
+    await base44.entities.Bed.bulkCreate(batch);
+    created += batch.length;
+    onProgress?.(`יוצר מיטות... ${created}/${toCreate.length}`);
+  }
+
+  // Bulk update existing beds in batches of 50 (sequential to avoid rate limit)
+  let updated = 0;
+  for (let i = 0; i < toUpdate.length; i += 50) {
+    const batch = toUpdate.slice(i, i + 50);
+    await Promise.all(batch.map(({ id, data }) => base44.entities.Bed.update(id, data)));
+    updated += batch.length;
+    onProgress?.(`מעדכן מיטות... ${updated}/${toUpdate.length}`);
   }
 
   return { created, updated, total: bedsData.length };
