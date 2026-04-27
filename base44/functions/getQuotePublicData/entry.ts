@@ -17,37 +17,30 @@ Deno.serve(async (req) => {
     return Response.json({ error: 'Quote not found' }, { status: 404 });
   }
 
-  // Case-insensitive status check
   if (String(quote.status || '').toLowerCase() !== 'approved') {
     return Response.json({ error: 'This quote is not available for guest form submission' }, { status: 403 });
   }
 
-  // Parse snapshot if present
   let snapshot = null;
   if (quote.snapshot) {
     try { snapshot = JSON.parse(quote.snapshot); } catch {}
   }
 
-  // Fetch the live group to get up-to-date group_type and dates
   let group = null;
   if (quote.group_id) {
     const groups = await base44.asServiceRole.entities.Group.filter({ id: quote.group_id });
     group = groups[0] || null;
   }
 
-  // Resolve group name safely: snapshot.groupName > snapshot.group_name > client_name
   const group_name =
     snapshot?.groupName ||
     snapshot?.group_name ||
     quote.client_name ||
     '';
 
-  // group_type: live group is authoritative
   const group_type = group?.group_type || snapshot?.groupType || '';
 
-  // Dates: use live quote fields (most up-to-date), fall back to snapshot
   const arrival_date   = quote.arrival_date   || snapshot?.startDate || '';
-  // For DAY_USE groups, departure = arrival (no overnight stay)
   const departure_date = group_type === 'DAY_USE'
     ? arrival_date
     : (quote.departure_date || snapshot?.endDate || '');
@@ -57,19 +50,15 @@ Deno.serve(async (req) => {
     group_id:          quote.group_id,
     quote_number:      quote.quote_number || '',
     snapshot,
-    // Group identity
     group_name,
     group_type,
-    // Dates
     arrival_date,
     departure_date,
-    // Headcounts — prefer snapshot (captured at approval), fall back to quote fields
     total_pax:         snapshot?.totalPax         ?? quote.estimated_pax    ?? null,
     staff_count:       snapshot?.staffTotal        ?? quote.staff_count      ?? null,
     participant_count: snapshot?.studentsTotal     ?? quote.participant_count ?? null,
     boys_count:        quote.boys_count            ?? null,
     girls_count:       quote.girls_count           ?? null,
-    // Contact
     contact_name:      snapshot?.clientName  || quote.client_name  || '',
     contact_phone:     snapshot?.clientPhone || quote.client_phone || '',
     contact_email:     snapshot?.clientEmail || quote.client_email || '',
