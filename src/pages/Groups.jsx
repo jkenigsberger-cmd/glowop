@@ -91,11 +91,11 @@ export default function Groups() {
 
   const handleDelete = async (g) => {
     const confirmed = window.confirm(
-      `למחוק לצמיתות את "${g.group_name}"?\n\nפעולה זו לא ניתנת לביטול.`
+      `למחוק לצמיתות את "${g.group_name}"?\n\nכל הנתונים הקשורים (הצעות מחיר, טפסי קבלה, הקצאות לינה ועוד) יימחקו לצמיתות.`
     );
     if (!confirmed) return;
     setDeletingId(g.id);
-    await base44.entities.Group.delete(g.id);
+    await base44.functions.invoke("deleteGroup", { group_id: g.id });
     queryClient.invalidateQueries({ queryKey: ["groups"] });
     setDeletingId(null);
   };
