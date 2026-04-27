@@ -17,6 +17,7 @@ import SubmissionReviewModal from "@/components/groups/SubmissionReviewModal";
 import OperationalProfileDisplay from "@/components/groups/OperationalProfileDisplay";
 import OperationalHoldCard from "@/components/groups/OperationalHoldCard";
 import SleepingAllocationTab from "@/components/sleeping/SleepingAllocationTab";
+import ScheduleAndMealsTab from "@/components/schedule/ScheduleAndMealsTab";
 
 export default function GroupDetail() {
   const { id } = useParams();
@@ -36,6 +37,13 @@ export default function GroupDetail() {
     queryFn: () => base44.entities.Group.filter({ id }),
     select: (r) => r[0],
   });
+
+  const { data: profiles = [] } = useQuery({
+    queryKey: ["operationalProfile", id],
+    queryFn: () => base44.entities.OperationalGroupProfile.filter({ group_id: id }),
+    enabled: !!id,
+  });
+  const operationalProfile = profiles[0];
 
   const { data: quotes = [] } = useQuery({
     queryKey: ["quotes", id],
@@ -113,6 +121,7 @@ export default function GroupDetail() {
         <div className="max-w-5xl mx-auto px-4 sm:px-6 flex gap-0">
           {[
             { key: "overview", label: "סקירה כללית" },
+            { key: "schedule", label: "📅 לוח זמנים וארוחות" },
             { key: "sleeping", label: "🏕️ הקצאת לינה" },
           ].map(tab => (
             <button
@@ -133,6 +142,7 @@ export default function GroupDetail() {
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 space-y-6">
 
         {activeTab === "sleeping" && <SleepingAllocationTab groupId={id} />}
+        {activeTab === "schedule" && <ScheduleAndMealsTab groupId={id} profile={operationalProfile} />}
 
         {activeTab === "overview" && <>
 

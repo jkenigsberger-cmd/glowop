@@ -1,0 +1,73 @@
+{
+  "name": "GroupScheduleItem",
+  "type": "object",
+  "properties": {
+    "group_id": {
+      "type": "string",
+      "description": "FK to Group"
+    },
+    "operational_group_profile_id": {
+      "type": "string",
+      "description": "FK to OperationalGroupProfile"
+    },
+    "date": {
+      "type": "string",
+      "format": "date"
+    },
+    "start_time": {
+      "type": "string",
+      "description": "HH:MM"
+    },
+    "end_time": {
+      "type": "string",
+      "description": "HH:MM"
+    },
+    "activity_name": {
+      "type": "string"
+    },
+    "requested_location": {
+      "type": "string",
+      "description": "Client general preference: \u05db\u05d9\u05ea\u05d4 / \u05de\u05ea\u05d7\u05dd \u05d7\u05d5\u05e5 / \u05de\u05d7\u05d5\u05e5 \u05dc\u05d7\u05d5\u05d5\u05d4 / \u05d0\u05d7\u05e8"
+    },
+    "activity_space_id": {
+      "type": "string",
+      "description": "FK to ActivitySpace \u2014 optional, assigned by admin"
+    },
+    "activity_space_code": {
+      "type": "string",
+      "description": "Derived code from ActivitySpace e.g. bunker_1 \u2014 set by backend on save"
+    },
+    "pax": {
+      "type": "number"
+    },
+    "notes": {
+      "type": "string"
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "groupSync",
+        "manual"
+      ],
+      "description": "groupSync = prefilled from GuestForm; manual = added by admin"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "ACTIVE",
+        "CANCELLED"
+      ],
+      "default": "ACTIVE"
+    }
+  },
+  "required": [
+    "group_id",
+    "operational_group_profile_id",
+    "date",
+    "start_time",
+    "end_time",
+    "activity_name",
+    "source",
+    "status"
+  ]
+}

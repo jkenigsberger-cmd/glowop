@@ -1,0 +1,76 @@
+{
+  "name": "MealReservation",
+  "type": "object",
+  "properties": {
+    "group_id": {
+      "type": "string",
+      "description": "FK to Group"
+    },
+    "operational_group_profile_id": {
+      "type": "string",
+      "description": "FK to OperationalGroupProfile"
+    },
+    "date": {
+      "type": "string",
+      "format": "date"
+    },
+    "meal_type": {
+      "type": "string",
+      "enum": [
+        "BREAKFAST",
+        "LUNCH",
+        "DINNER",
+        "OTHER"
+      ]
+    },
+    "start_time": {
+      "type": "string",
+      "description": "HH:MM"
+    },
+    "end_time": {
+      "type": "string",
+      "description": "HH:MM \u2014 BREAKFAST +60min, LUNCH/DINNER +90min default"
+    },
+    "pax": {
+      "type": "number"
+    },
+    "special_diets_summary": {
+      "type": "string",
+      "description": "JSON summary of diet counts for this meal"
+    },
+    "sandwich_option": {
+      "type": "boolean",
+      "default": false
+    },
+    "notes": {
+      "type": "string"
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "groupSync",
+        "manual"
+      ],
+      "description": "groupSync = prefilled from GuestForm; manual = added by admin"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "ACTIVE",
+        "CANCELLED"
+      ],
+      "default": "ACTIVE"
+    }
+  },
+  "required": [
+    "group_id",
+    "operational_group_profile_id",
+    "date",
+    "meal_type",
+    "start_time",
+    "end_time",
+    "pax",
+    "source",
+    "status"
+  ]
+}
