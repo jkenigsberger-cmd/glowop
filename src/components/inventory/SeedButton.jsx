@@ -28,7 +28,7 @@ export default function SeedButton({ onSeeded }) {
   return (
     <>
       <Button variant="destructive" size="sm" onClick={() => setOpen(true)}>
-        זרע מלאי ראשוני
+        סנכרן / זרע מלאי
       </Button>
 
       <Dialog open={open} onOpenChange={(v) => { if (status !== "running") setOpen(v); }}>
@@ -41,7 +41,7 @@ export default function SeedButton({ onSeeded }) {
             <div className="space-y-4">
               <div className="flex gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
                 <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                <p>פעולה זו תיצור את כל הנתונים הפיזיים של המשק. יש להריץ אותה רק פעם אחת. אם כבר קיים מלאי, יווצרו כפילויות.</p>
+                <p>פעולה זו אידמפוטנטית — פריטים קיימים יעודכנו, פריטים חסרים יווצרו. לא נוצרות כפילויות.</p>
               </div>
               <div className="text-sm text-muted-foreground space-y-1">
                 <p>יווצרו:</p>
@@ -74,13 +74,21 @@ export default function SeedButton({ onSeeded }) {
                 <CheckCircle2 className="w-5 h-5" />
                 <span className="font-semibold">הזריעה הושלמה בהצלחה!</span>
               </div>
-              <div className="text-sm space-y-1">
-                <p>✅ {report.neighborhoods} שכונות</p>
-                <p>✅ {report.tents} אוהלים</p>
-                <p>✅ {report.beds} מיטות</p>
-                <p>✅ {report.facilityAreas} אזורי שירותים</p>
-                <p>✅ {report.facilities}/46 מתקנים</p>
-                <p>✅ {report.activitySpaces} מרחבי פעילות</p>
+              <div className="text-sm space-y-1 font-mono">
+                {[
+                  ["שכונות",         report.neighborhoods],
+                  ["אוהלים",         report.tents],
+                  ["מיטות",          report.beds],
+                  ["אזורי שירותים",  report.facilityAreas],
+                  ["מתקנים",         report.facilities],
+                  ["מרחבי פעילות",   report.activitySpaces],
+                ].map(([label, r]) => (
+                  <p key={label}>
+                    ✅ {label}: {r?.total ?? r} סה״כ
+                    {r?.created != null && <span className="text-emerald-600"> (+{r.created} נוצרו</span>}
+                    {r?.updated != null && <span className="text-slate-500">, {r.updated} עודכנו)</span>}
+                  </p>
+                ))}
               </div>
               <Button className="w-full" onClick={() => { setOpen(false); setStatus("idle"); }}>
                 סגור

@@ -93,19 +93,19 @@ export const TENTS_SEED = [
   ...makeSingleTents("N4", [41, 42, 43, 44], 8),
   // N5 — 5 single tents, 6 beds each
   ...makeSingleTents("N5", [51, 52, 53, 54, 55], 6),
-  // N6 — 4 single tents, 6 beds each
-  ...makeSingleTents("N6", [61, 62, 63, 64], 6),
-  // N7 — 3 standard (8 beds) + 1 accessible (3 beds)
-  ...makeSingleTents("N7", [71, 72, 73], 8),
+  // N6 — 4 single tents (60,61,62,63), 6 beds each
+  ...makeSingleTents("N6", [60, 61, 62, 63], 6),
+  // N7 — 71(8), 72(accessible,3), 73(8), 74(8)
+  ...makeSingleTents("N7", [71, 73, 74], 8),
   {
     neighborhoodCode: "N7",
-    code: "74",
-    tent_number: "74",
+    code: "72",
+    tent_number: "72",
     sub_label: null,
     tent_type: "STANDARD",
     capacity: 3,
-    has_private_bathroom: true,
-    has_private_shower: true,
+    has_private_bathroom: false,
+    has_private_shower: false,
     is_accessible: true,
     working_status: "WORKING",
   },
@@ -185,9 +185,9 @@ export function generateBedsForTents(tents) {
       structure = n4n7Beds8();
     } else if (nc === "N5" || nc === "N6") {
       structure = singleBeds(6);
-    } else if (nc === "N7" && code !== "74") {
+    } else if (nc === "N7" && code !== "72") {
       structure = n4n7Beds8();
-    } else if (code === "74") {
+    } else if (code === "72") {
       structure = singleBeds(3);
     } else if (nc === "VIP") {
       structure = singleBeds(3);
