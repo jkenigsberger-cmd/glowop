@@ -66,6 +66,7 @@ Deno.serve(async (req) => {
       if (maxSleeping > 0) {
         const totalAfter = heldSleepingPax + requestedPax;
         capacityInfo.sleeping = { max: maxSleeping, held: heldSleepingPax, requested: requestedPax, totalAfter };
+
         if (totalAfter > maxSleeping) {
           warnings.push({
             type: "SLEEPING_CAPACITY",
@@ -74,6 +75,18 @@ Deno.serve(async (req) => {
             held: heldSleepingPax,
             requested: requestedPax,
             max: maxSleeping
+          });
+        } else if (totalAfter >= maxSleeping * 0.85) {
+          // Near-full warning: 85% or more of max capacity
+          const pct = Math.round((totalAfter / maxSleeping) * 100);
+          warnings.push({
+            type: "SLEEPING_CAPACITY_NEAR_FULL",
+            severity: "NEAR_FULL",
+            message: `האתר קרוב לתפוסה מלאה בתאריכים אלו: ${totalAfter}/${maxSleeping} (${pct}%)`,
+            held: heldSleepingPax,
+            requested: requestedPax,
+            max: maxSleeping,
+            percentage: pct
           });
         }
       } else {
