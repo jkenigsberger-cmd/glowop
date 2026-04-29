@@ -6,15 +6,29 @@ import { Pencil, Trash2, Check, X, MapPin } from "lucide-react";
 
 const LOCATION_OPTIONS = ["כיתה", "מתחם חוץ", "מחוץ לחווה", "אחר"];
 
-export default function ScheduleItemRow({ item, activitySpaces, onSave, onCancel, saving }) {
+export default function ScheduleItemRow({ item, activitySpaces, quoteActivities = [], groupDateRange = {}, onSave, onCancel, saving }) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ ...item });
   const [error, setError] = useState(null);
+  const [customName, setCustomName] = useState(false);
+
+  const { arrivalDate, departureDate } = groupDateRange;
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
+  const validateDate = (date) => {
+    if (arrivalDate && departureDate && date) {
+      if (date < arrivalDate || date > departureDate) {
+        return "לא ניתן לקבוע פעילות מחוץ לתאריכי הקבוצה";
+      }
+    }
+    return null;
+  };
+
   const handleSave = async () => {
     setError(null);
+    const dateErr = validateDate(form.date);
+    if (dateErr) { setError(dateErr); return; }
     const err = await onSave(form);
     if (err) { setError(err); return; }
     setEditing(false);
@@ -24,19 +38,66 @@ export default function ScheduleItemRow({ item, activitySpaces, onSave, onCancel
     setForm({ ...item });
     setEditing(false);
     setError(null);
+    setCustomName(false);
+  };
+
+  // When opening edit, check if current activity_name is in quote list or is custom
+  const handleStartEdit = () => {
+    setCustomName(
+      !quoteActivities.length || !quoteActivities.includes(item.activity_name)
+    );
+    setForm({ ...item });
+    setEditing(true);
   };
 
   if (editing) {
     return (
       <div className="bg-slate-50 border border-primary/30 rounded-xl p-4 space-y-3">
+        {arrivalDate && departureDate && (
+          <p className="text-xs text-slate-400">תאריכים מותרים: {arrivalDate} עד {departureDate}</p>
+        )}
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
             <label className="text-xs text-slate-500">תאריך</label>
-            <Input type="date" value={form.date} onChange={e => set("date", e.target.value)} />
+            <Input
+              type="date"
+              value={form.date}
+              min={arrivalDate || undefined}
+              max={departureDate || undefined}
+              onChange={e => set("date", e.target.value)}
+            />
           </div>
           <div className="space-y-1">
-            <label className="text-xs text-slate-500">שם פעילות</label>
-            <Input value={form.activity_name} onChange={e => set("activity_name", e.target.value)} placeholder="שם הפעילות" />
+            <label className="text-xs text-slate-500">שם / סוג פעילות</label>
+            {quoteActivities.length > 0 && !customName ? (
+              <div className="flex gap-1">
+                <Select
+                  value={form.activity_name}
+                  onValueChange={v => {
+                    if (v === "__custom__") { setCustomName(true); set("activity_name", ""); }
+                    else set("activity_name", v);
+                  }}
+                >
+                  <SelectTrigger><SelectValue placeholder="בחר פעילות..." /></SelectTrigger>
+                  <SelectContent>
+                    {quoteActivities.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+                    <SelectItem value="__custom__">✏️ אחר (הקלד ידנית)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : (
+              <div className="flex gap-1">
+                <Input
+                  value={form.activity_name}
+                  onChange={e => set("activity_name", e.target.value)}
+                  placeholder="שם הפעילות"
+                  autoFocus={customName}
+                />
+                {quoteActivities.length > 0 && (
+                  <Button size="sm" variant="ghost" type="button" onClick={() => setCustomName(false)} className="text-xs px-2">↩</Button>
+                )}
+              </div>
+            )}
           </div>
           <div className="space-y-1">
             <label className="text-xs text-slate-500">שעת התחלה</label>
@@ -128,7 +189,7 @@ export default function ScheduleItemRow({ item, activitySpaces, onSave, onCancel
       </div>
       {item.status !== "CANCELLED" && (
         <div className="flex gap-1 shrink-0">
-          <Button size="sm" variant="ghost" onClick={() => setEditing(true)} className="h-7 w-7 p-0">
+          <Button size="sm" variant="ghost" onClick={handleStartEdit} className="h-7 w-7 p-0">
             <Pencil className="w-3.5 h-3.5" />
           </Button>
           <Button size="sm" variant="ghost" onClick={() => onCancel(item.id)} className="h-7 w-7 p-0 text-red-400 hover:text-red-600">

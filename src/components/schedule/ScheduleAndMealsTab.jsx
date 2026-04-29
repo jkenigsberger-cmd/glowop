@@ -10,13 +10,46 @@ import ScheduleItemRow from "./ScheduleItemRow";
 import MealReservationRow from "./MealReservationRow";
 
 const MEAL_LABELS = { BREAKFAST: "ארוחת בוקר", LUNCH: "ארוחת צהריים", DINNER: "ארוחת ערב", OTHER: "אחר" };
-const MEAL_DURATIONS = { BREAKFAST: 60, LUNCH: 90, DINNER: 90, OTHER: 60 };
+
+// Default meal times
+const MEAL_DEFAULTS = {
+  BREAKFAST: { start_time: "07:00", end_time: "09:00" },
+  LUNCH:     { start_time: "12:30", end_time: "13:30" },
+  DINNER:    { start_time: "18:30", end_time: "20:00" },
+  OTHER:     { start_time: "12:00", end_time: "13:00" },
+};
+
 const LOCATION_OPTIONS = ["כיתה", "מתחם חוץ", "מחוץ לחווה", "אחר"];
 
-function addMinutes(timeStr, mins) {
-  const [h, m] = (timeStr || "08:00").split(":").map(Number);
-  const total = h * 60 + m + mins;
-  return `${String(Math.floor(total / 60) % 24).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+/**
+ * Extract activity name options from a quote.
+ * Reads workshop_lines, lecture_lines, addon_lines JSON fields and quote snapshot.
+ */
+function extractQuoteActivities(quote) {
+  if (!quote) return [];
+  const names = new Set();
+
+  const parseLines = (field) => {
+    if (!field) return [];
+    try { return JSON.parse(field); } catch { return []; }
+  };
+
+  parseLines(quote.workshop_lines).forEach(l => l.name && names.add(l.name));
+  parseLines(quote.lecture_lines).forEach(l => l.name && names.add(l.name));
+  parseLines(quote.addon_lines).forEach(l => l.description && names.add(l.description));
+
+  // Also check snapshot
+  if (quote.snapshot) {
+    try {
+      const snap = JSON.parse(quote.snapshot);
+      (snap.workshopLines || []).forEach(l => l.name && names.add(l.name));
+      (snap.lectureLines  || []).forEach(l => l.name && names.add(l.name));
+      (snap.workshop_lines || []).forEach(l => l.name && names.add(l.name));
+      (snap.lecture_lines  || []).forEach(l => l.name && names.add(l.name));
+    } catch {}
+  }
+
+  return [...names].filter(Boolean);
 }
 
 const EMPTY_SCHEDULE = {
@@ -24,22 +57,34 @@ const EMPTY_SCHEDULE = {
   activity_name: "", requested_location: "", activity_space_id: null, pax: "", notes: ""
 };
 
-const EMPTY_MEAL = {
-  date: "", meal_type: "BREAKFAST", start_time: "08:00", end_time: "09:00",
+const EMPTY_MEAL = (type = "BREAKFAST") => ({
+  date: "",
+  meal_type: type,
+  start_time: MEAL_DEFAULTS[type].start_time,
+  end_time:   MEAL_DEFAULTS[type].end_time,
   pax: "", sandwich_option: false, notes: ""
-};
+});
 
-export default function ScheduleAndMealsTab({ groupId, profile }) {
+export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = [] }) {
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [addingSchedule, setAddingSchedule] = useState(false);
   const [addingMeal, setAddingMeal] = useState(false);
   const [newSchedule, setNewSchedule] = useState(EMPTY_SCHEDULE);
-  const [newMeal, setNewMeal] = useState(EMPTY_MEAL);
+  const [newMeal, setNewMeal] = useState(EMPTY_MEAL());
   const [newScheduleError, setNewScheduleError] = useState(null);
 
+  // Custom activity name input toggle
+  const [customActivityName, setCustomActivityName] = useState(false);
+
   const profileId = profile?.id;
+  const arrivalDate   = group?.arrival_date   || "";
+  const departureDate = group?.departure_date || "";
+
+  // The approved quote (or first quote) for activity suggestions
+  const activeQuote = quotes.find(q => q.status === "APPROVED") || quotes[0];
+  const quoteActivities = extractQuoteActivities(activeQuote);
 
   const { data: scheduleItems = [] } = useQuery({
     queryKey: ["groupScheduleItems", groupId],
@@ -81,12 +126,26 @@ export default function ScheduleAndMealsTab({ groupId, profile }) {
     toast.success("פעילות בוטלה");
   };
 
+  // Client-side date validation for schedule
+  const validateScheduleDate = (date) => {
+    if (!date) return "יש למלא תאריך";
+    if (arrivalDate && departureDate) {
+      if (date < arrivalDate || date > departureDate) {
+        return "לא ניתן לקבוע פעילות מחוץ לתאריכי הקבוצה";
+      }
+    }
+    return null;
+  };
+
   const handleAddSchedule = async () => {
     setNewScheduleError(null);
-    if (!newSchedule.date || !newSchedule.activity_name) {
-      setNewScheduleError("יש למלא תאריך ושם פעילות");
+    if (!newSchedule.activity_name) {
+      setNewScheduleError("יש למלא שם פעילות");
       return;
     }
+    const dateErr = validateScheduleDate(newSchedule.date);
+    if (dateErr) { setNewScheduleError(dateErr); return; }
+
     setSaving(true);
     const res = await base44.functions.invoke("saveGroupScheduleItem", {
       ...newSchedule,
@@ -98,6 +157,7 @@ export default function ScheduleAndMealsTab({ groupId, profile }) {
     setSaving(false);
     if (res.data?.error) { setNewScheduleError(res.data.error); return; }
     setNewSchedule(EMPTY_SCHEDULE);
+    setCustomActivityName(false);
     setAddingSchedule(false);
     invalidate();
     toast.success("פעילות נוספה");
@@ -135,10 +195,15 @@ export default function ScheduleAndMealsTab({ groupId, profile }) {
       status: "ACTIVE",
     });
     setSaving(false);
-    setNewMeal(EMPTY_MEAL);
+    setNewMeal(EMPTY_MEAL());
     setAddingMeal(false);
     invalidate();
     toast.success("ארוחה נוספה");
+  };
+
+  const setNewMealType = (v) => {
+    const defaults = MEAL_DEFAULTS[v] || MEAL_DEFAULTS.OTHER;
+    setNewMeal(m => ({ ...m, meal_type: v, start_time: defaults.start_time, end_time: defaults.end_time }));
   };
 
   // ── Sync from GuestForm ─────────────────────────────────────────────────────
@@ -159,24 +224,14 @@ export default function ScheduleAndMealsTab({ groupId, profile }) {
     }
   };
 
-  const activeSchedule = scheduleItems.filter(i => i.status === "ACTIVE").sort((a, b) =>
-    a.date.localeCompare(b.date) || a.start_time.localeCompare(b.start_time)
-  );
+  // Sorted: earliest date then earliest start_time
+  const sortChron = (arr) =>
+    [...arr].sort((a, b) => a.date.localeCompare(b.date) || (a.start_time || "").localeCompare(b.start_time || ""));
+
+  const activeSchedule = sortChron(scheduleItems.filter(i => i.status === "ACTIVE"));
   const cancelledSchedule = scheduleItems.filter(i => i.status === "CANCELLED");
-  const activeMeals = mealItems.filter(i => i.status === "ACTIVE").sort((a, b) =>
-    a.date.localeCompare(b.date) || a.start_time.localeCompare(b.start_time)
-  );
+  const activeMeals = sortChron(mealItems.filter(i => i.status === "ACTIVE"));
   const cancelledMeals = mealItems.filter(i => i.status === "CANCELLED");
-
-  const setNewMealStartTime = (v) => {
-    const duration = MEAL_DURATIONS[newMeal.meal_type] || 60;
-    setNewMeal(m => ({ ...m, start_time: v, end_time: addMinutes(v, duration) }));
-  };
-
-  const setNewMealType = (v) => {
-    const duration = MEAL_DURATIONS[v] || 60;
-    setNewMeal(m => ({ ...m, meal_type: v, end_time: addMinutes(m.start_time, duration) }));
-  };
 
   if (!profile) {
     return (
@@ -213,14 +268,55 @@ export default function ScheduleAndMealsTab({ groupId, profile }) {
         {addingSchedule && (
           <div className="bg-slate-50 border border-primary/30 rounded-xl p-4 space-y-3 mb-3">
             <p className="text-xs font-semibold text-primary">פעילות חדשה (ידנית)</p>
+            {arrivalDate && departureDate && (
+              <p className="text-xs text-slate-400">תאריכים מותרים: {arrivalDate} עד {departureDate}</p>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <label className="text-xs text-slate-500">תאריך *</label>
-                <Input type="date" value={newSchedule.date} onChange={e => setNewSchedule(s => ({ ...s, date: e.target.value }))} />
+                <Input
+                  type="date"
+                  value={newSchedule.date}
+                  min={arrivalDate || undefined}
+                  max={departureDate || undefined}
+                  onChange={e => setNewSchedule(s => ({ ...s, date: e.target.value }))}
+                />
               </div>
               <div className="space-y-1">
-                <label className="text-xs text-slate-500">שם פעילות *</label>
-                <Input value={newSchedule.activity_name} onChange={e => setNewSchedule(s => ({ ...s, activity_name: e.target.value }))} placeholder="שם הפעילות" />
+                <label className="text-xs text-slate-500">שם / סוג פעילות *</label>
+                {quoteActivities.length > 0 && !customActivityName ? (
+                  <div className="flex gap-1">
+                    <Select
+                      value={newSchedule.activity_name}
+                      onValueChange={v => {
+                        if (v === "__custom__") {
+                          setCustomActivityName(true);
+                          setNewSchedule(s => ({ ...s, activity_name: "" }));
+                        } else {
+                          setNewSchedule(s => ({ ...s, activity_name: v }));
+                        }
+                      }}
+                    >
+                      <SelectTrigger><SelectValue placeholder="בחר פעילות..." /></SelectTrigger>
+                      <SelectContent>
+                        {quoteActivities.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+                        <SelectItem value="__custom__">✏️ אחר (הקלד ידנית)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : (
+                  <div className="flex gap-1">
+                    <Input
+                      value={newSchedule.activity_name}
+                      onChange={e => setNewSchedule(s => ({ ...s, activity_name: e.target.value }))}
+                      placeholder="שם הפעילות"
+                      autoFocus={customActivityName}
+                    />
+                    {quoteActivities.length > 0 && (
+                      <Button size="sm" variant="ghost" type="button" onClick={() => setCustomActivityName(false)} className="text-xs px-2">↩</Button>
+                    )}
+                  </div>
+                )}
               </div>
               <div className="space-y-1">
                 <label className="text-xs text-slate-500">שעת התחלה</label>
@@ -267,7 +363,7 @@ export default function ScheduleAndMealsTab({ groupId, profile }) {
               <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{newScheduleError}</p>
             )}
             <div className="flex gap-2 justify-end">
-              <Button size="sm" variant="outline" onClick={() => { setAddingSchedule(false); setNewScheduleError(null); }}>ביטול</Button>
+              <Button size="sm" variant="outline" onClick={() => { setAddingSchedule(false); setNewScheduleError(null); setCustomActivityName(false); }}>ביטול</Button>
               <Button size="sm" onClick={handleAddSchedule} disabled={saving}>הוסף</Button>
             </div>
           </div>
@@ -284,6 +380,8 @@ export default function ScheduleAndMealsTab({ groupId, profile }) {
                 key={item.id}
                 item={item}
                 activitySpaces={activitySpaces}
+                quoteActivities={quoteActivities}
+                groupDateRange={{ arrivalDate, departureDate }}
                 onSave={handleSaveScheduleItem}
                 onCancel={handleCancelScheduleItem}
                 saving={saving}
@@ -303,6 +401,8 @@ export default function ScheduleAndMealsTab({ groupId, profile }) {
                   key={item.id}
                   item={item}
                   activitySpaces={activitySpaces}
+                  quoteActivities={quoteActivities}
+                  groupDateRange={{ arrivalDate, departureDate }}
                   onSave={handleSaveScheduleItem}
                   onCancel={() => {}}
                   saving={saving}
@@ -346,7 +446,7 @@ export default function ScheduleAndMealsTab({ groupId, profile }) {
               </div>
               <div className="space-y-1">
                 <label className="text-xs text-slate-500">שעת התחלה</label>
-                <Input type="time" value={newMeal.start_time} onChange={e => setNewMealStartTime(e.target.value)} />
+                <Input type="time" value={newMeal.start_time} onChange={e => setNewMeal(m => ({ ...m, start_time: e.target.value }))} />
               </div>
               <div className="space-y-1">
                 <label className="text-xs text-slate-500">שעת סיום</label>

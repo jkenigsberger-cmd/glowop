@@ -2,31 +2,74 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Pencil, Trash2, Check, X } from "lucide-react";
+import { Pencil, Trash2, Check, X, ChevronDown, ChevronUp } from "lucide-react";
 
 const MEAL_LABELS = { BREAKFAST: "ארוחת בוקר", LUNCH: "ארוחת צהריים", DINNER: "ארוחת ערב", OTHER: "אחר" };
-const MEAL_DURATIONS = { BREAKFAST: 60, LUNCH: 90, DINNER: 90, OTHER: 60 };
 
-function addMinutes(timeStr, mins) {
-  const [h, m] = (timeStr || "08:00").split(":").map(Number);
-  const total = h * 60 + m + mins;
-  return `${String(Math.floor(total / 60) % 24).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+// Default times used when editing (same as sync defaults)
+const MEAL_DEFAULTS = {
+  BREAKFAST: { start_time: "07:00", end_time: "09:00" },
+  LUNCH:     { start_time: "12:30", end_time: "13:30" },
+  DINNER:    { start_time: "18:30", end_time: "20:00" },
+  OTHER:     { start_time: "12:00", end_time: "13:00" },
+};
+
+const DIET_LABELS = [
+  { key: "vegetarian_count",      label: "צמחוני" },
+  { key: "vegan_count",           label: "טבעוני" },
+  { key: "glutenFree_count",      label: "ללא גלוטן" },
+  { key: "lactoseFree_count",     label: "ללא לקטוז" },
+  { key: "eggFree_count",         label: "ללא ביצים" },
+  { key: "nutFree_count",         label: "ללא אגוזים" },
+  { key: "mehadrinKosher_count",  label: "מהדרין" },
+  { key: "lifeThreatening_count", label: "⚠️ אלרגיה מסכנת חיים" },
+];
+
+function parseDiets(raw) {
+  if (!raw) return null;
+  try { return JSON.parse(raw); } catch { return null; }
+}
+
+function DietBadges({ raw }) {
+  const diets = parseDiets(raw);
+  if (!diets) return null;
+  const items = DIET_LABELS.filter(l => Number(diets[l.key]) > 0);
+  const hasLifeThreat = Number(diets.lifeThreatening_count) > 0;
+  if (!items.length && !diets.diet_notes) return null;
+
+  return (
+    <div className={`rounded-lg px-3 py-2 text-xs space-y-1 ${hasLifeThreat ? "bg-red-50 border border-red-200" : "bg-amber-50 border border-amber-200"}`}>
+      <p className="font-semibold text-slate-700 text-[11px]">🍽️ דיאטות מיוחדות:</p>
+      <div className="flex flex-wrap gap-1.5">
+        {items.map(l => (
+          <span
+            key={l.key}
+            className={`px-2 py-0.5 rounded-full font-medium ${l.key === "lifeThreatening_count" ? "bg-red-100 text-red-700" : "bg-white text-slate-600 border border-slate-200"}`}
+          >
+            {l.label}: {diets[l.key]}
+          </span>
+        ))}
+      </div>
+      {diets.diet_notes && (
+        <p className="text-slate-600 text-[11px]">הערה: {diets.diet_notes}</p>
+      )}
+    </div>
+  );
 }
 
 export default function MealReservationRow({ item, onSave, onCancel, saving }) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ ...item });
+  const [expanded, setExpanded] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const handleMealTypeChange = (v) => {
-    const duration = MEAL_DURATIONS[v] || 60;
-    const newEnd = addMinutes(form.start_time, duration);
-    setForm(f => ({ ...f, meal_type: v, end_time: newEnd }));
+    const defaults = MEAL_DEFAULTS[v] || MEAL_DEFAULTS.OTHER;
+    setForm(f => ({ ...f, meal_type: v, start_time: defaults.start_time, end_time: defaults.end_time }));
   };
 
   const handleStartChange = (v) => {
-    const duration = MEAL_DURATIONS[form.meal_type] || 60;
-    setForm(f => ({ ...f, start_time: v, end_time: addMinutes(v, duration) }));
+    setForm(f => ({ ...f, start_time: v }));
   };
 
   const handleSave = async () => {
@@ -38,6 +81,17 @@ export default function MealReservationRow({ item, onSave, onCancel, saving }) {
     setForm({ ...item });
     setEditing(false);
   };
+
+  const hasDiets = (() => {
+    const d = parseDiets(item.special_diets_summary);
+    if (!d) return false;
+    return DIET_LABELS.some(l => Number(d[l.key]) > 0) || !!d.diet_notes;
+  })();
+
+  const hasLifeThreat = (() => {
+    const d = parseDiets(item.special_diets_summary);
+    return d && Number(d.lifeThreatening_count) > 0;
+  })();
 
   if (editing) {
     return (
@@ -98,35 +152,63 @@ export default function MealReservationRow({ item, onSave, onCancel, saving }) {
   }
 
   return (
-    <div className={`bg-card border rounded-xl px-4 py-3 flex items-start gap-3 ${item.status === "CANCELLED" ? "opacity-50" : "border-border"}`}>
-      <div className="flex-1 min-w-0 space-y-0.5">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-sm font-medium">{MEAL_LABELS[item.meal_type] || item.meal_type}</span>
-          {item.sandwich_option && (
-            <span className="text-xs bg-amber-50 text-amber-700 border border-amber-200 rounded px-1.5">🥪 כריכים</span>
+    <div className={`bg-card border rounded-xl overflow-hidden ${item.status === "CANCELLED" ? "opacity-50" : hasLifeThreat ? "border-red-300" : "border-border"}`}>
+      <div className="px-4 py-3 flex items-start gap-3">
+        <div className="flex-1 min-w-0 space-y-0.5">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-medium">{MEAL_LABELS[item.meal_type] || item.meal_type}</span>
+            {item.sandwich_option && (
+              <span className="text-xs bg-amber-50 text-amber-700 border border-amber-200 rounded px-1.5">🥪 כריכים</span>
+            )}
+            {hasLifeThreat && (
+              <span className="text-xs bg-red-100 text-red-700 border border-red-300 rounded px-1.5 font-semibold">⚠️ אלרגיה מסכנת חיים</span>
+            )}
+            {item.source === "manual" && (
+              <span className="text-xs bg-blue-50 text-blue-600 border border-blue-200 rounded px-1.5">ידני</span>
+            )}
+            {item.status === "CANCELLED" && (
+              <span className="text-xs bg-red-50 text-red-600 border border-red-200 rounded px-1.5">בוטל</span>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {item.date} · {item.start_time}–{item.end_time} · {item.pax} אנשים
+          </p>
+          {item.notes && (
+            <p className="text-xs text-slate-600 whitespace-pre-line">{item.notes}</p>
           )}
-          {item.source === "manual" && (
-            <span className="text-xs bg-blue-50 text-blue-600 border border-blue-200 rounded px-1.5">ידני</span>
+          {hasDiets && !expanded && (
+            <button
+              type="button"
+              onClick={() => setExpanded(true)}
+              className="text-xs text-primary flex items-center gap-1 mt-1 hover:underline"
+            >
+              <ChevronDown className="w-3 h-3" /> הצג דיאטות מיוחדות
+            </button>
           )}
-          {item.status === "CANCELLED" && (
-            <span className="text-xs bg-red-50 text-red-600 border border-red-200 rounded px-1.5">בוטל</span>
+          {hasDiets && expanded && (
+            <>
+              <DietBadges raw={item.special_diets_summary} />
+              <button
+                type="button"
+                onClick={() => setExpanded(false)}
+                className="text-xs text-slate-400 flex items-center gap-1 hover:underline"
+              >
+                <ChevronUp className="w-3 h-3" /> הסתר
+              </button>
+            </>
           )}
         </div>
-        <p className="text-xs text-muted-foreground">
-          {item.date} · {item.start_time}–{item.end_time} · {item.pax} אנשים
-        </p>
-        {item.notes && <p className="text-xs text-muted-foreground italic">{item.notes}</p>}
+        {item.status !== "CANCELLED" && (
+          <div className="flex gap-1 shrink-0">
+            <Button size="sm" variant="ghost" onClick={() => setEditing(true)} className="h-7 w-7 p-0">
+              <Pencil className="w-3.5 h-3.5" />
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => onCancel(item.id)} className="h-7 w-7 p-0 text-red-400 hover:text-red-600">
+              <Trash2 className="w-3.5 h-3.5" />
+            </Button>
+          </div>
+        )}
       </div>
-      {item.status !== "CANCELLED" && (
-        <div className="flex gap-1 shrink-0">
-          <Button size="sm" variant="ghost" onClick={() => setEditing(true)} className="h-7 w-7 p-0">
-            <Pencil className="w-3.5 h-3.5" />
-          </Button>
-          <Button size="sm" variant="ghost" onClick={() => onCancel(item.id)} className="h-7 w-7 p-0 text-red-400 hover:text-red-600">
-            <Trash2 className="w-3.5 h-3.5" />
-          </Button>
-        </div>
-      )}
     </div>
   );
 }

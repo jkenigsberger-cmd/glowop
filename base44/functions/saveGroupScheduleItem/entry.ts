@@ -36,6 +36,15 @@ Deno.serve(async (req) => {
     return Response.json({ error: 'שדות חובה חסרים' }, { status: 400 });
   }
 
+  // Validate date is within group booking window
+  const groups = await base44.asServiceRole.entities.Group.filter({ id: group_id });
+  const group = groups[0];
+  if (group && group.arrival_date && group.departure_date) {
+    if (date < group.arrival_date || date > group.departure_date) {
+      return Response.json({ error: 'לא ניתן לקבוע פעילות מחוץ לתאריכי הקבוצה' }, { status: 400 });
+    }
+  }
+
   let resolvedSpaceId = activity_space_id || null;
   let resolvedSpaceCode = null;
 

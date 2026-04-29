@@ -6,7 +6,13 @@
  */
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
-const MEAL_DURATION = { BREAKFAST: 60, LUNCH: 90, DINNER: 90, OTHER: 60 };
+// Default meal times — used when client did not provide a specific time
+const MEAL_DEFAULTS = {
+  BREAKFAST: { start_time: '07:00', end_time: '09:00' },
+  LUNCH:     { start_time: '12:30', end_time: '13:30' },
+  DINNER:    { start_time: '18:30', end_time: '20:00' },
+  OTHER:     { start_time: '12:00', end_time: '13:00' },
+};
 
 function addMinutes(timeStr, mins) {
   const [h, m] = timeStr.split(':').map(Number);
@@ -14,6 +20,25 @@ function addMinutes(timeStr, mins) {
   const hh = String(Math.floor(total / 60) % 24).padStart(2, '0');
   const mm = String(total % 60).padStart(2, '0');
   return `${hh}:${mm}`;
+}
+
+function buildDietSummary(diets) {
+  if (!diets || typeof diets !== 'object') return '';
+  const labels = [
+    { key: 'vegetarian_count',     label: 'צמחוני' },
+    { key: 'vegan_count',          label: 'טבעוני' },
+    { key: 'glutenFree_count',     label: 'ללא גלוטן' },
+    { key: 'lactoseFree_count',    label: 'ללא לקטוז' },
+    { key: 'eggFree_count',        label: 'ללא ביצים' },
+    { key: 'nutFree_count',        label: 'ללא אגוזים' },
+    { key: 'mehadrinKosher_count', label: 'מהדרין' },
+    { key: 'lifeThreatening_count',label: 'אלרגיה מסכנת חיים' },
+  ];
+  const parts = labels
+    .filter(l => Number(diets[l.key]) > 0)
+    .map(l => `${l.label}: ${diets[l.key]}`);
+  if (diets.diet_notes) parts.push(`הערות: ${diets.diet_notes}`);
+  return parts.join(' | ');
 }
 
 Deno.serve(async (req) => {
@@ -117,15 +142,27 @@ Deno.serve(async (req) => {
   if (submission.special_diets) {
     try { specialDiets = JSON.parse(submission.special_diets); } catch {}
   }
-  const dietSummary = JSON.stringify(specialDiets);
+
+  // Build human-readable diet summary for kitchen
+  const dietSummaryText = buildDietSummary(specialDiets);
+  // Also keep the raw JSON for structured display
+  const dietSummaryJson = JSON.stringify(specialDiets);
+
+  // Build extra notes: arrival/departure lunch flags + client meal notes
+  const arrivalLunchNote  = submission.arrival_lunch   ? 'צהריים ביום הגעה' : null;
+  const departureLunchNote = submission.departure_lunch ? 'צהריים ביום עזיבה' : null;
+  const extraNotes = [arrivalLunchNote, departureLunchNote, submission.general_notes]
+    .filter(Boolean).join(' | ');
 
   for (const row of mealRows) {
     if (!row.date || !row.meal_type) continue;
     const mealTypeMap = { BREAKFAST: 'BREAKFAST', LUNCH: 'LUNCH', DINNER: 'DINNER' };
     const meal_type = mealTypeMap[row.meal_type] || 'OTHER';
-    const start_time = row.start_time || '08:00';
-    const duration = MEAL_DURATION[meal_type] || 60;
-    const end_time = addMinutes(start_time, duration);
+
+    // Use default times if client did not provide specific times
+    const defaults = MEAL_DEFAULTS[meal_type] || MEAL_DEFAULTS.OTHER;
+    const start_time = (row.start_time && row.start_time !== '00:00') ? row.start_time : defaults.start_time;
+    const end_time   = (row.end_time   && row.end_time   !== '00:00') ? row.end_time   : defaults.end_time;
     const key = `${row.date}|${meal_type}`;
 
     const payload = {
@@ -136,9 +173,9 @@ Deno.serve(async (req) => {
       start_time,
       end_time,
       pax: profile.total_pax || submission.total_pax || 0,
-      special_diets_summary: dietSummary,
+      special_diets_summary: dietSummaryJson,
       sandwich_option: row.sandwich_instead || false,
-      notes: null,
+      notes: [dietSummaryText, extraNotes].filter(Boolean).join('\n') || null,
       source: 'groupSync',
       status: 'ACTIVE',
     };
