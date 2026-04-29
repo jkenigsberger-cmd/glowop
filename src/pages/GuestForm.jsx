@@ -7,6 +7,7 @@ import GuestFormStep4 from "@/components/guest-form/GuestFormStep4";
 import GuestFormProgress from "@/components/guest-form/GuestFormProgress";
 import { Button } from "@/components/ui/button";
 import { differenceInCalendarDays, addDays, format, parseISO } from "date-fns";
+import { base44 } from "@/api/base44Client";
 
 function buildInitialMeals(arrival, departure) {
   if (!arrival || !departure) return [];
@@ -56,14 +57,8 @@ const ALL_STEPS = [
 ];
 
 async function callFunction(name, payload) {
-  const res = await fetch(`/functions/${name}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
-  return data;
+  const res = await base44.functions.invoke(name, payload);
+  return res.data;
 }
 
 export default function GuestForm() {
@@ -109,11 +104,11 @@ export default function GuestForm() {
 
     callFunction("getQuotePublicData", { quote_id: quoteId })
       .then(d => {
-        if (d?.error) {
-          const msg = d.error;
+        if (!d || d?.error) {
+          const msg = d?.error || "";
           if (msg.includes('not found') || msg.includes('Not found')) setError("הטופס לא נמצא — בדקו שהקישור תקין");
-          else if (msg.includes('not available') || msg.includes('not approved')) setError("הצעת המחיר אינה מאושרת — הטופס זמין רק לאחר אישור הצעה");
-          else setError("הקישור אינו תקין");
+          else if (msg.includes('not available') || msg.includes('not approved') || msg.includes('not available')) setError("הצעת המחיר אינה מאושרת — הטופס זמין רק לאחר אישור הצעה");
+          else setError("הצעת המחיר אינה זמינה");
           return;
         }
 
@@ -142,7 +137,12 @@ export default function GuestForm() {
           staff_women_count: Math.ceil(staffTotal / 2)     || "",
         }));
       })
-      .catch(() => setError("הצעת המחיר אינה זמינה"))
+      .catch((e) => {
+        const msg = e?.message || "";
+        if (msg.includes('not found') || msg.includes('404')) setError("הטופס לא נמצא — בדקו שהקישור תקין");
+        else if (msg.includes('403') || msg.includes('not available')) setError("הצעת המחיר אינה מאושרת — הטופס זמין רק לאחר אישור הצעה");
+        else setError("הצעת המחיר אינה זמינה — בדקו שהקישור תקין");
+      })
       .finally(() => setLoading(false));
   }, [quoteId]);
 
