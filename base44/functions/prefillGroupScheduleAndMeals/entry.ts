@@ -159,10 +159,10 @@ Deno.serve(async (req) => {
     const mealTypeMap = { BREAKFAST: 'BREAKFAST', LUNCH: 'LUNCH', DINNER: 'DINNER' };
     const meal_type = mealTypeMap[row.meal_type] || 'OTHER';
 
-    // Use default times if client did not provide specific times
+    // Always use default times — guest form does not collect meal times
     const defaults = MEAL_DEFAULTS[meal_type] || MEAL_DEFAULTS.OTHER;
-    const start_time = (row.start_time && row.start_time !== '00:00') ? row.start_time : defaults.start_time;
-    const end_time   = (row.end_time   && row.end_time   !== '00:00') ? row.end_time   : defaults.end_time;
+    const start_time = defaults.start_time;
+    const end_time   = defaults.end_time;
     const key = `${row.date}|${meal_type}`;
 
     const payload = {

@@ -60,9 +60,18 @@ function DietBadges({ raw }) {
 
 export default function MealReservationRow({ item, onSave, onCancel, saving }) {
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ ...item });
   const [expanded, setExpanded] = useState(false);
+
+  // Parse diets from special_diets_summary into editable form state
+  const parsedDietsInit = parseDiets(item.special_diets_summary) || {};
+  const initDiets = {};
+  DIET_LABELS.forEach(l => { initDiets[l.key] = parsedDietsInit[l.key] ?? 0; });
+  initDiets.diet_notes = parsedDietsInit.diet_notes || "";
+
+  const [form, setForm] = useState({ ...item });
+  const [dietForm, setDietForm] = useState(initDiets);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const setDiet = (k, v) => setDietForm(f => ({ ...f, [k]: v }));
 
   const handleMealTypeChange = (v) => {
     const defaults = MEAL_DEFAULTS[v] || MEAL_DEFAULTS.OTHER;
@@ -74,12 +83,22 @@ export default function MealReservationRow({ item, onSave, onCancel, saving }) {
   };
 
   const handleSave = async () => {
-    await onSave(form);
+    // Merge updated diet counts back into special_diets_summary
+    const updatedForm = {
+      ...form,
+      special_diets_summary: JSON.stringify(dietForm),
+    };
+    await onSave(updatedForm);
     setEditing(false);
   };
 
   const handleCancel = () => {
     setForm({ ...item });
+    const pd = parseDiets(item.special_diets_summary) || {};
+    const reset = {};
+    DIET_LABELS.forEach(l => { reset[l.key] = pd[l.key] ?? 0; });
+    reset.diet_notes = pd.diet_notes || "";
+    setDietForm(reset);
     setEditing(false);
   };
 
@@ -140,6 +159,32 @@ export default function MealReservationRow({ item, onSave, onCancel, saving }) {
             <Input value={form.notes || ""} onChange={e => set("notes", e.target.value)} placeholder="הערות..." />
           </div>
         </div>
+
+        {/* Diet counts */}
+        <div className="border-t border-slate-200 pt-3 space-y-2">
+          <p className="text-xs font-semibold text-slate-600">🍽️ דיאטות מיוחדות</p>
+          <div className="grid grid-cols-2 gap-2">
+            {DIET_LABELS.map(l => (
+              <div key={l.key} className="flex items-center gap-2">
+                <span className="text-base">{l.emoji}</span>
+                <label className="text-xs text-slate-600 flex-1">{l.label}</label>
+                <Input
+                  type="number"
+                  min="0"
+                  value={dietForm[l.key] || ""}
+                  onChange={e => setDiet(l.key, Number(e.target.value) || 0)}
+                  className="w-16 text-center text-xs h-7"
+                  placeholder="0"
+                />
+              </div>
+            ))}
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs text-slate-500">הערות תזונה</label>
+            <Input value={dietForm.diet_notes || ""} onChange={e => setDiet("diet_notes", e.target.value)} placeholder="הערות תזונה..." />
+          </div>
+        </div>
+
         <div className="flex gap-2 justify-end">
           <Button size="sm" variant="outline" onClick={handleCancel} className="gap-1">
             <X className="w-3.5 h-3.5" /> ביטול
