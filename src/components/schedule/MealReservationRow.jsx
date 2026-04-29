@@ -15,14 +15,14 @@ const MEAL_DEFAULTS = {
 };
 
 const DIET_LABELS = [
-  { key: "vegetarian_count",      label: "צמחוני" },
-  { key: "vegan_count",           label: "טבעוני" },
-  { key: "glutenFree_count",      label: "ללא גלוטן" },
-  { key: "lactoseFree_count",     label: "ללא לקטוז" },
-  { key: "eggFree_count",         label: "ללא ביצים" },
-  { key: "nutFree_count",         label: "ללא אגוזים" },
-  { key: "mehadrinKosher_count",  label: "מהדרין" },
-  { key: "lifeThreatening_count", label: "⚠️ אלרגיה מסכנת חיים" },
+  { key: "vegetarian_count",      label: "צמחוני",              emoji: "🥦" },
+  { key: "vegan_count",           label: "טבעוני",              emoji: "🌱" },
+  { key: "glutenFree_count",      label: "ללא גלוטן",           emoji: "🌾" },
+  { key: "lactoseFree_count",     label: "ללא לקטוז",           emoji: "🥛" },
+  { key: "eggFree_count",         label: "ללא ביצים",           emoji: "🥚" },
+  { key: "nutFree_count",         label: "ללא אגוזים",          emoji: "🥜" },
+  { key: "mehadrinKosher_count",  label: "מהדרין",              emoji: "✡️" },
+  { key: "lifeThreatening_count", label: "אלרגיה מסכנת חיים",  emoji: "⚠️" },
 ];
 
 function parseDiets(raw) {
@@ -44,8 +44,9 @@ function DietBadges({ raw }) {
         {items.map(l => (
           <span
             key={l.key}
-            className={`px-2 py-0.5 rounded-full font-medium ${l.key === "lifeThreatening_count" ? "bg-red-100 text-red-700" : "bg-white text-slate-600 border border-slate-200"}`}
+            className={`px-2 py-0.5 rounded-full font-medium flex items-center gap-1 ${l.key === "lifeThreatening_count" ? "bg-red-100 text-red-700" : "bg-white text-slate-600 border border-slate-200"}`}
           >
+            <span>{l.emoji}</span>
             {l.label}: {diets[l.key]}
           </span>
         ))}

@@ -224,13 +224,22 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
     }
   };
 
-  // Sorted: earliest date then earliest start_time
-  const sortChron = (arr) =>
-    [...arr].sort((a, b) => a.date.localeCompare(b.date) || (a.start_time || "").localeCompare(b.start_time || ""));
+  // Sorted: earliest date, then for meals: BREAKFAST→LUNCH→DINNER, then start_time
+  const MEAL_ORDER = { BREAKFAST: 0, LUNCH: 1, DINNER: 2, OTHER: 3 };
+  const sortChron = (arr, isMeals = false) =>
+    [...arr].sort((a, b) => {
+      const dateCmp = a.date.localeCompare(b.date);
+      if (dateCmp !== 0) return dateCmp;
+      if (isMeals) {
+        const mealCmp = (MEAL_ORDER[a.meal_type] ?? 99) - (MEAL_ORDER[b.meal_type] ?? 99);
+        if (mealCmp !== 0) return mealCmp;
+      }
+      return (a.start_time || "").localeCompare(b.start_time || "");
+    });
 
-  const activeSchedule = sortChron(scheduleItems.filter(i => i.status === "ACTIVE"));
+  const activeSchedule = sortChron(scheduleItems.filter(i => i.status === "ACTIVE"), false);
   const cancelledSchedule = scheduleItems.filter(i => i.status === "CANCELLED");
-  const activeMeals = sortChron(mealItems.filter(i => i.status === "ACTIVE"));
+  const activeMeals = sortChron(mealItems.filter(i => i.status === "ACTIVE"), true);
   const cancelledMeals = mealItems.filter(i => i.status === "CANCELLED");
 
   if (!profile) {
