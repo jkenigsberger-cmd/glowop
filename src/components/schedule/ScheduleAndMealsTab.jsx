@@ -111,12 +111,17 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
   // ── Schedule handlers ──────────────────────────────────────────────────────
   const handleSaveScheduleItem = async (form) => {
     setSaving(true);
-    const res = await base44.functions.invoke("saveGroupScheduleItem", { ...form });
-    setSaving(false);
-    if (res.data?.error) return res.data.error;
-    invalidate();
-    toast.success("פעילות נשמרה");
-    return null;
+    try {
+      const res = await base44.functions.invoke("saveGroupScheduleItem", { ...form });
+      if (res.data?.error) return res.data.error;
+      invalidate();
+      toast.success("פעילות נשמרה");
+      return null;
+    } catch (err) {
+      return err?.response?.data?.error || err?.message || "שגיאה בשמירה";
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleCancelScheduleItem = async (id) => {
@@ -147,20 +152,26 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
     if (dateErr) { setNewScheduleError(dateErr); return; }
 
     setSaving(true);
-    const res = await base44.functions.invoke("saveGroupScheduleItem", {
-      ...newSchedule,
-      group_id: groupId,
-      operational_group_profile_id: profileId,
-      source: "manual",
-      status: "ACTIVE",
-    });
-    setSaving(false);
-    if (res.data?.error) { setNewScheduleError(res.data.error); return; }
-    setNewSchedule(EMPTY_SCHEDULE);
-    setCustomActivityName(false);
-    setAddingSchedule(false);
-    invalidate();
-    toast.success("פעילות נוספה");
+    try {
+      const res = await base44.functions.invoke("saveGroupScheduleItem", {
+        ...newSchedule,
+        group_id: groupId,
+        operational_group_profile_id: profileId,
+        source: "manual",
+        status: "ACTIVE",
+      });
+      if (res.data?.error) { setNewScheduleError(res.data.error); return; }
+      setNewSchedule(EMPTY_SCHEDULE);
+      setCustomActivityName(false);
+      setAddingSchedule(false);
+      invalidate();
+      toast.success("פעילות נוספה");
+    } catch (err) {
+      const msg = err?.response?.data?.error || err?.message || "שגיאה בשמירה";
+      setNewScheduleError(msg);
+    } finally {
+      setSaving(false);
+    }
   };
 
   // ── Meal handlers ──────────────────────────────────────────────────────────
