@@ -12,6 +12,7 @@ import Groups from "./pages/Groups";
 import GroupDetail from "./pages/GroupDetail";
 import GuestForm from "./pages/GuestForm.jsx";
 import ApprovedGroups from "./pages/ApprovedGroups.jsx";
+import Admin from "./pages/Admin.jsx";
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -45,6 +46,7 @@ const AuthenticatedApp = () => {
         <Route path="/groups" element={<Groups />} />
         <Route path="/groups/:id" element={<GroupDetail />} />
         <Route path="/approved-groups" element={<ApprovedGroups />} />
+        <Route path="/admin" element={<Admin />} />
         {/* Add your page Route elements here */}
         <Route path="*" element={<PageNotFound />} />
       </Routes>
