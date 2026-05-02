@@ -149,7 +149,7 @@ export default function Dashboard() {
 
         {/* Header */}
         <div>
-          <h1 className="text-2xl font-bold">דשבורד יומי</h1>
+          <h1 className="text-2xl font-bold">בית</h1>
           <p className="text-muted-foreground text-sm mt-0.5">תמונת מצב תפעולית להיום — {todayDisplay}</p>
         </div>
 

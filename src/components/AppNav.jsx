@@ -5,7 +5,7 @@ import {
 } from "lucide-react";
 
 const OPS_LINKS = [
-  { to: "/dashboard",       label: "דשבורד",         icon: LayoutDashboard },
+  { to: "/dashboard",       label: "בית",            icon: LayoutDashboard },
   { to: "/approved-groups", label: "קבוצות מאושרות", icon: CheckSquare },
   { to: "/calendar",        label: "לוח שנה",         icon: CalendarDays },
   { to: "/housekeeping",    label: "משק בית",         icon: BedDouble },
