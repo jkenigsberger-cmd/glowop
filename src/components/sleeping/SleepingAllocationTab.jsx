@@ -172,6 +172,23 @@ export default function SleepingAllocationTab({ groupId }) {
     return a.status === "DRAFT" && hood?.is_vip;
   });
 
+  // ── Live bed counters (for inline display in each neighbourhood panel) ────
+  const boysNeeded  = Number(profile?.boys_beds_needed)  || 0;
+  const girlsNeeded = Number(profile?.girls_beds_needed) || 0;
+
+  function bedsInReservations(resList) {
+    let beds = 0;
+    resList.forEach(r => {
+      const tentsInHood = allTents.filter(t => t.neighborhood_id === r.neighborhood_id && t.working_status === "WORKING");
+      const sorted = [...tentsInHood].sort((a, b) => (b.capacity || 0) - (a.capacity || 0));
+      sorted.slice(0, r.planned_tents || 0).forEach(t => { beds += t.capacity || 0; });
+    });
+    return beds;
+  }
+
+  const boysAllocated  = useMemo(() => bedsInReservations(myActiveNhoodRes.filter(r => r.gender_group === "BOYS"  || r.gender_group === "MIXED")), [myActiveNhoodRes, allTents]);
+  const girlsAllocated = useMemo(() => bedsInReservations(myActiveNhoodRes.filter(r => r.gender_group === "GIRLS" || r.gender_group === "MIXED")), [myActiveNhoodRes, allTents]);
+
   // ── Suggestion ────────────────────────────────────────────────────────────
   const boysDist = parseDist(profile?.boys_tent_distribution_json);
   const girlsDist = parseDist(profile?.girls_tent_distribution_json);
@@ -376,6 +393,10 @@ export default function SleepingAllocationTab({ groupId }) {
               departureDate={departureDate}
               groupId={groupId}
               profileId={profile.id}
+              boysNeeded={boysNeeded}
+              boysAllocated={boysAllocated}
+              girlsNeeded={girlsNeeded}
+              girlsAllocated={girlsAllocated}
               onReserve={handleReserveNeighborhood}
               onRelease={handleReleaseNeighborhood}
               saving={saving}
