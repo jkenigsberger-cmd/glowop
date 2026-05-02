@@ -13,6 +13,11 @@ import GroupDetail from "./pages/GroupDetail";
 import GuestForm from "./pages/GuestForm.jsx";
 import ApprovedGroups from "./pages/ApprovedGroups.jsx";
 import Admin from "./pages/Admin.jsx";
+import Dashboard from "./pages/Dashboard.jsx";
+import Calendar from "./pages/Calendar.jsx";
+import Housekeeping from "./pages/Housekeeping.jsx";
+import Kitchen from "./pages/Kitchen.jsx";
+import Maintenance from "./pages/Maintenance.jsx";
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -42,11 +47,17 @@ const AuthenticatedApp = () => {
     <>
       <AppNav />
       <Routes>
-        <Route path="/" element={<Inventory />} />
+        <Route path="/" element={<Dashboard />} />
+        <Route path="/inventory" element={<Inventory />} />
         <Route path="/groups" element={<Groups />} />
         <Route path="/groups/:id" element={<GroupDetail />} />
         <Route path="/approved-groups" element={<ApprovedGroups />} />
         <Route path="/admin" element={<Admin />} />
+        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/calendar" element={<Calendar />} />
+        <Route path="/housekeeping" element={<Housekeeping />} />
+        <Route path="/kitchen" element={<Kitchen />} />
+        <Route path="/maintenance" element={<Maintenance />} />
         {/* Add your page Route elements here */}
         <Route path="*" element={<PageNotFound />} />
       </Routes>

@@ -30,7 +30,7 @@ const ADMIN_TILES = [
     iconColor: "text-amber-600",
   },
   {
-    to: "/",
+    to: "/inventory",
     icon: Boxes,
     label: "מלאי / מתקנים",
     desc: "שכונות, אוהלים, מתקנים, מרחבי פעילות",
