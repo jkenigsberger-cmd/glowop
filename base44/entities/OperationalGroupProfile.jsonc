@@ -77,6 +77,59 @@
     "accepted_by": {
       "type": "string",
       "description": "Email of admin who accepted"
+    },
+    "boys_beds_needed": {
+      "type": "number",
+      "description": "Student beds required for boys"
+    },
+    "girls_beds_needed": {
+      "type": "number",
+      "description": "Student beds required for girls"
+    },
+    "estimated_student_tents_boys": {
+      "type": "number",
+      "description": "Estimated tent count for boys (planning only)"
+    },
+    "estimated_student_tents_girls": {
+      "type": "number",
+      "description": "Estimated tent count for girls (planning only)"
+    },
+    "staff_men_beds_needed": {
+      "type": "number",
+      "description": "VIP beds needed for male staff/drivers"
+    },
+    "staff_women_beds_needed": {
+      "type": "number",
+      "description": "VIP beds needed for female staff/drivers"
+    },
+    "vip_tents_men_needed": {
+      "type": "number",
+      "description": "VIP tents to reserve for men (max 3 per tent, 10 total)"
+    },
+    "vip_tents_women_needed": {
+      "type": "number",
+      "description": "VIP tents to reserve for women (max 3 per tent, 10 total)"
+    },
+    "student_sleeping_notes": {
+      "type": "string",
+      "description": "Admin notes for student sleeping arrangements"
+    },
+    "staff_sleeping_notes": {
+      "type": "string",
+      "description": "Admin notes for staff/VIP sleeping arrangements"
+    },
+    "accessibility_sleeping_notes": {
+      "type": "string",
+      "description": "Accessibility / special needs notes for housekeeping"
+    },
+    "housekeeping_sleeping_notes": {
+      "type": "string",
+      "description": "General notes for housekeeping team"
+    },
+    "sleeping_requirements_completed": {
+      "type": "boolean",
+      "description": "Admin marked requirements as ready for housekeeping",
+      "default": false
     }
   },
   "required": [
