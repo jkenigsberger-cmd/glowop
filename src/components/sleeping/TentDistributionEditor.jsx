@@ -3,16 +3,58 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 /**
- * Builds the smart suggested distribution rows.
- * e.g. 33 people, capacity 8 → [{tent_count:4, people_per_tent:8},{tent_count:1, people_per_tent:1}]
+ * Balanced suggestion algorithm.
+ *
+ * Step 1: minimum tents = ceil(total / capacity)
+ * Step 2: fill as many full tents as possible
+ * Step 3: if remainder is "tiny" (< half capacity), rebalance the last few tents
+ *         by spreading their people more evenly, so no tent has a very small count.
+ *
+ * Examples (capacity 8):
+ *   90 → 10×8, 2×5          (remainder 2 → rebalance last 3 tents: 2+8+8=18 → 3 tents of 6? No: 18/3=6 → 3×6. But 10-3=7 full + 3×6 = 56+18=74≠90. Let's redo: 11 tents min. 11×8=88. rem=2 → tiny. Rebalance 2 tents at end: (8+2)=10 across 2 → 5+5 → 9×8 + 2×5 = 72+10=82≠90. Correct: 10×8+2×5=90 ✓)
+ *   33 → 3×8, 1×5, 1×4      (4 tents min. rem=1 → tiny. Rebalance last 2: 8+1=9 across 2 → 5+4)
+ *   25 → 2×8, 1×5, 1×4      (4 tents min. 3×8=24 rem=1 → tiny. Rebalance last 2: 8+1=9 → 5+4)
+ *
+ * Examples (capacity 3):
+ *   4  → 2×2                 (ceil(4/3)=2, rem=1 → tiny. Rebalance 2 tents: 4/2=2 → 2×2)
+ *   5  → 1×3, 1×2            (rem=2, not tiny → keep as is)
  */
 export function buildSuggestion(total, capacityPerTent) {
   if (!total || total <= 0) return [];
+
+  const numTents = Math.ceil(total / capacityPerTent);
   const fullTents = Math.floor(total / capacityPerTent);
   const remainder = total % capacityPerTent;
+
+  // "Tiny" threshold: remainder < half capacity (but not zero)
+  const tinyThreshold = Math.floor(capacityPerTent / 2);
+  const isTiny = remainder > 0 && remainder <= tinyThreshold;
+
+  if (!isTiny) {
+    // Simple case: all full tents + one remainder tent
+    const rows = [];
+    if (fullTents > 0) rows.push({ tent_count: fullTents, people_per_tent: capacityPerTent });
+    if (remainder > 0) rows.push({ tent_count: 1, people_per_tent: remainder });
+    return rows;
+  }
+
+  // Rebalance: spread the last (remainder + capacityPerTent) people across 2 tents evenly
+  // i.e. take one full tent back and rebalance (capacityPerTent + remainder) across 2 tents
+  const rebalancePeople = capacityPerTent + remainder; // e.g. 8+1=9, 8+2=10, 3+1=4
+  const high = Math.ceil(rebalancePeople / 2);
+  const low  = Math.floor(rebalancePeople / 2);
+
+  // Remaining full tents (excluding the 2 rebalanced)
+  const remainingFullTents = fullTents - 1; // we "borrowed" one full tent
+
   const rows = [];
-  if (fullTents > 0) rows.push({ tent_count: fullTents, people_per_tent: capacityPerTent });
-  if (remainder > 0) rows.push({ tent_count: 1, people_per_tent: remainder });
+  if (remainingFullTents > 0) rows.push({ tent_count: remainingFullTents, people_per_tent: capacityPerTent });
+  if (high === low) {
+    rows.push({ tent_count: 2, people_per_tent: high });
+  } else {
+    rows.push({ tent_count: 1, people_per_tent: high });
+    rows.push({ tent_count: 1, people_per_tent: low });
+  }
   return rows;
 }
 
@@ -103,7 +145,7 @@ export default function TentDistributionEditor({
           {suggestion.map((s, i) => (
             <p key={i}>{s.tent_count} × {s.people_per_tent} = {s.tent_count * s.people_per_tent}</p>
           ))}
-          <p className="text-[10px] text-blue-400 mt-0.5">המלצה בלבד — משק הבית יקבע את האוהלים בפועל</p>
+          <p className="text-[10px] text-blue-400 mt-0.5">המלצה מאוזנת בלבד — משק הבית יקבע את האוהלים בפועל</p>
         </div>
       )}
 
