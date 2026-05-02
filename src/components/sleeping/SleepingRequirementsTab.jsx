@@ -133,21 +133,31 @@ export default function SleepingRequirementsTab({ groupId, profile }) {
     }
 
     setSaving(true);
-    const payload = {
-      ...form,
-      boys_tent_distribution_json:  JSON.stringify(boysDist),
-      girls_tent_distribution_json: JSON.stringify(girlsDist),
-      vip_tent_requirements_json:   JSON.stringify(vipRows),
-    };
-    if (markComplete !== null) payload.sleeping_requirements_completed = markComplete;
+    try {
+      const payload = {
+        ...form,
+        boys_tent_distribution_json:  JSON.stringify(boysDist),
+        girls_tent_distribution_json: JSON.stringify(girlsDist),
+        vip_tent_requirements_json:   JSON.stringify(vipRows),
+      };
+      if (markComplete !== null) payload.sleeping_requirements_completed = markComplete;
 
-    await base44.entities.OperationalGroupProfile.update(profile.id, payload);
-    setSaving(false);
-    queryClient.invalidateQueries({ queryKey: ["operationalProfile", groupId] });
+      await base44.entities.OperationalGroupProfile.update(profile.id, payload);
 
-    if (markComplete === true)       toast.success("דרישות הלינה סומנו כמוכנות למשק בית ✓");
-    else if (markComplete === false) toast.success("דרישות הלינה הוחזרו לעריכה");
-    else                             toast.success("דרישות הלינה נשמרו");
+      // Update local form state immediately so banner reacts without waiting for refetch
+      if (markComplete !== null) set("sleeping_requirements_completed", markComplete);
+
+      queryClient.invalidateQueries({ queryKey: ["operationalProfile", groupId] });
+
+      if (markComplete === true)       toast.success("דרישות הלינה סומנו כמוכנות למשק בית ✓");
+      else if (markComplete === false) toast.success("דרישות הלינה הוחזרו לעריכה");
+      else                             toast.success("דרישות הלינה נשמרו");
+    } catch (err) {
+      console.error("שגיאה בשמירת דרישות לינה:", err);
+      toast.error(`שגיאה בשמירה: ${err?.message || "שגיאה לא ידועה"}`);
+    } finally {
+      setSaving(false);
+    }
   };
 
   // ── guard ─────────────────────────────────────────────────────────────────
