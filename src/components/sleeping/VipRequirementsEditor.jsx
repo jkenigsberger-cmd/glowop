@@ -15,20 +15,47 @@ const PURPOSE_OPTIONS = [
 ];
 
 const GENDER_OPTIONS = [
-  { value: "MEN",   label: "גברים" },
-  { value: "WOMEN", label: "נשים" },
+  { value: "MEN",   label: "בנים" },
+  { value: "WOMEN", label: "בנות" },
 ];
+
+// Color scheme per gender
+const GENDER_COLORS = {
+  MEN:   { row: "border-emerald-300 bg-emerald-50/60", badge: "bg-emerald-100 text-emerald-700 border-emerald-300" },
+  WOMEN: { row: "border-orange-300 bg-orange-50/60",   badge: "bg-orange-100 text-orange-700 border-orange-300" },
+};
 
 const EMPTY_ROW = () => ({ gender_group: "", people_count: 1, purpose: "STAFF", notes: "" });
 
+function CountdownBar({ staffTotal, rows }) {
+  if (staffTotal == null) return null;
+  const assigned = rows.reduce((s, r) => s + (Number(r.people_count) || 0), 0);
+  const remaining = staffTotal - assigned;
+  const done = remaining === 0;
+  const over = remaining < 0;
+
+  return (
+    <div className={`rounded-lg border px-3 py-2 text-xs flex items-center justify-between ${
+      over  ? "bg-red-50 border-red-300 text-red-700" :
+      done  ? "bg-emerald-50 border-emerald-300 text-emerald-700" :
+              "bg-violet-50 border-violet-200 text-violet-700"
+    }`}>
+      <span>שובצו: <strong>{assigned}</strong> / {staffTotal}</span>
+      <span className="font-bold">
+        {over ? `${Math.abs(remaining)} עודף!` : done ? "✓ הכל שובץ" : `נותרו: ${remaining}`}
+      </span>
+    </div>
+  );
+}
+
 function VipSummary({ rows }) {
-  const total      = rows.length;
-  const menRows    = rows.filter(r => r.gender_group === "MEN");
-  const womenRows  = rows.filter(r => r.gender_group === "WOMEN");
-  const menPeople  = menRows.reduce((s, r) => s + (r.people_count || 0), 0);
-  const womenPeople= womenRows.reduce((s, r) => s + (r.people_count || 0), 0);
-  const exceedsMax = total > VIP_MAX;
-  const hasOverPax = rows.some(r => r.people_count > VIP_MAX_PER_TENT);
+  const total       = rows.length;
+  const boysRows    = rows.filter(r => r.gender_group === "MEN");
+  const girlsRows   = rows.filter(r => r.gender_group === "WOMEN");
+  const boysPeople  = boysRows.reduce((s, r)  => s + (r.people_count || 0), 0);
+  const girlsPeople = girlsRows.reduce((s, r) => s + (r.people_count || 0), 0);
+  const exceedsMax  = total > VIP_MAX;
+  const hasOverPax  = rows.some(r => r.people_count > VIP_MAX_PER_TENT);
 
   if (total === 0) return null;
 
@@ -42,18 +69,18 @@ function VipSummary({ rows }) {
       </p>
       <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
         <span>סה"כ אוהלי VIP: <strong>{total}</strong> / {VIP_MAX}</span>
-        <span>סה"כ אנשים: <strong>{menPeople + womenPeople}</strong></span>
-        <span>גברים: {menRows.length} אוהלים · {menPeople} אנשים</span>
-        <span>נשים: {womenRows.length} אוהלים · {womenPeople} אנשים</span>
+        <span>סה"כ אנשים: <strong>{boysPeople + girlsPeople}</strong></span>
+        <span>בנים: {boysRows.length} אוהלים · {boysPeople} אנשים</span>
+        <span>בנות: {girlsRows.length} אוהלים · {girlsPeople} אנשים</span>
       </div>
-      {exceedsMax  && <p className="text-red-600">⚠️ חריגה מהמקסימום ({VIP_MAX} אוהלי VIP בסה"כ)</p>}
-      {hasOverPax  && <p className="text-red-600">⚠️ יש שורה עם יותר מ-{VIP_MAX_PER_TENT} אנשים לאוהל</p>}
+      {exceedsMax && <p className="text-red-600">⚠️ חריגה מהמקסימום ({VIP_MAX} אוהלי VIP בסה"כ)</p>}
+      {hasOverPax && <p className="text-red-600">⚠️ יש שורה עם יותר מ-{VIP_MAX_PER_TENT} אנשים לאוהל</p>}
       <p className="text-[10px] opacity-60">אוהלי VIP 80–89. שיבוץ ספציפי ייעשה ע"י משק הבית.</p>
     </div>
   );
 }
 
-export default function VipRequirementsEditor({ rows, onChange }) {
+export default function VipRequirementsEditor({ rows, onChange, staffTotal }) {
   const addRow    = () => onChange([...rows, EMPTY_ROW()]);
   const removeRow = (i) => onChange(rows.filter((_, idx) => idx !== i));
   const updateRow = (i, field, val) => {
@@ -64,18 +91,26 @@ export default function VipRequirementsEditor({ rows, onChange }) {
 
   return (
     <div className="space-y-3">
+      {/* Countdown — shown above rows */}
+      <CountdownBar staffTotal={staffTotal} rows={rows} />
+
       <div className="flex items-center justify-between flex-wrap gap-2">
         <p className="text-xs text-slate-500">כל שורה = אוהל VIP אחד נדרש (לא מוקצה פיזית)</p>
         <div className="flex gap-1.5 flex-wrap">
-          <Button size="sm" variant="outline" onClick={() => onChange([...rows, { ...EMPTY_ROW(), purpose: "SECURITY", gender_group: "" }])}
-            className="text-xs gap-1 h-7 border-amber-300 text-amber-700 hover:bg-amber-50" disabled={rows.length >= 10}>
+          <Button size="sm" variant="outline"
+            onClick={() => onChange([...rows, { ...EMPTY_ROW(), purpose: "SECURITY", gender_group: "" }])}
+            className="text-xs gap-1 h-7 border-amber-300 text-amber-700 hover:bg-amber-50"
+            disabled={rows.length >= VIP_MAX}>
             <Plus className="w-3 h-3" /> אבטחה
           </Button>
-          <Button size="sm" variant="outline" onClick={() => onChange([...rows, { ...EMPTY_ROW(), purpose: "DRIVER", gender_group: "" }])}
-            className="text-xs gap-1 h-7 border-blue-300 text-blue-700 hover:bg-blue-50" disabled={rows.length >= 10}>
+          <Button size="sm" variant="outline"
+            onClick={() => onChange([...rows, { ...EMPTY_ROW(), purpose: "DRIVER", gender_group: "" }])}
+            className="text-xs gap-1 h-7 border-blue-300 text-blue-700 hover:bg-blue-50"
+            disabled={rows.length >= VIP_MAX}>
             <Plus className="w-3 h-3" /> נהג
           </Button>
-          <Button size="sm" variant="outline" onClick={addRow} className="text-xs gap-1 h-7" disabled={rows.length >= 10}>
+          <Button size="sm" variant="outline" onClick={addRow}
+            className="text-xs gap-1 h-7" disabled={rows.length >= VIP_MAX}>
             <Plus className="w-3 h-3" /> הוסף אוהל VIP
           </Button>
         </div>
@@ -88,19 +123,29 @@ export default function VipRequirementsEditor({ rows, onChange }) {
       ) : (
         <div className="space-y-2">
           {rows.map((row, i) => {
-            const overPax    = row.people_count > VIP_MAX_PER_TENT;
+            const overPax       = row.people_count > VIP_MAX_PER_TENT;
             const missingGender = !row.gender_group;
             const missingPax    = !row.people_count;
-            const hasError = overPax || missingGender || missingPax;
+            const hasError      = overPax || missingGender || missingPax;
+
+            const genderColor = !hasError && row.gender_group
+              ? GENDER_COLORS[row.gender_group]
+              : null;
+
+            const rowClass = hasError
+              ? "border-red-300 bg-red-50/40"
+              : genderColor
+                ? genderColor.row
+                : "border-slate-200 bg-slate-50/40";
 
             return (
-              <div key={i} className={`border rounded-lg p-3 space-y-2 ${hasError ? "border-red-300 bg-red-50/40" : "border-slate-200 bg-white"}`}>
+              <div key={i} className={`border rounded-lg p-3 space-y-2 ${rowClass}`}>
                 <div className="grid grid-cols-12 gap-2 items-end">
                   {/* Gender */}
                   <div className="col-span-3 space-y-1">
                     <label className="text-[11px] text-slate-500">מגדר *</label>
                     <Select value={row.gender_group || ""} onValueChange={v => updateRow(i, "gender_group", v)}>
-                      <SelectTrigger className={`h-7 text-xs ${missingGender ? "border-red-400" : ""}`}>
+                      <SelectTrigger className={`h-7 text-xs ${missingGender ? "border-red-400" : genderColor ? `border ${genderColor.badge.split(" ")[2]}` : ""}`}>
                         <SelectValue placeholder="בחר..." />
                       </SelectTrigger>
                       <SelectContent>
@@ -151,6 +196,13 @@ export default function VipRequirementsEditor({ rows, onChange }) {
                     </button>
                   </div>
                 </div>
+
+                {/* Gender badge */}
+                {!hasError && genderColor && (
+                  <div className={`inline-flex text-[10px] font-semibold px-2 py-0.5 rounded border ${genderColor.badge}`}>
+                    {row.gender_group === "MEN" ? "בנים" : "בנות"}
+                  </div>
+                )}
 
                 {/* Row-level errors */}
                 {hasError && (

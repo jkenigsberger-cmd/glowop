@@ -265,7 +265,7 @@ export default function SleepingRequirementsTab({ groupId, profile }) {
 
       {/* VIP / Staff */}
       <SectionCard icon={Star} title="דרישות לינה — צוות / VIP (אוהלי 80–89)" color="bg-purple-50/50 border-purple-200">
-        <VipRequirementsEditor rows={vipRows} onChange={setVipRows} />
+        <VipRequirementsEditor rows={vipRows} onChange={setVipRows} staffTotal={profile.staff_count ?? null} />
         <TextArea
           label="הערות לינה — צוות / VIP"
           value={form.staff_sleeping_notes}
