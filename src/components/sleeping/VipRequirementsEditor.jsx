@@ -64,12 +64,21 @@ export default function VipRequirementsEditor({ rows, onChange }) {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <p className="text-xs text-slate-500">כל שורה = אוהל VIP אחד נדרש (לא מוקצה פיזית)</p>
-        <Button size="sm" variant="outline" onClick={addRow} className="text-xs gap-1 h-7"
-          disabled={rows.length >= 10}>
-          <Plus className="w-3 h-3" /> הוסף אוהל VIP
-        </Button>
+        <div className="flex gap-1.5 flex-wrap">
+          <Button size="sm" variant="outline" onClick={() => onChange([...rows, { ...EMPTY_ROW(), purpose: "SECURITY", gender_group: "" }])}
+            className="text-xs gap-1 h-7 border-amber-300 text-amber-700 hover:bg-amber-50" disabled={rows.length >= 10}>
+            <Plus className="w-3 h-3" /> אבטחה
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => onChange([...rows, { ...EMPTY_ROW(), purpose: "DRIVER", gender_group: "" }])}
+            className="text-xs gap-1 h-7 border-blue-300 text-blue-700 hover:bg-blue-50" disabled={rows.length >= 10}>
+            <Plus className="w-3 h-3" /> נהג
+          </Button>
+          <Button size="sm" variant="outline" onClick={addRow} className="text-xs gap-1 h-7" disabled={rows.length >= 10}>
+            <Plus className="w-3 h-3" /> הוסף אוהל VIP
+          </Button>
+        </div>
       </div>
 
       {rows.length === 0 ? (

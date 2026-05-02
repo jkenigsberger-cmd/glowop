@@ -21,7 +21,16 @@
       "type": "number"
     },
     "staff_count": {
-      "type": "number"
+      "type": "number",
+      "description": "VIP/staff/teachers/guides total (from GuestForm)"
+    },
+    "staff_men_count": {
+      "type": "number",
+      "description": "Male staff/teachers/guides count"
+    },
+    "staff_women_count": {
+      "type": "number",
+      "description": "Female staff/teachers/guides count"
     },
     "boys_count": {
       "type": "number"
@@ -30,10 +39,12 @@
       "type": "number"
     },
     "drivers_men_count": {
-      "type": "number"
+      "type": "number",
+      "description": "Male drivers/security/guards count"
     },
     "drivers_women_count": {
-      "type": "number"
+      "type": "number",
+      "description": "Female drivers/security/guards count"
     },
     "is_sleeping_group": {
       "type": "boolean"
