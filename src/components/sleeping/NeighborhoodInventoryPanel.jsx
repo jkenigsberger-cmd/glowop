@@ -3,19 +3,6 @@ import { ChevronDown, ChevronUp, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const GENDER_LABEL = { BOYS: "בנים", GIRLS: "בנות", MEN: "גברים", WOMEN: "נשים" };
-const TYPE_LABEL   = { STAFF: "צוות", STUDENT: "חניכים", SECURITY: "אבטחה" };
-
-// color per gender+type for VIP allocated cards
-function allocCardStyle(gender, type) {
-  if (type === "SECURITY") {
-    return gender === "MEN"
-      ? "bg-orange-50 border-orange-300 text-orange-800"
-      : "bg-fuchsia-50 border-fuchsia-300 text-fuchsia-800";
-  }
-  return gender === "MEN" || gender === "BOYS"
-    ? "bg-blue-50 border-blue-300 text-blue-800"
-    : "bg-pink-50 border-pink-300 text-pink-800";
-}
 
 /**
  * Renders one neighborhood and its tents with availability info.
@@ -82,23 +69,15 @@ export default function NeighborhoodInventoryPanel({
                 </div>
 
                 {isAllocatedByMe && (
-                  <div className="space-y-0.5">
-                    <div className={`inline-flex items-center gap-1 text-[10px] font-semibold rounded px-1.5 py-0.5 border ${allocCardStyle(myAlloc.gender_group, myAlloc.allocation_type)}`}>
-                      {TYPE_LABEL[myAlloc.allocation_type] || myAlloc.allocation_type}
-                      {" · "}
-                      {GENDER_LABEL[myAlloc.gender_group] || myAlloc.gender_group}
-                      {" · "}
-                      {myAlloc.allocated_pax} אנשים
-                    </div>
-                    <div className={`text-[9px] ${myAlloc.status === 'CONFIRMED' ? 'text-emerald-600' : 'text-slate-400'}`}>
-                      {myAlloc.status === 'CONFIRMED' ? '✓ מאושר' : '⏳ טיוטה'}
-                    </div>
+                  <div className={`text-[10px] font-medium ${myAlloc.status === 'CONFIRMED' ? 'text-emerald-700' : 'text-blue-700'}`}>
+                    ✓ {GENDER_LABEL[myAlloc.gender_group]} · {myAlloc.allocated_pax} מקומות
+                    {myAlloc.status === 'CONFIRMED' ? ' (מאושר)' : ' (טיוטה)'}
                   </div>
                 )}
 
                 {isBookedByOther && !isAllocatedByMe && (
                   <div className="text-[10px] text-red-600">
-                    תפוס — {GENDER_LABEL[conflict.gender_group] || conflict.gender_group}
+                    תפוס — {GENDER_LABEL[conflict.gender_group] || ""}
                   </div>
                 )}
 
