@@ -1,0 +1,69 @@
+{
+  "name": "NeighborhoodReservation",
+  "type": "object",
+  "properties": {
+    "group_id": {
+      "type": "string",
+      "description": "FK to Group"
+    },
+    "operational_group_profile_id": {
+      "type": "string",
+      "description": "FK to OperationalGroupProfile"
+    },
+    "neighborhood_id": {
+      "type": "string",
+      "description": "FK to Neighborhood"
+    },
+    "arrival_date": {
+      "type": "string",
+      "format": "date",
+      "description": "First sleeping night (inclusive)"
+    },
+    "departure_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Checkout day \u2014 exclusive (arrival_date <= night < departure_date)"
+    },
+    "gender_group": {
+      "type": "string",
+      "enum": [
+        "BOYS",
+        "GIRLS",
+        "MIXED"
+      ],
+      "description": "Primary gender group using this neighborhood"
+    },
+    "planned_tents": {
+      "type": "number",
+      "description": "Number of tents the group actually plans to use inside this neighborhood"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "ACTIVE",
+        "CANCELLED"
+      ],
+      "default": "ACTIVE"
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "allocation"
+      ],
+      "default": "allocation"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "group_id",
+    "operational_group_profile_id",
+    "neighborhood_id",
+    "arrival_date",
+    "departure_date",
+    "gender_group",
+    "status",
+    "source"
+  ]
+}
