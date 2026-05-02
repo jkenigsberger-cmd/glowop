@@ -27,23 +27,58 @@ const GENDER_COLORS = {
 
 const EMPTY_ROW = () => ({ gender_group: "", people_count: 1, purpose: "STAFF", notes: "" });
 
-function CountdownBar({ staffTotal, rows }) {
-  if (staffTotal == null) return null;
-  const assigned = rows.reduce((s, r) => s + (Number(r.people_count) || 0), 0);
-  const remaining = staffTotal - assigned;
+const NON_STAFF_PURPOSES = ["DRIVER", "SECURITY", "GUIDE", "OTHER"];
+
+function SingleCountdown({ total, assigned, label, colorClass }) {
+  if (total == null) return null;
+  const remaining = total - assigned;
   const done = remaining === 0;
   const over = remaining < 0;
+  return (
+    <div className={`rounded-lg border px-3 py-2 text-xs flex items-center justify-between flex-1 ${
+      over ? "bg-red-50 border-red-300 text-red-700" :
+      done ? "bg-emerald-50 border-emerald-300 text-emerald-700" :
+             colorClass
+    }`}>
+      <span className="text-[11px] opacity-70 ml-1">{label}</span>
+      <span>שובצו: <strong>{assigned}</strong> / {total}</span>
+      <span className="font-bold">
+        {over ? `${Math.abs(remaining)} עודף!` : done ? "✓" : `נותרו: ${remaining}`}
+      </span>
+    </div>
+  );
+}
+
+function CountdownBar({ staffTotal, driversTotal, rows }) {
+  const hasStaff   = staffTotal != null;
+  const hasDrivers = driversTotal != null;
+  if (!hasStaff && !hasDrivers) return null;
+
+  const staffAssigned   = rows
+    .filter(r => !NON_STAFF_PURPOSES.includes(r.purpose))
+    .reduce((s, r) => s + (Number(r.people_count) || 0), 0);
+  const driversAssigned = rows
+    .filter(r => NON_STAFF_PURPOSES.includes(r.purpose))
+    .reduce((s, r) => s + (Number(r.people_count) || 0), 0);
 
   return (
-    <div className={`rounded-lg border px-3 py-2 text-xs flex items-center justify-between ${
-      over  ? "bg-red-50 border-red-300 text-red-700" :
-      done  ? "bg-emerald-50 border-emerald-300 text-emerald-700" :
-              "bg-violet-50 border-violet-200 text-violet-700"
-    }`}>
-      <span>שובצו: <strong>{assigned}</strong> / {staffTotal}</span>
-      <span className="font-bold">
-        {over ? `${Math.abs(remaining)} עודף!` : done ? "✓ הכל שובץ" : `נותרו: ${remaining}`}
-      </span>
+    <div className="flex gap-2 flex-wrap">
+      {hasStaff && (
+        <SingleCountdown
+          total={staffTotal}
+          assigned={staffAssigned}
+          label="צוות / VIP"
+          colorClass="bg-violet-50 border-violet-200 text-violet-700"
+        />
+      )}
+      {hasDrivers && (
+        <SingleCountdown
+          total={driversTotal}
+          assigned={driversAssigned}
+          label="* נהגים / אבטחה"
+          colorClass="bg-pink-50 border-pink-200 text-pink-700"
+        />
+      )}
     </div>
   );
 }
@@ -80,7 +115,7 @@ function VipSummary({ rows }) {
   );
 }
 
-export default function VipRequirementsEditor({ rows, onChange, staffTotal }) {
+export default function VipRequirementsEditor({ rows, onChange, staffTotal, driversTotal }) {
   const addRow    = () => onChange([...rows, EMPTY_ROW()]);
   const removeRow = (i) => onChange(rows.filter((_, idx) => idx !== i));
   const updateRow = (i, field, val) => {
@@ -92,7 +127,7 @@ export default function VipRequirementsEditor({ rows, onChange, staffTotal }) {
   return (
     <div className="space-y-3">
       {/* Countdown — shown above rows */}
-      <CountdownBar staffTotal={staffTotal} rows={rows} />
+      <CountdownBar staffTotal={staffTotal} driversTotal={driversTotal} rows={rows} />
 
       <div className="flex items-center justify-between flex-wrap gap-2">
         <p className="text-xs text-slate-500">כל שורה = אוהל VIP אחד נדרש (לא מוקצה פיזית)</p>
@@ -197,12 +232,19 @@ export default function VipRequirementsEditor({ rows, onChange, staffTotal }) {
                   </div>
                 </div>
 
-                {/* Gender badge */}
-                {!hasError && genderColor && (
-                  <div className={`inline-flex text-[10px] font-semibold px-2 py-0.5 rounded border ${genderColor.badge}`}>
-                    {row.gender_group === "MEN" ? "בנים" : "בנות"}
-                  </div>
-                )}
+                {/* Badges row */}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {!hasError && genderColor && (
+                    <span className={`inline-flex text-[10px] font-semibold px-2 py-0.5 rounded border ${genderColor.badge}`}>
+                      {row.gender_group === "MEN" ? "בנים" : "בנות"}
+                    </span>
+                  )}
+                  {NON_STAFF_PURPOSES.includes(row.purpose) && (
+                    <span className="inline-flex text-[10px] font-semibold px-2 py-0.5 rounded border bg-pink-100 border-pink-300 text-pink-700">
+                      * {PURPOSE_OPTIONS.find(p => p.value === row.purpose)?.label || row.purpose}
+                    </span>
+                  )}
+                </div>
 
                 {/* Row-level errors */}
                 {hasError && (
