@@ -96,11 +96,11 @@
     },
     "staff_men_beds_needed": {
       "type": "number",
-      "description": "VIP beds needed for male staff/drivers"
+      "description": "VIP beds needed for male staff"
     },
     "staff_women_beds_needed": {
       "type": "number",
-      "description": "VIP beds needed for female staff/drivers"
+      "description": "VIP beds needed for female staff"
     },
     "vip_tents_men_needed": {
       "type": "number",
@@ -111,25 +111,36 @@
       "description": "VIP tents to reserve for women (max 3 per tent, 10 total)"
     },
     "student_sleeping_notes": {
-      "type": "string",
-      "description": "Admin notes for student sleeping arrangements"
+      "type": "string"
     },
     "staff_sleeping_notes": {
-      "type": "string",
-      "description": "Admin notes for staff/VIP sleeping arrangements"
+      "type": "string"
     },
     "accessibility_sleeping_notes": {
-      "type": "string",
-      "description": "Accessibility / special needs notes for housekeeping"
+      "type": "string"
     },
     "housekeeping_sleeping_notes": {
-      "type": "string",
-      "description": "General notes for housekeeping team"
+      "type": "string"
     },
     "sleeping_requirements_completed": {
       "type": "boolean",
-      "description": "Admin marked requirements as ready for housekeeping",
       "default": false
+    },
+    "boys_tent_distribution_json": {
+      "type": "string",
+      "description": "JSON array [{tent_count, people_per_tent}] \u2014 planning only"
+    },
+    "girls_tent_distribution_json": {
+      "type": "string",
+      "description": "JSON array [{tent_count, people_per_tent}] \u2014 planning only"
+    },
+    "staff_men_tent_distribution_json": {
+      "type": "string",
+      "description": "JSON array [{tent_count, people_per_tent}] \u2014 VIP planning"
+    },
+    "staff_women_tent_distribution_json": {
+      "type": "string",
+      "description": "JSON array [{tent_count, people_per_tent}] \u2014 VIP planning"
     }
   },
   "required": [
