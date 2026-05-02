@@ -51,8 +51,17 @@ export default function PeopleSummaryCard({ profile, vipRows = [], boysDist = []
     : null;
   const driversGenderKnown = driversBoys != null || driversGirls != null;
 
-  // VIP countdown: total people assigned in vip rows vs staff_count
-  const vipPeopleAssigned = vipRows.reduce((s, r) => s + (Number(r.people_count) || 0), 0);
+  const NON_STAFF = ["DRIVER", "SECURITY", "GUIDE", "OTHER"];
+
+  // VIP countdown: staff-only rows vs staff_count
+  const vipPeopleAssigned = vipRows
+    .filter(r => !NON_STAFF.includes(r.purpose))
+    .reduce((s, r) => s + (Number(r.people_count) || 0), 0);
+
+  // Drivers/security countdown: non-staff VIP rows vs driversTotal
+  const vipDriversAssigned = vipRows
+    .filter(r => NON_STAFF.includes(r.purpose))
+    .reduce((s, r) => s + (Number(r.people_count) || 0), 0);
 
   // Student countdown
   const boysAssigned  = boysDist.reduce((s, r) => s + (r.tent_count || 0) * (r.people_per_tent || 0), 0);
@@ -138,11 +147,12 @@ export default function PeopleSummaryCard({ profile, vipRows = [], boysDist = []
           ) : driversTotal != null ? (
             <p className="text-[11px] text-slate-400 pr-1 mt-1">מגדר לא הוגדר</p>
           ) : null}
-          {driversTotal != null && (
-            <div className="mt-1 rounded-lg px-3 py-1.5 text-xs border bg-pink-100 border-pink-300 text-pink-800">
-              <span>* {driversTotal} אנשים — ניתן להוסיף שורות VIP לפי צורך</span>
-            </div>
-          )}
+          <CountdownBadge
+            total={driversTotal}
+            assigned={vipDriversAssigned}
+            color="bg-pink-50 border-pink-200 text-pink-700"
+          />
+          <p className="text-[10px] text-pink-500 pt-0.5">→ שורות VIP מסומנות *</p>
         </SummaryGroup>
 
       </div>
