@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
-import { format, parseISO } from "date-fns";
-import { BedDouble, Users, ChevronDown, ChevronUp, CheckCircle2, Clock, AlertCircle } from "lucide-react";
+import { BedDouble, Users, ChevronDown, ChevronUp, CheckCircle2, Clock, AlertCircle, Shield, Car } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import SleepingAllocationTab from "@/components/sleeping/SleepingAllocationTab";
 
@@ -18,6 +17,78 @@ function distSummary(rows) {
   const total = rows.reduce((s, r) => s + (r.tent_count || 0) * (r.people_per_tent || 0), 0);
   const desc = rows.map(r => `${r.tent_count}×${r.people_per_tent}`).join(", ");
   return `${total} איש (${desc})`;
+}
+
+// ── VIP tent grid ──────────────────────────────────────────────────────────
+
+const GENDER_CONFIG = {
+  WOMEN: { label: "נשים",  bg: "bg-pink-50",   border: "border-pink-300",   text: "text-pink-700",   dot: "bg-pink-400"  },
+  MEN:   { label: "גברים", bg: "bg-blue-50",   border: "border-blue-300",   text: "text-blue-700",   dot: "bg-blue-400"  },
+  GIRLS: { label: "בנות",  bg: "bg-pink-50",   border: "border-pink-300",   text: "text-pink-700",   dot: "bg-pink-400"  },
+  BOYS:  { label: "בנים",  bg: "bg-blue-50",   border: "border-blue-300",   text: "text-blue-700",   dot: "bg-blue-400"  },
+};
+
+const PURPOSE_CONFIG = {
+  STAFF:    { label: "צוות",    icon: null,    iconText: "👤" },
+  SECURITY: { label: "אבטחה",   icon: Shield,  iconText: null },
+  DRIVER:   { label: "נהג",     icon: Car,     iconText: null },
+  VIP:      { label: "VIP",     icon: null,    iconText: "⭐" },
+};
+
+function purposeLabel(purpose) {
+  if (!purpose) return null;
+  const key = purpose?.toUpperCase();
+  return PURPOSE_CONFIG[key] || { label: purpose, icon: null, iconText: null };
+}
+
+function VipTentSquare({ row, index }) {
+  const gc = GENDER_CONFIG[row.gender_group] || GENDER_CONFIG.MEN;
+  const pc = purposeLabel(row.purpose);
+  const IconComp = pc?.icon;
+
+  return (
+    <div className={`relative rounded-xl border-2 ${gc.border} ${gc.bg} px-3 py-3 flex flex-col items-center gap-1 min-w-[72px]`}>
+      {/* Tent number */}
+      <span className="absolute top-1.5 right-2 text-[9px] font-bold text-slate-400">#{index + 1}</span>
+
+      {/* Purpose icon */}
+      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm ${gc.bg} border ${gc.border}`}>
+        {IconComp ? <IconComp className={`w-4 h-4 ${gc.text}`} /> : <span>{pc?.iconText || "👤"}</span>}
+      </div>
+
+      {/* People count */}
+      <div className="flex items-center gap-0.5">
+        {Array.from({ length: Math.min(row.people_count || 1, 3) }).map((_, i) => (
+          <span key={i} className={`w-2 h-2 rounded-full ${gc.dot}`} />
+        ))}
+      </div>
+
+      {/* Labels */}
+      <span className={`text-[10px] font-bold ${gc.text} leading-none`}>{gc.label}</span>
+      {pc && <span className="text-[9px] text-slate-500 leading-none">{pc.label}</span>}
+      <span className={`text-[11px] font-semibold ${gc.text}`}>{row.people_count} איש</span>
+    </div>
+  );
+}
+
+function VipTentGrid({ vipRows }) {
+  const womenCount = vipRows.filter(r => r.gender_group === "WOMEN" || r.gender_group === "GIRLS").length;
+  const menCount   = vipRows.filter(r => r.gender_group === "MEN"   || r.gender_group === "BOYS").length;
+
+  return (
+    <div className="bg-purple-50 border border-purple-200 rounded-xl px-4 py-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <p className="font-semibold text-sm text-purple-800">VIP — {vipRows.length} אוהלים</p>
+        <div className="flex items-center gap-2 text-[10px]">
+          {menCount > 0   && <span className="bg-blue-100 text-blue-700 border border-blue-200 rounded-full px-2 py-0.5 font-medium">{menCount} אוהלי גברים</span>}
+          {womenCount > 0 && <span className="bg-pink-100 text-pink-700 border border-pink-200 rounded-full px-2 py-0.5 font-medium">{womenCount} אוהלי נשים</span>}
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {vipRows.map((r, i) => <VipTentSquare key={i} row={r} index={i} />)}
+      </div>
+    </div>
+  );
 }
 
 function AllocationStatusBadge({ allocations }) {
@@ -99,15 +170,8 @@ function GroupAllocationCard({ profile, group, allocations }) {
             </div>
           )}
           {vipRows.length > 0 && (
-            <div className="bg-purple-50 border border-purple-100 rounded-lg px-3 py-2 space-y-0.5 sm:col-span-2">
-              <p className="font-semibold text-purple-700">VIP — {vipRows.length} אוהלים</p>
-              <div className="flex flex-wrap gap-1.5 mt-1">
-                {vipRows.map((r, i) => (
-                  <span key={i} className="bg-white border border-purple-200 rounded px-2 py-0.5 text-purple-700 text-[11px]">
-                    {r.gender_group} · {r.people_count} אנשים{r.purpose ? ` · ${r.purpose}` : ""}
-                  </span>
-                ))}
-              </div>
+            <div className="sm:col-span-2">
+              <VipTentGrid vipRows={vipRows} />
             </div>
           )}
           {profile.accessibility_sleeping_notes && (
