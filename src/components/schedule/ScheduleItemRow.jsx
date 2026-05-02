@@ -107,15 +107,7 @@ export default function ScheduleItemRow({ item, activitySpaces, quoteActivities 
             <label className="text-xs text-slate-500">שעת סיום</label>
             <Input type="time" value={form.end_time} onChange={e => set("end_time", e.target.value)} />
           </div>
-          <div className="space-y-1">
-            <label className="text-xs text-slate-500">מיקום מבוקש (לקוח)</label>
-            <Select value={form.requested_location || ""} onValueChange={v => set("requested_location", v)}>
-              <SelectTrigger><SelectValue placeholder="בחר..." /></SelectTrigger>
-              <SelectContent>
-                {LOCATION_OPTIONS.map(l => <SelectItem key={l} value={l}>{l}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
+
           <div className="space-y-1">
             <label className="text-xs text-slate-500">מרחב פעילות פנימי (אופציונלי)</label>
             <Select

@@ -335,15 +335,7 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
                 <label className="text-xs text-slate-500">שעת סיום</label>
                 <Input type="time" value={newSchedule.end_time} onChange={e => setNewSchedule(s => ({ ...s, end_time: e.target.value }))} />
               </div>
-              <div className="space-y-1">
-                <label className="text-xs text-slate-500">מיקום מבוקש</label>
-                <Select value={newSchedule.requested_location || ""} onValueChange={v => setNewSchedule(s => ({ ...s, requested_location: v }))}>
-                  <SelectTrigger><SelectValue placeholder="בחר..." /></SelectTrigger>
-                  <SelectContent>
-                    {LOCATION_OPTIONS.map(l => <SelectItem key={l} value={l}>{l}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
+
               <div className="space-y-1">
                 <label className="text-xs text-slate-500">מרחב פעילות פנימי</label>
                 <Select
