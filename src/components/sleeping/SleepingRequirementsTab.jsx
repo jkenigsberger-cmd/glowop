@@ -201,7 +201,7 @@ export default function SleepingRequirementsTab({ groupId, profile }) {
           />
         </div>
         <div className="text-[11px] text-blue-600 bg-blue-100 rounded-lg px-3 py-2">
-          ℹ️ בנים ובנות ישכנו בשכונות נפרדות. משק הבית יקצה את השכונות בפועל.
+          ℹ️ בנים ובנות ישכנו באוהלים נפרדים. משק הבית יקצה את האוהלים הספציפיים בפועל.
         </div>
         <TextArea
           label="הערות לינה — תלמידים / משק בית"
