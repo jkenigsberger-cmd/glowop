@@ -7,9 +7,10 @@ import { Save, CheckCircle2, Clock, AlertTriangle, Users, Star, ShieldAlert } fr
 import { toast } from "sonner";
 import PeopleSummaryCard from "./PeopleSummaryCard";
 import TentDistributionEditor from "./TentDistributionEditor";
+import VipRequirementsEditor from "./VipRequirementsEditor";
 
-const VIP_TOTAL_TENTS = 10;
-const VIP_CAPACITY    = 3;
+const VIP_TOTAL_TENTS  = 10;
+const VIP_MAX_PER_TENT = 3;
 const STUDENT_CAPACITY = 8;
 
 // ── small helpers ──────────────────────────────────────────────────────────
@@ -20,10 +21,6 @@ function parseDist(json) {
 
 function distTotal(rows) {
   return rows.reduce((s, r) => s + (r.tent_count || 0) * (r.people_per_tent || 0), 0);
-}
-
-function distTents(rows) {
-  return rows.reduce((s, r) => s + (r.tent_count || 0), 0);
 }
 
 function hasOverMaxRow(rows, max) {
@@ -80,10 +77,6 @@ export default function SleepingRequirementsTab({ groupId, profile }) {
   const [form, setForm] = useState({
     boys_beds_needed:    null,
     girls_beds_needed:   null,
-    staff_men_beds_needed:   null,
-    staff_women_beds_needed: null,
-    vip_tents_men_needed:    null,
-    vip_tents_women_needed:  null,
     student_sleeping_notes:      "",
     staff_sleeping_notes:        "",
     accessibility_sleeping_notes:"",
@@ -91,50 +84,42 @@ export default function SleepingRequirementsTab({ groupId, profile }) {
     sleeping_requirements_completed: false,
   });
 
-  const [boysDist,      setBoysDist]      = useState([]);
-  const [girlsDist,     setGirlsDist]     = useState([]);
-  const [staffMenDist,  setStaffMenDist]  = useState([]);
-  const [staffWomenDist,setStaffWomenDist]= useState([]);
+  const [boysDist,    setBoysDist]  = useState([]);
+  const [girlsDist,   setGirlsDist] = useState([]);
+  const [vipRows,     setVipRows]   = useState([]);
 
   useEffect(() => {
     if (!profile) return;
     setForm({
       boys_beds_needed:    profile.boys_beds_needed  ?? profile.boys_count  ?? null,
       girls_beds_needed:   profile.girls_beds_needed ?? profile.girls_count ?? null,
-      staff_men_beds_needed:   profile.staff_men_beds_needed   ?? profile.drivers_men_count   ?? null,
-      staff_women_beds_needed: profile.staff_women_beds_needed ?? profile.drivers_women_count ?? null,
-      vip_tents_men_needed:    profile.vip_tents_men_needed    ?? null,
-      vip_tents_women_needed:  profile.vip_tents_women_needed  ?? null,
       student_sleeping_notes:       profile.student_sleeping_notes       ?? "",
       staff_sleeping_notes:         profile.staff_sleeping_notes         ?? "",
       accessibility_sleeping_notes: profile.accessibility_sleeping_notes ?? "",
       housekeeping_sleeping_notes:  profile.housekeeping_sleeping_notes  ?? "",
       sleeping_requirements_completed: !!profile.sleeping_requirements_completed,
     });
-    setBoysDist(      parseDist(profile.boys_tent_distribution_json));
-    setGirlsDist(     parseDist(profile.girls_tent_distribution_json));
-    setStaffMenDist(  parseDist(profile.staff_men_tent_distribution_json));
-    setStaffWomenDist(parseDist(profile.staff_women_tent_distribution_json));
+    setBoysDist( parseDist(profile.boys_tent_distribution_json));
+    setGirlsDist(parseDist(profile.girls_tent_distribution_json));
+    setVipRows(  parseDist(profile.vip_tent_requirements_json));
   }, [profile?.id]);
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   // ── derived ───────────────────────────────────────────────────────────────
-  const totalVipTents = (form.vip_tents_men_needed ?? 0) + (form.vip_tents_women_needed ?? 0);
-  const vipExceedsMax = totalVipTents > VIP_TOTAL_TENTS;
-
   const studentOverMax = hasOverMaxRow(boysDist, STUDENT_CAPACITY) || hasOverMaxRow(girlsDist, STUDENT_CAPACITY);
-  const vipRowOverMax  = hasOverMaxRow(staffMenDist, VIP_CAPACITY) || hasOverMaxRow(staffWomenDist, VIP_CAPACITY);
+
+  const vipExceedsMax  = vipRows.length > VIP_TOTAL_TENTS;
+  const vipOverPaxRow  = vipRows.some(r => r.people_count > VIP_MAX_PER_TENT);
+  const vipMissingData = vipRows.some(r => !r.gender_group || !r.people_count);
 
   // Hard blocks for "סמן כמוכן"
-  const hardBlocked = vipExceedsMax || studentOverMax || vipRowOverMax;
+  const hardBlocked = studentOverMax || vipExceedsMax || vipOverPaxRow || vipMissingData;
 
-  // Soft warnings (distribution mismatch)
-  const boysDistMismatch  = form.boys_beds_needed   != null && distTotal(boysDist)      !== form.boys_beds_needed;
-  const girlsDistMismatch = form.girls_beds_needed  != null && distTotal(girlsDist)     !== form.girls_beds_needed;
-  const menDistMismatch   = form.staff_men_beds_needed   != null && distTotal(staffMenDist)   !== form.staff_men_beds_needed;
-  const womenDistMismatch = form.staff_women_beds_needed != null && distTotal(staffWomenDist) !== form.staff_women_beds_needed;
-  const hasSoftWarnings   = boysDistMismatch || girlsDistMismatch || menDistMismatch || womenDistMismatch;
+  // Soft warnings (student distribution mismatch)
+  const boysDistMismatch  = form.boys_beds_needed  != null && distTotal(boysDist)  !== form.boys_beds_needed;
+  const girlsDistMismatch = form.girls_beds_needed != null && distTotal(girlsDist) !== form.girls_beds_needed;
+  const hasSoftWarnings   = boysDistMismatch || girlsDistMismatch;
 
   // ── save ──────────────────────────────────────────────────────────────────
   const handleSave = async (markComplete = null) => {
@@ -150,10 +135,9 @@ export default function SleepingRequirementsTab({ groupId, profile }) {
     setSaving(true);
     const payload = {
       ...form,
-      boys_tent_distribution_json:       JSON.stringify(boysDist),
-      girls_tent_distribution_json:      JSON.stringify(girlsDist),
-      staff_men_tent_distribution_json:  JSON.stringify(staffMenDist),
-      staff_women_tent_distribution_json:JSON.stringify(staffWomenDist),
+      boys_tent_distribution_json:  JSON.stringify(boysDist),
+      girls_tent_distribution_json: JSON.stringify(girlsDist),
+      vip_tent_requirements_json:   JSON.stringify(vipRows),
     };
     if (markComplete !== null) payload.sleeping_requirements_completed = markComplete;
 
@@ -220,9 +204,10 @@ export default function SleepingRequirementsTab({ groupId, profile }) {
           <p className="text-sm font-semibold text-red-700 flex items-center gap-1.5">
             <ShieldAlert className="w-4 h-4" /> שגיאות קריטיות — חסום סימון כמוכן
           </p>
-          {vipExceedsMax    && <p className="text-xs text-red-600">• סה"כ אוהלי VIP ({totalVipTents}) חורג מהמקסימום ({VIP_TOTAL_TENTS})</p>}
-          {studentOverMax   && <p className="text-xs text-red-600">• יש שורת חלוקה עם יותר מ-{STUDENT_CAPACITY} תלמידים לאוהל</p>}
-          {vipRowOverMax    && <p className="text-xs text-red-600">• יש שורת VIP עם יותר מ-{VIP_CAPACITY} אנשים לאוהל</p>}
+          {studentOverMax  && <p className="text-xs text-red-600">• יש שורת חלוקה תלמידים עם יותר מ-{STUDENT_CAPACITY} לאוהל</p>}
+          {vipExceedsMax   && <p className="text-xs text-red-600">• סה"כ שורות VIP ({vipRows.length}) חורג מהמקסימום ({VIP_TOTAL_TENTS})</p>}
+          {vipOverPaxRow   && <p className="text-xs text-red-600">• יש שורת VIP עם יותר מ-{VIP_MAX_PER_TENT} אנשים לאוהל</p>}
+          {vipMissingData  && <p className="text-xs text-red-600">• יש שורת VIP עם מגדר או מספר אנשים חסר</p>}
         </div>
       )}
 
@@ -278,68 +263,9 @@ export default function SleepingRequirementsTab({ groupId, profile }) {
         />
       </SectionCard>
 
-      {/* Part B+C+D — Staff / VIP */}
+      {/* VIP / Staff */}
       <SectionCard icon={Star} title="דרישות לינה — צוות / VIP (אוהלי 80–89)" color="bg-purple-50/50 border-purple-200">
-        <div className="grid grid-cols-2 gap-3">
-          <NumberInput
-            label="אנשי צוות — גברים"
-            hint={`מהשאלון: ${profile.drivers_men_count ?? "—"}`}
-            value={form.staff_men_beds_needed}
-            onChange={v => set("staff_men_beds_needed", v)}
-          />
-          <NumberInput
-            label="אנשי צוות — נשים"
-            hint={`מהשאלון: ${profile.drivers_women_count ?? "—"}`}
-            value={form.staff_women_beds_needed}
-            onChange={v => set("staff_women_beds_needed", v)}
-          />
-          <NumberInput
-            label="אוהלי VIP — גברים"
-            hint={form.staff_men_beds_needed ? `המלצה: ${Math.ceil(form.staff_men_beds_needed / VIP_CAPACITY)} (עד ${VIP_CAPACITY} לאוהל)` : `עד ${VIP_CAPACITY} לאוהל`}
-            value={form.vip_tents_men_needed}
-            onChange={v => set("vip_tents_men_needed", v)}
-          />
-          <NumberInput
-            label="אוהלי VIP — נשים"
-            hint={form.staff_women_beds_needed ? `המלצה: ${Math.ceil(form.staff_women_beds_needed / VIP_CAPACITY)} (עד ${VIP_CAPACITY} לאוהל)` : `עד ${VIP_CAPACITY} לאוהל`}
-            value={form.vip_tents_women_needed}
-            onChange={v => set("vip_tents_women_needed", v)}
-          />
-        </div>
-
-        {/* VIP counter */}
-        <div className={`rounded-lg px-3 py-2 text-xs space-y-0.5 border ${vipExceedsMax ? "bg-red-50 border-red-300 text-red-700" : "bg-purple-100 border-purple-200 text-purple-700"}`}>
-          <p className="font-semibold">
-            {vipExceedsMax
-              ? `⚠️ סה"כ VIP: ${totalVipTents} — חורג מהמקסימום (${VIP_TOTAL_TENTS})!`
-              : `✓ סה"כ VIP: ${totalVipTents} / ${VIP_TOTAL_TENTS} אוהלים`
-            }
-          </p>
-          <p>גברים: {form.vip_tents_men_needed ?? 0} · נשים: {form.vip_tents_women_needed ?? 0} · אוהלי VIP 80–89. שיבוץ ספציפי ייעשה ע"י משק הבית.</p>
-        </div>
-
-        <TentDistributionEditor
-          title="חלוקת אוהלי VIP — גברים"
-          required={form.staff_men_beds_needed}
-          rows={staffMenDist}
-          onChange={setStaffMenDist}
-          maxPerTent={VIP_CAPACITY}
-          capacityPerTent={VIP_CAPACITY}
-          color="bg-purple-50"
-          hint={`מקסימום ${VIP_CAPACITY} אנשים לאוהל VIP`}
-        />
-
-        <TentDistributionEditor
-          title="חלוקת אוהלי VIP — נשים"
-          required={form.staff_women_beds_needed}
-          rows={staffWomenDist}
-          onChange={setStaffWomenDist}
-          maxPerTent={VIP_CAPACITY}
-          capacityPerTent={VIP_CAPACITY}
-          color="bg-fuchsia-50/70"
-          hint={`מקסימום ${VIP_CAPACITY} אנשים לאוהל VIP`}
-        />
-
+        <VipRequirementsEditor rows={vipRows} onChange={setVipRows} />
         <TextArea
           label="הערות לינה — צוות / VIP"
           value={form.staff_sleeping_notes}

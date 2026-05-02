@@ -96,19 +96,19 @@
     },
     "staff_men_beds_needed": {
       "type": "number",
-      "description": "VIP beds needed for male staff"
+      "description": "VIP beds needed for male staff (kept for backward compat)"
     },
     "staff_women_beds_needed": {
       "type": "number",
-      "description": "VIP beds needed for female staff"
+      "description": "VIP beds needed for female staff (kept for backward compat)"
     },
     "vip_tents_men_needed": {
       "type": "number",
-      "description": "VIP tents to reserve for men (max 3 per tent, 10 total)"
+      "description": "Kept for backward compat"
     },
     "vip_tents_women_needed": {
       "type": "number",
-      "description": "VIP tents to reserve for women (max 3 per tent, 10 total)"
+      "description": "Kept for backward compat"
     },
     "student_sleeping_notes": {
       "type": "string"
@@ -136,11 +136,15 @@
     },
     "staff_men_tent_distribution_json": {
       "type": "string",
-      "description": "JSON array [{tent_count, people_per_tent}] \u2014 VIP planning"
+      "description": "Kept for backward compat"
     },
     "staff_women_tent_distribution_json": {
       "type": "string",
-      "description": "JSON array [{tent_count, people_per_tent}] \u2014 VIP planning"
+      "description": "Kept for backward compat"
+    },
+    "vip_tent_requirements_json": {
+      "type": "string",
+      "description": "JSON array [{gender_group, people_count, purpose, notes}] \u2014 one entry per required VIP tent"
     }
   },
   "required": [
