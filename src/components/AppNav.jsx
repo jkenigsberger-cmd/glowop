@@ -8,6 +8,7 @@ const OPS_LINKS = [
   { to: "/dashboard",       label: "בית",            icon: LayoutDashboard },
   { to: "/approved-groups", label: "קבוצות מאושרות", icon: CheckSquare },
   { to: "/calendar",        label: "לוח שנה",         icon: CalendarDays },
+  { to: "/allocation",      label: "שיבוץ לינה",      icon: BedDouble },
   { to: "/housekeeping",    label: "משק בית",         icon: BedDouble },
   { to: "/kitchen",         label: "מטבח",            icon: UtensilsCrossed },
   { to: "/maintenance",     label: "תחזוקה",          icon: Wrench },
