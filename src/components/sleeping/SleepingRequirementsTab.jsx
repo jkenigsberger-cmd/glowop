@@ -212,7 +212,7 @@ export default function SleepingRequirementsTab({ groupId, profile }) {
       )}
 
       {/* Part A — People summary */}
-      <PeopleSummaryCard profile={profile} />
+      <PeopleSummaryCard profile={profile} vipRows={vipRows} boysDist={boysDist} girlsDist={girlsDist} />
 
       {/* Part B+C+D — Students */}
       <SectionCard icon={Users} title="דרישות לינה — תלמידים / משתתפים" color="bg-blue-50/50 border-blue-200">
