@@ -103,30 +103,37 @@ export default function Dashboard() {
     maintenanceIssues,
   };
 
-  // ── Warnings ──────────────────────────────────────────────────────────────
-  // Groups with no operational profile (exclude cancelled, include active/upcoming)
-  const groupsNoProfile = groups
-    .filter(g => g.status !== "CANCELLED" && !profileByGroupId[g.id] && g.departure_date >= TODAY)
-    .map(g => ({ id: g.id, label: `${g.group_name} (${g.arrival_date})` }));
+  // ── Operational warnings — scoped to today/tomorrow only ─────────────────
+  const TOMORROW = new Date(new Date().getTime() + 86400000).toISOString().slice(0, 10);
 
-  const incompleteSleeeping = profiles
-    .filter(p => !p.sleeping_requirements_completed)
-    .map(p => {
-      const g = groupById[p.group_id];
-      return { id: p.group_id, label: `${g?.group_name || p.group_id}` };
-    });
+  // Groups arriving TODAY with no sleeping requirements completed
+  const arrivingNoSleeping = arrivingToday
+    .map(g => profileByGroupId[g.id])
+    .filter(p => p && !p.sleeping_requirements_completed)
+    .map(p => ({ id: p.group_id, label: groupById[p.group_id]?.group_name || p.group_id }));
 
-  const pendingAllocation = pendingHousekeepingProfiles.map(p => {
-    const g = groupById[p.group_id];
-    return { id: p.id, label: `${g?.group_name || p.group_id}` };
-  });
+  // Groups arriving TOMORROW with no sleeping requirements completed
+  const arrivingTomorrowNoSleeping = groups
+    .filter(g => g.arrival_date === TOMORROW)
+    .map(g => profileByGroupId[g.id])
+    .filter(p => p && !p.sleeping_requirements_completed)
+    .map(p => ({ id: p.group_id, label: groupById[p.group_id]?.group_name || p.group_id }));
 
+  // Groups arriving today or tomorrow: sleeping complete but no allocation yet
+  const arrivingSoonGroupIds = new Set(
+    groups.filter(g => g.arrival_date === TODAY || g.arrival_date === TOMORROW).map(g => g.id)
+  );
+  const arrivingSoonPendingAllocation = profiles
+    .filter(p => p.sleeping_requirements_completed && !allocatedGroupIds.has(p.group_id) && arrivingSoonGroupIds.has(p.group_id))
+    .map(p => ({ id: p.group_id, label: groupById[p.group_id]?.group_name || p.group_id }));
+
+  // Broken facilities/tents — always show
   const brokenItemsList = [
     ...brokenFacilities.map(f => ({ id: f.id, label: `מתקן: ${f.label} (${f.working_status})` })),
     ...brokenTents.map(t => ({ id: t.id, label: `אוהל: ${t.code} (${t.working_status})` })),
   ];
 
-  const warnings = { noProfile: groupsNoProfile, incompleteSleeeping, pendingAllocation, brokenItems: brokenItemsList };
+  const warnings = { arrivingNoSleeping, arrivingTomorrowNoSleeping, arrivingSoonPendingAllocation, brokenItems: brokenItemsList };
 
   // ── Per-group counts for sleeping cards ───────────────────────────────────
   const mealsByGroup = {};
