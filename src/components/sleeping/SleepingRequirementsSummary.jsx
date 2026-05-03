@@ -71,24 +71,7 @@ export default function SleepingRequirementsSummary({ profile, allocations, nhoo
           remaining={remGirls}
           color={remGirls === 0 ? "bg-green-50 border-green-200 text-green-700" : remGirls < 0 ? "bg-red-50 border-red-200 text-red-700" : "bg-orange-50 border-orange-200 text-orange-700"}
         />
-        {staffM > 0 && (
-          <Counter
-            label="צוות גברים נותרו"
-            required={staffM}
-            allocated={allocatedMen}
-            remaining={remMen}
-            color={remMen === 0 ? "bg-green-50 border-green-200 text-green-700" : remMen < 0 ? "bg-red-50 border-red-200 text-red-700" : "bg-amber-50 border-amber-200 text-amber-700"}
-          />
-        )}
-        {staffW > 0 && (
-          <Counter
-            label="צוות נשים נותרו"
-            required={staffW}
-            allocated={allocatedWomen}
-            remaining={remWomen}
-            color={remWomen === 0 ? "bg-green-50 border-green-200 text-green-700" : remWomen < 0 ? "bg-red-50 border-red-200 text-red-700" : "bg-purple-50 border-purple-200 text-purple-700"}
-          />
-        )}
+
       </div>
 
       {/* Neighbourhood summary */}
