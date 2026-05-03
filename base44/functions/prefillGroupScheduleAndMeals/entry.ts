@@ -100,7 +100,11 @@ Deno.serve(async (req) => {
     try { scheduleRows = JSON.parse(submission.schedule_notes); } catch {}
   }
 
-  for (const row of scheduleRows) {
+  // SAFETY: talk suggestions are intake-only — never create GroupScheduleItem from them.
+  const normalScheduleRows = scheduleRows.filter(r => !r.is_talk_suggestion);
+  // talkSuggestionRows are only for QuoteTalksPanel display; never synced here.
+
+  for (const row of normalScheduleRows) {
     if (!row.date || !row.start_time || !row.activity) continue;
     const start_time = row.start_time || '09:00';
     const end_time   = row.end_time   || addMinutes(start_time, 60);

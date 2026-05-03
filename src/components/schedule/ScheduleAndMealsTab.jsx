@@ -301,6 +301,11 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
           quote={activeQuote}
           scheduleItems={scheduleItems}
           clientSuggestions={clientTalkSuggestions}
+          groupId={groupId}
+          profileId={profileId}
+          group={group}
+          activitySpaces={activitySpaces}
+          onScheduleChanged={invalidate}
         />
       )}
 
