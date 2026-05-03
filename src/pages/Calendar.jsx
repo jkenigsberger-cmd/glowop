@@ -6,7 +6,7 @@ import "moment/locale/he";
 import { ChevronLeft, ChevronRight, CalendarDays } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import CalendarEventModal from "@/components/calendar/CalendarEventModal.jsx";
+import CalendarEventModal from "../components/calendar/CalendarEventModal.jsx";
 
 moment.locale("he");
 
