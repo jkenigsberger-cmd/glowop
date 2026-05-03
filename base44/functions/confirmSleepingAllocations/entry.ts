@@ -33,9 +33,17 @@ Deno.serve(async (req) => {
     return Response.json({ error: 'No DRAFT allocations found for the given IDs' }, { status: 400 });
   }
 
-  // 2. Load all CONFIRMED allocations from OTHER groups (for conflict checking)
-  const allAllocations = await base44.asServiceRole.entities.SleepingAllocation.filter({ status: 'CONFIRMED' });
-  const otherConfirmed = allAllocations.filter(a => a.group_id !== group_id);
+  // 2. Load all CONFIRMED + DRAFT allocations from OTHER groups (for conflict checking)
+  // We must check against DRAFT rows too — otherwise two groups can both create drafts
+  // for the same tent and race to confirm, causing overbooking.
+  const allConfirmed = await base44.asServiceRole.entities.SleepingAllocation.filter({ status: 'CONFIRMED' });
+  const allDrafts    = await base44.asServiceRole.entities.SleepingAllocation.filter({ status: 'DRAFT' });
+  const otherActive  = [...allConfirmed, ...allDrafts].filter(a =>
+    a.group_id !== group_id &&
+    !draft_allocation_ids.includes(a.id)  // exclude the very rows we're confirming
+  );
+  // Keep backward-compat variable name used below
+  const otherConfirmed = otherActive;
 
   // 3. Load neighborhoods for is_vip lookup
   const neighborhoods = await base44.asServiceRole.entities.Neighborhood.list();

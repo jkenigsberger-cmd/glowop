@@ -50,6 +50,7 @@ function AssignmentDialog({ req, reqIndex, tent, existingAlloc, profile, groupId
 
   const isReassign = !!existingAlloc;
 
+  // Frontend validation — quick UX feedback before hitting the server
   const validate = () => {
     const errs = [];
     if (!gender) errs.push("יש לבחור מגדר");
@@ -64,27 +65,25 @@ function AssignmentDialog({ req, reqIndex, tent, existingAlloc, profile, groupId
     if (errs.length) { setErrors(errs); return; }
     setSaving(true);
     setErrors([]);
-    const payload = {
-      tent_id:                      tent.id,
-      neighborhood_id:              neighborhoodId,
-      group_id:                     groupId,
-      operational_group_profile_id: profile.id,
-      arrival_date:                 profile.arrival_date,
-      departure_date:               profile.departure_date,
-      allocated_pax:                Number(pax),
-      allocation_type:              "STAFF",
-      gender_group:                 gender,
-      notes:                        `__vip_req_${reqIndex}__ ${notes}`.trim(),
-      status:                       "DRAFT",
-    };
     try {
-      if (existingAlloc) {
-        await base44.entities.SleepingAllocation.update(existingAlloc.id, payload);
+      // All conflict checking and persistence is done server-side
+      const res = await base44.functions.invoke("saveVipSleepingAllocation", {
+        allocation_id:                existingAlloc?.id || null,
+        group_id:                     groupId,
+        operational_group_profile_id: profile.id,
+        tent_id:                      tent.id,
+        requirement_index:            reqIndex,
+        gender_group:                 gender,
+        allocated_pax:                Number(pax),
+        notes:                        notes,
+      });
+      if (res.data?.success) {
+        toast.success(`אוהל ${tent.code} שויך לדרישה #${reqIndex + 1} ✓`);
+        onSaved();
       } else {
-        await base44.entities.SleepingAllocation.create(payload);
+        const errMsg = res.data?.error || "שגיאה בשמירה";
+        setErrors([errMsg]);
       }
-      toast.success(`אוהל ${tent.code} שויך לדרישה #${reqIndex + 1} ✓`);
-      onSaved();
     } catch (err) {
       setErrors([err.message || "שגיאה בשמירה"]);
     } finally {
@@ -95,6 +94,7 @@ function AssignmentDialog({ req, reqIndex, tent, existingAlloc, profile, groupId
   const handleRelease = async () => {
     if (!existingAlloc) { onReleased(); return; }
     setReleasing(true);
+    setErrors([]);
     try {
       if (existingAlloc.status === "DRAFT") {
         await base44.entities.SleepingAllocation.delete(existingAlloc.id);
