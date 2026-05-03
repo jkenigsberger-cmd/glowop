@@ -36,6 +36,11 @@ Deno.serve(async (req) => {
     return Response.json({ error: 'שדות חובה חסרים' }, { status: 400 });
   }
 
+  // Validate start_time < end_time
+  if (timeToMinutes(start_time) >= timeToMinutes(end_time)) {
+    return Response.json({ error: 'שעת הסיום חייבת להיות אחרי שעת ההתחלה' }, { status: 400 });
+  }
+
   // Validate date is within group booking window
   const groups = await base44.asServiceRole.entities.Group.filter({ id: group_id });
   const group = groups[0];

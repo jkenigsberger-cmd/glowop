@@ -150,6 +150,10 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
     }
     const dateErr = validateScheduleDate(newSchedule.date);
     if (dateErr) { setNewScheduleError(dateErr); return; }
+    if (!newSchedule.start_time || !newSchedule.end_time || newSchedule.start_time >= newSchedule.end_time) {
+      setNewScheduleError("שעת הסיום חייבת להיות אחרי שעת ההתחלה");
+      return;
+    }
 
     setSaving(true);
     try {

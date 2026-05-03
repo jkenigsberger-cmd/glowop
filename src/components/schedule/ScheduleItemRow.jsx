@@ -29,6 +29,10 @@ export default function ScheduleItemRow({ item, activitySpaces, quoteActivities 
     setError(null);
     const dateErr = validateDate(form.date);
     if (dateErr) { setError(dateErr); return; }
+    if (!form.start_time || !form.end_time || form.start_time >= form.end_time) {
+      setError("שעת הסיום חייבת להיות אחרי שעת ההתחלה");
+      return;
+    }
     const err = await onSave(form);
     if (err) { setError(err); return; }
     setEditing(false);
