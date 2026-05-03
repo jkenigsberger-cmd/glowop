@@ -270,7 +270,8 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
       return (a.start_time || "").localeCompare(b.start_time || "");
     });
 
-  const activeSchedule = sortChron(scheduleItems.filter(i => i.status === "ACTIVE"), false);
+  // Quote-linked talks are managed exclusively in QuoteTalksPanel — exclude them from the regular list.
+  const activeSchedule = sortChron(scheduleItems.filter(i => i.status === "ACTIVE" && !i.quote_item_id), false);
   const cancelledSchedule = scheduleItems.filter(i => i.status === "CANCELLED");
   const activeMeals = sortChron(mealItems.filter(i => i.status === "ACTIVE"), true);
   const cancelledMeals = mealItems.filter(i => i.status === "CANCELLED");
