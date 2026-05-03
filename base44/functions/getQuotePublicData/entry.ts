@@ -51,6 +51,16 @@ Deno.serve(async (req) => {
       ? arrival_date
       : (quote.departure_date || snapshot?.endDate || '');
 
+    // Build safe talks array for GuestForm (name + type + stable id only — NO pricing)
+    const parseSafe = (field) => { try { return JSON.parse(field || '[]') || []; } catch { return []; } };
+    const talks = [];
+    parseSafe(quote.lecture_lines).forEach((l, i) => {
+      if (l.name) talks.push({ quote_item_id: `lecture__${i}`, name: l.name, type: 'הרצאה' });
+    });
+    parseSafe(quote.workshop_lines).forEach((l, i) => {
+      if (l.name) talks.push({ quote_item_id: `workshop__${i}`, name: l.name, type: 'סדנה' });
+    });
+
     return Response.json({
       quote_id:          quote.id,
       group_id:          quote.group_id,
@@ -69,6 +79,7 @@ Deno.serve(async (req) => {
       contact_phone:     snapshot?.clientPhone || quote.client_phone || '',
       contact_email:     snapshot?.clientEmail || quote.client_email || '',
       client_tax_id:     snapshot?.clientTaxId || quote.client_tax_id || '',
+      talks,
     });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });

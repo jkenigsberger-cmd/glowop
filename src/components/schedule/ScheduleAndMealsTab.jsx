@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,7 @@ import { Plus, RefreshCw, CalendarDays, UtensilsCrossed } from "lucide-react";
 import { toast } from "sonner";
 import ScheduleItemRow from "./ScheduleItemRow";
 import MealReservationRow from "./MealReservationRow";
+import QuoteTalksPanel, { extractQuoteTalks } from "./QuoteTalksPanel";
 
 const MEAL_LABELS = { BREAKFAST: "ארוחת בוקר", LUNCH: "ארוחת צהריים", DINNER: "ארוחת ערב", OTHER: "אחר" };
 
@@ -54,7 +55,8 @@ function extractQuoteActivities(quote) {
 
 const EMPTY_SCHEDULE = {
   date: "", start_time: "09:00", end_time: "10:00",
-  activity_name: "", requested_location: "", activity_space_id: null, pax: "", notes: ""
+  activity_name: "", requested_location: "", activity_space_id: null,
+  quote_item_id: null, pax: "", notes: ""
 };
 
 const EMPTY_MEAL = (type = "BREAKFAST") => ({
@@ -65,7 +67,7 @@ const EMPTY_MEAL = (type = "BREAKFAST") => ({
   pax: "", sandwich_option: false, notes: ""
 });
 
-export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = [] }) {
+export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = [], guestFormSubmission = null }) {
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -85,6 +87,16 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
   // The approved quote (or first quote) for activity suggestions
   const activeQuote = quotes.find(q => q.status === "APPROVED") || quotes[0];
   const quoteActivities = extractQuoteActivities(activeQuote);
+  const quoteTalks = extractQuoteTalks(activeQuote);
+
+  // Parse client talk suggestions from GuestFormSubmission.schedule_notes
+  const clientTalkSuggestions = useMemo(() => {
+    if (!guestFormSubmission?.schedule_notes) return [];
+    try {
+      const rows = JSON.parse(guestFormSubmission.schedule_notes);
+      return rows.filter(r => r.is_talk_suggestion && r.quote_item_id);
+    } catch { return []; }
+  }, [guestFormSubmission]);
 
   const { data: scheduleItems = [] } = useQuery({
     queryKey: ["groupScheduleItems", groupId],
@@ -283,6 +295,15 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
         </Button>
       </div>
 
+      {/* ── Quote Talks Panel ────────────────────────────────────────────────── */}
+      {quoteTalks.length > 0 && (
+        <QuoteTalksPanel
+          quote={activeQuote}
+          scheduleItems={scheduleItems}
+          clientSuggestions={clientTalkSuggestions}
+        />
+      )}
+
       {/* ── Schedule Section ─────────────────────────────────────────────────── */}
       <section>
         <div className="flex items-center justify-between mb-3">
@@ -380,6 +401,25 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
                 <label className="text-xs text-slate-500">הערות</label>
                 <Input value={newSchedule.notes} onChange={e => setNewSchedule(s => ({ ...s, notes: e.target.value }))} placeholder="הערות..." />
               </div>
+              {quoteTalks.length > 0 && (
+                <div className="space-y-1 col-span-2">
+                  <label className="text-xs text-slate-500">קשר להרצאה / סדנה מההצעה (אופציונלי)</label>
+                  <Select
+                    value={newSchedule.quote_item_id || "none"}
+                    onValueChange={v => setNewSchedule(s => ({ ...s, quote_item_id: v === "none" ? null : v }))}
+                  >
+                    <SelectTrigger><SelectValue placeholder="— לא משויך —" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">— לא משויך —</SelectItem>
+                      {quoteTalks.map(t => (
+                        <SelectItem key={t.quote_item_id} value={t.quote_item_id}>
+                          {t.type}: {t.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
             {newScheduleError && (
               <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{newScheduleError}</p>

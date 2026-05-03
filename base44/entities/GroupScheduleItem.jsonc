@@ -37,6 +37,10 @@
       "type": "string",
       "description": "Derived code from ActivitySpace e.g. bunker_1 \u2014 set by backend on save"
     },
+    "quote_item_id": {
+      "type": "string",
+      "description": "Stable reference to a quote lecture/workshop line e.g. lecture__0, workshop__1. Nullable \u2014 only set when this activity fulfils a quoted talk."
+    },
     "pax": {
       "type": "number"
     },
