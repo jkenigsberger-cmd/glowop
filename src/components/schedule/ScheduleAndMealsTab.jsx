@@ -176,7 +176,8 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
       invalidate();
       toast.success("פעילות נוספה");
     } catch (err) {
-      const msg = err?.response?.data?.error || err?.message || "שגיאה בשמירה";
+      invalidate(); // refetch so rollback-cancelled items don't appear as active
+      const msg = err?.response?.data?.error || err?.message || "השמירה נכשלה. הנתונים רועננו, נסה שוב.";
       setNewScheduleError(msg);
     } finally {
       setSaving(false);
