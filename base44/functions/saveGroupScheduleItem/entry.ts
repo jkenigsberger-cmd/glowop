@@ -116,5 +116,35 @@ Deno.serve(async (req) => {
     result = await base44.asServiceRole.entities.GroupScheduleItem.create(payload);
   }
 
+  // Post-write race-condition check: re-fetch and verify no conflict slipped through
+  if (resolvedSpaceId && status !== 'CANCELLED') {
+    const newStart = timeToMinutes(start_time);
+    const newEnd   = timeToMinutes(end_time);
+    const bufStart = newStart - 15;
+    const bufEnd   = newEnd   + 15;
+
+    const afterItems = await base44.asServiceRole.entities.GroupScheduleItem.filter({
+      activity_space_id: resolvedSpaceId,
+      date,
+      status: 'ACTIVE',
+    });
+
+    const postConflicts = afterItems.filter(item => {
+      if (item.id === result.id) return false; // exclude the item we just wrote
+      const eStart = timeToMinutes(item.start_time);
+      const eEnd   = timeToMinutes(item.end_time);
+      return bufStart < eEnd && bufEnd > eStart;
+    });
+
+    if (postConflicts.length > 0) {
+      // Roll back: cancel the item we just wrote
+      await base44.asServiceRole.entities.GroupScheduleItem.update(result.id, { status: 'CANCELLED' });
+      const c = postConflicts[0];
+      return Response.json({
+        error: `המרחב כבר תפוס בשעה הזו. יש לבחור שעה אחרת או מרחב אחר. (התנגשות עם ${c.start_time}–${c.end_time})`
+      }, { status: 409 });
+    }
+  }
+
   return Response.json({ success: true, item: result });
 });

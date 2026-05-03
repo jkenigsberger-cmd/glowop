@@ -113,12 +113,17 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
     setSaving(true);
     try {
       const res = await base44.functions.invoke("saveGroupScheduleItem", { ...form });
-      if (res.data?.error) return res.data.error;
+      if (res.data?.error) {
+        invalidate(); // refetch so UI reflects actual DB state
+        return res.data.error;
+      }
       invalidate();
       toast.success("פעילות נשמרה");
       return null;
     } catch (err) {
-      return err?.response?.data?.error || err?.message || "שגיאה בשמירה";
+      invalidate(); // refetch on any failure — never leave fake unsaved state
+      const msg = err?.response?.data?.error || err?.message || "השמירה נכשלה. הנתונים רועננו, נסה שוב.";
+      return msg;
     } finally {
       setSaving(false);
     }
