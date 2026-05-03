@@ -62,14 +62,14 @@ export default function SleepingRequirementsSummary({ profile, allocations, nhoo
           required={boysNeeded}
           allocated={allocatedBoysBeds}
           remaining={remBoys}
-          color={remBoys === 0 ? "bg-green-50 border-green-200 text-green-700" : remBoys < 0 ? "bg-red-50 border-red-200 text-red-700" : "bg-blue-50 border-blue-200 text-blue-700"}
+          color={remBoys === 0 ? "bg-green-50 border-green-200 text-green-700" : remBoys < 0 ? "bg-red-50 border-red-200 text-red-700" : "bg-emerald-50 border-emerald-200 text-emerald-700"}
         />
         <Counter
           label="בנות נותרו"
           required={girlsNeeded}
           allocated={allocatedGirlsBeds}
           remaining={remGirls}
-          color={remGirls === 0 ? "bg-green-50 border-green-200 text-green-700" : remGirls < 0 ? "bg-red-50 border-red-200 text-red-700" : "bg-pink-50 border-pink-200 text-pink-700"}
+          color={remGirls === 0 ? "bg-green-50 border-green-200 text-green-700" : remGirls < 0 ? "bg-red-50 border-red-200 text-red-700" : "bg-orange-50 border-orange-200 text-orange-700"}
         />
         {staffM > 0 && (
           <Counter

@@ -42,10 +42,10 @@ function suggestNeighborhoods(neighborhoods, allTents, neededTents) {
 // ── VIP square UI ──────────────────────────────────────────────────────────
 
 const GENDER_CFG = {
-  WOMEN:  { label: "נשים",  bg: "bg-pink-50",  border: "border-pink-300",  text: "text-pink-700",  dot: "bg-pink-400"  },
-  MEN:    { label: "גברים", bg: "bg-blue-50",  border: "border-blue-300",  text: "text-blue-700",  dot: "bg-blue-400"  },
-  GIRLS:  { label: "בנות",  bg: "bg-pink-50",  border: "border-pink-300",  text: "text-pink-700",  dot: "bg-pink-400"  },
-  BOYS:   { label: "בנים",  bg: "bg-blue-50",  border: "border-blue-300",  text: "text-blue-700",  dot: "bg-blue-400"  },
+  WOMEN:  { label: "נשים",  bg: "bg-orange-50",  border: "border-orange-300",  text: "text-orange-700",  dot: "bg-orange-400"  },
+  MEN:    { label: "גברים", bg: "bg-emerald-50", border: "border-emerald-300", text: "text-emerald-700", dot: "bg-emerald-400" },
+  GIRLS:  { label: "בנות",  bg: "bg-orange-50",  border: "border-orange-300",  text: "text-orange-700",  dot: "bg-orange-400"  },
+  BOYS:   { label: "בנים",  bg: "bg-emerald-50", border: "border-emerald-300", text: "text-emerald-700", dot: "bg-emerald-400" },
 };
 
 const PURPOSE_CFG = {
@@ -136,8 +136,8 @@ function VipTentPickerGrid({ vipRows, tents, neighborhood, conflictMap, myAllocB
       <div className="flex items-center justify-between">
         <p className="font-semibold text-sm text-purple-800">{neighborhood.name} — {vipRows.length} אוהלים</p>
         <div className="flex items-center gap-2 text-[10px]">
-          {menCount   > 0 && <span className="bg-blue-100 text-blue-700 border border-blue-200 rounded-full px-2 py-0.5 font-medium">{menCount} גברים</span>}
-          {womenCount > 0 && <span className="bg-pink-100 text-pink-700 border border-pink-200 rounded-full px-2 py-0.5 font-medium">{womenCount} נשים</span>}
+          {menCount   > 0 && <span className="bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5 font-medium">{menCount} גברים</span>}
+          {womenCount > 0 && <span className="bg-orange-100 text-orange-700 border border-orange-200 rounded-full px-2 py-0.5 font-medium">{womenCount} נשים</span>}
         </div>
       </div>
       <div className="flex flex-wrap gap-2">

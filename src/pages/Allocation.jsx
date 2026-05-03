@@ -22,10 +22,10 @@ function distSummary(rows) {
 // ── VIP tent grid ──────────────────────────────────────────────────────────
 
 const GENDER_CONFIG = {
-  WOMEN: { label: "נשים",  bg: "bg-pink-50",   border: "border-pink-300",   text: "text-pink-700",   dot: "bg-pink-400"  },
-  MEN:   { label: "גברים", bg: "bg-blue-50",   border: "border-blue-300",   text: "text-blue-700",   dot: "bg-blue-400"  },
-  GIRLS: { label: "בנות",  bg: "bg-pink-50",   border: "border-pink-300",   text: "text-pink-700",   dot: "bg-pink-400"  },
-  BOYS:  { label: "בנים",  bg: "bg-blue-50",   border: "border-blue-300",   text: "text-blue-700",   dot: "bg-blue-400"  },
+  WOMEN: { label: "נשים",  bg: "bg-orange-50",  border: "border-orange-300",  text: "text-orange-700",  dot: "bg-orange-400"  },
+  MEN:   { label: "גברים", bg: "bg-emerald-50", border: "border-emerald-300", text: "text-emerald-700", dot: "bg-emerald-400" },
+  GIRLS: { label: "בנות",  bg: "bg-orange-50",  border: "border-orange-300",  text: "text-orange-700",  dot: "bg-orange-400"  },
+  BOYS:  { label: "בנים",  bg: "bg-emerald-50", border: "border-emerald-300", text: "text-emerald-700", dot: "bg-emerald-400" },
 };
 
 const PURPOSE_CONFIG = {
@@ -80,8 +80,8 @@ function VipTentGrid({ vipRows }) {
       <div className="flex items-center justify-between">
         <p className="font-semibold text-sm text-purple-800">VIP — {vipRows.length} אוהלים</p>
         <div className="flex items-center gap-2 text-[10px]">
-          {menCount > 0   && <span className="bg-blue-100 text-blue-700 border border-blue-200 rounded-full px-2 py-0.5 font-medium">{menCount} אוהלי גברים</span>}
-          {womenCount > 0 && <span className="bg-pink-100 text-pink-700 border border-pink-200 rounded-full px-2 py-0.5 font-medium">{womenCount} אוהלי נשים</span>}
+          {menCount > 0   && <span className="bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5 font-medium">{menCount} אוהלי גברים</span>}
+          {womenCount > 0 && <span className="bg-orange-100 text-orange-700 border border-orange-200 rounded-full px-2 py-0.5 font-medium">{womenCount} אוהלי נשים</span>}
         </div>
       </div>
       <div className="flex flex-wrap gap-2">
@@ -158,15 +158,15 @@ function GroupAllocationCard({ profile, group, allocations }) {
         {/* Requirements summary */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
           {profile.boys_beds_needed != null && (
-            <div className="bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 space-y-0.5">
-              <p className="font-semibold text-blue-700">בנים — {profile.boys_beds_needed} מיטות</p>
-              {boysSummary && <p className="text-blue-600">{boysSummary}</p>}
+            <div className="bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2 space-y-0.5">
+              <p className="font-semibold text-emerald-700">בנים — {profile.boys_beds_needed} מיטות</p>
+              {boysSummary && <p className="text-emerald-600">{boysSummary}</p>}
             </div>
           )}
           {profile.girls_beds_needed != null && (
-            <div className="bg-pink-50 border border-pink-100 rounded-lg px-3 py-2 space-y-0.5">
-              <p className="font-semibold text-pink-700">בנות — {profile.girls_beds_needed} מיטות</p>
-              {girlsSummary && <p className="text-pink-600">{girlsSummary}</p>}
+            <div className="bg-orange-50 border border-orange-100 rounded-lg px-3 py-2 space-y-0.5">
+              <p className="font-semibold text-orange-700">בנות — {profile.girls_beds_needed} מיטות</p>
+              {girlsSummary && <p className="text-orange-600">{girlsSummary}</p>}
             </div>
           )}
           {vipRows.length > 0 && (

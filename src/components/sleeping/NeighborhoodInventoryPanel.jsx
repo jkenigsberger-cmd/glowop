@@ -54,7 +54,7 @@ export default function NeighborhoodInventoryPanel({
 
             let cardClass = "border rounded-lg px-3 py-2 text-xs space-y-1 ";
             if (isAllocatedByMe && myAlloc.status === 'CONFIRMED') cardClass += "bg-emerald-50 border-emerald-300";
-            else if (isAllocatedByMe) cardClass += "bg-blue-50 border-blue-300";
+            else if (isAllocatedByMe) cardClass += "bg-emerald-50 border-emerald-300";
             else if (isBlocked || isBookedByOther) cardClass += "bg-red-50 border-red-200 opacity-70";
             else cardClass += "bg-white border-slate-200 hover:border-primary/40";
 
@@ -69,7 +69,7 @@ export default function NeighborhoodInventoryPanel({
                 </div>
 
                 {isAllocatedByMe && (
-                  <div className={`text-[10px] font-medium ${myAlloc.status === 'CONFIRMED' ? 'text-emerald-700' : 'text-blue-700'}`}>
+                  <div className={`text-[10px] font-medium ${myAlloc.status === 'CONFIRMED' ? 'text-emerald-700' : 'text-emerald-600'}`}>
                     ✓ {GENDER_LABEL[myAlloc.gender_group]} · {myAlloc.allocated_pax} מקומות
                     {myAlloc.status === 'CONFIRMED' ? ' (מאושר)' : ' (טיוטה)'}
                   </div>
