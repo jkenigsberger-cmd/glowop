@@ -1,7 +1,7 @@
 import { Link, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, CheckSquare, CalendarDays, BedDouble,
-  UtensilsCrossed, Wrench, ShieldAlert
+  UtensilsCrossed, Wrench, ShieldAlert, Layers
 } from "lucide-react";
 
 const OPS_LINKS = [
@@ -9,6 +9,7 @@ const OPS_LINKS = [
   { to: "/approved-groups", label: "קבוצות מאושרות", icon: CheckSquare },
   { to: "/calendar",        label: "לוח שנה",         icon: CalendarDays },
   { to: "/allocation",      label: "שיבוץ לינה",      icon: BedDouble },
+  { to: "/common-spaces",   label: "מרחבי פעילות",   icon: Layers },
   { to: "/housekeeping",    label: "משק בית",         icon: BedDouble },
   { to: "/kitchen",         label: "מטבח",            icon: UtensilsCrossed },
   { to: "/maintenance",     label: "תחזוקה",          icon: Wrench },

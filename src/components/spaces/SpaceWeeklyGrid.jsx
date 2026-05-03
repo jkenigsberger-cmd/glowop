@@ -1,0 +1,101 @@
+import moment from "moment";
+import "moment/locale/he";
+import { cn } from "@/lib/utils";
+
+moment.locale("he");
+
+const HEB_DAYS = ["שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת", "ראשון"];
+
+function getWeekDates(pivot) {
+  const start = moment(pivot).startOf("isoWeek");
+  return Array.from({ length: 7 }, (_, i) => start.clone().add(i, "days"));
+}
+
+const HEAT = [
+  "bg-slate-50 text-slate-300",    // 0
+  "bg-emerald-50 text-emerald-700 border border-emerald-200",   // 1
+  "bg-amber-50 text-amber-700 border border-amber-200",         // 2-3
+  "bg-orange-100 text-orange-800 border border-orange-300",     // 4+
+];
+
+function heatClass(count) {
+  if (count === 0) return HEAT[0];
+  if (count === 1) return HEAT[1];
+  if (count <= 3) return HEAT[2];
+  return HEAT[3];
+}
+
+const SPACE_TYPE_LABELS = { BUNKER: "בונקר", OHEL_MOED: "אוהל מועד", DINING_HALL: "חדר אוכל" };
+
+export default function SpaceWeeklyGrid({ spaces, allItems, pivot, onSelectDay }) {
+  const weekDates = getWeekDates(pivot);
+  const today = moment().format("YYYY-MM-DD");
+
+  return (
+    <div className="overflow-x-auto" dir="rtl">
+      <table className="w-full text-sm border-collapse">
+        <thead>
+          <tr>
+            <th className="text-right px-3 py-2.5 bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-500 min-w-[140px]">
+              מרחב
+            </th>
+            {weekDates.map((d, i) => {
+              const isToday = d.format("YYYY-MM-DD") === today;
+              return (
+                <th
+                  key={i}
+                  className={cn(
+                    "text-center px-2 py-2.5 border border-slate-200 text-xs font-semibold min-w-[80px]",
+                    isToday ? "bg-primary text-primary-foreground" : "bg-slate-50 text-slate-500"
+                  )}
+                >
+                  <div>{HEB_DAYS[i]}</div>
+                  <div className={cn("font-bold text-sm", isToday ? "text-white" : "text-slate-700")}>
+                    {d.format("D/M")}
+                  </div>
+                </th>
+              );
+            })}
+          </tr>
+        </thead>
+        <tbody>
+          {spaces.map((space) => (
+            <tr key={space.id} className="hover:bg-slate-50/50 transition-colors">
+              {/* Space label */}
+              <td className="px-3 py-2.5 border border-slate-200 bg-white">
+                <div className="font-semibold text-slate-700 text-xs">{space.name}</div>
+                <div className="text-[10px] text-slate-400 font-mono">{space.code}</div>
+                <div className="text-[10px] text-slate-400">
+                  {SPACE_TYPE_LABELS[space.space_type] || space.space_type}
+                </div>
+              </td>
+              {weekDates.map((d) => {
+                const dateStr = d.format("YYYY-MM-DD");
+                const count = allItems.filter(
+                  (i) => i.activity_space_id === space.id && i.date === dateStr
+                ).length;
+
+                return (
+                  <td key={dateStr} className="border border-slate-200 p-1 text-center">
+                    <button
+                      type="button"
+                      onClick={() => count > 0 && onSelectDay(dateStr)}
+                      disabled={count === 0}
+                      className={cn(
+                        "w-full h-10 rounded-lg text-xs font-bold transition-all",
+                        heatClass(count),
+                        count > 0 && "hover:shadow-md cursor-pointer hover:scale-105"
+                      )}
+                    >
+                      {count > 0 ? count : "—"}
+                    </button>
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}

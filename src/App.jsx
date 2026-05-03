@@ -19,6 +19,7 @@ import Housekeeping from "./pages/Housekeeping.jsx";
 import Kitchen from "./pages/Kitchen.jsx";
 import Maintenance from "./pages/Maintenance.jsx";
 import Allocation from "./pages/Allocation.jsx";
+import CommonSpaces from "./pages/CommonSpaces.jsx";
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -60,6 +61,7 @@ const AuthenticatedApp = () => {
         <Route path="/kitchen" element={<Kitchen />} />
         <Route path="/maintenance" element={<Maintenance />} />
         <Route path="/allocation" element={<Allocation />} />
+        <Route path="/common-spaces" element={<CommonSpaces />} />
         {/* Add your page Route elements here */}
         <Route path="*" element={<PageNotFound />} />
       </Routes>
