@@ -2,13 +2,12 @@ import { useState, useMemo } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ShieldCheck, AlertTriangle, Lightbulb, Shield, Car } from "lucide-react";
+import { AlertTriangle, Lightbulb } from "lucide-react";
 import { toast } from "sonner";
 
 import SleepingRequirementsSummary from "./SleepingRequirementsSummary";
 import StudentNeighborhoodPanel from "./StudentNeighborhoodPanel";
-import TentAllocationModal from "./TentAllocationModal";
+import VipAllocationPanel from "./VipAllocationPanel";
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -39,192 +38,14 @@ function suggestNeighborhoods(neighborhoods, allTents, neededTents) {
   return suggestion;
 }
 
-// ── VIP square UI ──────────────────────────────────────────────────────────
-
-const GENDER_CFG = {
-  WOMEN:  { label: "נשים",  bg: "bg-orange-50",  border: "border-orange-300",  text: "text-orange-700",  dot: "bg-orange-400"  },
-  MEN:    { label: "גברים", bg: "bg-emerald-50", border: "border-emerald-300", text: "text-emerald-700", dot: "bg-emerald-400" },
-  GIRLS:  { label: "בנות",  bg: "bg-orange-50",  border: "border-orange-300",  text: "text-orange-700",  dot: "bg-orange-400"  },
-  BOYS:   { label: "בנים",  bg: "bg-emerald-50", border: "border-emerald-300", text: "text-emerald-700", dot: "bg-emerald-400" },
-};
-
-const PURPOSE_CFG = {
-  STAFF:    { label: "צוות",  Icon: null,   emoji: "👤" },
-  SECURITY: { label: "אבטחה", Icon: Shield,  emoji: null },
-  DRIVER:   { label: "נהג",   Icon: Car,     emoji: null },
-  VIP:      { label: "VIP",   Icon: null,    emoji: "⭐" },
-};
-
-function getPurposeCfg(purpose) {
-  if (!purpose) return PURPOSE_CFG.STAFF;
-  return PURPOSE_CFG[purpose?.toUpperCase()] || { label: purpose, Icon: null, emoji: "👤" };
-}
-
-function VipRowSquare({ row, index, allocTent, onClick }) {
-  const gc = GENDER_CFG[row.gender_group] || GENDER_CFG.MEN;
-  const pc = getPurposeCfg(row.purpose);
-  const { Icon } = pc;
-  const isAllocated = !!allocTent;
-  const isConfirmed = allocTent?.status === "CONFIRMED";
-
-  let borderCls = gc.border;
-  let bgCls = gc.bg;
-  let ringCls = "";
-  if (isConfirmed)  { borderCls = "border-emerald-400"; bgCls = "bg-emerald-50"; ringCls = "ring-1 ring-emerald-300"; }
-  else if (isAllocated) { borderCls = "border-amber-400"; bgCls = "bg-amber-50"; ringCls = "ring-1 ring-amber-300"; }
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`relative rounded-xl border-2 ${borderCls} ${bgCls} ${ringCls} px-3 py-3 flex flex-col items-center gap-1 min-w-[80px] cursor-pointer hover:brightness-95 transition-all`}
-    >
-      <span className="absolute top-1.5 right-2 text-[9px] font-bold text-slate-400">#{index + 1}</span>
-      {isConfirmed  && <span className="absolute top-1.5 left-2 text-[10px] text-emerald-600">✓</span>}
-      {isAllocated && !isConfirmed && <span className="absolute top-1.5 left-2 text-[10px] text-amber-500">~</span>}
-
-      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm ${gc.bg} border ${gc.border}`}>
-        {Icon ? <Icon className={`w-4 h-4 ${gc.text}`} /> : <span>{pc.emoji}</span>}
-      </div>
-
-      <div className="flex items-center gap-0.5">
-        {Array.from({ length: Math.min(row.people_count || 1, 3) }).map((_, i) => (
-          <span key={i} className={`w-2 h-2 rounded-full ${gc.dot}`} />
-        ))}
-      </div>
-
-      <span className={`text-[10px] font-bold ${gc.text} leading-none`}>{gc.label}</span>
-      <span className="text-[9px] text-slate-500 leading-none">{pc.label}</span>
-      <span className={`text-[11px] font-semibold ${gc.text}`}>{row.people_count} איש</span>
-
-      {isAllocated && (
-        <span className={`text-[9px] font-bold mt-0.5 px-1.5 py-0.5 rounded-full border ${isConfirmed ? "bg-emerald-100 text-emerald-700 border-emerald-300" : "bg-amber-100 text-amber-700 border-amber-300"}`}>
-          אוהל {allocTent.tentCode || "?"}
-        </span>
-      )}
-      {!isAllocated && (
-        <span className="text-[9px] text-slate-400 mt-0.5">לחץ לשיבוץ</span>
-      )}
-    </button>
-  );
-}
-
-function VipTentPickerGrid({ vipRows, tents, neighborhood, conflictMap, myAllocByTent, onPickTent }) {
-  if (!vipRows.length) return null;
-
-  // Greedily match allocations to vip rows by gender order
-  const allocsByGender = {};
-  Object.values(myAllocByTent).forEach(a => {
-    const tent = tents.find(t => t.id === a.tent_id);
-    if (!allocsByGender[a.gender_group]) allocsByGender[a.gender_group] = [];
-    allocsByGender[a.gender_group].push({ ...a, tentCode: tent?.code });
-  });
-  const usedIdx = {};
-  const rowAllocMap = {};
-  vipRows.forEach((row, i) => {
-    const g = row.gender_group;
-    if (!usedIdx[g]) usedIdx[g] = 0;
-    const arr = allocsByGender[g] || [];
-    if (arr[usedIdx[g]]) { rowAllocMap[i] = arr[usedIdx[g]]; usedIdx[g]++; }
-  });
-
-  const womenCount = vipRows.filter(r => r.gender_group === "WOMEN" || r.gender_group === "GIRLS").length;
-  const menCount   = vipRows.filter(r => r.gender_group === "MEN"   || r.gender_group === "BOYS").length;
-
-  return (
-    <div className="bg-purple-50 border border-purple-200 rounded-xl px-4 py-3 space-y-2">
-      <div className="flex items-center justify-between">
-        <p className="font-semibold text-sm text-purple-800">{neighborhood.name} — {vipRows.length} אוהלים</p>
-        <div className="flex items-center gap-2 text-[10px]">
-          {menCount   > 0 && <span className="bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5 font-medium">{menCount} גברים</span>}
-          {womenCount > 0 && <span className="bg-orange-100 text-orange-700 border border-orange-200 rounded-full px-2 py-0.5 font-medium">{womenCount} נשים</span>}
-        </div>
-      </div>
-      <div className="flex flex-wrap gap-2">
-        {vipRows.map((row, i) => (
-          <VipRowSquare
-            key={i}
-            row={row}
-            index={i}
-            allocTent={rowAllocMap[i] || null}
-            onClick={() => onPickTent(row, i)}
-          />
-        ))}
-      </div>
-      <p className="text-[10px] text-purple-500">לחץ על ריבוע כדי לשבץ אוהל ספציפי</p>
-    </div>
-  );
-}
-
-function VipTentPickModal({ vipRow, hood, hoodTents, conflictMap, myAllocByTent, onSelectTent, onClose }) {
-  const gc = GENDER_CFG[vipRow.gender_group] || GENDER_CFG.MEN;
-  const pc = getPurposeCfg(vipRow.purpose);
-
-  return (
-    <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-sm" dir="rtl">
-        <DialogHeader>
-          <DialogTitle className="text-right text-sm flex items-center gap-2 flex-wrap">
-            בחר אוהל לשיבוץ
-            <span className={`text-[11px] px-2 py-0.5 rounded-full border ${gc.bg} ${gc.border} ${gc.text} font-medium`}>
-              {gc.label} · {pc.label} · {vipRow.people_count} איש
-            </span>
-          </DialogTitle>
-        </DialogHeader>
-        <div className="space-y-2">
-          <p className="text-xs text-slate-500">בחר אוהל פנוי מתוך {hood.name}:</p>
-          <div className="grid grid-cols-3 gap-2 max-h-64 overflow-y-auto py-1">
-            {hoodTents.map(tent => {
-              const conflict   = conflictMap[tent.id];
-              const myAlloc    = myAllocByTent[tent.id];
-              const isOccupied = !!conflict;
-              const isAllocatedByMe = !!myAlloc && myAlloc.status !== "CANCELLED";
-              const isConfirmed = myAlloc?.status === "CONFIRMED";
-
-              let cls = "rounded-lg border-2 px-2 py-2.5 flex flex-col items-center gap-1 text-center transition-all ";
-              if (isConfirmed)        cls += "border-emerald-400 bg-emerald-50 cursor-not-allowed opacity-60";
-              else if (isAllocatedByMe) cls += "border-amber-400 bg-amber-50 cursor-pointer hover:brightness-95";
-              else if (isOccupied)    cls += "border-red-200 bg-red-50 cursor-not-allowed opacity-50";
-              else                    cls += "border-slate-200 bg-white cursor-pointer hover:border-primary hover:bg-primary/5";
-
-              return (
-                <button
-                  key={tent.id}
-                  type="button"
-                  disabled={isOccupied || isConfirmed}
-                  onClick={() => onSelectTent(tent)}
-                  className={cls}
-                >
-                  <span className="font-bold text-sm text-slate-700">{tent.code}</span>
-                  <span className="text-[10px] text-slate-400">{tent.capacity} 🛏️</span>
-                  {isAllocatedByMe && !isConfirmed && <span className="text-[9px] text-amber-600 font-medium">בשימוש שלי</span>}
-                  {isOccupied && !isAllocatedByMe   && <span className="text-[9px] text-red-500">תפוס</span>}
-                  {isConfirmed                       && <span className="text-[9px] text-emerald-600">מאושר</span>}
-                  {tent.is_accessible                && <span className="text-[9px]">♿</span>}
-                </button>
-              );
-            })}
-          </div>
-          <div className="flex justify-end pt-1">
-            <Button size="sm" variant="outline" onClick={onClose}>ביטול</Button>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 // ── Main component ─────────────────────────────────────────────────────────
 
 export default function SleepingAllocationTab({ groupId }) {
   const queryClient = useQueryClient();
-  const [allocateTentTarget, setAllocateTentTarget] = useState(null);
-  const [pickingVipRow, setPickingVipRow] = useState(null);
   const [saving, setSaving] = useState(false);
-  const [confirming, setConfirming] = useState(false);
-  const [serverErrors, setServerErrors] = useState([]);
   const [showSuggestion, setShowSuggestion] = useState(false);
 
+  // ── Data fetching ──────────────────────────────────────────────────────────
   const { data: profiles = [] } = useQuery({
     queryKey: ["operationalProfile", groupId],
     queryFn: () => base44.entities.OperationalGroupProfile.filter({ group_id: groupId }),
@@ -255,6 +76,7 @@ export default function SleepingAllocationTab({ groupId }) {
     enabled: !!groupId,
   });
 
+  // All CONFIRMED allocations from OTHER groups (for VIP conflict check)
   const { data: allConfirmedAllocations = [] } = useQuery({
     queryKey: ["allConfirmedAllocations"],
     queryFn: () => base44.entities.SleepingAllocation.filter({ status: "CONFIRMED" }),
@@ -276,6 +98,7 @@ export default function SleepingAllocationTab({ groupId }) {
     queryFn: () => base44.entities.Group.list("-arrival_date", 300),
   });
 
+  // ── Derived ────────────────────────────────────────────────────────────────
   const arrivalDate   = profile?.arrival_date   || group?.arrival_date   || "";
   const departureDate = profile?.departure_date || group?.departure_date || "";
 
@@ -301,6 +124,7 @@ export default function SleepingAllocationTab({ groupId }) {
     return map;
   }, [allNhoodReservations, groupId, arrivalDate, departureDate, groupById]);
 
+  // VIP tent conflict map: tentId → { gender_group, group_id } for OTHER groups
   const vipTentConflictMap = useMemo(() => {
     const map = {};
     if (!arrivalDate || !departureDate) return map;
@@ -312,30 +136,7 @@ export default function SleepingAllocationTab({ groupId }) {
     return map;
   }, [allConfirmedAllocations, groupId, arrivalDate, departureDate]);
 
-  const myVipAllocByTent = useMemo(() => {
-    const map = {};
-    myAllocations.filter(a => a.status !== "CANCELLED").forEach(a => {
-      const tent = allTents.find(t => t.id === a.tent_id);
-      const hood = neighborhoods.find(n => n.id === tent?.neighborhood_id);
-      if (hood?.is_vip) map[a.tent_id] = a;
-    });
-    return map;
-  }, [myAllocations, allTents, neighborhoods]);
-
-  const myVipDraftConflictTentIds = useMemo(() => {
-    const set = new Set();
-    myAllocations.filter(a => a.status === "DRAFT").forEach(a => {
-      if (vipTentConflictMap[a.tent_id]) set.add(a.tent_id);
-    });
-    return set;
-  }, [myAllocations, vipTentConflictMap]);
-
-  const hasDraftVip = myAllocations.some(a => {
-    const tent = allTents.find(t => t.id === a.tent_id);
-    const hood = neighborhoods.find(n => n.id === tent?.neighborhood_id);
-    return a.status === "DRAFT" && hood?.is_vip;
-  });
-
+  // Suggestion for student neighborhoods
   const boysDist = parseDist(profile?.boys_tent_distribution_json);
   const girlsDist = parseDist(profile?.girls_tent_distribution_json);
   const totalTentsNeeded =
@@ -352,6 +153,7 @@ export default function SleepingAllocationTab({ groupId }) {
     [availableStudentNeighborhoods, allTents, totalTentsNeeded]
   );
 
+  // ── Handlers ───────────────────────────────────────────────────────────────
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["sleepingAllocations", groupId] });
     queryClient.invalidateQueries({ queryKey: ["allConfirmedAllocations"] });
@@ -381,62 +183,7 @@ export default function SleepingAllocationTab({ groupId }) {
     toast.success("שכונה שוחררה");
   };
 
-  const handleSaveVipDraft = async (data) => {
-    setSaving(true);
-    const existing = myAllocations.find(a => a.tent_id === data.tent_id && a.status === "DRAFT");
-    if (existing) {
-      await base44.entities.SleepingAllocation.update(existing.id, data);
-    } else {
-      await base44.entities.SleepingAllocation.create(data);
-    }
-    setSaving(false);
-    invalidate();
-    toast.success("טיוטת VIP נשמרה");
-  };
-
-  const handleConfirmVip = async () => {
-    const draftIds = myAllocations
-      .filter(a => {
-        const tent = allTents.find(t => t.id === a.tent_id);
-        const hood = neighborhoods.find(n => n.id === tent?.neighborhood_id);
-        return a.status === "DRAFT" && hood?.is_vip;
-      })
-      .map(a => a.id);
-
-    if (draftIds.length === 0) { toast.error("אין טיוטות VIP לאישור"); return; }
-    setConfirming(true);
-    setServerErrors([]);
-    const res = await base44.functions.invoke("confirmSleepingAllocations", {
-      group_id: groupId,
-      draft_allocation_ids: draftIds,
-    });
-    setConfirming(false);
-    if (res.data?.success) {
-      toast.success(`${res.data.confirmed_count} הקצאות VIP אושרו`);
-      invalidate();
-    } else {
-      setServerErrors(res.data?.errors || ["שגיאה לא ידועה"]);
-    }
-  };
-
-  const handleCancelAllVip = async () => {
-    if (!window.confirm("ביטול כל הקצאות ה-VIP?")) return;
-    const active = myAllocations.filter(a => {
-      const tent = allTents.find(t => t.id === a.tent_id);
-      const hood = neighborhoods.find(n => n.id === tent?.neighborhood_id);
-      return a.status !== "CANCELLED" && hood?.is_vip;
-    });
-    await Promise.all(
-      active.map(a =>
-        a.status === "DRAFT"
-          ? base44.entities.SleepingAllocation.delete(a.id)
-          : base44.entities.SleepingAllocation.update(a.id, { status: "CANCELLED" })
-      )
-    );
-    invalidate();
-    toast.success("הקצאות VIP בוטלו");
-  };
-
+  // ── Guard ──────────────────────────────────────────────────────────────────
   if (!profile) {
     return (
       <div className="text-center py-12 text-slate-400 text-sm">
@@ -447,11 +194,16 @@ export default function SleepingAllocationTab({ groupId }) {
   }
 
   const studentNeighborhoods = neighborhoods.filter(n => !n.is_vip);
-  const vipNeighborhoods     = neighborhoods.filter(n => n.is_vip);
+  const vipNeighborhood      = neighborhoods.find(n => n.is_vip);
+  const vipTents             = vipNeighborhood
+    ? allTents.filter(t => t.neighborhood_id === vipNeighborhood.id && t.working_status === "WORKING")
+    : [];
+  const vipRows              = parseDist(profile.vip_tent_requirements_json);
 
   return (
     <div className="space-y-6" dir="rtl">
 
+      {/* Requirements summary */}
       <SleepingRequirementsSummary
         profile={{ ...profile, arrival_date: arrivalDate, departure_date: departureDate }}
         allocations={myAllocations}
@@ -460,6 +212,7 @@ export default function SleepingAllocationTab({ groupId }) {
         neighborhoods={neighborhoods}
       />
 
+      {/* Date range */}
       {arrivalDate && (
         <div className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
           📅 תאריכי לינה: <strong>{arrivalDate}</strong> — <strong>{departureDate}</strong>
@@ -467,7 +220,7 @@ export default function SleepingAllocationTab({ groupId }) {
         </div>
       )}
 
-      {/* ── חניכים ── */}
+      {/* ── STUDENT NEIGHBORHOODS ── */}
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold text-slate-700">שיבוץ לפי שכונות — חניכים</h3>
@@ -528,95 +281,40 @@ export default function SleepingAllocationTab({ groupId }) {
         })}
       </section>
 
-      {/* ── VIP ── */}
-      <section className="space-y-3">
-        <h3 className="text-sm font-semibold text-slate-700">שיבוץ VIP לפי אוהלים בודדים</h3>
-        <p className="text-[11px] text-slate-500">
-          אוהלי VIP (80–89) — לחץ על כל ריבוע כדי לשבץ אוהל ספציפי. קבוצות שונות יכולות להשתמש באוהלי VIP שונים בתאריכים חופפים.
-        </p>
+      {/* ── VIP ALLOCATION ── */}
+      {vipRows.length > 0 && (
+        <section className="space-y-3">
+          <h3 className="text-sm font-semibold text-slate-700">שיבוץ VIP</h3>
+          <p className="text-[11px] text-slate-500">
+            שייך כל דרישת VIP לאוהל ספציפי (80–89). לחץ על דרישה ← לאחר מכן על אוהל.
+          </p>
 
-        {serverErrors.length > 0 && (
-          <div className="bg-red-50 border border-red-300 rounded-xl px-4 py-3 space-y-1">
-            <p className="text-sm font-semibold text-red-700 flex items-center gap-1.5">
-              <AlertTriangle className="w-4 h-4" /> שגיאות אישור:
+          {!arrivalDate && (
+            <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              ⚠️ תאריכי לינה לא הוגדרו — לא ניתן לבדוק זמינות.
             </p>
-            {serverErrors.map((e, i) => <p key={i} className="text-xs text-red-600">• {e}</p>)}
-          </div>
-        )}
+          )}
 
-        {vipNeighborhoods.map(hood => {
-          const hoodTents = allTents.filter(t => t.neighborhood_id === hood.id && t.working_status === "WORKING");
-          return (
-            <VipTentPickerGrid
-              key={hood.id}
-              tents={hoodTents}
-              neighborhood={hood}
-              vipRows={parseDist(profile.vip_tent_requirements_json)}
-              conflictMap={vipTentConflictMap}
-              myAllocByTent={myVipAllocByTent}
-              onPickTent={(vipRow, rowIndex) => setPickingVipRow({ vipRow, rowIndex, hood, hoodTents })}
-            />
-          );
-        })}
-
-        {vipNeighborhoods.length > 0 && (
-          <div className="flex flex-wrap gap-2 pt-1">
-            {hasDraftVip && (
-              <Button
-                size="sm"
-                onClick={handleConfirmVip}
-                disabled={confirming || myVipDraftConflictTentIds.size > 0}
-                className="gap-1.5 bg-emerald-700 hover:bg-emerald-800"
-              >
-                <ShieldCheck className="w-4 h-4" />
-                {confirming ? "מאשר..." : "אשר הקצאות VIP"}
-              </Button>
-            )}
-            {myVipDraftConflictTentIds.size > 0 && (
-              <p className="text-xs text-red-600 flex items-center gap-1">
-                <AlertTriangle className="w-3.5 h-3.5" /> יש קונפליקטים — לא ניתן לאשר
-              </p>
-            )}
-            {myAllocations.some(a => {
-              const tent = allTents.find(t => t.id === a.tent_id);
-              const hood = neighborhoods.find(n => n.id === tent?.neighborhood_id);
-              return a.status !== "CANCELLED" && hood?.is_vip;
-            }) && (
-              <Button size="sm" variant="outline" onClick={handleCancelAllVip} className="text-red-600 border-red-200 hover:bg-red-50">
-                בטל הכל
-              </Button>
-            )}
-          </div>
-        )}
-      </section>
-
-      {/* VIP: בחר אוהל */}
-      {pickingVipRow && (
-        <VipTentPickModal
-          vipRow={pickingVipRow.vipRow}
-          hood={pickingVipRow.hood}
-          hoodTents={pickingVipRow.hoodTents}
-          conflictMap={vipTentConflictMap}
-          myAllocByTent={myVipAllocByTent}
-          onSelectTent={(tent) => {
-            setPickingVipRow(null);
-            setAllocateTentTarget({ tent, neighborhood: pickingVipRow.hood });
-          }}
-          onClose={() => setPickingVipRow(null)}
-        />
+          <VipAllocationPanel
+            vipRows={vipRows}
+            vipTents={vipTents}
+            vipNeighborhoodId={vipNeighborhood?.id}
+            conflictMap={vipTentConflictMap}
+            myAllocations={myAllocations}
+            profile={{ ...profile, arrival_date: arrivalDate, departure_date: departureDate }}
+            groupId={groupId}
+            onInvalidate={invalidate}
+          />
+        </section>
       )}
 
-      {/* הקצאת אוהל VIP */}
-      {allocateTentTarget && (
-        <TentAllocationModal
-          tent={allocateTentTarget.tent}
-          neighborhood={allocateTentTarget.neighborhood}
-          groupId={groupId}
-          profile={{ ...profile, arrival_date: arrivalDate, departure_date: departureDate }}
-          onSave={handleSaveVipDraft}
-          onClose={() => setAllocateTentTarget(null)}
-        />
+      {vipRows.length === 0 && vipTents.length > 0 && (
+        <section>
+          <h3 className="text-sm font-semibold text-slate-700 mb-1">שיבוץ VIP</h3>
+          <p className="text-xs text-slate-400 italic">לא הוגדרו דרישות VIP לקבוצה זו.</p>
+        </section>
       )}
+
     </div>
   );
 }
