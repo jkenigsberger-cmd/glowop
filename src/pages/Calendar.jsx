@@ -11,12 +11,11 @@ import CalendarEventModal from "../components/calendar/CalendarEventModal.jsx";
 moment.locale("he");
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
-
 const fmt = (d) => moment(d).format("YYYY-MM-DD");
 const isSameDay = (a, b) => fmt(a) === fmt(b);
 
 function getWeekDates(pivot) {
-  const start = moment(pivot).startOf("isoWeek"); // Monday
+  const start = moment(pivot).startOf("isoWeek");
   return Array.from({ length: 7 }, (_, i) => start.clone().add(i, "days"));
 }
 
@@ -32,54 +31,32 @@ function getMonthDates(pivot) {
   return days;
 }
 
-// ─── Event builders ───────────────────────────────────────────────────────────
-
+// ─── Event builders (UNCHANGED logic) ────────────────────────────────────────
 function buildGroupEvents(groups) {
   const events = [];
   groups.forEach((g) => {
     if (!g.arrival_date || !g.departure_date) return;
     const arr = moment(g.arrival_date);
     const dep = moment(g.departure_date);
-
-    // Check-in
     events.push({
-      id: `ci-${g.id}`,
-      eventType: "groupStayCheckIn",
-      date: fmt(arr),
-      groupId: g.id,
-      groupName: g.group_name,
-      pax: g.total_pax,
-      label: `✓ ${g.group_name}`,
-      chipCls: "bg-emerald-500 text-white",
+      id: `ci-${g.id}`, eventType: "groupStayCheckIn", date: fmt(arr),
+      groupId: g.id, groupName: g.group_name, pax: g.total_pax,
+      label: `✓ ${g.group_name}`, chipCls: "bg-emerald-500 text-white",
     });
-
-    // Sleeping nights (day after arrival up to but NOT including departure)
     let cur = arr.clone().add(1, "day");
     while (cur.isBefore(dep, "day")) {
       events.push({
-        id: `sl-${g.id}-${fmt(cur)}`,
-        eventType: "groupStaySleeping",
-        date: fmt(cur),
-        groupId: g.id,
-        groupName: g.group_name,
-        pax: g.total_pax,
-        label: `🌙 ${g.group_name}`,
-        chipCls: "bg-blue-500 text-white",
+        id: `sl-${g.id}-${fmt(cur)}`, eventType: "groupStaySleeping", date: fmt(cur),
+        groupId: g.id, groupName: g.group_name, pax: g.total_pax,
+        label: `🌙 ${g.group_name}`, chipCls: "bg-blue-500 text-white",
       });
       cur.add(1, "day");
     }
-
-    // Check-out (only if departure > arrival — not same-day)
     if (dep.isAfter(arr, "day")) {
       events.push({
-        id: `co-${g.id}`,
-        eventType: "groupStayCheckOut",
-        date: fmt(dep),
-        groupId: g.id,
-        groupName: g.group_name,
-        pax: g.total_pax,
-        label: `↑ ${g.group_name}`,
-        chipCls: "bg-orange-500 text-white",
+        id: `co-${g.id}`, eventType: "groupStayCheckOut", date: fmt(dep),
+        groupId: g.id, groupName: g.group_name, pax: g.total_pax,
+        label: `↑ ${g.group_name}`, chipCls: "bg-orange-500 text-white",
       });
     }
   });
@@ -87,86 +64,86 @@ function buildGroupEvents(groups) {
 }
 
 function buildMealEvents(meals, groupById) {
-  return meals
-    .filter((m) => m.status === "ACTIVE")
-    .map((m) => {
-      const g = groupById[m.group_id];
-      return {
-        id: `meal-${m.id}`,
-        eventType: "meal",
-        date: fmt(moment(m.date)),
-        groupId: m.group_id,
-        groupName: g?.group_name || "—",
-        pax: m.pax,
-        mealType: m.meal_type,
-        timeRange: m.start_time && m.end_time ? `${m.start_time}–${m.end_time}` : null,
-        sandwichOption: m.sandwich_option,
-        specialDietsSummary: m.special_diets_summary,
-        label: `🍽 ${m.meal_type} · ${g?.group_name || ""}`,
-        chipCls: "bg-amber-400 text-white",
-      };
-    });
+  return meals.filter((m) => m.status === "ACTIVE").map((m) => {
+    const g = groupById[m.group_id];
+    return {
+      id: `meal-${m.id}`, eventType: "meal", date: fmt(moment(m.date)),
+      groupId: m.group_id, groupName: g?.group_name || "—", pax: m.pax,
+      mealType: m.meal_type, timeRange: m.start_time && m.end_time ? `${m.start_time}–${m.end_time}` : null,
+      sandwichOption: m.sandwich_option, specialDietsSummary: m.special_diets_summary,
+      label: `🍽 ${m.meal_type} · ${g?.group_name || ""}`, chipCls: "bg-amber-400 text-white",
+    };
+  });
 }
 
 function buildActivityEvents(items, groupById, spaceById) {
-  return items
-    .filter((i) => i.status === "ACTIVE" && i.activity_space_id)
-    .map((i) => {
-      const g = groupById[i.group_id];
-      const s = spaceById[i.activity_space_id];
-      return {
-        id: `act-${i.id}`,
-        eventType: "activity",
-        date: fmt(moment(i.date)),
-        groupId: i.group_id,
-        groupName: g?.group_name || "—",
-        pax: i.pax,
-        activityName: i.activity_name,
-        spaceName: s?.name || s?.code || "—",
-        timeRange: i.start_time && i.end_time ? `${i.start_time}–${i.end_time}` : null,
-        notes: i.notes,
-        label: `🏃 ${i.activity_name}`,
-        chipCls: "bg-purple-500 text-white",
-      };
-    });
+  return items.filter((i) => i.status === "ACTIVE" && i.activity_space_id).map((i) => {
+    const g = groupById[i.group_id];
+    const s = spaceById[i.activity_space_id];
+    return {
+      id: `act-${i.id}`, eventType: "activity", date: fmt(moment(i.date)),
+      groupId: i.group_id, groupName: g?.group_name || "—", pax: i.pax,
+      activityName: i.activity_name, spaceName: s?.name || s?.code || "—",
+      timeRange: i.start_time && i.end_time ? `${i.start_time}–${i.end_time}` : null,
+      notes: i.notes, label: `🏃 ${i.activity_name}`, chipCls: "bg-purple-500 text-white",
+    };
+  });
 }
 
 function buildHoldEvents(holds, groupById) {
   const events = [];
-  holds
-    .filter((h) => h.status === "ACTIVE")
-    .forEach((h) => {
-      if (!h.arrival_date) return;
-      const arr = moment(h.arrival_date);
-      const dep = h.departure_date ? moment(h.departure_date) : arr.clone();
-      const g = groupById[h.group_id];
-      let cur = arr.clone();
-      while (cur.isSameOrBefore(dep, "day")) {
-        events.push({
-          id: `hold-${h.id}-${fmt(cur)}`,
-          eventType: "operationalHold",
-          date: fmt(cur),
-          groupId: h.group_id,
-          groupName: g?.group_name || "—",
-          pax: h.total_pax,
-          label: `⟳ ${g?.group_name || "Hold"}`,
-          chipCls: "bg-slate-300 text-slate-700 border border-dashed border-slate-500",
-        });
-        cur.add(1, "day");
-      }
-    });
+  holds.filter((h) => h.status === "ACTIVE").forEach((h) => {
+    if (!h.arrival_date) return;
+    const arr = moment(h.arrival_date);
+    const dep = h.departure_date ? moment(h.departure_date) : arr.clone();
+    const g = groupById[h.group_id];
+    let cur = arr.clone();
+    while (cur.isSameOrBefore(dep, "day")) {
+      events.push({
+        id: `hold-${h.id}-${fmt(cur)}`, eventType: "operationalHold", date: fmt(cur),
+        groupId: h.group_id, groupName: g?.group_name || "—", pax: h.total_pax,
+        label: `⟳ ${g?.group_name || "Hold"}`, chipCls: "bg-slate-300 text-slate-700 border border-dashed border-slate-500",
+      });
+      cur.add(1, "day");
+    }
+  });
   return events;
 }
 
-// ─── Event chip ───────────────────────────────────────────────────────────────
+// ─── Legend ───────────────────────────────────────────────────────────────────
+const LEGEND_ITEMS = [
+  { cls: "bg-emerald-500", label: "צ׳ק-אין" },
+  { cls: "bg-blue-500",    label: "לינה" },
+  { cls: "bg-orange-500",  label: "צ׳ק-אאוט" },
+  { cls: "bg-amber-400",   label: "ארוחה" },
+  { cls: "bg-purple-500",  label: "פעילות" },
+  { cls: "bg-slate-300 border border-dashed border-slate-400", label: "Hold" },
+];
 
-function EventChip({ event, onClick }) {
+function Legend() {
+  return (
+    <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-slate-600 bg-white border border-slate-100 rounded-lg px-4 py-2.5">
+      {LEGEND_ITEMS.map((item) => (
+        <div key={item.label} className="flex items-center gap-1.5">
+          <span className={cn("inline-block w-3 h-3 rounded shrink-0", item.cls)} />
+          <span>{item.label}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MONTH VIEW — compact grid
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function MonthEventChip({ event, onClick }) {
   return (
     <button
       type="button"
       onClick={() => onClick(event)}
       className={cn(
-        "w-full text-right text-[10px] leading-tight rounded px-1 py-0.5 truncate font-medium cursor-pointer hover:opacity-80 transition-opacity",
+        "w-full text-right text-[10px] leading-tight rounded px-1 py-0.5 truncate font-medium hover:opacity-80 transition-opacity",
         event.chipCls
       )}
       title={event.label}
@@ -176,76 +153,230 @@ function EventChip({ event, onClick }) {
   );
 }
 
-// ─── Day Cell ─────────────────────────────────────────────────────────────────
-
-function DayCell({ date, events, onClick, isCurrentMonth }) {
+function MonthDayCell({ date, events, onClick, isCurrentMonth }) {
   const isToday = isSameDay(date, moment());
   const dayEvents = events.filter((e) => e.date === fmt(date));
+  const visible = dayEvents.slice(0, 3);
+  const overflow = dayEvents.length - 3;
 
   return (
-    <div
-      className={cn(
-        "min-h-[90px] p-1 flex flex-col gap-0.5 bg-white border-b border-r border-slate-100",
-        !isCurrentMonth && "bg-slate-50",
-      )}
-    >
-      <span
-        className={cn(
-          "text-xs font-semibold self-end leading-none mb-0.5",
-          isToday
-            ? "bg-primary text-white w-5 h-5 rounded-full flex items-center justify-center text-[10px]"
-            : "text-slate-500"
-        )}
-      >
+    <div className={cn(
+      "min-h-[88px] p-1 flex flex-col gap-0.5 border-b border-r border-slate-100",
+      isCurrentMonth ? "bg-white" : "bg-slate-50/60",
+    )}>
+      <span className={cn(
+        "text-[11px] font-semibold self-end leading-none mb-0.5",
+        isToday
+          ? "bg-primary text-white w-5 h-5 rounded-full flex items-center justify-center text-[10px]"
+          : isCurrentMonth ? "text-slate-600" : "text-slate-300"
+      )}>
         {date.format("D")}
       </span>
-
       <div className="flex flex-col gap-0.5 overflow-hidden">
-        {dayEvents.slice(0, 4).map((ev) => (
-          <EventChip key={ev.id} event={ev} onClick={onClick} />
+        {visible.map((ev) => (
+          <MonthEventChip key={ev.id} event={ev} onClick={onClick} />
         ))}
-        {dayEvents.length > 4 && (
-          <span className="text-[10px] text-slate-400 px-1">+{dayEvents.length - 4} נוספים</span>
+        {overflow > 0 && (
+          <span className="text-[10px] text-slate-400 px-1 font-medium">+{overflow} עוד</span>
         )}
       </div>
     </div>
   );
 }
 
-// ─── Legend ───────────────────────────────────────────────────────────────────
+const HEB_DAYS = ["שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת", "ראשון"];
 
-function Legend() {
-  const items = [
-    { cls: "bg-emerald-500", label: "צ׳ק-אין" },
-    { cls: "bg-blue-500",    label: "לינה" },
-    { cls: "bg-orange-500",  label: "צ׳ק-אאוט" },
-    { cls: "bg-amber-400",   label: "ארוחה" },
-    { cls: "bg-purple-500",  label: "פעילות" },
-    { cls: "bg-slate-300 border border-dashed border-slate-500", label: "Hold" },
-  ];
+function MonthView({ dates, allEvents, pivot, onClick }) {
+  const currentMonth = pivot.month();
   return (
-    <div className="flex flex-wrap gap-3 text-xs text-slate-600">
-      {items.map((item) => (
-        <div key={item.label} className="flex items-center gap-1">
-          <span className={cn("inline-block w-3 h-3 rounded-sm shrink-0", item.cls)} />
-          {item.label}
+    <div className="rounded-xl overflow-hidden border border-slate-200 shadow-sm">
+      <div className="grid grid-cols-7 bg-slate-50 border-b border-slate-200">
+        {HEB_DAYS.map((d) => (
+          <div key={d} className="text-center text-xs font-semibold text-slate-500 py-2.5 border-r border-slate-100 last:border-r-0">
+            {d}
+          </div>
+        ))}
+      </div>
+      {Array.from({ length: dates.length / 7 }, (_, wi) => (
+        <div key={wi} className="grid grid-cols-7">
+          {dates.slice(wi * 7, wi * 7 + 7).map((date) => (
+            <MonthDayCell
+              key={date.toISOString()}
+              date={date}
+              events={allEvents}
+              onClick={onClick}
+              isCurrentMonth={date.month() === currentMonth}
+            />
+          ))}
         </div>
       ))}
     </div>
   );
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// WEEK VIEW — spacious operational board
+// ═══════════════════════════════════════════════════════════════════════════════
 
-const HEB_DAYS_WEEK  = ["שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת", "ראשון"];
-const HEB_DAYS_MONTH = ["שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת", "ראשון"];
+const EVENT_TYPE_CONFIG = {
+  groupStayCheckIn:  { label: "צ׳ק-אין",   bg: "bg-emerald-50", border: "border-emerald-300", dot: "bg-emerald-500", text: "text-emerald-800", badge: "bg-emerald-500 text-white", emoji: "✓" },
+  groupStaySleeping: { label: "לינה",       bg: "bg-blue-50",    border: "border-blue-300",    dot: "bg-blue-500",    text: "text-blue-800",    badge: "bg-blue-500 text-white",    emoji: "🌙" },
+  groupStayCheckOut: { label: "צ׳ק-אאוט",  bg: "bg-orange-50",  border: "border-orange-300",  dot: "bg-orange-500",  text: "text-orange-800",  badge: "bg-orange-500 text-white",  emoji: "↑" },
+  meal:              { label: "ארוחה",      bg: "bg-amber-50",   border: "border-amber-300",   dot: "bg-amber-400",   text: "text-amber-800",   badge: "bg-amber-400 text-white",   emoji: "🍽" },
+  activity:          { label: "פעילות",     bg: "bg-purple-50",  border: "border-purple-300",  dot: "bg-purple-500",  text: "text-purple-800",  badge: "bg-purple-500 text-white",  emoji: "🏃" },
+  operationalHold:   { label: "Hold",       bg: "bg-slate-50",   border: "border-slate-300 border-dashed", dot: "bg-slate-400", text: "text-slate-600", badge: "bg-slate-200 text-slate-700", emoji: "⟳" },
+};
+
+const MEAL_TYPE_HEB = { BREAKFAST: "בוקר", LUNCH: "צהריים", DINNER: "ערב", OTHER: "אחר" };
+
+const GROUP_ORDER = ["groupStayCheckIn", "groupStaySleeping", "groupStayCheckOut", "meal", "activity", "operationalHold"];
+
+function WeekEventCard({ event, onClick }) {
+  const cfg = EVENT_TYPE_CONFIG[event.eventType] || EVENT_TYPE_CONFIG.meal;
+  return (
+    <button
+      type="button"
+      onClick={() => onClick(event)}
+      className={cn(
+        "w-full text-right rounded-lg border px-3 py-2 flex flex-col gap-1 hover:shadow-md transition-all cursor-pointer",
+        cfg.bg, cfg.border
+      )}
+    >
+      {/* Top row: badge + group name */}
+      <div className="flex items-start justify-between gap-1">
+        <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0", cfg.badge)}>
+          {cfg.emoji} {cfg.label}
+        </span>
+        {event.pax && (
+          <span className="text-[10px] text-slate-400 font-medium shrink-0">{event.pax} 👤</span>
+        )}
+      </div>
+      {/* Group name */}
+      <span className={cn("text-sm font-semibold leading-tight text-right", cfg.text)}>
+        {event.groupName}
+      </span>
+      {/* Sub-details */}
+      <div className="flex flex-wrap gap-1 items-center">
+        {event.timeRange && (
+          <span className="text-[10px] text-slate-500 bg-white border border-slate-200 rounded px-1.5 py-0.5">
+            {event.timeRange}
+          </span>
+        )}
+        {event.mealType && (
+          <span className="text-[10px] text-amber-700 font-medium">
+            {MEAL_TYPE_HEB[event.mealType] || event.mealType}
+          </span>
+        )}
+        {event.activityName && (
+          <span className="text-[10px] text-purple-700 font-medium truncate max-w-[120px]">
+            {event.activityName}
+          </span>
+        )}
+        {event.spaceName && (
+          <span className="text-[10px] text-slate-400">📍 {event.spaceName}</span>
+        )}
+      </div>
+    </button>
+  );
+}
+
+function WeekDayColumn({ date, events, onClick }) {
+  const isToday = isSameDay(date, moment());
+  const dayEvents = events.filter((e) => e.date === fmt(date));
+
+  // Group by event type in specified order
+  const grouped = GROUP_ORDER.reduce((acc, type) => {
+    const group = dayEvents.filter((e) => e.eventType === type);
+    if (group.length > 0) acc.push({ type, events: group });
+    return acc;
+  }, []);
+
+  const totalCount = dayEvents.length;
+
+  return (
+    <div className={cn(
+      "flex flex-col min-h-[500px] border-r border-slate-200 last:border-r-0",
+      isToday ? "bg-blue-50/30" : "bg-white"
+    )}>
+      {/* Day header */}
+      <div className={cn(
+        "px-3 py-3 border-b text-center sticky top-0 z-10",
+        isToday ? "bg-primary text-primary-foreground border-primary/30" : "bg-slate-50 border-slate-200 text-slate-600"
+      )}>
+        <div className={cn("text-xs font-semibold uppercase tracking-wide", isToday ? "text-primary-foreground/80" : "text-slate-400")}>
+          {date.format("dddd")}
+        </div>
+        <div className={cn("text-2xl font-bold leading-tight mt-0.5", isToday ? "text-white" : "text-slate-800")}>
+          {date.format("D")}
+        </div>
+        <div className={cn("text-[10px] mt-0.5", isToday ? "text-primary-foreground/70" : "text-slate-400")}>
+          {date.format("MMM")}
+        </div>
+        {totalCount > 0 && (
+          <div className={cn(
+            "text-[10px] font-semibold mt-1.5 rounded-full px-2 py-0.5 inline-block",
+            isToday ? "bg-white/20 text-white" : "bg-slate-200 text-slate-600"
+          )}>
+            {totalCount} אירועים
+          </div>
+        )}
+      </div>
+
+      {/* Events */}
+      <div className="flex-1 p-2 space-y-3 overflow-y-auto">
+        {grouped.length === 0 && (
+          <div className="flex items-center justify-center h-24 text-slate-300 text-xs">
+            —
+          </div>
+        )}
+        {grouped.map(({ type, events: group }) => {
+          const cfg = EVENT_TYPE_CONFIG[type] || EVENT_TYPE_CONFIG.meal;
+          return (
+            <div key={type} className="space-y-1.5">
+              {/* Group label */}
+              <div className="flex items-center gap-1.5 px-1">
+                <span className={cn("w-2 h-2 rounded-full shrink-0", cfg.dot)} />
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">{cfg.label}</span>
+                <div className="flex-1 h-px bg-slate-100" />
+              </div>
+              {/* Cards */}
+              {group.map((ev) => (
+                <WeekEventCard key={ev.id} event={ev} onClick={onClick} />
+              ))}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function WeekView({ dates, allEvents, onClick }) {
+  return (
+    <div className="rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+      <div className="grid grid-cols-7">
+        {dates.map((date) => (
+          <WeekDayColumn
+            key={date.toISOString()}
+            date={date}
+            events={allEvents}
+            onClick={onClick}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Main Page
+// ═══════════════════════════════════════════════════════════════════════════════
 
 export default function Calendar() {
   const [pivot, setPivot]       = useState(moment());
-  const [view, setView]         = useState("week"); // "week" | "month"
+  const [view, setView]         = useState("week");
   const [selected, setSelected] = useState(null);
 
-  // ── Queries ────────────────────────────────────────────────────────────────
   const { data: groups = [] } = useQuery({
     queryKey: ["cal-groups"],
     queryFn: () => base44.entities.Group.list("-arrival_date", 500),
@@ -267,11 +398,9 @@ export default function Calendar() {
     queryFn: () => base44.entities.OperationalHold.filter({ status: "ACTIVE" }),
   });
 
-  // ── Lookup maps ────────────────────────────────────────────────────────────
   const groupById = useMemo(() => Object.fromEntries(groups.map((g) => [g.id, g])), [groups]);
   const spaceById = useMemo(() => Object.fromEntries(activitySpaces.map((s) => [s.id, s])), [activitySpaces]);
 
-  // ── All events ────────────────────────────────────────────────────────────
   const allEvents = useMemo(() => [
     ...buildGroupEvents(groups),
     ...buildMealEvents(meals, groupById),
@@ -279,13 +408,11 @@ export default function Calendar() {
     ...buildHoldEvents(holds, groupById),
   ], [groups, meals, scheduleItems, activitySpaces, holds, groupById, spaceById]);
 
-  // ── Displayed dates ───────────────────────────────────────────────────────
   const dates = useMemo(
     () => view === "week" ? getWeekDates(pivot) : getMonthDates(pivot),
     [pivot, view]
   );
 
-  // ── Navigation ────────────────────────────────────────────────────────────
   const go = (dir) => setPivot((p) => p.clone().add(dir, view === "week" ? "week" : "month"));
   const goToday = () => setPivot(moment());
 
@@ -293,14 +420,9 @@ export default function Calendar() {
     ? `${dates[0].format("D MMM")} – ${dates[6].format("D MMM YYYY")}`
     : pivot.format("MMMM YYYY");
 
-  // ── Week header labels (Mon → Sun) ────────────────────────────────────────
-  const headerDays = HEB_DAYS_WEEK;
-
-  const currentMonth = pivot.month();
-
   return (
     <div className="min-h-screen bg-background" dir="rtl">
-      <div className="max-w-7xl mx-auto px-2 sm:px-6 py-6 space-y-4">
+      <div className="max-w-[1400px] mx-auto px-3 sm:px-6 py-6 space-y-4">
 
         {/* Page header */}
         <div>
@@ -323,51 +445,27 @@ export default function Calendar() {
             <Button size="sm" variant="outline" onClick={() => go(1)}>
               <ChevronLeft className="w-4 h-4" />
             </Button>
-            <span className="text-sm font-semibold text-slate-700 mr-2">{titleStr}</span>
+            <span className="text-base font-bold text-slate-700 mr-2">{titleStr}</span>
           </div>
           <div className="flex items-center gap-1">
-            <Button
-              size="sm"
-              variant={view === "week" ? "default" : "outline"}
-              onClick={() => setView("week")}
-            >שבוע</Button>
-            <Button
-              size="sm"
-              variant={view === "month" ? "default" : "outline"}
-              onClick={() => setView("month")}
-            >חודש</Button>
+            <Button size="sm" variant={view === "week" ? "default" : "outline"} onClick={() => setView("week")}>
+              שבוע
+            </Button>
+            <Button size="sm" variant={view === "month" ? "default" : "outline"} onClick={() => setView("month")}>
+              חודש
+            </Button>
           </div>
         </div>
 
         {/* Legend */}
         <Legend />
 
-        {/* Grid */}
-        <div className="rounded-lg overflow-hidden border border-slate-200">
-          {/* Day headers */}
-          <div className="grid grid-cols-7 bg-slate-50 border-b border-slate-200">
-            {headerDays.map((d) => (
-              <div key={d} className="text-center text-xs font-semibold text-slate-500 py-2 border-r border-slate-100 last:border-r-0">
-                {d}
-              </div>
-            ))}
-          </div>
-
-          {/* Week(s) rows */}
-          {Array.from({ length: dates.length / 7 }, (_, wi) => (
-            <div key={wi} className="grid grid-cols-7">
-              {dates.slice(wi * 7, wi * 7 + 7).map((date) => (
-                <DayCell
-                  key={date.toISOString()}
-                  date={date}
-                  events={allEvents}
-                  onClick={setSelected}
-                  isCurrentMonth={view === "week" || date.month() === currentMonth}
-                />
-              ))}
-            </div>
-          ))}
-        </div>
+        {/* Calendar body — separate components per view */}
+        {view === "week" ? (
+          <WeekView dates={dates} allEvents={allEvents} onClick={setSelected} />
+        ) : (
+          <MonthView dates={dates} allEvents={allEvents} pivot={pivot} onClick={setSelected} />
+        )}
 
       </div>
 
