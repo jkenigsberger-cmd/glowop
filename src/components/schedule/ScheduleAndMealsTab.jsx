@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, RefreshCw, CalendarDays, UtensilsCrossed } from "lucide-react";
+import { Plus, RefreshCw, CalendarDays, UtensilsCrossed, GitBranch, X, Shuffle } from "lucide-react";
 import { toast } from "sonner";
 import ScheduleItemRow from "./ScheduleItemRow";
 import MealReservationRow from "./MealReservationRow";
@@ -59,6 +59,13 @@ const EMPTY_SCHEDULE = {
   quote_item_id: null, pax: "", notes: ""
 };
 
+function autoDividePax(total, n) {
+  if (!total || !n) return Array(n).fill("");
+  const base = Math.floor(total / n);
+  const remainder = total % n;
+  return Array.from({ length: n }, (_, i) => (i < remainder ? base + 1 : base));
+}
+
 const EMPTY_MEAL = (type = "BREAKFAST") => ({
   date: "",
   meal_type: type,
@@ -77,8 +84,12 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
   const [newMeal, setNewMeal] = useState(EMPTY_MEAL());
   const [newScheduleError, setNewScheduleError] = useState(null);
 
-  // Custom activity name input toggle
-  const [customActivityName, setCustomActivityName] = useState(false);
+  // Split state for the "הוסף פעילות" form
+  const [splitEnabled, setSplitEnabled] = useState(false);
+  const [splitRows, setSplitRows] = useState([
+    { activity_space_id: "", pax: "" },
+    { activity_space_id: "", pax: "" },
+  ]);
 
   const profileId = profile?.id;
   const arrivalDate   = group?.arrival_date   || "";
@@ -183,7 +194,6 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
       });
       if (res.data?.error) { setNewScheduleError(res.data.error); return; }
       setNewSchedule(EMPTY_SCHEDULE);
-      setCustomActivityName(false);
       setAddingSchedule(false);
       invalidate();
       toast.success("פעילות נוספה");
@@ -191,6 +201,70 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
       invalidate(); // refetch so rollback-cancelled items don't appear as active
       const msg = err?.response?.data?.error || err?.message || "השמירה נכשלה. הנתונים רועננו, נסה שוב.";
       setNewScheduleError(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ── Split save handler ─────────────────────────────────────────────────────
+  const handleAddSplitSchedule = async () => {
+    setNewScheduleError(null);
+    const dateErr = validateScheduleDate(newSchedule.date);
+    if (dateErr) { setNewScheduleError(dateErr); return; }
+    if (!newSchedule.start_time || !newSchedule.end_time || newSchedule.start_time >= newSchedule.end_time) {
+      setNewScheduleError("שעת הסיום חייבת להיות אחרי שעת ההתחלה"); return;
+    }
+    if (splitRows.length < 2) { setNewScheduleError("יש לבחור לפחות 2 מרחבים"); return; }
+    for (let i = 0; i < splitRows.length; i++) {
+      if (!splitRows[i].activity_space_id) { setNewScheduleError(`יש לבחור מרחב לשורה ${i + 1}`); return; }
+    }
+    const ids = splitRows.map(r => r.activity_space_id);
+    if (new Set(ids).size !== ids.length) { setNewScheduleError("לא ניתן לבחור את אותו מרחב פעמיים"); return; }
+
+    setSaving(true);
+    const splitGroupId = crypto.randomUUID();
+    const createdIds = [];
+    try {
+      for (let i = 0; i < splitRows.length; i++) {
+        const row = splitRows[i];
+        const res = await base44.functions.invoke("saveGroupScheduleItem", {
+          group_id: groupId,
+          operational_group_profile_id: profileId,
+          date: newSchedule.date,
+          start_time: newSchedule.start_time,
+          end_time: newSchedule.end_time,
+          activity_name: newSchedule.activity_name,
+          activity_space_id: row.activity_space_id || null,
+          quote_item_id: newSchedule.quote_item_id,
+          pax: row.pax ? Number(row.pax) : null,
+          notes: newSchedule.notes || null,
+          split_group_id: splitGroupId,
+          split_index: i + 1,
+          split_total: splitRows.length,
+          source: "manual",
+          status: "ACTIVE",
+        });
+        if (res.data?.error) {
+          for (const cid of createdIds) {
+            await base44.entities.GroupScheduleItem.update(cid, { status: "CANCELLED" }).catch(() => {});
+          }
+          setNewScheduleError(`שגיאה במרחב ${i + 1}: ${res.data.error}`);
+          setSaving(false);
+          return;
+        }
+        createdIds.push(res.data.item.id);
+      }
+      toast.success(`שיבוץ מפוצל נשמר — ${splitRows.length} מרחבים`);
+      setNewSchedule(EMPTY_SCHEDULE);
+      setSplitEnabled(false);
+      setSplitRows([{ activity_space_id: "", pax: "" }, { activity_space_id: "", pax: "" }]);
+      setAddingSchedule(false);
+      invalidate();
+    } catch (err) {
+      for (const cid of createdIds) {
+        await base44.entities.GroupScheduleItem.update(cid, { status: "CANCELLED" }).catch(() => {});
+      }
+      setNewScheduleError(err?.response?.data?.error || err?.message || "שגיאה בשמירה — הפעולה בוטלה");
     } finally {
       setSaving(false);
     }
@@ -329,6 +403,52 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
               <p className="text-xs text-slate-400">תאריכים מותרים: {arrivalDate} עד {departureDate}</p>
             )}
             <div className="grid grid-cols-2 gap-3">
+
+              {/* Quote talk selector — first, drives auto-fill */}
+              {quoteTalks.length > 0 && (
+                <div className="space-y-1 col-span-2">
+                  <label className="text-xs text-slate-500">פעילות מתוך הצעת המחיר</label>
+                  <Select
+                    value={newSchedule.quote_item_id || "none"}
+                    onValueChange={v => {
+                      if (v === "none") {
+                        setNewSchedule(s => ({ ...s, quote_item_id: null }));
+                        setSplitEnabled(false);
+                      } else {
+                        const talk = quoteTalks.find(t => t.quote_item_id === v);
+                        setNewSchedule(s => ({ ...s, quote_item_id: v, activity_name: talk?.name || s.activity_name }));
+                      }
+                    }}
+                  >
+                    <SelectTrigger><SelectValue placeholder="— פעילות רגילה / לא מתוך הצעה —" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">— פעילות רגילה / לא מתוך הצעה —</SelectItem>
+                      {quoteTalks.map(t => (
+                        <SelectItem key={t.quote_item_id} value={t.quote_item_id}>
+                          {t.type}: {t.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {/* Activity name */}
+              <div className="space-y-1 col-span-2">
+                <label className="text-xs text-slate-500">
+                  {newSchedule.quote_item_id ? "שם הפעילות" : "שם / סוג פעילות *"}
+                </label>
+                <Input
+                  value={newSchedule.activity_name}
+                  onChange={e => setNewSchedule(s => ({ ...s, activity_name: e.target.value }))}
+                  placeholder="שם הפעילות"
+                />
+                {newSchedule.quote_item_id && (
+                  <p className="text-[11px] text-slate-400">נמלא אוטומטית לפי ההצעה, ניתן לערוך</p>
+                )}
+              </div>
+
+              {/* Date */}
               <div className="space-y-1">
                 <label className="text-xs text-slate-500">תאריך *</label>
                 <Input
@@ -339,42 +459,15 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
                   onChange={e => setNewSchedule(s => ({ ...s, date: e.target.value }))}
                 />
               </div>
-              <div className="space-y-1">
-                <label className="text-xs text-slate-500">שם / סוג פעילות *</label>
-                {quoteActivities.length > 0 && !customActivityName ? (
-                  <div className="flex gap-1">
-                    <Select
-                      value={newSchedule.activity_name}
-                      onValueChange={v => {
-                        if (v === "__custom__") {
-                          setCustomActivityName(true);
-                          setNewSchedule(s => ({ ...s, activity_name: "" }));
-                        } else {
-                          setNewSchedule(s => ({ ...s, activity_name: v }));
-                        }
-                      }}
-                    >
-                      <SelectTrigger><SelectValue placeholder="בחר פעילות..." /></SelectTrigger>
-                      <SelectContent>
-                        {quoteActivities.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
-                        <SelectItem value="__custom__">✏️ אחר (הקלד ידנית)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                ) : (
-                  <div className="flex gap-1">
-                    <Input
-                      value={newSchedule.activity_name}
-                      onChange={e => setNewSchedule(s => ({ ...s, activity_name: e.target.value }))}
-                      placeholder="שם הפעילות"
-                      autoFocus={customActivityName}
-                    />
-                    {quoteActivities.length > 0 && (
-                      <Button size="sm" variant="ghost" type="button" onClick={() => setCustomActivityName(false)} className="text-xs px-2">↩</Button>
-                    )}
-                  </div>
-                )}
-              </div>
+
+              {/* Pax (only for single mode) */}
+              {!splitEnabled && (
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-500">משתתפים</label>
+                  <Input type="number" min="0" value={newSchedule.pax} onChange={e => setNewSchedule(s => ({ ...s, pax: e.target.value }))} placeholder="0" />
+                </div>
+              )}
+
               <div className="space-y-1">
                 <label className="text-xs text-slate-500">שעת התחלה</label>
                 <Input type="time" value={newSchedule.start_time} onChange={e => setNewSchedule(s => ({ ...s, start_time: e.target.value }))} />
@@ -384,55 +477,153 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
                 <Input type="time" value={newSchedule.end_time} onChange={e => setNewSchedule(s => ({ ...s, end_time: e.target.value }))} />
               </div>
 
-              <div className="space-y-1">
-                <label className="text-xs text-slate-500">מרחב פעילות פנימי</label>
-                <Select
-                  value={newSchedule.activity_space_id || "none"}
-                  onValueChange={v => setNewSchedule(s => ({ ...s, activity_space_id: v === "none" ? null : v }))}
-                >
-                  <SelectTrigger><SelectValue placeholder="לא הוקצה" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">— לא הוקצה —</SelectItem>
-                    {activitySpaces.map(sp => (
-                      <SelectItem key={sp.id} value={sp.id}>{sp.name} ({sp.code})</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs text-slate-500">משתתפים</label>
-                <Input type="number" min="0" value={newSchedule.pax} onChange={e => setNewSchedule(s => ({ ...s, pax: e.target.value }))} placeholder="0" />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs text-slate-500">הערות</label>
-                <Input value={newSchedule.notes} onChange={e => setNewSchedule(s => ({ ...s, notes: e.target.value }))} placeholder="הערות..." />
-              </div>
-              {quoteTalks.length > 0 && (
+              {/* Single-space selector (only when not split) */}
+              {!splitEnabled && (
                 <div className="space-y-1 col-span-2">
-                  <label className="text-xs text-slate-500">קשר להרצאה / סדנה מההצעה (אופציונלי)</label>
+                  <label className="text-xs text-slate-500">מרחב פעילות פנימי</label>
                   <Select
-                    value={newSchedule.quote_item_id || "none"}
-                    onValueChange={v => setNewSchedule(s => ({ ...s, quote_item_id: v === "none" ? null : v }))}
+                    value={newSchedule.activity_space_id || "none"}
+                    onValueChange={v => setNewSchedule(s => ({ ...s, activity_space_id: v === "none" ? null : v }))}
                   >
-                    <SelectTrigger><SelectValue placeholder="— לא משויך —" /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder="לא הוקצה" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">— לא משויך —</SelectItem>
-                      {quoteTalks.map(t => (
-                        <SelectItem key={t.quote_item_id} value={t.quote_item_id}>
-                          {t.type}: {t.name}
-                        </SelectItem>
+                      <SelectItem value="none">— לא הוקצה —</SelectItem>
+                      {activitySpaces.map(sp => (
+                        <SelectItem key={sp.id} value={sp.id}>{sp.name} ({sp.code})</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
               )}
+
+              <div className="space-y-1 col-span-2">
+                <label className="text-xs text-slate-500">הערות</label>
+                <Input value={newSchedule.notes} onChange={e => setNewSchedule(s => ({ ...s, notes: e.target.value }))} placeholder="הערות..." />
+              </div>
+
+              {/* Split toggle — only when a quote talk is linked */}
+              {newSchedule.quote_item_id && (
+                <div className="col-span-2">
+                  <label className="flex items-center gap-2 cursor-pointer select-none w-fit">
+                    <input
+                      type="checkbox"
+                      checked={splitEnabled}
+                      onChange={e => {
+                        setSplitEnabled(e.target.checked);
+                        if (e.target.checked) {
+                          const total = group?.participant_count || group?.total_pax || null;
+                          const divided = autoDividePax(total, 2);
+                          setSplitRows([
+                            { activity_space_id: "", pax: divided[0] !== "" ? String(divided[0]) : "" },
+                            { activity_space_id: "", pax: divided[1] !== "" ? String(divided[1]) : "" },
+                          ]);
+                        }
+                      }}
+                      className="w-4 h-4 accent-blue-600"
+                    />
+                    <span className="flex items-center gap-1 text-xs text-blue-700 font-medium">
+                      <GitBranch className="w-3 h-3" /> הרצאה מפוצלת למספר מרחבים
+                    </span>
+                  </label>
+                </div>
+              )}
             </div>
+
+            {/* Split rows */}
+            {splitEnabled && (
+              <div className="space-y-2 border border-blue-200 rounded-lg p-3 bg-blue-50/40">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-blue-700">בחר מרחבים</p>
+                  {(group?.participant_count || group?.total_pax) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const total = group?.participant_count || group?.total_pax;
+                        const divided = autoDividePax(total, splitRows.length);
+                        setSplitRows(rows => rows.map((r, i) => ({ ...r, pax: divided[i] !== "" ? String(divided[i]) : "" })));
+                      }}
+                      className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 underline"
+                    >
+                      <Shuffle className="w-3 h-3" /> פיצול אוטומטי ({group?.participant_count || group?.total_pax} משתתפים)
+                    </button>
+                  )}
+                </div>
+                {splitRows.map((row, idx) => (
+                  <div key={idx} className="flex items-center gap-2 bg-white rounded-lg px-3 py-2 border border-blue-100">
+                    <span className="text-xs font-bold text-slate-400 w-5 shrink-0">{idx + 1}.</span>
+                    <div className="flex-1">
+                      <Select
+                        value={row.activity_space_id || "none"}
+                        onValueChange={v => setSplitRows(rows => rows.map((r, i) => i === idx ? { ...r, activity_space_id: v === "none" ? "" : v } : r))}
+                      >
+                        <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="בחר מרחב..." /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">— בחר מרחב —</SelectItem>
+                          {activitySpaces
+                            .filter(sp => !splitRows.some((r, i) => i !== idx && r.activity_space_id === sp.id))
+                            .map(sp => (
+                              <SelectItem key={sp.id} value={sp.id}>{sp.name} ({sp.code})</SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="w-28 shrink-0">
+                      <Input
+                        type="number" min="0"
+                        value={row.pax}
+                        onChange={e => setSplitRows(rows => rows.map((r, i) => i === idx ? { ...r, pax: e.target.value } : r))}
+                        placeholder="משתתפים"
+                        className="h-8 text-xs"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (splitRows.length <= 2) return;
+                        setSplitRows(rows => rows.filter((_, i) => i !== idx));
+                      }}
+                      disabled={splitRows.length <= 2}
+                      className="text-slate-300 hover:text-red-500 disabled:opacity-30 shrink-0"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setSplitRows(rows => [...rows, { activity_space_id: "", pax: "" }])}
+                  className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700"
+                >
+                  <Plus className="w-3 h-3" /> הוסף מרחב נוסף
+                </button>
+                <p className="text-xs text-slate-400">
+                  סה״כ:{" "}
+                  <span className="font-semibold text-slate-600">
+                    {splitRows.reduce((s, r) => s + (Number(r.pax) || 0), 0)}
+                  </span>
+                  {(group?.participant_count || group?.total_pax) && ` / ${group?.participant_count || group?.total_pax} בקבוצה`}
+                </p>
+              </div>
+            )}
+
             {newScheduleError && (
               <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{newScheduleError}</p>
             )}
             <div className="flex gap-2 justify-end">
-              <Button size="sm" variant="outline" onClick={() => { setAddingSchedule(false); setNewScheduleError(null); setCustomActivityName(false); }}>ביטול</Button>
-              <Button size="sm" onClick={handleAddSchedule} disabled={saving}>הוסף</Button>
+              <Button size="sm" variant="outline" onClick={() => {
+                setAddingSchedule(false);
+                setNewScheduleError(null);
+                setSplitEnabled(false);
+                setSplitRows([{ activity_space_id: "", pax: "" }, { activity_space_id: "", pax: "" }]);
+                setNewSchedule(EMPTY_SCHEDULE);
+              }}>ביטול</Button>
+              {splitEnabled ? (
+                <Button size="sm" onClick={handleAddSplitSchedule} disabled={saving} className="bg-blue-600 hover:bg-blue-700 text-white">
+                  {saving ? "שומר..." : "שמור שיבוץ מפוצל"}
+                </Button>
+              ) : (
+                <Button size="sm" onClick={handleAddSchedule} disabled={saving}>הוסף</Button>
+              )}
             </div>
           </div>
         )}
