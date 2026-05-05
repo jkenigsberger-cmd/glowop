@@ -365,12 +365,14 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
   const activeMeals = sortChron(mealItems.filter(i => i.status === "ACTIVE"), true);
   const cancelledMeals = mealItems.filter(i => i.status === "CANCELLED");
 
+  // Resolved pax for split: use what admin typed, fallback to group count
+  const splitTotalPax = Number(newSchedule.pax) || groupParticipantCount || null;
+
   // Helpers for split toggle pax auto-divide
   const handleSplitToggle = (enabled) => {
     setSplitEnabled(enabled);
     if (enabled) {
-      const total = groupParticipantCount;
-      const divided = autoDividePax(total, 2);
+      const divided = autoDividePax(splitTotalPax, 2);
       setSplitRows([
         { activity_space_id: "", pax: divided[0] !== "" ? String(divided[0]) : "" },
         { activity_space_id: "", pax: divided[1] !== "" ? String(divided[1]) : "" },
@@ -379,26 +381,17 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
   };
 
   const handleAutoDivide = () => {
-    const total = groupParticipantCount;
-    const divided = autoDividePax(total, splitRows.length);
+    const divided = autoDividePax(splitTotalPax, splitRows.length);
     setSplitRows(rows => rows.map((r, i) => ({ ...r, pax: divided[i] !== "" ? String(divided[i]) : "" })));
   };
 
   const addSplitRow = () => {
-    setSplitRows(rows => {
-      const next = [...rows, { activity_space_id: "", pax: "" }];
-      const divided = autoDividePax(groupParticipantCount, next.length);
-      return next.map((r, i) => ({ ...r, pax: divided[i] !== "" ? String(divided[i]) : r.pax }));
-    });
+    setSplitRows(rows => [...rows, { activity_space_id: "", pax: "" }]);
   };
 
   const removeSplitRow = (idx) => {
     if (splitRows.length <= 2) return;
-    setSplitRows(rows => {
-      const next = rows.filter((_, i) => i !== idx);
-      const divided = autoDividePax(groupParticipantCount, next.length);
-      return next.map((r, i) => ({ ...r, pax: divided[i] !== "" ? String(divided[i]) : r.pax }));
-    });
+    setSplitRows(rows => rows.filter((_, i) => i !== idx));
   };
 
   if (!profile) {
@@ -471,9 +464,9 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
                       }
                     }}
                   >
-                    <SelectTrigger><SelectValue placeholder="— פעילות רגילה / לא מתוך הצעה —" /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder="— פעילות בהזנה ידנית —" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">— פעילות רגילה / לא מתוך הצעה —</SelectItem>
+                      <SelectItem value="none">— פעילות בהזנה ידנית —</SelectItem>
                       {quoteTalks.map(t => (
                         <SelectItem key={t.quote_item_id} value={t.quote_item_id}>
                           {t.type}: {t.name}
@@ -511,18 +504,18 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
                 />
               </div>
 
-              {/* Pax — single mode only */}
-              {!splitEnabled && (
-                <div className="space-y-1">
-                  <label className="text-xs text-slate-500">מספר משתתפים</label>
-                  <Input
-                    type="number" min="0"
-                    value={newSchedule.pax}
-                    onChange={e => setNewSchedule(s => ({ ...s, pax: e.target.value }))}
-                    placeholder="0"
-                  />
-                </div>
-              )}
+              {/* Pax — always visible; in split mode it's the total for auto-divide */}
+              <div className="space-y-1">
+                <label className="text-xs text-slate-500">
+                  {splitEnabled ? "סה״כ משתתפים לפיצול" : "מספר משתתפים"}
+                </label>
+                <Input
+                  type="number" min="0"
+                  value={newSchedule.pax}
+                  onChange={e => setNewSchedule(s => ({ ...s, pax: e.target.value }))}
+                  placeholder="0"
+                />
+              </div>
 
               <div className="space-y-1">
                 <label className="text-xs text-slate-500">שעת התחלה</label>
@@ -578,15 +571,14 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
               <div className="space-y-2 border border-blue-200 rounded-lg p-3 bg-blue-50/40">
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-semibold text-blue-700">בחר מרחבים</p>
-                  {groupParticipantCount && (
-                    <button
-                      type="button"
-                      onClick={handleAutoDivide}
-                      className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 underline"
-                    >
-                      <Shuffle className="w-3 h-3" /> פיצול אוטומטי ({groupParticipantCount} משתתפים)
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={handleAutoDivide}
+                    className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 underline"
+                  >
+                    <Shuffle className="w-3 h-3" /> פיצול אוטומטי לפי המספר שהוזן
+                    {splitTotalPax ? ` (${splitTotalPax})` : ""}
+                  </button>
                 </div>
                 {splitRows.map((row, idx) => (
                   <div key={idx} className="flex items-center gap-2 bg-white rounded-lg px-3 py-2 border border-blue-100">

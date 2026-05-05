@@ -1,7 +1,9 @@
 import { useMemo, useState } from "react";
-import { CheckCircle2, Clock, GitBranch, Plus, Pencil } from "lucide-react";
+import { CheckCircle2, Clock, GitBranch, Plus, Pencil, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { base44 } from "@/api/base44Client";
+import { toast } from "sonner";
 
 /**
  * Parses lecture_lines and workshop_lines from a quote into a stable talks array.
@@ -39,6 +41,27 @@ export default function QuoteTalksPanel({
   onOpenActivityForm,
 }) {
   const [showUnscheduledOnly, setShowUnscheduledOnly] = useState(false);
+  const [cancellingId, setCancellingId] = useState(null);
+
+  const handleCancelSingle = async (itemId) => {
+    if (!window.confirm("לבטל שיבוץ זה?")) return;
+    setCancellingId(itemId);
+    await base44.entities.GroupScheduleItem.update(itemId, { status: "CANCELLED" });
+    setCancellingId(null);
+    toast.success("שיבוץ בוטל");
+    onScheduleChanged?.();
+  };
+
+  const handleCancelSplit = async (items) => {
+    if (!window.confirm(`לבטל את כל ${items.length} השיבוצים המפוצלים?`)) return;
+    setCancellingId("split");
+    for (const item of items) {
+      await base44.entities.GroupScheduleItem.update(item.id, { status: "CANCELLED" }).catch(() => {});
+    }
+    setCancellingId(null);
+    toast.success("שיבוץ מפוצל בוטל");
+    onScheduleChanged?.();
+  };
 
   const talks = useMemo(() => extractQuoteTalks(quote), [quote]);
 
@@ -190,7 +213,36 @@ export default function QuoteTalksPanel({
                   </span>
                 )}
 
-                {/* Action buttons — all open the unified form */}
+                {/* Scheduled: edit / cancel buttons */}
+                {isScheduled && (
+                  <div className="flex flex-col gap-1.5 items-end mt-1">
+                    {!isSplit && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-xs h-7 px-2 gap-1"
+                        onClick={() => handleOpenForm(talk, null)}
+                      >
+                        <Pencil className="w-3 h-3" /> ערוך שיבוץ
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={cancellingId !== null}
+                      className="text-xs h-7 px-2 gap-1 text-red-500 hover:text-red-700 hover:bg-red-50"
+                      onClick={() => isSplit
+                        ? handleCancelSplit(scheduledItems)
+                        : handleCancelSingle(scheduledItems[0].id)
+                      }
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      {isSplit ? "ביטול שיבוץ מפוצל" : "ביטול שיבוץ"}
+                    </Button>
+                  </div>
+                )}
+
+                {/* Unscheduled: schedule buttons — all open the unified form */}
                 {!isScheduled && (
                   <div className="flex flex-col gap-1.5 items-end">
                     <div className="flex gap-1.5">
