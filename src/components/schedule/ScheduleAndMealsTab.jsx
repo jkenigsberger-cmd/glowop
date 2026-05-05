@@ -12,51 +12,11 @@ import QuoteTalksPanel, { extractQuoteTalks } from "./QuoteTalksPanel";
 
 const MEAL_LABELS = { BREAKFAST: "ארוחת בוקר", LUNCH: "ארוחת צהריים", DINNER: "ארוחת ערב", OTHER: "אחר" };
 
-// Default meal times
 const MEAL_DEFAULTS = {
   BREAKFAST: { start_time: "07:00", end_time: "09:00" },
   LUNCH:     { start_time: "12:30", end_time: "13:30" },
   DINNER:    { start_time: "18:30", end_time: "20:00" },
   OTHER:     { start_time: "12:00", end_time: "13:00" },
-};
-
-const LOCATION_OPTIONS = ["כיתה", "מתחם חוץ", "מחוץ לחווה", "אחר"];
-
-/**
- * Extract activity name options from a quote.
- * Reads workshop_lines, lecture_lines, addon_lines JSON fields and quote snapshot.
- */
-function extractQuoteActivities(quote) {
-  if (!quote) return [];
-  const names = new Set();
-
-  const parseLines = (field) => {
-    if (!field) return [];
-    try { return JSON.parse(field); } catch { return []; }
-  };
-
-  parseLines(quote.workshop_lines).forEach(l => l.name && names.add(l.name));
-  parseLines(quote.lecture_lines).forEach(l => l.name && names.add(l.name));
-  parseLines(quote.addon_lines).forEach(l => l.description && names.add(l.description));
-
-  // Also check snapshot
-  if (quote.snapshot) {
-    try {
-      const snap = JSON.parse(quote.snapshot);
-      (snap.workshopLines || []).forEach(l => l.name && names.add(l.name));
-      (snap.lectureLines  || []).forEach(l => l.name && names.add(l.name));
-      (snap.workshop_lines || []).forEach(l => l.name && names.add(l.name));
-      (snap.lecture_lines  || []).forEach(l => l.name && names.add(l.name));
-    } catch {}
-  }
-
-  return [...names].filter(Boolean);
-}
-
-const EMPTY_SCHEDULE = {
-  date: "", start_time: "09:00", end_time: "10:00",
-  activity_name: "", requested_location: "", activity_space_id: null,
-  quote_item_id: null, pax: "", notes: ""
 };
 
 function autoDividePax(total, n) {
@@ -80,11 +40,10 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
   const [syncing, setSyncing] = useState(false);
   const [addingSchedule, setAddingSchedule] = useState(false);
   const [addingMeal, setAddingMeal] = useState(false);
-  const [newSchedule, setNewSchedule] = useState(EMPTY_SCHEDULE);
   const [newMeal, setNewMeal] = useState(EMPTY_MEAL());
   const [newScheduleError, setNewScheduleError] = useState(null);
 
-  // Split state for the "הוסף פעילות" form
+  // Split state
   const [splitEnabled, setSplitEnabled] = useState(false);
   const [splitRows, setSplitRows] = useState([
     { activity_space_id: "", pax: "" },
@@ -95,9 +54,24 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
   const arrivalDate   = group?.arrival_date   || "";
   const departureDate = group?.departure_date || "";
 
+  // Resolved group participant count for pax auto-fill
+  const groupParticipantCount = useMemo(() =>
+    group?.participant_count || group?.total_pax ||
+    profile?.participant_count || profile?.total_pax || null,
+    [group, profile]
+  );
+
+  // Default empty schedule with pax auto-filled
+  const makeEmptySchedule = () => ({
+    date: "", start_time: "09:00", end_time: "10:00",
+    activity_name: "", requested_location: "", activity_space_id: null,
+    quote_item_id: null, pax: groupParticipantCount ? String(groupParticipantCount) : "", notes: ""
+  });
+
+  const [newSchedule, setNewSchedule] = useState(makeEmptySchedule);
+
   // The approved quote (or first quote) for activity suggestions
   const activeQuote = quotes.find(q => q.status === "APPROVED") || quotes[0];
-  const quoteActivities = extractQuoteActivities(activeQuote);
   const quoteTalks = extractQuoteTalks(activeQuote);
 
   // Parse client talk suggestions from GuestFormSubmission.schedule_notes
@@ -131,22 +105,48 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
     queryClient.invalidateQueries({ queryKey: ["mealReservations", groupId] });
   };
 
+  // Open Add Activity form, optionally prefilled from a suggestion or quote talk
+  const openActivityForm = (prefill = {}) => {
+    const base = makeEmptySchedule();
+    setNewSchedule({
+      ...base,
+      date: prefill.date || base.date,
+      start_time: prefill.start_time || base.start_time,
+      end_time: prefill.end_time || base.end_time,
+      activity_name: prefill.activity_name || base.activity_name,
+      quote_item_id: prefill.quote_item_id || null,
+      notes: prefill.notes || base.notes,
+      pax: groupParticipantCount ? String(groupParticipantCount) : base.pax,
+      activity_space_id: null,
+    });
+    setSplitEnabled(false);
+    setSplitRows([
+      { activity_space_id: "", pax: groupParticipantCount ? String(Math.ceil(groupParticipantCount / 2)) : "" },
+      { activity_space_id: "", pax: groupParticipantCount ? String(Math.floor(groupParticipantCount / 2)) : "" },
+    ]);
+    setNewScheduleError(null);
+    setAddingSchedule(true);
+    // Scroll to form
+    setTimeout(() => {
+      document.getElementById("add-activity-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 50);
+  };
+
   // ── Schedule handlers ──────────────────────────────────────────────────────
   const handleSaveScheduleItem = async (form) => {
     setSaving(true);
     try {
       const res = await base44.functions.invoke("saveGroupScheduleItem", { ...form });
       if (res.data?.error) {
-        invalidate(); // refetch so UI reflects actual DB state
+        invalidate();
         return res.data.error;
       }
       invalidate();
       toast.success("פעילות נשמרה");
       return null;
     } catch (err) {
-      invalidate(); // refetch on any failure — never leave fake unsaved state
-      const msg = err?.response?.data?.error || err?.message || "השמירה נכשלה. הנתונים רועננו, נסה שוב.";
-      return msg;
+      invalidate();
+      return err?.response?.data?.error || err?.message || "השמירה נכשלה. הנתונים רועננו, נסה שוב.";
     } finally {
       setSaving(false);
     }
@@ -159,7 +159,6 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
     toast.success("פעילות בוטלה");
   };
 
-  // Client-side date validation for schedule
   const validateScheduleDate = (date) => {
     if (!date) return "יש למלא תאריך";
     if (arrivalDate && departureDate) {
@@ -170,9 +169,18 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
     return null;
   };
 
+  const resetAddActivityForm = () => {
+    setAddingSchedule(false);
+    setNewScheduleError(null);
+    setSplitEnabled(false);
+    setSplitRows([{ activity_space_id: "", pax: "" }, { activity_space_id: "", pax: "" }]);
+    setNewSchedule(makeEmptySchedule());
+  };
+
+  // Single-space save
   const handleAddSchedule = async () => {
     setNewScheduleError(null);
-    if (!newSchedule.activity_name) {
+    if (!newSchedule.activity_name.trim()) {
       setNewScheduleError("יש למלא שם פעילות");
       return;
     }
@@ -182,7 +190,6 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
       setNewScheduleError("שעת הסיום חייבת להיות אחרי שעת ההתחלה");
       return;
     }
-
     setSaving(true);
     try {
       const res = await base44.functions.invoke("saveGroupScheduleItem", {
@@ -193,33 +200,42 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
         status: "ACTIVE",
       });
       if (res.data?.error) { setNewScheduleError(res.data.error); return; }
-      setNewSchedule(EMPTY_SCHEDULE);
-      setAddingSchedule(false);
-      invalidate();
       toast.success("פעילות נוספה");
+      resetAddActivityForm();
+      invalidate();
     } catch (err) {
-      invalidate(); // refetch so rollback-cancelled items don't appear as active
-      const msg = err?.response?.data?.error || err?.message || "השמירה נכשלה. הנתונים רועננו, נסה שוב.";
-      setNewScheduleError(msg);
+      invalidate();
+      setNewScheduleError(err?.response?.data?.error || err?.message || "השמירה נכשלה. הנתונים רועננו, נסה שוב.");
     } finally {
       setSaving(false);
     }
   };
 
-  // ── Split save handler ─────────────────────────────────────────────────────
+  // Split save with rollback
   const handleAddSplitSchedule = async () => {
     setNewScheduleError(null);
+    if (!newSchedule.activity_name.trim()) {
+      setNewScheduleError("יש למלא שם פעילות");
+      return;
+    }
     const dateErr = validateScheduleDate(newSchedule.date);
     if (dateErr) { setNewScheduleError(dateErr); return; }
     if (!newSchedule.start_time || !newSchedule.end_time || newSchedule.start_time >= newSchedule.end_time) {
-      setNewScheduleError("שעת הסיום חייבת להיות אחרי שעת ההתחלה"); return;
+      setNewScheduleError("שעת הסיום חייבת להיות אחרי שעת ההתחלה");
+      return;
     }
-    if (splitRows.length < 2) { setNewScheduleError("יש לבחור לפחות 2 מרחבים"); return; }
+    if (splitRows.length < 2) { setNewScheduleError("יש לבחור לפחות שני מרחבים לפיצול"); return; }
     for (let i = 0; i < splitRows.length; i++) {
-      if (!splitRows[i].activity_space_id) { setNewScheduleError(`יש לבחור מרחב לשורה ${i + 1}`); return; }
+      if (!splitRows[i].activity_space_id) {
+        setNewScheduleError(`יש לבחור מרחב פעילות (שורה ${i + 1})`);
+        return;
+      }
     }
     const ids = splitRows.map(r => r.activity_space_id);
-    if (new Set(ids).size !== ids.length) { setNewScheduleError("לא ניתן לבחור את אותו מרחב פעמיים"); return; }
+    if (new Set(ids).size !== ids.length) {
+      setNewScheduleError("לא ניתן לבחור את אותו מרחב פעמיים");
+      return;
+    }
 
     setSaving(true);
     const splitGroupId = crypto.randomUUID();
@@ -235,7 +251,7 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
           end_time: newSchedule.end_time,
           activity_name: newSchedule.activity_name,
           activity_space_id: row.activity_space_id || null,
-          quote_item_id: newSchedule.quote_item_id,
+          quote_item_id: newSchedule.quote_item_id || null,
           pax: row.pax ? Number(row.pax) : null,
           notes: newSchedule.notes || null,
           split_group_id: splitGroupId,
@@ -245,26 +261,26 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
           status: "ACTIVE",
         });
         if (res.data?.error) {
+          // Rollback
           for (const cid of createdIds) {
             await base44.entities.GroupScheduleItem.update(cid, { status: "CANCELLED" }).catch(() => {});
           }
-          setNewScheduleError(`שגיאה במרחב ${i + 1}: ${res.data.error}`);
+          invalidate();
+          setNewScheduleError(`אחד המרחבים שנבחרו כבר תפוס בשעה הזו. יש לבחור שעה או מרחב אחר. (${res.data.error})`);
           setSaving(false);
           return;
         }
         createdIds.push(res.data.item.id);
       }
       toast.success(`שיבוץ מפוצל נשמר — ${splitRows.length} מרחבים`);
-      setNewSchedule(EMPTY_SCHEDULE);
-      setSplitEnabled(false);
-      setSplitRows([{ activity_space_id: "", pax: "" }, { activity_space_id: "", pax: "" }]);
-      setAddingSchedule(false);
+      resetAddActivityForm();
       invalidate();
     } catch (err) {
       for (const cid of createdIds) {
         await base44.entities.GroupScheduleItem.update(cid, { status: "CANCELLED" }).catch(() => {});
       }
-      setNewScheduleError(err?.response?.data?.error || err?.message || "שגיאה בשמירה — הפעולה בוטלה");
+      invalidate();
+      setNewScheduleError(err?.response?.data?.error || err?.message || "השמירה נכשלה. הנתונים רועננו, נסה שוב.");
     } finally {
       setSaving(false);
     }
@@ -331,7 +347,6 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
     }
   };
 
-  // Sorted: earliest date, then for meals: BREAKFAST→LUNCH→DINNER, then start_time
   const MEAL_ORDER = { BREAKFAST: 0, LUNCH: 1, DINNER: 2, OTHER: 3 };
   const sortChron = (arr, isMeals = false) =>
     [...arr].sort((a, b) => {
@@ -344,11 +359,47 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
       return (a.start_time || "").localeCompare(b.start_time || "");
     });
 
-  // Quote-linked talks are managed exclusively in QuoteTalksPanel — exclude them from the regular list.
+  // Quote-linked talks are managed/displayed in QuoteTalksPanel — exclude from the regular list.
   const activeSchedule = sortChron(scheduleItems.filter(i => i.status === "ACTIVE" && !i.quote_item_id), false);
   const cancelledSchedule = scheduleItems.filter(i => i.status === "CANCELLED");
   const activeMeals = sortChron(mealItems.filter(i => i.status === "ACTIVE"), true);
   const cancelledMeals = mealItems.filter(i => i.status === "CANCELLED");
+
+  // Helpers for split toggle pax auto-divide
+  const handleSplitToggle = (enabled) => {
+    setSplitEnabled(enabled);
+    if (enabled) {
+      const total = groupParticipantCount;
+      const divided = autoDividePax(total, 2);
+      setSplitRows([
+        { activity_space_id: "", pax: divided[0] !== "" ? String(divided[0]) : "" },
+        { activity_space_id: "", pax: divided[1] !== "" ? String(divided[1]) : "" },
+      ]);
+    }
+  };
+
+  const handleAutoDivide = () => {
+    const total = groupParticipantCount;
+    const divided = autoDividePax(total, splitRows.length);
+    setSplitRows(rows => rows.map((r, i) => ({ ...r, pax: divided[i] !== "" ? String(divided[i]) : "" })));
+  };
+
+  const addSplitRow = () => {
+    setSplitRows(rows => {
+      const next = [...rows, { activity_space_id: "", pax: "" }];
+      const divided = autoDividePax(groupParticipantCount, next.length);
+      return next.map((r, i) => ({ ...r, pax: divided[i] !== "" ? String(divided[i]) : r.pax }));
+    });
+  };
+
+  const removeSplitRow = (idx) => {
+    if (splitRows.length <= 2) return;
+    setSplitRows(rows => {
+      const next = rows.filter((_, i) => i !== idx);
+      const divided = autoDividePax(groupParticipantCount, next.length);
+      return next.map((r, i) => ({ ...r, pax: divided[i] !== "" ? String(divided[i]) : r.pax }));
+    });
+  };
 
   if (!profile) {
     return (
@@ -381,6 +432,7 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
           group={group}
           activitySpaces={activitySpaces}
           onScheduleChanged={invalidate}
+          onOpenActivityForm={openActivityForm}
         />
       )}
 
@@ -390,21 +442,21 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
           <h3 className="font-semibold flex items-center gap-2 text-slate-800">
             <CalendarDays className="w-4 h-4" /> לוח פעילויות
           </h3>
-          <Button size="sm" variant="outline" onClick={() => setAddingSchedule(v => !v)} className="gap-1">
+          <Button size="sm" variant="outline" onClick={() => addingSchedule ? resetAddActivityForm() : openActivityForm()} className="gap-1">
             <Plus className="w-3.5 h-3.5" /> הוסף פעילות
           </Button>
         </div>
 
-        {/* Add new schedule row */}
+        {/* ── Unified Add Activity Form ─────────────────────────────────────── */}
         {addingSchedule && (
-          <div className="bg-slate-50 border border-primary/30 rounded-xl p-4 space-y-3 mb-3">
-            <p className="text-xs font-semibold text-primary">פעילות חדשה (ידנית)</p>
+          <div id="add-activity-form" className="bg-slate-50 border border-primary/30 rounded-xl p-4 space-y-3 mb-3">
+            <p className="text-xs font-semibold text-primary">פעילות חדשה</p>
             {arrivalDate && departureDate && (
               <p className="text-xs text-slate-400">תאריכים מותרים: {arrivalDate} עד {departureDate}</p>
             )}
             <div className="grid grid-cols-2 gap-3">
 
-              {/* Quote talk selector — first, drives auto-fill */}
+              {/* Quote talk selector — always shown if quote has talks */}
               {quoteTalks.length > 0 && (
                 <div className="space-y-1 col-span-2">
                   <label className="text-xs text-slate-500">פעילות מתוך הצעת המחיר</label>
@@ -413,7 +465,6 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
                     onValueChange={v => {
                       if (v === "none") {
                         setNewSchedule(s => ({ ...s, quote_item_id: null }));
-                        setSplitEnabled(false);
                       } else {
                         const talk = quoteTalks.find(t => t.quote_item_id === v);
                         setNewSchedule(s => ({ ...s, quote_item_id: v, activity_name: talk?.name || s.activity_name }));
@@ -460,11 +511,16 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
                 />
               </div>
 
-              {/* Pax (only for single mode) */}
+              {/* Pax — single mode only */}
               {!splitEnabled && (
                 <div className="space-y-1">
-                  <label className="text-xs text-slate-500">משתתפים</label>
-                  <Input type="number" min="0" value={newSchedule.pax} onChange={e => setNewSchedule(s => ({ ...s, pax: e.target.value }))} placeholder="0" />
+                  <label className="text-xs text-slate-500">מספר משתתפים</label>
+                  <Input
+                    type="number" min="0"
+                    value={newSchedule.pax}
+                    onChange={e => setNewSchedule(s => ({ ...s, pax: e.target.value }))}
+                    placeholder="0"
+                  />
                 </div>
               )}
 
@@ -477,15 +533,15 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
                 <Input type="time" value={newSchedule.end_time} onChange={e => setNewSchedule(s => ({ ...s, end_time: e.target.value }))} />
               </div>
 
-              {/* Single-space selector (only when not split) */}
+              {/* Single-space selector — only when NOT split */}
               {!splitEnabled && (
                 <div className="space-y-1 col-span-2">
-                  <label className="text-xs text-slate-500">מרחב פעילות פנימי</label>
+                  <label className="text-xs text-slate-500">מרחב פעילות</label>
                   <Select
                     value={newSchedule.activity_space_id || "none"}
                     onValueChange={v => setNewSchedule(s => ({ ...s, activity_space_id: v === "none" ? null : v }))}
                   >
-                    <SelectTrigger><SelectValue placeholder="לא הוקצה" /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder="לא הוקצה (אופציונלי)" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">— לא הוקצה —</SelectItem>
                       {activitySpaces.map(sp => (
@@ -501,32 +557,20 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
                 <Input value={newSchedule.notes} onChange={e => setNewSchedule(s => ({ ...s, notes: e.target.value }))} placeholder="הערות..." />
               </div>
 
-              {/* Split toggle — only when a quote talk is linked */}
-              {newSchedule.quote_item_id && (
-                <div className="col-span-2">
-                  <label className="flex items-center gap-2 cursor-pointer select-none w-fit">
-                    <input
-                      type="checkbox"
-                      checked={splitEnabled}
-                      onChange={e => {
-                        setSplitEnabled(e.target.checked);
-                        if (e.target.checked) {
-                          const total = group?.participant_count || group?.total_pax || null;
-                          const divided = autoDividePax(total, 2);
-                          setSplitRows([
-                            { activity_space_id: "", pax: divided[0] !== "" ? String(divided[0]) : "" },
-                            { activity_space_id: "", pax: divided[1] !== "" ? String(divided[1]) : "" },
-                          ]);
-                        }
-                      }}
-                      className="w-4 h-4 accent-blue-600"
-                    />
-                    <span className="flex items-center gap-1 text-xs text-blue-700 font-medium">
-                      <GitBranch className="w-3 h-3" /> הרצאה מפוצלת למספר מרחבים
-                    </span>
-                  </label>
-                </div>
-              )}
+              {/* ── Split toggle — ALWAYS visible ── */}
+              <div className="col-span-2">
+                <label className="flex items-center gap-2 cursor-pointer select-none w-fit">
+                  <input
+                    type="checkbox"
+                    checked={splitEnabled}
+                    onChange={e => handleSplitToggle(e.target.checked)}
+                    className="w-4 h-4 accent-blue-600"
+                  />
+                  <span className="flex items-center gap-1 text-xs text-blue-700 font-medium">
+                    <GitBranch className="w-3 h-3" /> פיצול למספר מרחבים
+                  </span>
+                </label>
+              </div>
             </div>
 
             {/* Split rows */}
@@ -534,17 +578,13 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
               <div className="space-y-2 border border-blue-200 rounded-lg p-3 bg-blue-50/40">
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-semibold text-blue-700">בחר מרחבים</p>
-                  {(group?.participant_count || group?.total_pax) && (
+                  {groupParticipantCount && (
                     <button
                       type="button"
-                      onClick={() => {
-                        const total = group?.participant_count || group?.total_pax;
-                        const divided = autoDividePax(total, splitRows.length);
-                        setSplitRows(rows => rows.map((r, i) => ({ ...r, pax: divided[i] !== "" ? String(divided[i]) : "" })));
-                      }}
+                      onClick={handleAutoDivide}
                       className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 underline"
                     >
-                      <Shuffle className="w-3 h-3" /> פיצול אוטומטי ({group?.participant_count || group?.total_pax} משתתפים)
+                      <Shuffle className="w-3 h-3" /> פיצול אוטומטי ({groupParticipantCount} משתתפים)
                     </button>
                   )}
                 </div>
@@ -578,10 +618,7 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
                     </div>
                     <button
                       type="button"
-                      onClick={() => {
-                        if (splitRows.length <= 2) return;
-                        setSplitRows(rows => rows.filter((_, i) => i !== idx));
-                      }}
+                      onClick={() => removeSplitRow(idx)}
                       disabled={splitRows.length <= 2}
                       className="text-slate-300 hover:text-red-500 disabled:opacity-30 shrink-0"
                     >
@@ -591,17 +628,17 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
                 ))}
                 <button
                   type="button"
-                  onClick={() => setSplitRows(rows => [...rows, { activity_space_id: "", pax: "" }])}
+                  onClick={addSplitRow}
                   className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700"
                 >
                   <Plus className="w-3 h-3" /> הוסף מרחב נוסף
                 </button>
                 <p className="text-xs text-slate-400">
-                  סה״כ:{" "}
+                  סה״כ משתתפים:{" "}
                   <span className="font-semibold text-slate-600">
                     {splitRows.reduce((s, r) => s + (Number(r.pax) || 0), 0)}
                   </span>
-                  {(group?.participant_count || group?.total_pax) && ` / ${group?.participant_count || group?.total_pax} בקבוצה`}
+                  {groupParticipantCount && ` / ${groupParticipantCount} בקבוצה`}
                 </p>
               </div>
             )}
@@ -610,19 +647,15 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
               <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{newScheduleError}</p>
             )}
             <div className="flex gap-2 justify-end">
-              <Button size="sm" variant="outline" onClick={() => {
-                setAddingSchedule(false);
-                setNewScheduleError(null);
-                setSplitEnabled(false);
-                setSplitRows([{ activity_space_id: "", pax: "" }, { activity_space_id: "", pax: "" }]);
-                setNewSchedule(EMPTY_SCHEDULE);
-              }}>ביטול</Button>
+              <Button size="sm" variant="outline" onClick={resetAddActivityForm}>ביטול</Button>
               {splitEnabled ? (
                 <Button size="sm" onClick={handleAddSplitSchedule} disabled={saving} className="bg-blue-600 hover:bg-blue-700 text-white">
                   {saving ? "שומר..." : "שמור שיבוץ מפוצל"}
                 </Button>
               ) : (
-                <Button size="sm" onClick={handleAddSchedule} disabled={saving}>הוסף</Button>
+                <Button size="sm" onClick={handleAddSchedule} disabled={saving}>
+                  {saving ? "שומר..." : "הוסף"}
+                </Button>
               )}
             </div>
           </div>
@@ -639,7 +672,7 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
                 key={item.id}
                 item={item}
                 activitySpaces={activitySpaces}
-                quoteActivities={quoteActivities}
+                quoteActivities={[]}
                 groupDateRange={{ arrivalDate, departureDate }}
                 onSave={handleSaveScheduleItem}
                 onCancel={handleCancelScheduleItem}
@@ -660,7 +693,7 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
                   key={item.id}
                   item={item}
                   activitySpaces={activitySpaces}
-                  quoteActivities={quoteActivities}
+                  quoteActivities={[]}
                   groupDateRange={{ arrivalDate, departureDate }}
                   onSave={handleSaveScheduleItem}
                   onCancel={() => {}}
@@ -683,7 +716,6 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
           </Button>
         </div>
 
-        {/* Add new meal row */}
         {addingMeal && (
           <div className="bg-slate-50 border border-primary/30 rounded-xl p-4 space-y-3 mb-3">
             <p className="text-xs font-semibold text-primary">ארוחה חדשה (ידנית)</p>
