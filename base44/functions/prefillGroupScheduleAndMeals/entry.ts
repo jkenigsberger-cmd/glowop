@@ -102,13 +102,24 @@ Deno.serve(async (req) => {
 
   // SAFETY: talk suggestions are intake-only — never create GroupScheduleItem from them.
   const normalScheduleRows = scheduleRows.filter(r => !r.is_talk_suggestion);
-  // talkSuggestionRows are only for QuoteTalksPanel display; never synced here.
 
   for (const row of normalScheduleRows) {
     if (!row.date || !row.start_time || !row.activity) continue;
     const start_time = row.start_time || '09:00';
     const end_time   = row.end_time   || addMinutes(start_time, 60);
     const key = `${row.date}|${start_time}|${row.activity}`;
+
+    // Build needs summary string to append to notes
+    const NEEDS_LABELS = { microphone: 'מיקרופון', projector: 'מקרן', chairs: 'סידור כיסאות', tables: 'שולחנות', whiteboard: 'לוח כתיבה' };
+    let needsNote = '';
+    if (row.needs && typeof row.needs === 'object') {
+      const parts = Object.entries(NEEDS_LABELS)
+        .filter(([k]) => row.needs[k])
+        .map(([, label]) => label);
+      if (row.needs.other) parts.push(row.needs.other_text ? `אחר: ${row.needs.other_text}` : 'אחר');
+      if (parts.length) needsNote = `צרכים לפעילות: ${parts.join(', ')}`;
+    }
+    const combinedNotes = [needsNote, row.notes].filter(Boolean).join('. ') || null;
 
     const payload = {
       group_id,
@@ -121,7 +132,7 @@ Deno.serve(async (req) => {
       activity_space_id: null,
       activity_space_code: null,
       pax: row.pax ? Number(row.pax) : null,
-      notes: row.notes || null,
+      notes: combinedNotes,
       source: 'groupSync',
       status: 'ACTIVE',
     };
