@@ -91,11 +91,9 @@ export default function GuestForm() {
     drivers_men_count: "", drivers_women_count: "", drivers_lodging_notes: "",
   });
   const [schedule, setSchedule] = useState([]);
-  const [talkSuggestions, setTalkSuggestions] = useState({});
   const [generalNotes, setGeneralNotes] = useState("");
 
-  const scheduleHasTimeErrors = schedule.some(r => r.start_time && r.end_time && r.start_time >= r.end_time)
-    || Object.values(talkSuggestions).some(s => s.start_time && s.end_time && s.start_time >= s.end_time);
+  const scheduleHasTimeErrors = schedule.some(r => r.start_time && r.end_time && r.start_time >= r.end_time);
 
   useEffect(() => {
     if (!quoteId) {
@@ -225,12 +223,7 @@ export default function GuestForm() {
           staff_sleeping_notes:   participants.staff_sleeping_notes,
           drivers_lodging_notes:  participants.drivers_lodging_notes,
         }),
-        schedule_notes:  JSON.stringify([
-          ...schedule,
-          ...Object.entries(talkSuggestions)
-            .filter(([, s]) => s.date || s.start_time || s.end_time || s.notes)
-            .map(([quote_item_id, s]) => ({ ...s, quote_item_id, is_talk_suggestion: true })),
-        ]),
+        schedule_notes:  JSON.stringify(schedule),
         general_notes:   generalNotes,
       });
       setSubmitted(true);
@@ -304,8 +297,6 @@ export default function GuestForm() {
               <GuestFormStep4
                 rows={schedule}
                 setRows={setSchedule}
-                talkSuggestions={talkSuggestions}
-                setTalkSuggestions={setTalkSuggestions}
                 quoteData={resolvedQuoteData}
               />
             )}
