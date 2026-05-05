@@ -41,6 +41,18 @@
       "type": "string",
       "description": "Stable reference to a quote lecture/workshop line e.g. lecture__0, workshop__1. Nullable \u2014 only set when this activity fulfils a quoted talk."
     },
+    "split_group_id": {
+      "type": "string",
+      "description": "UUID shared by all GroupScheduleItems created in a single split operation. Nullable \u2014 only set for split talks."
+    },
+    "split_index": {
+      "type": "number",
+      "description": "1-based position within the split group (1, 2, 3\u2026). Nullable."
+    },
+    "split_total": {
+      "type": "number",
+      "description": "Total number of spaces in the split group. Nullable."
+    },
     "pax": {
       "type": "number"
     },
