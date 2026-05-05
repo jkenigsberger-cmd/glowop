@@ -59,6 +59,17 @@
       ],
       "default": "DRAFT"
     },
+    "housekeeping_status": {
+      "type": "string",
+      "enum": [
+        "PENDING",
+        "IN_PROGRESS",
+        "READY",
+        "ISSUE"
+      ],
+      "default": "PENDING",
+      "description": "Cleaning/preparation workflow status \u2014 separate from allocation status"
+    },
     "notes": {
       "type": "string"
     }
