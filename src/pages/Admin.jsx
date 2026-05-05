@@ -3,6 +3,7 @@ import {
   Users, FileText, ClipboardList, Boxes, Settings,
   TrendingUp, ChevronLeft, ShieldAlert
 } from "lucide-react";
+import OrphanCleanupPanel from "@/components/admin/OrphanCleanupPanel";
 
 const ADMIN_TILES = [
   {
@@ -93,7 +94,11 @@ export default function Admin() {
           ))}
         </div>
 
-        <p className="text-center text-xs text-slate-600 mt-10">
+        <div className="mt-8">
+          <OrphanCleanupPanel />
+        </div>
+
+        <p className="text-center text-xs text-slate-600 mt-8">
           הרשאות מלאות יתווספו בעתיד — כרגע גישה פתוחה למנהלים רשומים
         </p>
       </div>

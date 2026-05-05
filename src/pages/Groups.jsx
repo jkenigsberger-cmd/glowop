@@ -2,12 +2,13 @@ import { useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Plus, Users, Calendar, ChevronLeft, FileText, Trash2, ChevronDown, ChevronUp, Clock } from "lucide-react";
+import { Plus, Users, Calendar, ChevronLeft, FileText, Trash2, ChevronDown, ChevronUp, Clock, AlertTriangle } from "lucide-react";
 import { Link } from "react-router-dom";
 import GroupStatusBadge from "@/components/groups/GroupStatusBadge";
 import GroupFormModal from "@/components/groups/GroupFormModal";
 import QuoteFormModal from "@/components/quotes/QuoteFormModal";
 import { format } from "date-fns";
+import { toast } from "sonner";
 
 const GROUP_TYPE_LABEL = { LODGING: "לינה", DAY_USE: "יום כיף" };
 
@@ -67,6 +68,7 @@ export default function Groups() {
   const [editTarget, setEditTarget] = useState(null);
   const [showHistory, setShowHistory] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
   const queryClient = useQueryClient();
 
   const { data: groups = [] } = useQuery({
@@ -89,15 +91,19 @@ export default function Groups() {
     setShowGroupForm(true);
   };
 
-  const handleDelete = async (g) => {
-    const confirmed = window.confirm(
-      `למחוק לצמיתות את "${g.group_name}"?\n\nכל הנתונים הקשורים (הצעות מחיר, טפסי קבלה, הקצאות לינה ועוד) יימחקו לצמיתות.`
-    );
-    if (!confirmed) return;
-    setDeletingId(g.id);
-    await base44.functions.invoke("deleteGroup", { group_id: g.id });
+  const handleDelete = (g) => setDeleteTarget(g);
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeletingId(deleteTarget.id);
+    setDeleteTarget(null);
+    const res = await base44.functions.invoke("deleteGroup", { group_id: deleteTarget.id });
     queryClient.invalidateQueries({ queryKey: ["groups"] });
     setDeletingId(null);
+    if (res.data?.success) {
+      const d = res.data.deleted;
+      toast.success(`הקבוצה נמחקה. הוסרו: ${d.scheduleItems} פעילויות, ${d.mealReservations} ארוחות, ${d.allocations} הקצאות לינה.`);
+    }
   };
 
   return (
@@ -181,6 +187,40 @@ export default function Groups() {
           onClose={() => { setShowGroupForm(false); setEditTarget(null); }}
           onSaved={handleGroupSaved}
         />
+      )}
+
+      {/* Delete confirmation modal */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" dir="rtl">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="bg-red-100 rounded-lg p-2 shrink-0">
+                <AlertTriangle className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-slate-800">מחיקת קבוצה</h2>
+                <p className="text-sm text-slate-600 mt-1">
+                  מחיקת הקבוצה <strong>"{deleteTarget.group_name}"</strong> תסיר גם את כל הנתונים התפעוליים הקשורים אליה:
+                  שיבוצי לינה, לוח פעילויות, ארוחות, שמירת שכונות ועוד.
+                </p>
+                <p className="text-xs text-slate-400 mt-2">
+                  הנתונים הפיזיים של החווה (אוהלים, מיטות, שכונות, מרחבים) לא יימחקו.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end pt-2">
+              <Button variant="outline" size="sm" onClick={() => setDeleteTarget(null)}>ביטול</Button>
+              <Button
+                size="sm"
+                className="bg-red-600 hover:bg-red-700 text-white gap-1.5"
+                onClick={confirmDelete}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                מחק קבוצה ונתונים קשורים
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
