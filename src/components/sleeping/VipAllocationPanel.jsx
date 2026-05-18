@@ -65,29 +65,35 @@ function AssignmentDialog({ req, reqIndex, tent, existingAlloc, profile, groupId
     if (errs.length) { setErrors(errs); return; }
     setSaving(true);
     setErrors([]);
+
+    const invokePayload = {
+      allocation_id:                existingAlloc?.id || null,
+      group_id:                     groupId,
+      operational_group_profile_id: profile.id,
+      tent_id:                      tent.id,
+      requirement_index:            reqIndex,
+      gender_group:                 gender,
+      allocated_pax:                Number(pax),
+      notes:                        notes,
+    };
+    console.log("[VIP Alloc] payload →", invokePayload);
+
     try {
-      // All conflict checking and persistence is done server-side
-      const res = await base44.functions.invoke("saveVipSleepingAllocation", {
-        allocation_id:                existingAlloc?.id || null,
-        group_id:                     groupId,
-        operational_group_profile_id: profile.id,
-        tent_id:                      tent.id,
-        requirement_index:            reqIndex,
-        gender_group:                 gender,
-        allocated_pax:                Number(pax),
-        notes:                        notes,
-      });
+      const res = await base44.functions.invoke("saveVipSleepingAllocation", invokePayload);
+      console.log("[VIP Alloc] response →", res?.data);
+
       if (res.data?.success) {
         toast.success(`אוהל ${tent.code} שויך לדרישה #${reqIndex + 1} ✓`);
         onSaved();
       } else {
-        if (res.data?.debug) console.log("[VIP Alloc Debug]", res.data.debug);
+        if (res.data?.debug) console.warn("[VIP Alloc Debug]", res.data.debug);
         setErrors([res.data?.error || "שגיאה בשמירה"]);
       }
     } catch (err) {
-      // Extract specific Hebrew error from backend response; fallback only if none exists
+      console.error("[VIP Alloc] catch err →", err);
+      console.error("[VIP Alloc] err.response?.data →", err?.response?.data);
       const serverMsg = err?.response?.data?.error || err?.response?.data?.message;
-      if (err?.response?.data?.debug) console.log("[VIP Alloc Debug]", err.response.data.debug);
+      if (err?.response?.data?.debug) console.warn("[VIP Alloc Debug]", err.response.data.debug);
       setErrors([serverMsg || "שגיאה בשמירה — נסה שוב"]);
     } finally {
       setSaving(false);
