@@ -69,12 +69,20 @@ export default function Dashboard() {
   const allocatedGroupIds = new Set(allocations.map(a => a.group_id));
 
   // ── Date buckets ──────────────────────────────────────────────────────────
-  // active: arrival <= today AND (no departure OR departure >= today)
-  const activeGroups   = groups.filter(g => g.arrival_date <= TODAY && (!g.departure_date || g.departure_date >= TODAY));
-  const arrivingToday  = groups.filter(g => g.arrival_date === TODAY);
+  // active:
+  //   - LODGING: arrival <= today AND (departure >= today OR no departure)
+  //   - DAY_USE: arrival === today (no departure = only active on arrival day)
+  const activeGroups = groups.filter(g => {
+    if (g.status === "CANCELLED") return false;
+    if (g.group_type === "DAY_USE") {
+      return g.arrival_date === TODAY;
+    }
+    return g.arrival_date <= TODAY && (!g.departure_date || g.departure_date >= TODAY);
+  });
+  const arrivingToday  = groups.filter(g => g.status !== "CANCELLED" && g.arrival_date === TODAY);
   // sleeping tonight: arrival <= today AND departure > today (departure is checkout, not sleeping night)
-  const sleepingTonight = groups.filter(g => g.arrival_date <= TODAY && g.departure_date && g.departure_date > TODAY);
-  const departingToday = groups.filter(g => g.departure_date === TODAY);
+  const sleepingTonight = groups.filter(g => g.status !== "CANCELLED" && g.arrival_date <= TODAY && g.departure_date && g.departure_date > TODAY);
+  const departingToday = groups.filter(g => g.status !== "CANCELLED" && g.departure_date === TODAY);
 
   // ── Stats ─────────────────────────────────────────────────────────────────
   const totalPaxOnSite = activeGroups.reduce((sum, g) => {
