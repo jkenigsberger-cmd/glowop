@@ -12,6 +12,18 @@ function datesOverlap(a1, a2, b1, b2) {
   return a1 < b2 && b1 < a2;
 }
 
+function isValidDate(str) {
+  if (!str || typeof str !== 'string') return false;
+  return /^\d{4}-\d{2}-\d{2}$/.test(str) && !isNaN(Date.parse(str));
+}
+
+function fail(reasonCode, errorMsg, debugPayload) {
+  return Response.json({
+    error: errorMsg,
+    debug: { reasonCode, ...debugPayload },
+  }, { status: 400 });
+}
+
 Deno.serve(async (req) => {
   const base44 = createClientFromRequest(req);
 
@@ -22,68 +34,97 @@ Deno.serve(async (req) => {
 
   const body = await req.json();
   const {
-    allocation_id,            // string | null  — present when updating existing
-    group_id,                 // required
-    operational_group_profile_id, // required
-    tent_id,                  // required
-    requirement_index,        // required — integer, used in __vip_req_N__ marker
-    gender_group,             // required — MEN or WOMEN
-    allocated_pax,            // required — 1..3
-    notes,                    // optional string
+    allocation_id,
+    group_id,
+    operational_group_profile_id,
+    tent_id,
+    requirement_index,
+    gender_group,
+    allocated_pax,
+    notes,
   } = body;
+
+  // Base debug context (grows as we load data)
+  const dbg = {
+    tent_id:                      tent_id        ?? null,
+    tent_code:                    null,
+    tent_is_vip:                  null,
+    tent_capacity:                null,
+    tent_working_status:          null,
+    tent_neighborhood_id:         null,
+    group_id:                     group_id       ?? null,
+    operational_group_profile_id: operational_group_profile_id ?? null,
+    arrival_date:                 null,
+    departure_date:               null,
+    allocated_pax:                allocated_pax  ?? null,
+    gender_group:                 gender_group   ?? null,
+    requirement_index:            requirement_index ?? null,
+    existingActiveAllocationsCount: null,
+    conflictingAllocationIds:     [],
+  };
 
   // ── 1. Input validation ────────────────────────────────────────────────────
 
-  if (!group_id || !operational_group_profile_id || !tent_id) {
-    return Response.json({ error: 'group_id, operational_group_profile_id, tent_id הם שדות חובה' }, { status: 400 });
-  }
-  if (requirement_index == null || requirement_index < 0) {
-    return Response.json({ error: 'requirement_index הוא שדה חובה' }, { status: 400 });
+  if (!group_id || !operational_group_profile_id || !tent_id || requirement_index == null) {
+    return fail('MISSING_INPUT', 'חסרים פרטי שיבוץ VIP', dbg);
   }
   if (!gender_group || !['MEN', 'WOMEN'].includes(gender_group)) {
-    return Response.json({ error: 'יש לבחור מגדר (גברים/נשים)' }, { status: 400 });
+    return fail('INVALID_GENDER', 'יש לבחור מגדר (גברים/נשים)', dbg);
   }
   const pax = Number(allocated_pax);
   if (!pax || pax < 1 || pax > 3) {
-    return Response.json({ error: 'מספר האנשים חייב להיות בין 1 ל-3' }, { status: 400 });
+    return fail('INVALID_PAX', 'מספר האנשים חייב להיות בין 1 ל-3', dbg);
   }
 
   // ── 2. Load & validate tent ────────────────────────────────────────────────
 
-  let tent, neighborhood, profile;
+  let tent;
   try {
     const tents = await base44.asServiceRole.entities.Tent.filter({ id: tent_id });
     tent = tents[0];
   } catch (_) { tent = null; }
-  if (!tent) return Response.json({ error: 'האוהל לא נמצא במערכת' }, { status: 404 });
+
+  if (!tent) return fail('TENT_NOT_FOUND', 'האוהל לא נמצא במערכת', dbg);
+
+  // Update debug with tent metadata
+  dbg.tent_code           = tent.code;
+  dbg.tent_is_vip         = tent.tent_type;
+  dbg.tent_capacity       = tent.capacity;
+  dbg.tent_working_status = tent.working_status;
+  dbg.tent_neighborhood_id = tent.neighborhood_id;
+
   if (tent.tent_type !== 'VIP') {
-    return Response.json({ error: `אוהל ${tent.code} אינו אוהל VIP` }, { status: 400 });
+    return fail('TENT_NOT_VIP', 'האוהל שנבחר אינו אוהל VIP', dbg);
   }
   if (tent.working_status !== 'WORKING') {
-    return Response.json({ error: `אוהל ${tent.code} אינו זמין (${tent.working_status})` }, { status: 400 });
+    return fail('TENT_NOT_WORKING', 'האוהל אינו זמין לשימוש', dbg);
   }
   if (pax > tent.capacity) {
-    return Response.json({ error: `מספר האנשים (${pax}) חורג מקיבולת האוהל ${tent.code} (${tent.capacity})` }, { status: 400 });
+    return fail('PAX_EXCEEDS_CAPACITY', 'כמות האנשים גדולה מקיבולת האוהל', dbg);
   }
 
   // ── 3. Load VIP neighborhood for this tent ─────────────────────────────────
 
+  let neighborhood;
   try {
     const neighborhoods = await base44.asServiceRole.entities.Neighborhood.filter({ id: tent.neighborhood_id });
     neighborhood = neighborhoods[0];
   } catch (_) { neighborhood = null; }
+
   if (!neighborhood || !neighborhood.is_vip) {
-    return Response.json({ error: `אוהל ${tent.code} אינו שייך לשכונת VIP` }, { status: 400 });
+    return fail('NOT_VIP_NEIGHBORHOOD', 'האוהל שנבחר אינו נמצא במתחם VIP', dbg);
   }
 
   // ── 4. Load profile → get authoritative arrival/departure dates ────────────
 
+  let profile;
   try {
     const profiles = await base44.asServiceRole.entities.OperationalGroupProfile.filter({ id: operational_group_profile_id });
     profile = profiles[0];
   } catch (_) { profile = null; }
+
   if (!profile || profile.group_id !== group_id) {
-    return Response.json({ error: 'פרופיל תפעולי לא נמצא או אינו שייך לקבוצה זו' }, { status: 404 });
+    return fail('PROFILE_NOT_FOUND', 'חסרים פרטי קבוצה או פרופיל תפעולי', dbg);
   }
 
   // Derive dates from profile; fall back to Group if not set on profile
@@ -95,41 +136,53 @@ Deno.serve(async (req) => {
     arrival_date   = arrival_date   || group?.arrival_date;
     departure_date = departure_date || group?.departure_date;
   }
+
+  dbg.arrival_date   = arrival_date   ?? null;
+  dbg.departure_date = departure_date ?? null;
+
   if (!arrival_date || !departure_date) {
-    return Response.json({ error: 'תאריכי לינה לא הוגדרו לקבוצה זו' }, { status: 400 });
+    return fail('DATES_MISSING', 'חסרים תאריכי הגעה או עזיבה לקבוצה', dbg);
+  }
+  if (!isValidDate(arrival_date) || !isValidDate(departure_date)) {
+    return fail('DATES_INVALID', 'תאריכי השיבוץ אינם תקינים', dbg);
+  }
+  if (departure_date <= arrival_date) {
+    return fail('DATES_DEPARTURE_BEFORE_ARRIVAL', 'תאריך העזיבה חייב להיות אחרי תאריך ההגעה', dbg);
   }
 
   // ── 5. Conflict check — no other active allocation may overlap this tent ───
 
-  // Load all non-cancelled allocations for this tent
   const existingForTent = await base44.asServiceRole.entities.SleepingAllocation.filter({ tent_id });
   const activeForTent = existingForTent.filter(a =>
     a.status !== 'CANCELLED' &&
-    a.id !== allocation_id           // exclude current row if updating
+    a.id !== allocation_id
   );
 
-  const conflict = activeForTent.find(a =>
+  dbg.existingActiveAllocationsCount = activeForTent.length;
+
+  const conflicting = activeForTent.filter(a =>
     datesOverlap(arrival_date, departure_date, a.arrival_date, a.departure_date)
   );
 
-  if (conflict) {
-    // Try to get the conflicting group name for a helpful message
+  dbg.conflictingAllocationIds = conflicting.map(a => a.id);
+
+  if (conflicting.length > 0) {
+    const conflict = conflicting[0];
     let conflictGroupName = conflict.group_id;
     try {
-      const conflictGroups = await base44.asServiceRole.entities.Group.filter({ id: conflict.group_id });
-      conflictGroupName = conflictGroups[0]?.group_name || conflict.group_id;
+      const cgs = await base44.asServiceRole.entities.Group.filter({ id: conflict.group_id });
+      conflictGroupName = cgs[0]?.group_name || conflict.group_id;
     } catch (_) { /* non-fatal */ }
 
     const msg = conflict.group_id === group_id
-      ? `אוהל ${tent.code} כבר משויך לדרישה אחרת של קבוצה זו בתאריכים ${conflict.arrival_date} — ${conflict.departure_date}`
-      : `אוהל ${tent.code} כבר משויך לקבוצה אחרת (${conflictGroupName}) בתאריכים ${conflict.arrival_date} — ${conflict.departure_date}`;
+      ? `אוהל ${tent.code} כבר משויך לדרישה אחרת של קבוצה זו (${conflict.arrival_date} — ${conflict.departure_date})`
+      : `האוהל כבר משובץ לקבוצה אחרת (${conflictGroupName}) בתאריכים ${conflict.arrival_date} — ${conflict.departure_date}`;
 
-    return Response.json({ error: msg }, { status: 409 });
+    return fail('CONFLICT', msg, dbg);
   }
 
   // ── 6. Check for stale row: same group/req already on a DIFFERENT tent ─────
-  // If we're creating new (not updating), see if this req_index already has a row → we should
-  // update that row in place instead of creating a duplicate.
+
   const noteMarker = `__vip_req_${requirement_index}__`;
   const groupAllocs = await base44.asServiceRole.entities.SleepingAllocation.filter({ group_id });
   const staleRow = groupAllocs.find(a =>
@@ -160,20 +213,15 @@ Deno.serve(async (req) => {
   let savedId;
 
   if (allocation_id) {
-    // Updating existing row
     await base44.asServiceRole.entities.SleepingAllocation.update(allocation_id, payload);
     savedId = allocation_id;
-    // If the tent changed, the staleRow IS allocation_id, already handled above.
-    // If somehow there's a different stale row (shouldn't happen), clean it up.
     if (staleRow && staleRow.id !== allocation_id) {
       await base44.asServiceRole.entities.SleepingAllocation.delete(staleRow.id);
     }
   } else if (staleRow) {
-    // Req already had a different tent — update that row in place (avoids duplicates)
     await base44.asServiceRole.entities.SleepingAllocation.update(staleRow.id, payload);
     savedId = staleRow.id;
   } else {
-    // Brand new assignment
     const created = await base44.asServiceRole.entities.SleepingAllocation.create(payload);
     savedId = created.id;
   }

@@ -81,12 +81,14 @@ function AssignmentDialog({ req, reqIndex, tent, existingAlloc, profile, groupId
         toast.success(`אוהל ${tent.code} שויך לדרישה #${reqIndex + 1} ✓`);
         onSaved();
       } else {
+        if (res.data?.debug) console.log("[VIP Alloc Debug]", res.data.debug);
         setErrors([res.data?.error || "שגיאה בשמירה"]);
       }
     } catch (err) {
-      // Extract Hebrew error message from backend response if available
+      // Extract specific Hebrew error from backend response; fallback only if none exists
       const serverMsg = err?.response?.data?.error || err?.response?.data?.message;
-      setErrors([serverMsg || `האוהל תפוס או שגוי — לא ניתן לשמור`]);
+      if (err?.response?.data?.debug) console.log("[VIP Alloc Debug]", err.response.data.debug);
+      setErrors([serverMsg || "שגיאה בשמירה — נסה שוב"]);
     } finally {
       setSaving(false);
     }
