@@ -2,11 +2,25 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
 Deno.serve(async (req) => {
   const base44 = createClientFromRequest(req);
-  const user = await base44.auth.me();
-  if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
-  if (user.role !== 'admin') return Response.json({ error: 'Forbidden' }, { status: 403 });
 
-  const { group_id } = await req.json();
+  let user;
+  try {
+    user = await base44.auth.me();
+  } catch (e) {
+    return Response.json({ error: 'הפעולה נכשלה. יש להתחבר מחדש או לבדוק הרשאות.', detail: e?.message }, { status: 401 });
+  }
+
+  if (!user) {
+    return Response.json({ error: 'הפעולה נכשלה. יש להתחבר מחדש או לבדוק הרשאות.' }, { status: 401 });
+  }
+
+  const role = (user.role || '').toLowerCase();
+  if (role !== 'admin') {
+    return Response.json({ error: 'אין הרשאה לבצע פעולה זו' }, { status: 403 });
+  }
+
+  const body = await req.json().catch(() => ({}));
+  const { group_id } = body;
   if (!group_id) return Response.json({ error: 'group_id required' }, { status: 400 });
 
   // Verify group exists
@@ -36,7 +50,7 @@ Deno.serve(async (req) => {
     base44.asServiceRole.entities.NeighborhoodReservation.filter({ group_id }),
   ]);
 
-  // Delete / cancel all related records in parallel
+  // Delete all related records in parallel
   await Promise.all([
     ...quotes.map(r => base44.asServiceRole.entities.Quote.delete(r.id)),
     ...submissions.map(r => base44.asServiceRole.entities.GuestFormSubmission.delete(r.id)),

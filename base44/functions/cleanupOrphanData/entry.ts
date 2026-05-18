@@ -7,9 +7,22 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
 Deno.serve(async (req) => {
   const base44 = createClientFromRequest(req);
-  const user = await base44.auth.me();
-  if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
-  if (user.role !== 'admin') return Response.json({ error: 'Forbidden' }, { status: 403 });
+
+  let user;
+  try {
+    user = await base44.auth.me();
+  } catch (e) {
+    return Response.json({ error: 'הפעולה נכשלה. יש להתחבר מחדש או לבדוק הרשאות.', detail: e?.message }, { status: 401 });
+  }
+
+  if (!user) {
+    return Response.json({ error: 'הפעולה נכשלה. יש להתחבר מחדש או לבדוק הרשאות.' }, { status: 401 });
+  }
+
+  const role = (user.role || '').toLowerCase();
+  if (role !== 'admin') {
+    return Response.json({ error: 'אין הרשאה לבצע פעולה זו' }, { status: 403 });
+  }
 
   // Load all existing group IDs
   const allGroups = await base44.asServiceRole.entities.Group.list();

@@ -29,22 +29,36 @@ export default function OrphanCleanupPanel() {
     setLoading(true);
     setDone(false);
     setDryRunResult(null);
-    const res = await base44.functions.invoke("cleanupOrphanData", { dry_run: true });
-    setLoading(false);
-    setDryRunResult(res.data?.orphans || {});
+    try {
+      const res = await base44.functions.invoke("cleanupOrphanData", { dry_run: true });
+      if (res.data?.error) {
+        toast.error(res.data.error);
+      } else {
+        setDryRunResult(res.data?.orphans || {});
+      }
+    } catch (e) {
+      toast.error("הפעולה נכשלה. יש להתחבר מחדש או לבדוק הרשאות.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleCleanup = async () => {
     setLoading(true);
     setConfirming(false);
-    const res = await base44.functions.invoke("cleanupOrphanData", { dry_run: false });
-    setLoading(false);
-    if (res.data?.success) {
-      toast.success("ניקוי הושלם בהצלחה");
-      setDone(true);
-      setDryRunResult(null);
-    } else {
-      toast.error("שגיאה בניקוי");
+    try {
+      const res = await base44.functions.invoke("cleanupOrphanData", { dry_run: false });
+      if (res.data?.success) {
+        toast.success("ניקוי הושלם בהצלחה");
+        setDone(true);
+        setDryRunResult(null);
+      } else {
+        toast.error(res.data?.error || "שגיאה בניקוי");
+      }
+    } catch (e) {
+      toast.error("הפעולה נכשלה. יש להתחבר מחדש או לבדוק הרשאות.");
+    } finally {
+      setLoading(false);
     }
   };
 

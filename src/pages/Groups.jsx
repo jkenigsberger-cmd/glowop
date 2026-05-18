@@ -97,12 +97,20 @@ export default function Groups() {
     if (!deleteTarget) return;
     setDeletingId(deleteTarget.id);
     setDeleteTarget(null);
-    const res = await base44.functions.invoke("deleteGroup", { group_id: deleteTarget.id });
-    queryClient.invalidateQueries({ queryKey: ["groups"] });
-    setDeletingId(null);
-    if (res.data?.success) {
-      const d = res.data.deleted;
-      toast.success(`הקבוצה נמחקה. הוסרו: ${d.scheduleItems} פעילויות, ${d.mealReservations} ארוחות, ${d.allocations} הקצאות לינה.`);
+    try {
+      const res = await base44.functions.invoke("deleteGroup", { group_id: deleteTarget.id });
+      queryClient.invalidateQueries({ queryKey: ["groups"] });
+      if (res.data?.success) {
+        const d = res.data.deleted;
+        toast.success(`הקבוצה נמחקה. הוסרו: ${d.scheduleItems} פעילויות, ${d.mealReservations} ארוחות, ${d.allocations} הקצאות לינה.`);
+      } else if (res.data?.error) {
+        toast.error(res.data.error);
+      }
+    } catch (e) {
+      toast.error("הפעולה נכשלה. יש להתחבר מחדש או לבדוק הרשאות.");
+      queryClient.invalidateQueries({ queryKey: ["groups"] });
+    } finally {
+      setDeletingId(null);
     }
   };
 

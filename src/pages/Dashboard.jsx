@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
+import { useState } from "react";
 import DashboardSummaryCards from "@/components/dashboard/DashboardSummaryCards";
 import DashboardGroupCard from "@/components/dashboard/DashboardGroupCard";
 import DashboardWarnings from "@/components/dashboard/DashboardWarnings";
@@ -17,6 +18,61 @@ function Section({ title, children }) {
       <h2 className="font-bold text-base text-foreground border-b border-border pb-1">{title}</h2>
       {children}
     </section>
+  );
+}
+
+function PaxDebugPanel({ activeGroups, profileByGroupId }) {
+  const [open, setOpen] = useState(false);
+  const { data: user } = useQuery({
+    queryKey: ["me"],
+    queryFn: () => base44.auth.me(),
+  });
+  if (user?.role !== "admin") return null;
+  return (
+    <div className="bg-amber-50 border border-amber-300 rounded-xl p-3 text-xs" dir="rtl">
+      <button
+        className="font-semibold text-amber-800 hover:underline"
+        onClick={() => setOpen(v => !v)}
+      >
+        🔍 ניפוי: אנשים באתר ({activeGroups.reduce((s, g) => {
+          const p = profileByGroupId[g.id];
+          return s + (p?.total_pax ?? g.total_pax ?? 0);
+        }, 0)}) — {open ? "הסתר" : "הצג פירוט"}
+      </button>
+      {open && (
+        <table className="mt-2 w-full text-right border-collapse">
+          <thead>
+            <tr className="text-amber-700">
+              <th className="border border-amber-200 px-2 py-1">שם קבוצה</th>
+              <th className="border border-amber-200 px-2 py-1">סוג</th>
+              <th className="border border-amber-200 px-2 py-1">הגעה</th>
+              <th className="border border-amber-200 px-2 py-1">עזיבה</th>
+              <th className="border border-amber-200 px-2 py-1">סטטוס</th>
+              <th className="border border-amber-200 px-2 py-1">pax</th>
+            </tr>
+          </thead>
+          <tbody>
+            {activeGroups.map(g => {
+              const p = profileByGroupId[g.id];
+              const pax = p?.total_pax ?? g.total_pax ?? 0;
+              return (
+                <tr key={g.id} className="even:bg-amber-100/40">
+                  <td className="border border-amber-200 px-2 py-1">{g.group_name}</td>
+                  <td className="border border-amber-200 px-2 py-1">{g.group_type}</td>
+                  <td className="border border-amber-200 px-2 py-1">{g.arrival_date}</td>
+                  <td className="border border-amber-200 px-2 py-1">{g.departure_date || "—"}</td>
+                  <td className="border border-amber-200 px-2 py-1">{g.status}</td>
+                  <td className="border border-amber-200 px-2 py-1 font-bold">{pax}</td>
+                </tr>
+              );
+            })}
+            {activeGroups.length === 0 && (
+              <tr><td colSpan={6} className="text-center text-amber-600 py-2 border border-amber-200">אין קבוצות פעילות כרגע</td></tr>
+            )}
+          </tbody>
+        </table>
+      )}
+    </div>
   );
 }
 
@@ -70,18 +126,30 @@ export default function Dashboard() {
 
   // ── Date buckets ──────────────────────────────────────────────────────────
   // active:
-  //   - LODGING: arrival <= today AND (departure >= today OR no departure)
-  //   - DAY_USE: arrival === today (no departure = only active on arrival day)
+  //   - LODGING: arrival <= today AND departure > today (must have a real departure date)
+  //   - DAY_USE: arrival === today only
+  // NOTE: empty string "" is treated as "no departure" — we explicitly exclude those
+  //       unless arrival is today (they just arrived today, acceptable to show).
   const activeGroups = groups.filter(g => {
     if (g.status === "CANCELLED") return false;
     if (g.group_type === "DAY_USE") {
       return g.arrival_date === TODAY;
     }
-    return g.arrival_date <= TODAY && (!g.departure_date || g.departure_date >= TODAY);
+    // LODGING: must have a valid departure_date that is strictly after today
+    const dep = g.departure_date && g.departure_date.trim() !== "" ? g.departure_date : null;
+    if (!dep) {
+      // No departure date — only count if arriving today (first day)
+      return g.arrival_date === TODAY;
+    }
+    return g.arrival_date <= TODAY && dep > TODAY;
   });
   const arrivingToday  = groups.filter(g => g.status !== "CANCELLED" && g.arrival_date === TODAY);
-  // sleeping tonight: arrival <= today AND departure > today (departure is checkout, not sleeping night)
-  const sleepingTonight = groups.filter(g => g.status !== "CANCELLED" && g.arrival_date <= TODAY && g.departure_date && g.departure_date > TODAY);
+  // sleeping tonight: arrival <= today AND departure > today (must have a real non-empty departure)
+  const sleepingTonight = groups.filter(g => {
+    if (g.status === "CANCELLED") return false;
+    const dep = g.departure_date && g.departure_date.trim() !== "" ? g.departure_date : null;
+    return dep && g.arrival_date <= TODAY && dep > TODAY;
+  });
   const departingToday = groups.filter(g => g.status !== "CANCELLED" && g.departure_date === TODAY);
 
   // ── Stats ─────────────────────────────────────────────────────────────────
@@ -163,6 +231,9 @@ export default function Dashboard() {
 
         {/* Summary cards */}
         <DashboardSummaryCards stats={stats} />
+
+        {/* Admin pax debug panel */}
+        <PaxDebugPanel activeGroups={activeGroups} profileByGroupId={profileByGroupId} />
 
         {/* Quick links */}
         <Section title="קישורים מהירים">
