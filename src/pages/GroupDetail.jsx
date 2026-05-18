@@ -59,6 +59,7 @@ export default function GroupDetail() {
     queryClient.invalidateQueries({ queryKey: ["group", id] });
     queryClient.invalidateQueries({ queryKey: ["quotes", id] });
     queryClient.invalidateQueries({ queryKey: ["submissions", id] });
+    queryClient.invalidateQueries({ queryKey: ["operationalProfile", id] });
     queryClient.invalidateQueries({ queryKey: ["groups"] });
   };
 

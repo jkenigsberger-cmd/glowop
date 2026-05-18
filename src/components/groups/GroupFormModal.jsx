@@ -67,8 +67,31 @@ export default function GroupFormModal({ group, onClose, onSaved }) {
       if (payload[k] !== "" && payload[k] !== undefined) payload[k] = Number(payload[k]);
       else delete payload[k];
     });
-    if (isEdit) await base44.entities.Group.update(group.id, payload);
-    else await base44.entities.Group.create(payload);
+
+    if (isEdit) {
+      await base44.entities.Group.update(group.id, payload);
+    } else {
+      const newGroup = await base44.entities.Group.create(payload);
+      // Auto-create minimal OperationalGroupProfile so Group Detail is immediately operational
+      const existingProfiles = await base44.entities.OperationalGroupProfile.filter({ group_id: newGroup.id });
+      if (existingProfiles.length === 0) {
+        await base44.entities.OperationalGroupProfile.create({
+          group_id: newGroup.id,
+          quote_id: null,
+          guest_form_submission_id: null,
+          status: "ACCEPTED",
+          accepted_at: new Date().toISOString(),
+          total_pax: payload.total_pax || null,
+          participant_count: payload.participant_count || null,
+          staff_count: payload.staff_count || null,
+          boys_count: payload.boys_count || null,
+          girls_count: payload.girls_count || null,
+          general_notes: payload.internal_notes || null,
+          is_sleeping_group: payload.group_type === "LODGING",
+        });
+      }
+    }
+
     setSaving(false);
     onSaved();
   };

@@ -8,11 +8,11 @@
     },
     "quote_id": {
       "type": "string",
-      "description": "FK to Quote"
+      "description": "FK to Quote (optional \u2014 null for manually created groups)"
     },
     "guest_form_submission_id": {
       "type": "string",
-      "description": "FK to GuestFormSubmission"
+      "description": "FK to GuestFormSubmission (optional \u2014 null for manually created groups)"
     },
     "total_pax": {
       "type": "number"
@@ -160,8 +160,6 @@
   },
   "required": [
     "group_id",
-    "quote_id",
-    "guest_form_submission_id",
     "status"
   ]
 }
