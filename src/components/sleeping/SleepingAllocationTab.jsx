@@ -363,24 +363,27 @@ export default function SleepingAllocationTab({ groupId }) {
 
       {/* ── CONFIRMATION PANEL ── */}
       {(() => {
-        const draftAllocs    = myAllocations.filter(a => a.status === "DRAFT");
+        const draftAllocs     = myAllocations.filter(a => a.status === "DRAFT");
         const confirmedAllocs = myAllocations.filter(a => a.status === "CONFIRMED");
-        const totalAssigned  = myAllocations.filter(a => a.status !== "CANCELLED").reduce((s, a) => s + (a.allocated_pax || 0), 0);
-        const tentCount      = new Set(myAllocations.filter(a => a.status !== "CANCELLED").map(a => a.tent_id)).size;
+        const activeAllocs    = myAllocations.filter(a => a.status !== "CANCELLED");
+        const totalAssigned   = activeAllocs.reduce((s, a) => s + (a.allocated_pax || 0), 0);
+        const tentCount       = new Set(activeAllocs.map(a => a.tent_id)).size;
+        const hasNhoodOnly    = myActiveNhoodRes.length > 0 && activeAllocs.length === 0;
 
+        // A: All specific tents confirmed
         if (confirmedAllocs.length > 0 && draftAllocs.length === 0) {
-          // All confirmed — show status
           return (
             <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-300 rounded-xl px-4 py-3">
               <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
               <div className="flex-1">
-                <p className="text-sm font-semibold text-emerald-800">שיבוץ הלינה מאושר</p>
+                <p className="text-sm font-semibold text-emerald-800">שיבוץ לפי אוהלים — מאושר</p>
                 <p className="text-xs text-emerald-600">{totalAssigned} משתתפים · {tentCount} אוהלים · {confirmedAllocs.length} שורות מאושרות</p>
               </div>
             </div>
           );
         }
 
+        // B: Specific tent DRAFT rows — needs confirmation
         if (draftAllocs.length > 0) {
           const nhoodNames = [...new Set(
             draftAllocs.map(a => neighborhoods.find(n => n.id === a.neighborhood_id)?.name || a.neighborhood_id)
@@ -390,7 +393,7 @@ export default function SleepingAllocationTab({ groupId }) {
               <div className="flex items-start gap-2">
                 <Shield className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-sm font-semibold text-amber-800">שיבוץ בטיוטה — יש לאשר כדי לנעול את האוהלים</p>
+                  <p className="text-sm font-semibold text-amber-800">שיבוץ לפי אוהלים — טיוטה</p>
                   <p className="text-xs text-amber-700 mt-0.5">
                     {draftAllocs.length} שורות טיוטה · {totalAssigned} משתתפים · {tentCount} אוהלים
                     {nhoodNames && <span> · שכונות: {nhoodNames}</span>}
@@ -408,6 +411,26 @@ export default function SleepingAllocationTab({ groupId }) {
                 <CheckCircle2 className="w-4 h-4" />
                 {saving ? "מאשר..." : "אשר שיבוץ לינה"}
               </Button>
+            </div>
+          );
+        }
+
+        // C: Neighborhood-only reservation (no specific tent rows yet)
+        if (hasNhoodOnly) {
+          const nhoodNames = myActiveNhoodRes
+            .map(r => neighborhoods.find(n => n.id === r.neighborhood_id)?.name || r.neighborhood_id)
+            .join(", ");
+          return (
+            <div className="flex items-center gap-3 bg-blue-50 border border-blue-300 rounded-xl px-4 py-3">
+              <CheckCircle2 className="w-5 h-5 text-blue-600 shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-blue-800">שיבוץ אזורי נשמר</p>
+                <p className="text-xs text-blue-600">
+                  {nhoodNames && <span>שכונות: {nhoodNames} · </span>}
+                  טרם בוצע פירוט לפי אוהלים ספציפיים
+                </p>
+                <p className="text-[11px] text-blue-500 mt-0.5">לפירוט מלא לחץ "פירוט לפי אוהלים" על השכונה הרלוונטית</p>
+              </div>
             </div>
           );
         }

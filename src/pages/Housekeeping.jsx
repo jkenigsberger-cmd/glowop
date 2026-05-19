@@ -41,6 +41,11 @@ export default function Housekeeping() {
     queryFn: () => base44.entities.Neighborhood.list(),
   });
 
+  const { data: nhoodReservations = [] } = useQuery({
+    queryKey: ["allNhoodReservations"],
+    queryFn: () => base44.entities.NeighborhoodReservation.filter({ status: "ACTIVE" }),
+  });
+
   // Build lookup maps
   const groupsMap = useMemo(() => Object.fromEntries(groups.map(g => [g.id, g])), [groups]);
   const tentsMap  = useMemo(() => Object.fromEntries(tents.map(t => [t.id, t])), [tents]);
@@ -52,7 +57,7 @@ export default function Housekeeping() {
     [allocations]
   );
 
-  // Groups with only DRAFT allocations (no CONFIRMED) — to show warning
+  // Groups with only DRAFT SleepingAllocation rows (specific tent — not yet confirmed)
   const draftOnlyGroupIds = useMemo(() => {
     const confirmedGroupIds = new Set(activeAllocations.map(a => a.group_id));
     const draftGroupIds = new Set(allocations.filter(a => a.status === "DRAFT").map(a => a.group_id));
@@ -60,6 +65,15 @@ export default function Housekeeping() {
     draftGroupIds.forEach(id => { if (!confirmedGroupIds.has(id)) result.add(id); });
     return result;
   }, [allocations, activeAllocations]);
+
+  // Groups with neighborhood-only reservation (no SleepingAllocation rows at all)
+  const nhoodOnlyGroupIds = useMemo(() => {
+    const anyAllocGroupIds = new Set(allocations.filter(a => a.status !== "CANCELLED").map(a => a.group_id));
+    const nhoodGroupIds = new Set(nhoodReservations.map(r => r.group_id));
+    const result = new Set();
+    nhoodGroupIds.forEach(id => { if (!anyAllocGroupIds.has(id)) result.add(id); });
+    return result;
+  }, [allocations, nhoodReservations]);
 
   // Build date range to display
   const dateRange = useMemo(() => {
@@ -96,10 +110,19 @@ export default function Housekeeping() {
       // Groups arriving on this date (from Group entity directly) — for warning detection
       const arrivingGroups = groups.filter(g => g.arrival_date === date && g.status !== "CANCELLED");
 
-      // Groups with no CONFIRMED allocation on check-in date
-      const unallocatedGroups = arrivingGroups.filter(g => !checkInAllocsByGroup[g.id] && !draftOnlyGroupIds.has(g.id));
-      // Groups with only DRAFT allocation (not yet confirmed)
-      const draftOnlyGroups = arrivingGroups.filter(g => !checkInAllocsByGroup[g.id] && draftOnlyGroupIds.has(g.id));
+      // Groups with CONFIRMED specific tent allocations already handled above (checkInAllocsByGroup)
+      // Groups with only DRAFT specific tent allocation (needs confirmation)
+      const draftOnlyGroups = arrivingGroups.filter(g =>
+        !checkInAllocsByGroup[g.id] && draftOnlyGroupIds.has(g.id)
+      );
+      // Groups with neighborhood-only reservation (no tent rows at all — early planning)
+      const nhoodOnlyGroups = arrivingGroups.filter(g =>
+        !checkInAllocsByGroup[g.id] && !draftOnlyGroupIds.has(g.id) && nhoodOnlyGroupIds.has(g.id)
+      );
+      // Groups with no allocation of any kind
+      const unallocatedGroups = arrivingGroups.filter(g =>
+        !checkInAllocsByGroup[g.id] && !draftOnlyGroupIds.has(g.id) && !nhoodOnlyGroupIds.has(g.id)
+      );
 
       const checkInGroupIds  = Object.keys(checkInAllocsByGroup);
       const checkOutGroupIds = Object.keys(checkOutAllocsByGroup);
@@ -110,7 +133,8 @@ export default function Housekeeping() {
         checkOutGroupIds.length > 0 ||
         occupiedGroupIds.length > 0 ||
         unallocatedGroups.length > 0 ||
-        draftOnlyGroups.length > 0;
+        draftOnlyGroups.length > 0 ||
+        nhoodOnlyGroups.length > 0;
 
       return {
         date,
@@ -119,13 +143,14 @@ export default function Housekeeping() {
         occupiedAllocsByGroup,
         unallocatedGroups,
         draftOnlyGroups,
+        nhoodOnlyGroups,
         checkInGroupIds,
         checkOutGroupIds,
         occupiedGroupIds,
         hasActivity,
       };
     });
-  }, [dateRange, activeAllocations, groups]);
+  }, [dateRange, activeAllocations, groups, draftOnlyGroupIds, nhoodOnlyGroupIds]);
 
   const hasAnyActivity = dateData.some(d => d.hasActivity);
 
@@ -181,7 +206,7 @@ export default function Housekeeping() {
           </div>
         )}
 
-        {dateData.map(({ date, checkInAllocsByGroup, checkOutAllocsByGroup, occupiedAllocsByGroup, unallocatedGroups, draftOnlyGroups, checkInGroupIds, checkOutGroupIds, occupiedGroupIds, hasActivity }) => {
+        {dateData.map(({ date, checkInAllocsByGroup, checkOutAllocsByGroup, occupiedAllocsByGroup, unallocatedGroups, draftOnlyGroups, nhoodOnlyGroups, checkInGroupIds, checkOutGroupIds, occupiedGroupIds, hasActivity }) => {
           if (!hasActivity) return null;
           return (
             <section key={date}>
@@ -196,7 +221,7 @@ export default function Housekeeping() {
               </h2>
 
               {/* CHECK IN */}
-              {(checkInGroupIds.length > 0 || unallocatedGroups.length > 0 || draftOnlyGroups.length > 0) && (
+              {(checkInGroupIds.length > 0 || unallocatedGroups.length > 0 || draftOnlyGroups.length > 0 || nhoodOnlyGroups.length > 0) && (
                 <div className="mb-5">
                   <h3 className="text-sm font-semibold text-blue-700 mb-2 flex items-center gap-1.5">
                     <span className="inline-block w-2 h-2 rounded-full bg-blue-500" />
@@ -224,7 +249,7 @@ export default function Housekeeping() {
                         type="checkin"
                       />
                     ))}
-                    {/* Draft-only warnings */}
+                    {/* Draft specific-tent warnings */}
                     {draftOnlyGroups.map(g => (
                       <div key={g.id} className="border border-amber-300 bg-amber-50 rounded-xl p-4 space-y-1">
                         <div className="flex items-center gap-2">
@@ -232,7 +257,18 @@ export default function Housekeeping() {
                           <span className="font-semibold text-sm text-slate-800">{g.group_name}</span>
                           <span className="text-[11px] font-bold px-2 py-0.5 rounded-full border bg-blue-100 text-blue-700 border-blue-300">CHECK IN</span>
                         </div>
-                        <p className="text-xs text-amber-700 font-medium mr-6">שיבוץ לינה טרם אושר — יש לאשר בטאב שיבוץ לינה</p>
+                        <p className="text-xs text-amber-700 font-medium mr-6">שיבוץ לפי אוהלים טרם אושר — יש לאשר בטאב שיבוץ לינה</p>
+                      </div>
+                    ))}
+                    {/* Neighborhood-only warnings */}
+                    {nhoodOnlyGroups.map(g => (
+                      <div key={g.id} className="border border-blue-300 bg-blue-50 rounded-xl p-4 space-y-1">
+                        <div className="flex items-center gap-2">
+                          <AlertTriangle className="w-4 h-4 text-blue-500 shrink-0" />
+                          <span className="font-semibold text-sm text-slate-800">{g.group_name}</span>
+                          <span className="text-[11px] font-bold px-2 py-0.5 rounded-full border bg-blue-100 text-blue-700 border-blue-300">CHECK IN</span>
+                        </div>
+                        <p className="text-xs text-blue-700 font-medium mr-6">שיבוץ אזורי בלבד — טרם בוצע פירוט לאוהלים ספציפיים</p>
                       </div>
                     ))}
                   </div>
