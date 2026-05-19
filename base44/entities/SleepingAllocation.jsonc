@@ -46,9 +46,10 @@
         "BOYS",
         "GIRLS",
         "MEN",
-        "WOMEN"
+        "WOMEN",
+        "MIXED"
       ],
-      "description": "Single gender per tent \u2014 strictly enforced"
+      "description": "Gender group \u2014 MIXED used when no gender split is available"
     },
     "status": {
       "type": "string",

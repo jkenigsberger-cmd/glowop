@@ -159,9 +159,7 @@ export default function TentDistributionEditor({
             departure_date: departureDate,
             allocated_pax: pax,
             allocation_type: "STUDENT",
-            gender_group: reservation?.gender_group && reservation.gender_group !== "MIXED"
-              ? (reservation.gender_group === "BOYS" ? "BOYS" : "GIRLS")
-              : "BOYS",
+            gender_group: reservation?.gender_group || "MIXED",
             status: "DRAFT",
             notes,
           };

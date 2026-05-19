@@ -136,6 +136,10 @@ export default function SleepingAllocationTab({ groupId }) {
     return map;
   }, [allConfirmedAllocations, groupId, arrivalDate, departureDate]);
 
+  // Gender split availability
+  const hasGenderSplit = (Number(profile?.boys_count) + Number(profile?.girls_count)) > 0;
+  const defaultGenderGroup = hasGenderSplit ? "BOYS" : "MIXED";
+
   // Suggestion for student neighborhoods
   const boysDist = parseDist(profile?.boys_tent_distribution_json);
   const girlsDist = parseDist(profile?.girls_tent_distribution_json);
@@ -290,6 +294,7 @@ export default function SleepingAllocationTab({ groupId }) {
             saving={saving}
             allConfirmedAllocs={allConfirmedAllocations}
             onSaved={invalidate}
+            defaultGenderGroup={defaultGenderGroup}
             />
           );
         })}

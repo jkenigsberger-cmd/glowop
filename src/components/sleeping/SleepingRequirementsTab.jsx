@@ -88,11 +88,22 @@ export default function SleepingRequirementsTab({ groupId, profile }) {
   const [girlsDist,   setGirlsDist] = useState([]);
   const [vipRows,     setVipRows]   = useState([]);
 
+  // Gender split is available only when boys+girls sum > 0
+  const hasGenderSplit = (Number(profile?.boys_count) + Number(profile?.girls_count)) > 0;
+
   useEffect(() => {
     if (!profile) return;
+    const genderSplit = (Number(profile.boys_count) + Number(profile.girls_count)) > 0;
     setForm({
-      boys_beds_needed:    profile.boys_beds_needed  ?? profile.boys_count  ?? profile.participant_count ?? null,
-      girls_beds_needed:   profile.girls_beds_needed ?? profile.girls_count ?? null,
+      boys_beds_needed:    genderSplit
+        ? (profile.boys_beds_needed  ?? profile.boys_count  ?? null)
+        : null,
+      girls_beds_needed:   genderSplit
+        ? (profile.girls_beds_needed ?? profile.girls_count ?? null)
+        : null,
+      general_beds_needed: !genderSplit
+        ? (profile.boys_beds_needed ?? profile.participant_count ?? profile.total_pax ?? null)
+        : null,
       student_sleeping_notes:       profile.student_sleeping_notes       ?? "",
       staff_sleeping_notes:         profile.staff_sleeping_notes         ?? "",
       accessibility_sleeping_notes: profile.accessibility_sleeping_notes ?? "",
@@ -117,8 +128,8 @@ export default function SleepingRequirementsTab({ groupId, profile }) {
   const hardBlocked = studentOverMax || vipExceedsMax || vipOverPaxRow || vipMissingData;
 
   // Soft warnings (student distribution mismatch)
-  const boysDistMismatch  = form.boys_beds_needed  != null && distTotal(boysDist)  !== form.boys_beds_needed;
-  const girlsDistMismatch = form.girls_beds_needed != null && distTotal(girlsDist) !== form.girls_beds_needed;
+  const boysDistMismatch  = hasGenderSplit && form.boys_beds_needed  != null && distTotal(boysDist)  !== form.boys_beds_needed;
+  const girlsDistMismatch = hasGenderSplit && form.girls_beds_needed != null && distTotal(girlsDist) !== form.girls_beds_needed;
   const hasSoftWarnings   = boysDistMismatch || girlsDistMismatch;
 
   // ── save ──────────────────────────────────────────────────────────────────
@@ -134,8 +145,14 @@ export default function SleepingRequirementsTab({ groupId, profile }) {
 
     setSaving(true);
     try {
+      // When no gender split: store general_beds_needed in boys_beds_needed for backward compat
+      const saveForm = { ...form };
+      if (!hasGenderSplit) {
+        saveForm.boys_beds_needed  = form.general_beds_needed ?? null;
+        saveForm.girls_beds_needed = null;
+      }
       const payload = {
-        ...form,
+        ...saveForm,
         boys_tent_distribution_json:  JSON.stringify(boysDist),
         girls_tent_distribution_json: JSON.stringify(girlsDist),
         vip_tent_requirements_json:   JSON.stringify(vipRows),
@@ -226,44 +243,72 @@ export default function SleepingRequirementsTab({ groupId, profile }) {
 
       {/* Part B+C+D — Students */}
       <SectionCard icon={Users} title="דרישות לינה — תלמידים / משתתפים" color="bg-blue-50/50 border-blue-200">
-        <div className="grid grid-cols-2 gap-3">
+
+        {!hasGenderSplit && (
+          <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+            ℹ️ לא הוזנה חלוקה לבנים/בנות. ניתן לבצע שיבוץ כללי לפי מספר המשתתפים.
+          </div>
+        )}
+
+        {hasGenderSplit ? (
+          <div className="grid grid-cols-2 gap-3">
+            <NumberInput
+              label="מיטות נדרשות — בנים"
+              hint={`מהשאלון: ${profile.boys_count ?? "—"}`}
+              value={form.boys_beds_needed}
+              onChange={v => set("boys_beds_needed", v)}
+            />
+            <NumberInput
+              label="מיטות נדרשות — בנות"
+              hint={`מהשאלון: ${profile.girls_count ?? "—"}`}
+              value={form.girls_beds_needed}
+              onChange={v => set("girls_beds_needed", v)}
+            />
+          </div>
+        ) : (
           <NumberInput
-            label="מיטות נדרשות — בנים"
-            hint={`מהשאלון: ${profile.boys_count ?? "—"}`}
-            value={form.boys_beds_needed}
-            onChange={v => set("boys_beds_needed", v)}
+            label="מיטות נדרשות — משתתפים (שיבוץ כללי)"
+            hint={`מהשאלון: ${profile.participant_count ?? profile.total_pax ?? "—"}`}
+            value={form.general_beds_needed}
+            onChange={v => set("general_beds_needed", v)}
           />
-          <NumberInput
-            label="מיטות נדרשות — בנות"
-            hint={`מהשאלון: ${profile.girls_count ?? "—"}`}
-            value={form.girls_beds_needed}
-            onChange={v => set("girls_beds_needed", v)}
+        )}
+
+        {hasGenderSplit ? (
+          <>
+            <TentDistributionEditor
+              title="חלוקת אוהלים — בנים"
+              required={form.boys_beds_needed}
+              rows={boysDist}
+              onChange={setBoysDist}
+              maxPerTent={STUDENT_CAPACITY}
+              capacityPerTent={STUDENT_CAPACITY}
+              color="bg-blue-50"
+            />
+            <TentDistributionEditor
+              title="חלוקת אוהלים — בנות"
+              required={form.girls_beds_needed}
+              rows={girlsDist}
+              onChange={setGirlsDist}
+              maxPerTent={STUDENT_CAPACITY}
+              capacityPerTent={STUDENT_CAPACITY}
+              color="bg-pink-50/70"
+            />
+            <div className="text-[11px] text-blue-600 bg-blue-100 rounded-lg px-3 py-2">
+              ℹ️ בנים ובנות ישכנו באוהלים נפרדים. משק הבית יקצה את האוהלים הספציפיים בפועל.
+            </div>
+          </>
+        ) : (
+          <TentDistributionEditor
+            title="חלוקת אוהלים — כללי"
+            required={form.general_beds_needed}
+            rows={boysDist}
+            onChange={setBoysDist}
+            maxPerTent={STUDENT_CAPACITY}
+            capacityPerTent={STUDENT_CAPACITY}
+            color="bg-blue-50"
           />
-        </div>
-
-        <TentDistributionEditor
-          title="חלוקת אוהלים — בנים"
-          required={form.boys_beds_needed}
-          rows={boysDist}
-          onChange={setBoysDist}
-          maxPerTent={STUDENT_CAPACITY}
-          capacityPerTent={STUDENT_CAPACITY}
-          color="bg-blue-50"
-        />
-
-        <TentDistributionEditor
-          title="חלוקת אוהלים — בנות"
-          required={form.girls_beds_needed}
-          rows={girlsDist}
-          onChange={setGirlsDist}
-          maxPerTent={STUDENT_CAPACITY}
-          capacityPerTent={STUDENT_CAPACITY}
-          color="bg-pink-50/70"
-        />
-
-        <div className="text-[11px] text-blue-600 bg-blue-100 rounded-lg px-3 py-2">
-          ℹ️ בנים ובנות ישכנו באוהלים נפרדים. משק הבית יקצה את האוהלים הספציפיים בפועל.
-        </div>
+        )}
 
         <TextArea
           label="הערות לינה — תלמידים"

@@ -6,9 +6,9 @@ import { Lock, CheckCircle2, ChevronDown, ChevronUp, Plus, X, LayoutGrid } from 
 import TentDistributionEditor from "./TentDistributionEditor";
 
 const GENDER_OPTIONS = [
-  { value: "BOYS", label: "בנים 👦" },
+  { value: "BOYS",  label: "בנים 👦" },
   { value: "GIRLS", label: "בנות 👧" },
-  { value: "MIXED", label: "מעורב" },
+  { value: "MIXED", label: "מעורב / כללי 👥" },
 ];
 
 /**
@@ -40,11 +40,12 @@ export default function StudentNeighborhoodPanel({
   saving,
   allConfirmedAllocs = [],
   onSaved,
+  defaultGenderGroup = "BOYS",
 }) {
   const [open, setOpen] = useState(false);
   const [showDistribution, setShowDistribution] = useState(false);
   const [form, setForm] = useState({
-    gender_group: "BOYS",
+    gender_group: defaultGenderGroup,
     planned_tents: tents.length,
     notes: "",
   });
