@@ -95,71 +95,62 @@ function PairNode({ tents, allocByTentId, isSelected, onSelect }) {
 }
 
 // ── VIP Grid Map ───────────────────────────────────────────────────────────────
+// Uses explicit gridRow/gridColumn placement to be immune to RTL direction.
+
+const VIP_GRID_POSITIONS = {
+  "88": { row: 1, col: 1 },
+  "89": { row: 1, col: 2 },
+  "80": { row: 1, col: 3 },
+  "81": { row: 1, col: 4 },
+  "87": { row: 2, col: 1 },
+  "82": { row: 2, col: 4 },
+  "83": { row: 3, col: 1 },
+  "84": { row: 3, col: 2 },
+  "85": { row: 3, col: 3 },
+  "86": { row: 3, col: 4 },
+};
 
 function VipGridMap({ tents, allocByTentId, selectedTentId, onSelect }) {
-  // VIP layout: 88, 89, 80, 81 (top) | 87 (left), center, 82 (right) | 86, 85, 84, 83 (bottom)
-  const vipOrder = [88, 89, 80, 81, 87, 82, 86, 85, 84, 83];
-  const tentByNum = {};
-  tents.forEach(t => {
-    const num = parseInt(t.code, 10);
-    tentByNum[num] = t;
-  });
-
-  const topRow = [88, 89, 80, 81].map(n => tentByNum[n]).filter(Boolean);
-  const midLeft = tentByNum[87];
-  const midRight = tentByNum[82];
-  const bottomRow = [83, 84, 85, 86].map(n => tentByNum[n]).filter(Boolean);
+  const tentByCode = {};
+  tents.forEach(t => { tentByCode[t.code] = t; });
 
   return (
-    <div className="flex flex-col items-center gap-2 py-2">
-      {/* Top row */}
-      <div className="flex gap-2 justify-center">
-        {topRow.map(tent => (
-          <TentNode
-            key={tent.id}
-            tent={tent}
-            allocation={allocByTentId[tent.id] || null}
-            isSelected={selectedTentId === tent.id}
-            onClick={() => onSelect(tent.id)}
-          />
-        ))}
-      </div>
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(4, 1fr)",
+        gridTemplateRows: "repeat(3, auto)",
+        gap: "8px",
+        direction: "ltr",
+        padding: "8px 0",
+      }}
+    >
+      {/* Tent nodes */}
+      {Object.entries(VIP_GRID_POSITIONS).map(([code, pos]) => {
+        const tent = tentByCode[code];
+        if (!tent) return null;
+        return (
+          <div
+            key={code}
+            style={{ gridRow: pos.row, gridColumn: pos.col, display: "flex", justifyContent: "center" }}
+          >
+            <TentNode
+              tent={tent}
+              allocation={allocByTentId[tent.id] || null}
+              isSelected={selectedTentId === tent.id}
+              onClick={() => onSelect(tent.id)}
+            />
+          </div>
+        );
+      })}
 
-      {/* Middle row */}
-      <div className="flex gap-4 items-center justify-center">
-        {midLeft && (
-          <TentNode
-            tent={midLeft}
-            allocation={allocByTentId[midLeft.id] || null}
-            isSelected={selectedTentId === midLeft.id}
-            onClick={() => onSelect(midLeft.id)}
-          />
-        )}
-        {/* Center icon */}
+      {/* Center fire icon: row 2, cols 2–3 */}
+      <div
+        style={{ gridRow: 2, gridColumn: "2 / span 2", display: "flex", alignItems: "center", justifyContent: "center" }}
+      >
         <div className="w-12 h-12 rounded-full bg-gradient-to-br from-amber-100 to-orange-100 border-2 border-amber-300 flex items-center justify-center text-2xl">
           🔥
         </div>
-        {midRight && (
-          <TentNode
-            tent={midRight}
-            allocation={allocByTentId[midRight.id] || null}
-            isSelected={selectedTentId === midRight.id}
-            onClick={() => onSelect(midRight.id)}
-          />
-        )}
-      </div>
-
-      {/* Bottom row */}
-      <div className="flex gap-2 justify-center">
-        {bottomRow.map(tent => (
-          <TentNode
-            key={tent.id}
-            tent={tent}
-            allocation={allocByTentId[tent.id] || null}
-            isSelected={selectedTentId === tent.id}
-            onClick={() => onSelect(tent.id)}
-          />
-        ))}
       </div>
     </div>
   );
