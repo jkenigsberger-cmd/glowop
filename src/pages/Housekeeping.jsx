@@ -3,7 +3,7 @@ import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
 import { format, addDays, parseISO } from "date-fns";
 import { he } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, BedDouble } from "lucide-react";
+import { ChevronLeft, ChevronRight, BedDouble, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import GroupAllocationCard from "@/components/housekeeping/GroupAllocationCard";
 
@@ -46,11 +46,20 @@ export default function Housekeeping() {
   const tentsMap  = useMemo(() => Object.fromEntries(tents.map(t => [t.id, t])), [tents]);
   const neighborhoodsMap = useMemo(() => Object.fromEntries(neighborhoods.map(n => [n.id, n])), [neighborhoods]);
 
-  // Only non-cancelled allocations
+  // Only CONFIRMED allocations for housekeeping display (DRAFT = not yet confirmed)
   const activeAllocations = useMemo(
-    () => allocations.filter(a => a.status !== "CANCELLED"),
+    () => allocations.filter(a => a.status === "CONFIRMED"),
     [allocations]
   );
+
+  // Groups with only DRAFT allocations (no CONFIRMED) — to show warning
+  const draftOnlyGroupIds = useMemo(() => {
+    const confirmedGroupIds = new Set(activeAllocations.map(a => a.group_id));
+    const draftGroupIds = new Set(allocations.filter(a => a.status === "DRAFT").map(a => a.group_id));
+    const result = new Set();
+    draftGroupIds.forEach(id => { if (!confirmedGroupIds.has(id)) result.add(id); });
+    return result;
+  }, [allocations, activeAllocations]);
 
   // Build date range to display
   const dateRange = useMemo(() => {
@@ -65,7 +74,7 @@ export default function Housekeeping() {
   const dateData = useMemo(() => {
     return dateRange.map(date => {
       // Groups with allocations
-      const checkInAllocsByGroup = {};
+      const checkInAllocsByGroup  = {};
       const checkOutAllocsByGroup = {};
       const occupiedAllocsByGroup = {};
 
@@ -87,8 +96,10 @@ export default function Housekeeping() {
       // Groups arriving on this date (from Group entity directly) — for warning detection
       const arrivingGroups = groups.filter(g => g.arrival_date === date && g.status !== "CANCELLED");
 
-      // Groups with no allocation on check-in date
-      const unallocatedGroups = arrivingGroups.filter(g => !checkInAllocsByGroup[g.id]);
+      // Groups with no CONFIRMED allocation on check-in date
+      const unallocatedGroups = arrivingGroups.filter(g => !checkInAllocsByGroup[g.id] && !draftOnlyGroupIds.has(g.id));
+      // Groups with only DRAFT allocation (not yet confirmed)
+      const draftOnlyGroups = arrivingGroups.filter(g => !checkInAllocsByGroup[g.id] && draftOnlyGroupIds.has(g.id));
 
       const checkInGroupIds  = Object.keys(checkInAllocsByGroup);
       const checkOutGroupIds = Object.keys(checkOutAllocsByGroup);
@@ -98,7 +109,8 @@ export default function Housekeeping() {
         checkInGroupIds.length > 0 ||
         checkOutGroupIds.length > 0 ||
         occupiedGroupIds.length > 0 ||
-        unallocatedGroups.length > 0;
+        unallocatedGroups.length > 0 ||
+        draftOnlyGroups.length > 0;
 
       return {
         date,
@@ -106,6 +118,7 @@ export default function Housekeeping() {
         checkOutAllocsByGroup,
         occupiedAllocsByGroup,
         unallocatedGroups,
+        draftOnlyGroups,
         checkInGroupIds,
         checkOutGroupIds,
         occupiedGroupIds,
@@ -168,7 +181,7 @@ export default function Housekeeping() {
           </div>
         )}
 
-        {dateData.map(({ date, checkInAllocsByGroup, checkOutAllocsByGroup, occupiedAllocsByGroup, unallocatedGroups, checkInGroupIds, checkOutGroupIds, occupiedGroupIds, hasActivity }) => {
+        {dateData.map(({ date, checkInAllocsByGroup, checkOutAllocsByGroup, occupiedAllocsByGroup, unallocatedGroups, draftOnlyGroups, checkInGroupIds, checkOutGroupIds, occupiedGroupIds, hasActivity }) => {
           if (!hasActivity) return null;
           return (
             <section key={date}>
@@ -183,7 +196,7 @@ export default function Housekeeping() {
               </h2>
 
               {/* CHECK IN */}
-              {(checkInGroupIds.length > 0 || unallocatedGroups.length > 0) && (
+              {(checkInGroupIds.length > 0 || unallocatedGroups.length > 0 || draftOnlyGroups.length > 0) && (
                 <div className="mb-5">
                   <h3 className="text-sm font-semibold text-blue-700 mb-2 flex items-center gap-1.5">
                     <span className="inline-block w-2 h-2 rounded-full bg-blue-500" />
@@ -210,6 +223,17 @@ export default function Housekeeping() {
                         neighborhoodsMap={neighborhoodsMap}
                         type="checkin"
                       />
+                    ))}
+                    {/* Draft-only warnings */}
+                    {draftOnlyGroups.map(g => (
+                      <div key={g.id} className="border border-amber-300 bg-amber-50 rounded-xl p-4 space-y-1">
+                        <div className="flex items-center gap-2">
+                          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                          <span className="font-semibold text-sm text-slate-800">{g.group_name}</span>
+                          <span className="text-[11px] font-bold px-2 py-0.5 rounded-full border bg-blue-100 text-blue-700 border-blue-300">CHECK IN</span>
+                        </div>
+                        <p className="text-xs text-amber-700 font-medium mr-6">שיבוץ לינה טרם אושר — יש לאשר בטאב שיבוץ לינה</p>
+                      </div>
                     ))}
                   </div>
                 </div>

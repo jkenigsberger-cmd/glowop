@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, Lightbulb } from "lucide-react";
+import { AlertTriangle, Lightbulb, CheckCircle2, Shield } from "lucide-react";
 import { toast } from "sonner";
 
 import SleepingRequirementsSummary from "./SleepingRequirementsSummary";
@@ -199,6 +199,33 @@ export default function SleepingAllocationTab({ groupId }) {
     }
   };
 
+  const handleConfirmAllocations = async () => {
+    const draftIds = myAllocations.filter(a => a.status === "DRAFT").map(a => a.id);
+    if (draftIds.length === 0) {
+      toast.error("אין הקצאות טיוטה לאישור");
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await base44.functions.invoke("confirmSleepingAllocations", {
+        group_id: groupId,
+        draft_allocation_ids: draftIds,
+      });
+      if (res.data?.success) {
+        toast.success(`שיבוץ הלינה נשמר ואושר — ${res.data.confirmed_count} שורות ✓`);
+        invalidate();
+      } else {
+        const errList = res.data?.errors || ["שגיאה לא ידועה"];
+        toast.error("לא ניתן לאשר — " + errList[0]);
+        if (errList.length > 1) errList.slice(1).forEach(e => toast.error(e));
+      }
+    } catch (err) {
+      toast.error(err?.message || "שגיאה באישור השיבוץ — נסה שוב");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   // ── Guard ──────────────────────────────────────────────────────────────────
   if (!profile) {
     return (
@@ -333,6 +360,60 @@ export default function SleepingAllocationTab({ groupId }) {
           <p className="text-xs text-slate-400 italic">לא הוגדרו דרישות VIP לקבוצה זו.</p>
         </section>
       )}
+
+      {/* ── CONFIRMATION PANEL ── */}
+      {(() => {
+        const draftAllocs    = myAllocations.filter(a => a.status === "DRAFT");
+        const confirmedAllocs = myAllocations.filter(a => a.status === "CONFIRMED");
+        const totalAssigned  = myAllocations.filter(a => a.status !== "CANCELLED").reduce((s, a) => s + (a.allocated_pax || 0), 0);
+        const tentCount      = new Set(myAllocations.filter(a => a.status !== "CANCELLED").map(a => a.tent_id)).size;
+
+        if (confirmedAllocs.length > 0 && draftAllocs.length === 0) {
+          // All confirmed — show status
+          return (
+            <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-300 rounded-xl px-4 py-3">
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-emerald-800">שיבוץ הלינה מאושר</p>
+                <p className="text-xs text-emerald-600">{totalAssigned} משתתפים · {tentCount} אוהלים · {confirmedAllocs.length} שורות מאושרות</p>
+              </div>
+            </div>
+          );
+        }
+
+        if (draftAllocs.length > 0) {
+          const nhoodNames = [...new Set(
+            draftAllocs.map(a => neighborhoods.find(n => n.id === a.neighborhood_id)?.name || a.neighborhood_id)
+          )].join(", ");
+          return (
+            <div className="border border-amber-300 bg-amber-50 rounded-xl px-4 py-4 space-y-3">
+              <div className="flex items-start gap-2">
+                <Shield className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-semibold text-amber-800">שיבוץ בטיוטה — יש לאשר כדי לנעול את האוהלים</p>
+                  <p className="text-xs text-amber-700 mt-0.5">
+                    {draftAllocs.length} שורות טיוטה · {totalAssigned} משתתפים · {tentCount} אוהלים
+                    {nhoodNames && <span> · שכונות: {nhoodNames}</span>}
+                  </p>
+                  {confirmedAllocs.length > 0 && (
+                    <p className="text-xs text-emerald-700 mt-0.5">{confirmedAllocs.length} שורות כבר מאושרות</p>
+                  )}
+                </div>
+              </div>
+              <Button
+                className="w-full gap-2 bg-emerald-700 hover:bg-emerald-800 text-white"
+                onClick={handleConfirmAllocations}
+                disabled={saving}
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                {saving ? "מאשר..." : "אשר שיבוץ לינה"}
+              </Button>
+            </div>
+          );
+        }
+
+        return null;
+      })()}
 
     </div>
   );
