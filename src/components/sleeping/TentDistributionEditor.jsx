@@ -33,7 +33,7 @@ export default function TentDistributionEditor({
   open,
   onClose,
   neighborhood,
-  tents,
+  tents = [],
   reservation,
   groupId,
   profileId,
