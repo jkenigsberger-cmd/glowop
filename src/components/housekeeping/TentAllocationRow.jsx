@@ -53,9 +53,9 @@ export default function TentAllocationRow({ allocation, tent, neighborhood }) {
           </span>
         )}
 
-        {/* Pax */}
-        <span className="text-xs text-slate-600 shrink-0">
-          {allocation.allocated_pax} משתתפים
+        {/* Pax — cleaner-friendly label */}
+        <span className="text-xs font-semibold text-slate-700 shrink-0 bg-slate-100 border border-slate-200 rounded px-1.5 py-0.5">
+          להכין {allocation.allocated_pax} מיטות
         </span>
 
         {/* Gender */}

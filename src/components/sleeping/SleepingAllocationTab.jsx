@@ -276,18 +276,20 @@ export default function SleepingAllocationTab({ groupId }) {
           const hoodTents = allTents.filter(t => t.neighborhood_id === hood.id && t.working_status === "WORKING");
           return (
             <StudentNeighborhoodPanel
-              key={hood.id}
-              neighborhood={hood}
-              tents={hoodTents}
-              lockByThisGroup={myNhoodResById[hood.id] || null}
-              lockByOtherGroup={otherNhoodResByNeighborhood[hood.id] || null}
-              arrivalDate={arrivalDate}
-              departureDate={departureDate}
-              groupId={groupId}
-              profileId={profile.id}
-              onReserve={handleReserveNeighborhood}
-              onRelease={handleReleaseNeighborhood}
-              saving={saving}
+            key={hood.id}
+            neighborhood={hood}
+            tents={hoodTents}
+            lockByThisGroup={myNhoodResById[hood.id] || null}
+            lockByOtherGroup={otherNhoodResByNeighborhood[hood.id] || null}
+            arrivalDate={arrivalDate}
+            departureDate={departureDate}
+            groupId={groupId}
+            profileId={profile.id}
+            onReserve={handleReserveNeighborhood}
+            onRelease={handleReleaseNeighborhood}
+            saving={saving}
+            allConfirmedAllocs={allConfirmedAllocations}
+            onSaved={invalidate}
             />
           );
         })}

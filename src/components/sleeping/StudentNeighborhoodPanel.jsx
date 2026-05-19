@@ -2,7 +2,8 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Lock, CheckCircle2, ChevronDown, ChevronUp, Plus, X } from "lucide-react";
+import { Lock, CheckCircle2, ChevronDown, ChevronUp, Plus, X, LayoutGrid } from "lucide-react";
+import TentDistributionEditor from "./TentDistributionEditor";
 
 const GENDER_OPTIONS = [
   { value: "BOYS", label: "בנים 👦" },
@@ -37,8 +38,11 @@ export default function StudentNeighborhoodPanel({
   onReserve,
   onRelease,
   saving,
+  allConfirmedAllocs = [],
+  onSaved,
 }) {
   const [open, setOpen] = useState(false);
+  const [showDistribution, setShowDistribution] = useState(false);
   const [form, setForm] = useState({
     gender_group: "BOYS",
     planned_tents: tents.length,
@@ -120,6 +124,14 @@ export default function StudentNeighborhoodPanel({
                 <Button
                   size="sm"
                   variant="outline"
+                  className="h-7 text-xs gap-1 border-blue-200 text-blue-700 hover:bg-blue-50"
+                  onClick={() => setShowDistribution(true)}
+                >
+                  <LayoutGrid className="w-3 h-3" /> פירוט לפי אוהלים
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
                   className="h-7 text-xs gap-1 border-emerald-300 text-emerald-700 hover:bg-emerald-100"
                   onClick={() => setOpen(o => !o)}
                 >
@@ -148,6 +160,21 @@ export default function StudentNeighborhoodPanel({
           </div>
         )}
       </div>
+
+      {/* Tent distribution editor */}
+      <TentDistributionEditor
+        open={showDistribution}
+        onClose={() => setShowDistribution(false)}
+        neighborhood={neighborhood}
+        tents={tents}
+        reservation={lockByThisGroup}
+        groupId={groupId}
+        profileId={profileId}
+        arrivalDate={arrivalDate}
+        departureDate={departureDate}
+        allConfirmedAllocs={allConfirmedAllocs}
+        onSaved={onSaved}
+      />
 
       {/* Expand form */}
       {open && !isLockedByOther && (
