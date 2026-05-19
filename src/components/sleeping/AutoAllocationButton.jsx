@@ -1,22 +1,16 @@
 /**
  * AutoAllocationButton
  *
- * Reads the distribution from OperationalGroupProfile, subtracts already-allocated
- * tents/pax for this group, then assigns remaining to the first available tents
- * in the given neighborhood (sorted naturally), creating DRAFT SleepingAllocation rows.
+ * Handles both single-gender (MIXED) and dual-gender (BOYS + GIRLS) automatic allocation.
  *
- * Props:
- *   neighborhood         - Neighborhood record
- *   tents                - Tent[] (working tents in this neighborhood)
- *   reservation          - NeighborhoodReservation (must already exist)
- *   profile              - OperationalGroupProfile
- *   groupId              - string
- *   profileId            - string
- *   arrivalDate          - string
- *   departureDate        - string
- *   allConfirmedAllocs   - SleepingAllocation[] from ALL groups (overbooking check)
- *   existingGroupAllocs  - SleepingAllocation[] for THIS group (remaining pax calc)
- *   onSaved              - () => void
+ * When a gender split exists (boys_count + girls_count > 0):
+ *   - Reads boys_tent_distribution_json and girls_tent_distribution_json separately
+ *   - Subtracts already-allocated BOYS pax and GIRLS pax independently
+ *   - Assigns BOYS first then GIRLS from the same pool of available tents (sequential, no mixing)
+ *
+ * When no gender split:
+ *   - Uses boys_tent_distribution_json as the general/MIXED distribution
+ *   - Creates MIXED allocations
  */
 
 import { useState, useMemo } from "react";
@@ -25,14 +19,14 @@ import { Button } from "@/components/ui/button";
 import { Wand2, AlertTriangle, CheckCircle2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
+// ── Pure helpers ───────────────────────────────────────────────────────────────
 
 function parseDist(json) {
   if (!json) return [];
   try { return JSON.parse(json); } catch { return []; }
 }
 
-/** Expand [{tent_count, people_per_tent}] → flat list of pax per tent e.g. [8,8,4] */
+/** [{tent_count, people_per_tent}] → flat list e.g. [8, 8, 4] */
 function expandDist(rows) {
   const flat = [];
   rows.forEach(r => {
@@ -41,10 +35,33 @@ function expandDist(rows) {
   return flat;
 }
 
-/** Natural numeric sort on tent code */
+/** Auto-generate a flat distribution from totalPax and defaultCapacity */
+function autoExpandFromPax(totalPax, defaultCap = 8) {
+  if (!totalPax || totalPax <= 0) return [];
+  const flat = [];
+  let remaining = totalPax;
+  while (remaining > 0) {
+    flat.push(Math.min(remaining, defaultCap));
+    remaining -= defaultCap;
+  }
+  return flat;
+}
+
+/** Subtract already-allocated pax from a flat list (from the front) */
+function subtractAllocated(flatList, alreadyPax) {
+  let rem = alreadyPax;
+  const result = [];
+  for (const pax of flatList) {
+    if (rem >= pax) { rem -= pax; continue; }
+    result.push(rem > 0 ? pax - rem : pax);
+    rem = 0;
+  }
+  return result;
+}
+
 function tentSortKey(tent) {
-  const match = String(tent.code || "").match(/(\d+)/);
-  return match ? Number(match[1]) : 9999;
+  const m = String(tent.code || "").match(/(\d+)/);
+  return m ? Number(m[1]) : 9999;
 }
 
 function datesOverlap(a1, a2, b1, b2) {
@@ -52,12 +69,11 @@ function datesOverlap(a1, a2, b1, b2) {
   return a1 < b2 && b1 < a2;
 }
 
-// ── Component ──────────────────────────────────────────────────────────────────
+// ── Main component ─────────────────────────────────────────────────────────────
 
 export default function AutoAllocationButton({
   neighborhood,
   tents = [],
-  reservation,
   profile,
   groupId,
   profileId,
@@ -67,66 +83,17 @@ export default function AutoAllocationButton({
   existingGroupAllocs = [],
   onSaved,
 }) {
-  const [preview, setPreview]   = useState(null); // null | { rows: [{tent, pax}], error: string|null }
-  const [saving, setSaving]     = useState(false);
-  const [done, setDone]         = useState(false);
+  const [preview, setPreview] = useState(null); // null | { segments: [{gender, rows}], error }
+  const [saving, setSaving]   = useState(false);
+  const [done, setDone]       = useState(false);
 
-  const genderGroup = reservation?.gender_group || "MIXED";
+  // Does the group have a gender split?
+  const hasGenderSplit = useMemo(() =>
+    ((profile?.boys_count || 0) + (profile?.girls_count || 0)) > 0,
+    [profile]
+  );
 
-  // ── Derive required flat pax list from profile ─────────────────────────────
-  const requiredPaxList = useMemo(() => {
-    if (!profile) return [];
-    let rows = [];
-    if (genderGroup === "BOYS")  rows = parseDist(profile.boys_tent_distribution_json);
-    else if (genderGroup === "GIRLS") rows = parseDist(profile.girls_tent_distribution_json);
-    else {
-      // MIXED: prefer boys dist (general group), else derive from total_pax
-      rows = parseDist(profile.boys_tent_distribution_json);
-    }
-    return expandDist(rows);
-  }, [profile, genderGroup]);
-
-  // ── Already-allocated pax for this gender across ALL neighborhoods ──────────
-  const alreadyAllocatedPax = useMemo(() => {
-    return existingGroupAllocs
-      .filter(a =>
-        a.status !== "CANCELLED" &&
-        a.allocation_type === "STUDENT" &&
-        (a.gender_group === genderGroup || (genderGroup === "MIXED" && (a.gender_group === "MIXED" || a.gender_group === "BOYS" || a.gender_group === "GIRLS")))
-      )
-      .reduce((s, a) => s + (a.allocated_pax || 0), 0);
-  }, [existingGroupAllocs, genderGroup]);
-
-  // How many pax are already in THIS neighborhood for this group
-  const alreadyInThisNeighborhood = useMemo(() => {
-    return existingGroupAllocs
-      .filter(a =>
-        a.status !== "CANCELLED" &&
-        a.allocation_type === "STUDENT" &&
-        a.neighborhood_id === neighborhood?.id
-      )
-      .reduce((s, a) => s + (a.allocated_pax || 0), 0);
-  }, [existingGroupAllocs, neighborhood]);
-
-  // Remaining flat pax list after subtracting already allocated
-  const remainingPaxList = useMemo(() => {
-    let remaining = alreadyAllocatedPax;
-    const list = [...requiredPaxList];
-    // Remove items from the front that are already covered
-    const result = [];
-    for (const pax of list) {
-      if (remaining >= pax) { remaining -= pax; continue; }
-      if (remaining > 0) {
-        result.push(pax - remaining);
-        remaining = 0;
-      } else {
-        result.push(pax);
-      }
-    }
-    return result;
-  }, [requiredPaxList, alreadyAllocatedPax]);
-
-  // Tents blocked by OTHER groups for overlapping dates
+  // Tents blocked by OTHER groups (overbooking check)
   const blockedTentIds = useMemo(() => {
     const set = new Set();
     if (!arrivalDate || !departureDate) return set;
@@ -139,30 +106,79 @@ export default function AutoAllocationButton({
     return set;
   }, [allConfirmedAllocs, groupId, arrivalDate, departureDate]);
 
-  // Tents already used by THIS group in this neighborhood
-  const usedByMeTentIds = useMemo(() => {
-    return new Set(
-      existingGroupAllocs
-        .filter(a => a.status !== "CANCELLED" && a.neighborhood_id === neighborhood?.id)
-        .map(a => a.tent_id)
-    );
-  }, [existingGroupAllocs, neighborhood]);
+  // Tents already allocated by THIS group in this neighborhood (any status except cancelled)
+  const usedByMeTentIds = useMemo(() => new Set(
+    existingGroupAllocs
+      .filter(a => a.status !== "CANCELLED" && a.neighborhood_id === neighborhood?.id)
+      .map(a => a.tent_id)
+  ), [existingGroupAllocs, neighborhood]);
 
-  // ── Run auto allocation ────────────────────────────────────────────────────
+  // Already-allocated pax per gender for this group across ALL neighborhoods
+  const allocatedPaxByGender = useMemo(() => {
+    const map = { BOYS: 0, GIRLS: 0, MIXED: 0 };
+    existingGroupAllocs
+      .filter(a => a.status !== "CANCELLED" && a.allocation_type === "STUDENT")
+      .forEach(a => {
+        const g = a.gender_group;
+        if (map[g] !== undefined) map[g] += (a.allocated_pax || 0);
+      });
+    return map;
+  }, [existingGroupAllocs]);
+
+  // ── Core: compute what still needs to be allocated ──────────────────────────
+  const segments = useMemo(() => {
+    if (!profile) return [];
+
+    if (hasGenderSplit) {
+      // Boys
+      let boysFlat = expandDist(parseDist(profile.boys_tent_distribution_json));
+      if (!boysFlat.length && profile.boys_beds_needed > 0) {
+        boysFlat = autoExpandFromPax(profile.boys_beds_needed);
+      }
+      const boysRemaining = subtractAllocated(boysFlat, allocatedPaxByGender.BOYS);
+
+      // Girls
+      let girlsFlat = expandDist(parseDist(profile.girls_tent_distribution_json));
+      if (!girlsFlat.length && profile.girls_beds_needed > 0) {
+        girlsFlat = autoExpandFromPax(profile.girls_beds_needed);
+      }
+      const girlsRemaining = subtractAllocated(girlsFlat, allocatedPaxByGender.GIRLS);
+
+      return [
+        { gender: "BOYS",  label: "בנים",  remaining: boysRemaining  },
+        { gender: "GIRLS", label: "בנות",  remaining: girlsRemaining },
+      ].filter(s => s.remaining.length > 0);
+    } else {
+      // MIXED/general
+      let flat = expandDist(parseDist(profile.boys_tent_distribution_json));
+      if (!flat.length) {
+        const totalPax = profile.participant_count || profile.total_pax || 0;
+        flat = autoExpandFromPax(totalPax);
+      }
+      const remaining = subtractAllocated(flat, allocatedPaxByGender.MIXED);
+      return remaining.length > 0
+        ? [{ gender: "MIXED", label: "כללי", remaining }]
+        : [];
+    }
+  }, [profile, hasGenderSplit, allocatedPaxByGender]);
+
+  const totalRemainingTents = segments.reduce((s, seg) => s + seg.remaining.length, 0);
+
+  // ── Run allocation logic ────────────────────────────────────────────────────
   const runAutoAllocation = () => {
     setDone(false);
 
-    if (!requiredPaxList.length) {
-      setPreview({ rows: [], error: "לא נמצאה חלוקת אוהלים בדרישות הלינה. נא להשלים דרישות לינה תחילה." });
+    if (!profile) {
+      setPreview({ error: "אין פרופיל תפעולי — נא להשלים את פרטי הקבוצה." });
       return;
     }
 
-    if (remainingPaxList.length === 0) {
-      setPreview({ rows: [], error: "כל המשתתפים כבר שובצו — אין משתתפים שנותרו לשיבוץ." });
+    if (segments.length === 0) {
+      setPreview({ error: "כל המשתתפים כבר שובצו — אין משתתפים שנותרו לשיבוץ." });
       return;
     }
 
-    // Available tents: working, in this neighborhood, not blocked by others, not already used by me
+    // Available tents pool (sorted naturally, excluding blocked + already used)
     const available = tents
       .filter(t =>
         t.working_status === "WORKING" &&
@@ -171,54 +187,67 @@ export default function AutoAllocationButton({
       )
       .sort((a, b) => tentSortKey(a) - tentSortKey(b));
 
-    if (available.length < remainingPaxList.length) {
+    if (available.length < totalRemainingTents) {
       setPreview({
-        rows: [],
-        error: `אין מספיק אוהלים זמינים בשכונה זו. נדרשים ${remainingPaxList.length} אוהלים, נמצאו ${available.length} פנויים.`,
+        error: `אין מספיק אוהלים זמינים בשכונה זו. נדרשים ${totalRemainingTents} אוהלים, נמצאו ${available.length} פנויים.`,
       });
       return;
     }
 
-    // Check capacity for each assignment
-    const rows = [];
-    for (let i = 0; i < remainingPaxList.length; i++) {
-      const tent = available[i];
-      const pax  = remainingPaxList[i];
-      if (pax > (tent.capacity || 0)) {
-        setPreview({
-          rows: [],
-          error: `אוהל ${tent.code} — קיבולת ${tent.capacity} אך נדרשים ${pax} אנשים. יש לעדכן את חלוקת האוהלים בדרישות לינה.`,
-        });
-        return;
+    // Assign tents sequentially across segments (BOYS first, then GIRLS, no mixing)
+    const result = [];
+    let tentCursor = 0;
+
+    for (const seg of segments) {
+      const rows = [];
+      for (const pax of seg.remaining) {
+        const tent = available[tentCursor];
+        if (!tent) {
+          setPreview({ error: `לא נותרו אוהלים זמינים לאחר שיבוץ ${seg.label}.` });
+          return;
+        }
+        if (pax > (tent.capacity || 0)) {
+          setPreview({
+            error: `אוהל ${tent.code} — קיבולת ${tent.capacity} אך נדרשים ${pax} ל${seg.label}. יש לעדכן את חלוקת האוהלים בדרישות לינה.`,
+          });
+          return;
+        }
+        rows.push({ tent, pax });
+        tentCursor++;
       }
-      rows.push({ tent, pax });
+      result.push({ gender: seg.gender, label: seg.label, rows });
     }
 
-    setPreview({ rows, error: null });
+    setPreview({ segments: result, error: null });
   };
 
-  // ── Save DRAFT rows ────────────────────────────────────────────────────────
+  // ── Save all segments as DRAFT rows ────────────────────────────────────────
   const handleSave = async () => {
-    if (!preview?.rows?.length) return;
+    if (!preview?.segments?.length) return;
     setSaving(true);
     try {
-      const ops = preview.rows.map(({ tent, pax }) =>
-        base44.entities.SleepingAllocation.create({
-          group_id:                     groupId,
-          operational_group_profile_id: profileId,
-          tent_id:                      tent.id,
-          neighborhood_id:              neighborhood.id,
-          arrival_date:                 arrivalDate,
-          departure_date:               departureDate,
-          allocated_pax:                pax,
-          allocation_type:              "STUDENT",
-          gender_group:                 genderGroup,
-          status:                       "DRAFT",
-          notes:                        "שיבוץ אוטומטי",
-        })
-      );
+      const ops = [];
+      for (const seg of preview.segments) {
+        for (const { tent, pax } of seg.rows) {
+          ops.push(base44.entities.SleepingAllocation.create({
+            group_id:                     groupId,
+            operational_group_profile_id: profileId,
+            tent_id:                      tent.id,
+            neighborhood_id:              neighborhood.id,
+            arrival_date:                 arrivalDate,
+            departure_date:               departureDate,
+            allocated_pax:                pax,
+            allocation_type:              "STUDENT",
+            gender_group:                 seg.gender,
+            status:                       "DRAFT",
+            notes:                        "שיבוץ אוטומטי",
+          }));
+        }
+      }
       await Promise.all(ops);
-      toast.success("שיבוץ אוטומטי נוצר — נא לאשר שיבוץ לינה ✓");
+      const totalTents = preview.segments.reduce((s, sg) => s + sg.rows.length, 0);
+      const totalPax   = preview.segments.reduce((s, sg) => s + sg.rows.reduce((ss, r) => ss + r.pax, 0), 0);
+      toast.success(`שיבוץ אוטומטי נוצר — ${totalTents} אוהלים · ${totalPax} אנשים — נא לאשר שיבוץ לינה ✓`);
       setDone(true);
       setPreview(null);
       onSaved?.();
@@ -229,42 +258,51 @@ export default function AutoAllocationButton({
     }
   };
 
-  const handleCancel = () => {
-    setPreview(null);
-    setDone(false);
-  };
+  const handleCancel = () => { setPreview(null); setDone(false); };
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
-  // Summary line for the trigger button
-  const totalRequired = requiredPaxList.reduce((s, p) => s + p, 0);
-  const totalRemaining = remainingPaxList.reduce((s, p) => s + p, 0);
-  const hasRemaining = totalRemaining > 0;
+  const GENDER_STYLE = {
+    BOYS:  "bg-emerald-50 border-emerald-200 text-emerald-800",
+    GIRLS: "bg-orange-50 border-orange-200 text-orange-800",
+    MIXED: "bg-violet-50 border-violet-200 text-violet-800",
+  };
+  const ROW_STYLE = {
+    BOYS:  "bg-emerald-50 border-emerald-200",
+    GIRLS: "bg-orange-50 border-orange-200",
+    MIXED: "bg-violet-50 border-violet-200",
+  };
 
   return (
     <div className="space-y-2">
-      {/* Trigger button */}
+      {/* Trigger */}
       {!preview && !done && (
         <Button
           size="sm"
           variant="outline"
           className="h-7 text-xs gap-1 border-violet-200 text-violet-700 hover:bg-violet-50"
           onClick={runAutoAllocation}
-          title={`שיבוץ אוטומטי — ${hasRemaining ? totalRemaining + " אנשים נותרו" : "הכל שובץ"}`}
         >
           <Wand2 className="w-3 h-3" />
           שיבוץ אוטומטי
         </Button>
       )}
 
-      {/* Done badge */}
+      {/* Done badge — show button again to allow re-run for next neighborhood */}
       {done && (
-        <span className="inline-flex items-center gap-1 text-[10px] font-medium bg-violet-100 text-violet-700 border border-violet-200 rounded-full px-2 py-0.5">
-          <CheckCircle2 className="w-3 h-3" /> שיבוץ אוטומטי נוצר
-        </span>
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="inline-flex items-center gap-1 text-[10px] font-medium bg-violet-100 text-violet-700 border border-violet-200 rounded-full px-2 py-0.5">
+            <CheckCircle2 className="w-3 h-3" /> שיבוץ אוטומטי נוצר
+          </span>
+          <Button
+            size="sm" variant="ghost"
+            className="h-6 text-[10px] text-violet-600 px-1"
+            onClick={() => setDone(false)}
+          >שיבוץ נוסף</Button>
+        </div>
       )}
 
-      {/* Preview / error panel */}
+      {/* Preview / error */}
       {preview && (
         <div className="border rounded-xl overflow-hidden bg-white">
           {preview.error ? (
@@ -273,34 +311,32 @@ export default function AutoAllocationButton({
               <div>
                 <p className="font-semibold">לא ניתן לבצע שיבוץ אוטומטי</p>
                 <p className="mt-0.5">{preview.error}</p>
-                <Button
-                  size="sm" variant="ghost"
-                  className="h-6 text-xs text-red-600 mt-1 px-1"
-                  onClick={handleCancel}
-                >סגור</Button>
+                <Button size="sm" variant="ghost" className="h-6 text-xs text-red-600 mt-1 px-1" onClick={handleCancel}>סגור</Button>
               </div>
             </div>
           ) : (
-            <div className="p-3 space-y-2">
+            <div className="p-3 space-y-3">
               <p className="text-xs font-semibold text-violet-800 flex items-center gap-1.5">
                 <Wand2 className="w-3.5 h-3.5" />
-                שיבוץ אוטומטי — {preview.rows.length} אוהלים · {preview.rows.reduce((s, r) => s + r.pax, 0)} אנשים
+                תצוגה מקדימה — שיבוץ אוטומטי
               </p>
-              <div className="space-y-1">
-                {preview.rows.map(({ tent, pax }) => (
-                  <div key={tent.id} className="flex items-center justify-between text-xs px-3 py-1.5 bg-violet-50 border border-violet-200 rounded-lg">
-                    <span className="font-semibold text-slate-800">אוהל {tent.code}</span>
-                    <span className="text-violet-700 font-medium">{pax} מיטות</span>
-                  </div>
-                ))}
-              </div>
+
+              {preview.segments.map(seg => (
+                <div key={seg.gender} className={`border rounded-lg p-2 space-y-1 ${GENDER_STYLE[seg.gender]}`}>
+                  <p className="text-[11px] font-bold">
+                    {seg.label} — {seg.rows.length} אוהלים · {seg.rows.reduce((s, r) => s + r.pax, 0)} אנשים
+                  </p>
+                  {seg.rows.map(({ tent, pax }) => (
+                    <div key={tent.id} className={`flex items-center justify-between text-xs px-3 py-1.5 border rounded-lg bg-white`}>
+                      <span className="font-semibold text-slate-800">אוהל {tent.code}</span>
+                      <span className="font-medium">{pax} מיטות</span>
+                    </div>
+                  ))}
+                </div>
+              ))}
+
               <div className="flex gap-2 pt-1">
-                <Button
-                  size="sm" variant="outline"
-                  className="h-7 text-xs"
-                  onClick={handleCancel}
-                  disabled={saving}
-                >ביטול</Button>
+                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleCancel} disabled={saving}>ביטול</Button>
                 <Button
                   size="sm"
                   className="h-7 text-xs gap-1 bg-violet-700 hover:bg-violet-800 text-white flex-1"

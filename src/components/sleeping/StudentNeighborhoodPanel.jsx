@@ -128,7 +128,6 @@ export default function StudentNeighborhoodPanel({
                 <AutoAllocationButton
                   neighborhood={neighborhood}
                   tents={tents}
-                  reservation={lockByThisGroup}
                   profile={profile}
                   groupId={groupId}
                   profileId={profileId}
