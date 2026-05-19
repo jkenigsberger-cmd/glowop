@@ -3,7 +3,7 @@
  * Each row = { tent_count, people_per_tent, notes }
  * Used inside SleepingRequirementsTab (not the specific-tent dialog).
  */
-import { Plus, Trash2, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Plus, Trash2, CheckCircle2, AlertTriangle, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -11,6 +11,21 @@ const EMPTY_ROW = () => ({ tent_count: 1, people_per_tent: 8, notes: "" });
 
 function rowTotal(row) {
   return (Number(row.tent_count) || 0) * (Number(row.people_per_tent) || 0);
+}
+
+/**
+ * Auto-suggest a logical tent distribution for `total` people with `maxPerTent` capacity.
+ * Strategy: fill full tents first, then a remainder tent.
+ * e.g. 20 people @ 8/tent → [{tent_count:2, people_per_tent:8}, {tent_count:1, people_per_tent:4}]
+ */
+function suggestDistribution(total, maxPerTent) {
+  if (!total || total <= 0) return [];
+  const fullTents = Math.floor(total / maxPerTent);
+  const remainder = total % maxPerTent;
+  const rows = [];
+  if (fullTents > 0) rows.push({ tent_count: fullTents, people_per_tent: maxPerTent, notes: "" });
+  if (remainder > 0) rows.push({ tent_count: 1, people_per_tent: remainder, notes: "" });
+  return rows;
 }
 
 export default function StudentTentPlanningEditor({
@@ -28,6 +43,10 @@ export default function StudentTentPlanningEditor({
     next[i] = { ...next[i], [field]: val };
     onChange(next);
   };
+  const autoSuggest = () => {
+    const suggested = suggestDistribution(required, maxPerTent);
+    if (suggested.length > 0) onChange(suggested);
+  };
 
   const total = rows.reduce((s, r) => s + rowTotal(r), 0);
   const hasRequired = required != null && required > 0;
@@ -39,13 +58,25 @@ export default function StudentTentPlanningEditor({
       {/* Header */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <span className="text-xs font-semibold text-slate-700">{title}</span>
-        <Button
-          size="sm" variant="outline"
-          onClick={addRow}
-          className="h-7 text-xs gap-1 bg-white"
-        >
-          <Plus className="w-3 h-3" /> הוסף שורה
-        </Button>
+        <div className="flex gap-1.5">
+          {hasRequired && (
+            <Button
+              size="sm" variant="outline"
+              onClick={autoSuggest}
+              className="h-7 text-xs gap-1 bg-white border-purple-300 text-purple-700 hover:bg-purple-50"
+              title={`המלצה אוטומטית: ${required} אנשים × עד ${maxPerTent} לאוהל`}
+            >
+              <Wand2 className="w-3 h-3" /> המלצה אוטומטית
+            </Button>
+          )}
+          <Button
+            size="sm" variant="outline"
+            onClick={addRow}
+            className="h-7 text-xs gap-1 bg-white"
+          >
+            <Plus className="w-3 h-3" /> הוסף שורה
+          </Button>
+        </div>
       </div>
 
       {/* Column headers */}
