@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
-import { format, addDays, parseISO } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { he } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, BedDouble, AlertTriangle } from "lucide-react";
+import { ChevronLeft, ChevronRight, BedDouble } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import GroupAllocationCard from "@/components/housekeeping/GroupAllocationCard";
 
@@ -38,7 +38,7 @@ export default function Housekeeping() {
 
   const { data: neighborhoods = [] } = useQuery({
     queryKey: ["neighborhoods"],
-    queryFn: () => base44.entities.Neighborhood.list(),
+    queryFn: () => base44.entities.Neighborhood.list("sort_order"),
   });
 
   const { data: nhoodReservations = [] } = useQuery({
@@ -46,36 +46,71 @@ export default function Housekeeping() {
     queryFn: () => base44.entities.NeighborhoodReservation.filter({ status: "ACTIVE" }),
   });
 
-  // Build lookup maps
-  const groupsMap = useMemo(() => Object.fromEntries(groups.map(g => [g.id, g])), [groups]);
-  const tentsMap  = useMemo(() => Object.fromEntries(tents.map(t => [t.id, t])), [tents]);
+  const { data: profiles = [] } = useQuery({
+    queryKey: ["operationalProfiles"],
+    queryFn: () => base44.entities.OperationalGroupProfile.list(),
+  });
+
+  // ── Lookup maps ──────────────────────────────────────────────────────────────
+  const groupsMap        = useMemo(() => Object.fromEntries(groups.map(g => [g.id, g])), [groups]);
+  const tentsMap         = useMemo(() => Object.fromEntries(tents.map(t => [t.id, t])), [tents]);
   const neighborhoodsMap = useMemo(() => Object.fromEntries(neighborhoods.map(n => [n.id, n])), [neighborhoods]);
 
-  // Only CONFIRMED allocations for housekeeping display (DRAFT = not yet confirmed)
-  const activeAllocations = useMemo(
+  // nhoodReservationsByGroup: groupId → NeighborhoodReservation[]
+  const nhoodResByGroup = useMemo(() => {
+    const map = {};
+    nhoodReservations.forEach(r => {
+      if (!map[r.group_id]) map[r.group_id] = [];
+      map[r.group_id].push(r);
+    });
+    return map;
+  }, [nhoodReservations]);
+
+  // profilesByGroup: groupId → OperationalGroupProfile[]
+  const profilesByGroup = useMemo(() => {
+    const map = {};
+    profiles.forEach(p => {
+      if (!map[p.group_id]) map[p.group_id] = [];
+      map[p.group_id].push(p);
+    });
+    return map;
+  }, [profiles]);
+
+  // draftAllocsByGroup: groupId → DRAFT SleepingAllocation[]
+  const draftAllocsByGroup = useMemo(() => {
+    const map = {};
+    allocations.filter(a => a.status === "DRAFT").forEach(a => {
+      if (!map[a.group_id]) map[a.group_id] = [];
+      map[a.group_id].push(a);
+    });
+    return map;
+  }, [allocations]);
+
+  // Only CONFIRMED allocations shown in maps/details
+  const confirmedAllocations = useMemo(
     () => allocations.filter(a => a.status === "CONFIRMED"),
     [allocations]
   );
 
-  // Groups with only DRAFT SleepingAllocation rows (specific tent — not yet confirmed)
+  // Groups with DRAFT-only SleepingAllocation (specific tents, not yet confirmed)
   const draftOnlyGroupIds = useMemo(() => {
-    const confirmedGroupIds = new Set(activeAllocations.map(a => a.group_id));
-    const draftGroupIds = new Set(allocations.filter(a => a.status === "DRAFT").map(a => a.group_id));
+    const confirmedGroupIds = new Set(confirmedAllocations.map(a => a.group_id));
+    const draftGroupIds     = new Set(allocations.filter(a => a.status === "DRAFT").map(a => a.group_id));
     const result = new Set();
     draftGroupIds.forEach(id => { if (!confirmedGroupIds.has(id)) result.add(id); });
     return result;
-  }, [allocations, activeAllocations]);
+  }, [allocations, confirmedAllocations]);
 
-  // Groups with neighborhood-only reservation (no SleepingAllocation rows at all)
+  // Groups with neighborhood-only reservation (no SleepingAllocation rows of any kind)
   const nhoodOnlyGroupIds = useMemo(() => {
     const anyAllocGroupIds = new Set(allocations.filter(a => a.status !== "CANCELLED").map(a => a.group_id));
-    const nhoodGroupIds = new Set(nhoodReservations.map(r => r.group_id));
+    const nhoodGroupIds    = new Set(nhoodReservations.map(r => r.group_id));
     const result = new Set();
     nhoodGroupIds.forEach(id => { if (!anyAllocGroupIds.has(id)) result.add(id); });
     return result;
   }, [allocations, nhoodReservations]);
 
-  // Build date range to display
+  // Date range
   const dateRange = useMemo(() => {
     return Array.from({ length: DAYS_AHEAD }, (_, i) => {
       const d = new Date(startDate);
@@ -84,17 +119,17 @@ export default function Housekeeping() {
     });
   }, [startDate]);
 
-  // For each date, compute check-in groups, check-out groups, occupied
+  // Per-date data
   const dateData = useMemo(() => {
     return dateRange.map(date => {
-      // Groups with allocations
+      // Confirmed allocations bucketed by group
       const checkInAllocsByGroup  = {};
       const checkOutAllocsByGroup = {};
       const occupiedAllocsByGroup = {};
 
-      activeAllocations.forEach(a => {
+      confirmedAllocations.forEach(a => {
         if (a.arrival_date === date) {
-          if (!checkInAllocsByGroup[a.group_id]) checkInAllocsByGroup[a.group_id] = [];
+          if (!checkInAllocsByGroup[a.group_id])  checkInAllocsByGroup[a.group_id]  = [];
           checkInAllocsByGroup[a.group_id].push(a);
         }
         if (a.departure_date === date) {
@@ -107,52 +142,68 @@ export default function Housekeeping() {
         }
       });
 
-      // Groups arriving on this date (from Group entity directly) — for warning detection
-      const arrivingGroups = groups.filter(g => g.arrival_date === date && g.status !== "CANCELLED");
+      // Groups arriving today (from Group entity) for warning-state detection
+      const arrivingGroups  = groups.filter(g => g.arrival_date === date   && g.status !== "CANCELLED");
+      const departingGroups = groups.filter(g => g.departure_date === date  && g.status !== "CANCELLED");
 
-      // Groups with CONFIRMED specific tent allocations already handled above (checkInAllocsByGroup)
-      // Groups with only DRAFT specific tent allocation (needs confirmation)
-      const draftOnlyGroups = arrivingGroups.filter(g =>
-        !checkInAllocsByGroup[g.id] && draftOnlyGroupIds.has(g.id)
-      );
-      // Groups with neighborhood-only reservation (no tent rows at all — early planning)
-      const nhoodOnlyGroups = arrivingGroups.filter(g =>
-        !checkInAllocsByGroup[g.id] && !draftOnlyGroupIds.has(g.id) && nhoodOnlyGroupIds.has(g.id)
-      );
-      // Groups with no allocation of any kind
-      const unallocatedGroups = arrivingGroups.filter(g =>
-        !checkInAllocsByGroup[g.id] && !draftOnlyGroupIds.has(g.id) && !nhoodOnlyGroupIds.has(g.id)
-      );
+      // Check-in: not yet in confirmed bucket → draft or nhoodOnly or none
+      const draftCheckIn  = arrivingGroups.filter(g => !checkInAllocsByGroup[g.id]  && draftOnlyGroupIds.has(g.id));
+      const nhoodCheckIn  = arrivingGroups.filter(g => !checkInAllocsByGroup[g.id]  && !draftOnlyGroupIds.has(g.id) && nhoodOnlyGroupIds.has(g.id));
+      const noneCheckIn   = arrivingGroups.filter(g => !checkInAllocsByGroup[g.id]  && !draftOnlyGroupIds.has(g.id) && !nhoodOnlyGroupIds.has(g.id));
+
+      // Check-out: groups departing today without confirmed allocs → draft or nhoodOnly or none
+      const draftCheckOut = departingGroups.filter(g => !checkOutAllocsByGroup[g.id] && draftOnlyGroupIds.has(g.id));
+      const nhoodCheckOut = departingGroups.filter(g => !checkOutAllocsByGroup[g.id] && !draftOnlyGroupIds.has(g.id) && nhoodOnlyGroupIds.has(g.id));
+      const noneCheckOut  = departingGroups.filter(g => !checkOutAllocsByGroup[g.id] && !draftOnlyGroupIds.has(g.id) && !nhoodOnlyGroupIds.has(g.id));
 
       const checkInGroupIds  = Object.keys(checkInAllocsByGroup);
       const checkOutGroupIds = Object.keys(checkOutAllocsByGroup);
       const occupiedGroupIds = Object.keys(occupiedAllocsByGroup);
 
       const hasActivity =
-        checkInGroupIds.length > 0 ||
-        checkOutGroupIds.length > 0 ||
-        occupiedGroupIds.length > 0 ||
-        unallocatedGroups.length > 0 ||
-        draftOnlyGroups.length > 0 ||
-        nhoodOnlyGroups.length > 0;
+        checkInGroupIds.length > 0 || checkOutGroupIds.length > 0 || occupiedGroupIds.length > 0 ||
+        draftCheckIn.length > 0 || nhoodCheckIn.length > 0 || noneCheckIn.length > 0 ||
+        draftCheckOut.length > 0 || nhoodCheckOut.length > 0;
 
       return {
         date,
         checkInAllocsByGroup,
         checkOutAllocsByGroup,
         occupiedAllocsByGroup,
-        unallocatedGroups,
-        draftOnlyGroups,
-        nhoodOnlyGroups,
         checkInGroupIds,
         checkOutGroupIds,
         occupiedGroupIds,
+        draftCheckIn, nhoodCheckIn, noneCheckIn,
+        draftCheckOut, nhoodCheckOut, noneCheckOut,
         hasActivity,
       };
     });
-  }, [dateRange, activeAllocations, groups, draftOnlyGroupIds, nhoodOnlyGroupIds]);
+  }, [dateRange, confirmedAllocations, groups, draftOnlyGroupIds, nhoodOnlyGroupIds]);
 
   const hasAnyActivity = dateData.some(d => d.hasActivity);
+
+  // ── Helpers to build props for GroupAllocationCard ───────────────────────────
+  const cardProps = (groupId, allocations, type) => ({
+    group:             groupsMap[groupId],
+    allocations,
+    draftAllocations:  draftAllocsByGroup[groupId] || [],
+    nhoodReservations: nhoodResByGroup[groupId]    || [],
+    profiles:          profilesByGroup[groupId]    || [],
+    tentsMap,
+    neighborhoodsMap,
+    type,
+  });
+
+  const warnCardProps = (group, type) => ({
+    group,
+    allocations:       [],
+    draftAllocations:  draftAllocsByGroup[group.id] || [],
+    nhoodReservations: nhoodResByGroup[group.id]    || [],
+    profiles:          profilesByGroup[group.id]    || [],
+    tentsMap,
+    neighborhoodsMap,
+    type,
+  });
 
   return (
     <div className="min-h-screen bg-background" dir="rtl">
@@ -206,8 +257,20 @@ export default function Housekeeping() {
           </div>
         )}
 
-        {dateData.map(({ date, checkInAllocsByGroup, checkOutAllocsByGroup, occupiedAllocsByGroup, unallocatedGroups, draftOnlyGroups, nhoodOnlyGroups, checkInGroupIds, checkOutGroupIds, occupiedGroupIds, hasActivity }) => {
+        {dateData.map(({
+          date,
+          checkInAllocsByGroup, checkOutAllocsByGroup, occupiedAllocsByGroup,
+          checkInGroupIds, checkOutGroupIds, occupiedGroupIds,
+          draftCheckIn, nhoodCheckIn, noneCheckIn,
+          draftCheckOut, nhoodCheckOut, noneCheckOut,
+          hasActivity,
+        }) => {
           if (!hasActivity) return null;
+
+          const hasCheckins  = checkInGroupIds.length > 0 || draftCheckIn.length > 0 || nhoodCheckIn.length > 0 || noneCheckIn.length > 0;
+          const hasCheckouts = checkOutGroupIds.length > 0 || draftCheckOut.length > 0 || nhoodCheckOut.length > 0 || noneCheckOut.length > 0;
+          const hasOccupied  = occupiedGroupIds.length > 0;
+
           return (
             <section key={date}>
               {/* Date heading */}
@@ -221,99 +284,63 @@ export default function Housekeeping() {
               </h2>
 
               {/* CHECK IN */}
-              {(checkInGroupIds.length > 0 || unallocatedGroups.length > 0 || draftOnlyGroups.length > 0 || nhoodOnlyGroups.length > 0) && (
+              {hasCheckins && (
                 <div className="mb-5">
                   <h3 className="text-sm font-semibold text-blue-700 mb-2 flex items-center gap-1.5">
                     <span className="inline-block w-2 h-2 rounded-full bg-blue-500" />
                     קבוצות נכנסות
                   </h3>
-                  <div className="space-y-3">
+                  <div className="space-y-2">
                     {checkInGroupIds.map(gid => (
-                      <GroupAllocationCard
-                        key={gid}
-                        group={groupsMap[gid]}
-                        allocations={checkInAllocsByGroup[gid] || []}
-                        tentsMap={tentsMap}
-                        neighborhoodsMap={neighborhoodsMap}
-                        type="checkin"
-                      />
+                      <GroupAllocationCard key={gid} {...cardProps(gid, checkInAllocsByGroup[gid] || [], "checkin")} />
                     ))}
-                    {/* Unallocated warnings */}
-                    {unallocatedGroups.map(g => (
-                      <GroupAllocationCard
-                        key={g.id}
-                        group={g}
-                        allocations={[]}
-                        tentsMap={tentsMap}
-                        neighborhoodsMap={neighborhoodsMap}
-                        type="checkin"
-                      />
+                    {draftCheckIn.map(g => (
+                      <GroupAllocationCard key={g.id} {...warnCardProps(g, "checkin")} />
                     ))}
-                    {/* Draft specific-tent warnings */}
-                    {draftOnlyGroups.map(g => (
-                      <div key={g.id} className="border border-amber-300 bg-amber-50 rounded-xl p-4 space-y-1">
-                        <div className="flex items-center gap-2">
-                          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                          <span className="font-semibold text-sm text-slate-800">{g.group_name}</span>
-                          <span className="text-[11px] font-bold px-2 py-0.5 rounded-full border bg-blue-100 text-blue-700 border-blue-300">CHECK IN</span>
-                        </div>
-                        <p className="text-xs text-amber-700 font-medium mr-6">שיבוץ לפי אוהלים טרם אושר — יש לאשר בטאב שיבוץ לינה</p>
-                      </div>
+                    {nhoodCheckIn.map(g => (
+                      <GroupAllocationCard key={g.id} {...warnCardProps(g, "checkin")} />
                     ))}
-                    {/* Neighborhood-only warnings */}
-                    {nhoodOnlyGroups.map(g => (
-                      <div key={g.id} className="border border-blue-300 bg-blue-50 rounded-xl p-4 space-y-1">
-                        <div className="flex items-center gap-2">
-                          <AlertTriangle className="w-4 h-4 text-blue-500 shrink-0" />
-                          <span className="font-semibold text-sm text-slate-800">{g.group_name}</span>
-                          <span className="text-[11px] font-bold px-2 py-0.5 rounded-full border bg-blue-100 text-blue-700 border-blue-300">CHECK IN</span>
-                        </div>
-                        <p className="text-xs text-blue-700 font-medium mr-6">שיבוץ אזורי בלבד — טרם בוצע פירוט לאוהלים ספציפיים</p>
-                      </div>
+                    {noneCheckIn.map(g => (
+                      <GroupAllocationCard key={g.id} {...warnCardProps(g, "checkin")} />
                     ))}
                   </div>
                 </div>
               )}
 
               {/* CHECK OUT */}
-              {checkOutGroupIds.length > 0 && (
+              {hasCheckouts && (
                 <div className="mb-5">
                   <h3 className="text-sm font-semibold text-orange-700 mb-2 flex items-center gap-1.5">
                     <span className="inline-block w-2 h-2 rounded-full bg-orange-500" />
                     קבוצות יוצאות
                   </h3>
-                  <div className="space-y-3">
+                  <div className="space-y-2">
                     {checkOutGroupIds.map(gid => (
-                      <GroupAllocationCard
-                        key={gid}
-                        group={groupsMap[gid]}
-                        allocations={checkOutAllocsByGroup[gid] || []}
-                        tentsMap={tentsMap}
-                        neighborhoodsMap={neighborhoodsMap}
-                        type="checkout"
-                      />
+                      <GroupAllocationCard key={gid} {...cardProps(gid, checkOutAllocsByGroup[gid] || [], "checkout")} />
+                    ))}
+                    {draftCheckOut.map(g => (
+                      <GroupAllocationCard key={g.id} {...warnCardProps(g, "checkout")} />
+                    ))}
+                    {nhoodCheckOut.map(g => (
+                      <GroupAllocationCard key={g.id} {...warnCardProps(g, "checkout")} />
+                    ))}
+                    {noneCheckOut.map(g => (
+                      <GroupAllocationCard key={g.id} {...warnCardProps(g, "checkout")} />
                     ))}
                   </div>
                 </div>
               )}
 
               {/* OCCUPIED */}
-              {occupiedGroupIds.length > 0 && (
+              {hasOccupied && (
                 <div className="mb-5">
                   <h3 className="text-sm font-semibold text-slate-500 mb-2 flex items-center gap-1.5">
                     <span className="inline-block w-2 h-2 rounded-full bg-slate-400" />
                     אוהלים תפוסים
                   </h3>
-                  <div className="space-y-3">
+                  <div className="space-y-2">
                     {occupiedGroupIds.map(gid => (
-                      <GroupAllocationCard
-                        key={gid}
-                        group={groupsMap[gid]}
-                        allocations={occupiedAllocsByGroup[gid] || []}
-                        tentsMap={tentsMap}
-                        neighborhoodsMap={neighborhoodsMap}
-                        type="occupied"
-                      />
+                      <GroupAllocationCard key={gid} {...cardProps(gid, occupiedAllocsByGroup[gid] || [], "occupied")} />
                     ))}
                   </div>
                 </div>
