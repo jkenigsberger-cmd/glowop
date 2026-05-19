@@ -322,6 +322,8 @@ export default function SleepingAllocationTab({ groupId }) {
             allConfirmedAllocs={allConfirmedAllocations}
             onSaved={invalidate}
             defaultGenderGroup={defaultGenderGroup}
+            profile={profile}
+            existingGroupAllocs={myAllocations}
             />
           );
         })}

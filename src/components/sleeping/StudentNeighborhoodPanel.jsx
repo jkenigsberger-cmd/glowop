@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Lock, CheckCircle2, ChevronDown, ChevronUp, Plus, X, LayoutGrid } from "lucide-react";
 import TentDistributionEditor from "./TentDistributionEditor";
+import AutoAllocationButton from "./AutoAllocationButton";
 
 const GENDER_OPTIONS = [
   { value: "BOYS",  label: "בנים 👦" },
@@ -41,6 +42,8 @@ export default function StudentNeighborhoodPanel({
   allConfirmedAllocs = [],
   onSaved,
   defaultGenderGroup = "BOYS",
+  profile = null,
+  existingGroupAllocs = [],
 }) {
   const [open, setOpen] = useState(false);
   const [showDistribution, setShowDistribution] = useState(false);
@@ -122,6 +125,19 @@ export default function StudentNeighborhoodPanel({
           <div className="flex items-center gap-1.5 shrink-0">
             {isLockedByMe ? (
               <>
+                <AutoAllocationButton
+                  neighborhood={neighborhood}
+                  tents={tents}
+                  reservation={lockByThisGroup}
+                  profile={profile}
+                  groupId={groupId}
+                  profileId={profileId}
+                  arrivalDate={arrivalDate}
+                  departureDate={departureDate}
+                  allConfirmedAllocs={allConfirmedAllocs}
+                  existingGroupAllocs={existingGroupAllocs}
+                  onSaved={onSaved}
+                />
                 <Button
                   size="sm"
                   variant="outline"
