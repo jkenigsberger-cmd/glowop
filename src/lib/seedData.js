@@ -93,8 +93,8 @@ export const TENTS_SEED = [
   ...makeSingleTents("N4", [41, 42, 43, 44], 8),
   // N5 — 5 single tents, 6 beds each
   ...makeSingleTents("N5", [51, 52, 53, 54, 55], 6),
-  // N6 — 4 single tents (60,61,62,63), 6 beds each
-  ...makeSingleTents("N6", [60, 61, 62, 63], 6),
+  // N6 — 4 single tents (61,62,63,64), 6 beds each
+  ...makeSingleTents("N6", [61, 62, 63, 64], 6),
   // N7 — 71(8), 72(accessible,3), 73(8), 74(8)
   ...makeSingleTents("N7", [71, 73, 74], 8),
   {
