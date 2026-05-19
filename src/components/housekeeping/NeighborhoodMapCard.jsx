@@ -108,7 +108,7 @@ function VipGridMap({ tents, allocByTentId, selectedTentId, onSelect }) {
   const topRow = [88, 89, 80, 81].map(n => tentByNum[n]).filter(Boolean);
   const midLeft = tentByNum[87];
   const midRight = tentByNum[82];
-  const bottomRow = [86, 85, 84, 83].map(n => tentByNum[n]).filter(Boolean);
+  const bottomRow = [83, 84, 85, 86].map(n => tentByNum[n]).filter(Boolean);
 
   return (
     <div className="flex flex-col items-center gap-2 py-2">
