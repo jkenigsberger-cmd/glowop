@@ -22,7 +22,7 @@ export default function GroupFormModal({ group, onClose, onSaved }) {
     contact_phone: group?.contact_phone || "",
     contact_email: group?.contact_email || "",
     internal_notes: group?.internal_notes || "",
-    status:        group?.status        || "DRAFT",
+    status:        group?.status        || "CONFIRMED",
   });
   const [saving, setSaving] = useState(false);
 
@@ -136,17 +136,20 @@ export default function GroupFormModal({ group, onClose, onSaved }) {
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-1">
-              <Label>סטטוס</Label>
-              <Select value={form.status} onValueChange={v => set("status", v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="DRAFT">טיוטה</SelectItem>
-                  <SelectItem value="CONFIRMED">מאושר</SelectItem>
-                  <SelectItem value="CANCELLED">מבוטל</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {isEdit && (
+              <div className="space-y-1">
+                <Label>סטטוס</Label>
+                <Select value={form.status} onValueChange={v => set("status", v)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="CONFIRMED">מאושר</SelectItem>
+                    <SelectItem value="COMPLETED">הסתיים</SelectItem>
+                    <SelectItem value="ARCHIVED">מוקפא</SelectItem>
+                    <SelectItem value="CANCELLED">מבוטל</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="space-y-1">
               <Label>תאריך הגעה *</Label>
               <Input type="date" value={form.arrival_date} onChange={e => set("arrival_date", e.target.value)} required />

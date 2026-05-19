@@ -82,12 +82,20 @@ export default function ApprovedGroups() {
     return da.localeCompare(db);
   });
 
+  // Filter: only CONFIRMED groups (exclude CANCELLED, COMPLETED, ARCHIVED)
+  const activeProfiles = sorted.filter(p => {
+    const g = groupById[p.group_id];
+    if (!g) return false;
+    const isOperational = g.status === "CONFIRMED";
+    return isOperational;
+  });
+
   // Bucket: upcoming (arrival >= today), past (departure < today)
-  const upcoming = sorted.filter(p => {
+  const upcoming = activeProfiles.filter(p => {
     const g = groupById[p.group_id];
     return !g?.departure_date || g.departure_date >= today;
   });
-  const past = sorted.filter(p => {
+  const past = activeProfiles.filter(p => {
     const g = groupById[p.group_id];
     return g?.departure_date && g.departure_date < today;
   });
