@@ -8,7 +8,7 @@ import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 // Add page imports here
 import Inventory from "./pages/Inventory";
-import Groups from "./pages/Groups";
+import Groups from "./pages/Groups.jsx";
 import GroupDetail from "./pages/GroupDetail";
 import GuestForm from "./pages/GuestForm.jsx";
 import ApprovedGroups from "./pages/ApprovedGroups.jsx";
