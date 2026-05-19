@@ -57,6 +57,21 @@ export default function OperationalProfileDisplay({ groupId }) {
     enabled: !!groupId,
   });
 
+  const { data: allTents = [] } = useQuery({
+    queryKey: ["tents"],
+    queryFn: () => base44.entities.Tent.list(),
+  });
+
+  const { data: allNeighborhoods = [] } = useQuery({
+    queryKey: ["neighborhoods"],
+    queryFn: () => base44.entities.Neighborhood.list("sort_order"),
+  });
+
+  const { data: allActivitySpaces = [] } = useQuery({
+    queryKey: ["activitySpaces"],
+    queryFn: () => base44.entities.ActivitySpace.list(),
+  });
+
   if (isLoading) return null;
 
   const profile = profiles[0];
@@ -67,6 +82,14 @@ export default function OperationalProfileDisplay({ groupId }) {
   const activeActivities = scheduleItems.filter(s => s.status === "ACTIVE");
   const activeAllocations = sleepingAllocations.filter(a => a.status !== "CANCELLED");
   const hasLiveData = activeMeals.length > 0 || activeActivities.length > 0 || activeAllocations.length > 0;
+
+  // Lookup maps
+  const tentById = Object.fromEntries(allTents.map(t => [t.id, t]));
+  const neighborhoodById = Object.fromEntries(allNeighborhoods.map(n => [n.id, n]));
+  const spaceById = Object.fromEntries(allActivitySpaces.map(s => [s.id, s]));
+
+  // Allocation summary counts
+  const totalAllocPax = activeAllocations.reduce((s, a) => s + (Number(a.allocated_pax) || 0), 0);
 
   const diets = safeJson(profile.special_diets, {});
   const meals = safeJson(profile.meal_plan, []);
@@ -259,14 +282,22 @@ export default function OperationalProfileDisplay({ groupId }) {
                 <p className="text-xs font-semibold text-slate-400 mb-2 flex items-center gap-1.5">
                   <CalendarDays className="w-3.5 h-3.5" /> פעילויות מתוכננות ({activeActivities.length})
                 </p>
-                <div className="space-y-1">
-                  {[...activeActivities].sort((a,b) => a.date.localeCompare(b.date) || (a.start_time||"").localeCompare(b.start_time||"")).map(s => (
-                    <div key={s.id} className="flex items-center justify-between text-xs bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5">
-                      <span className="font-medium text-slate-700">{s.activity_name}</span>
-                      <span className="text-slate-500">{s.date} · {s.start_time}–{s.end_time}</span>
-                      {s.pax > 0 && <span className="text-slate-400">👥 {s.pax}</span>}
-                    </div>
-                  ))}
+                <div className="space-y-1.5">
+                  {[...activeActivities].sort((a,b) => a.date.localeCompare(b.date) || (a.start_time||"").localeCompare(b.start_time||"")).map(s => {
+                    const space = s.activity_space_id ? spaceById[s.activity_space_id] : null;
+                    return (
+                      <div key={s.id} className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs space-y-0.5">
+                        <p className="font-semibold text-slate-800">{s.activity_name}</p>
+                        <div className="flex items-center gap-3 text-slate-500 flex-wrap">
+                          <span dir="ltr">{s.date} · {s.start_time}–{s.end_time}</span>
+                          {s.pax > 0 && <span>👥 {s.pax} משתתפים</span>}
+                          <span className={space ? "text-blue-600 font-medium" : "text-slate-400 italic"}>
+                            📍 {space ? `${space.name}` : "ללא מרחב פעילות"}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -275,20 +306,33 @@ export default function OperationalProfileDisplay({ groupId }) {
             {activeAllocations.length > 0 && (
               <div>
                 <p className="text-xs font-semibold text-slate-400 mb-2 flex items-center gap-1.5">
-                  <BedDouble className="w-3.5 h-3.5" /> שיבוצי לינה ({activeAllocations.length} אוהלים)
+                  <BedDouble className="w-3.5 h-3.5" /> שיבוצי לינה ({activeAllocations.length} אוהלים · {totalAllocPax} אנשים)
                 </p>
-                <div className="space-y-1">
-                  {activeAllocations.map(a => (
-                    <div key={a.id} className="flex items-center justify-between text-xs bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5">
-                      <span className="font-medium text-slate-700">
-                        {ALLOC_TYPE_LABELS[a.allocation_type] || a.allocation_type} · {GENDER_LABELS[a.gender_group] || a.gender_group}
-                      </span>
-                      <span className="text-slate-500">{a.arrival_date} → {a.departure_date}</span>
-                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${a.status === 'CONFIRMED' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                        {a.status === 'CONFIRMED' ? 'מאושר' : 'טיוטה'}
-                      </span>
-                    </div>
-                  ))}
+                <div className="space-y-1.5">
+                  {activeAllocations.map(a => {
+                    const tent = tentById[a.tent_id];
+                    const neighborhood = tent ? neighborhoodById[tent.neighborhood_id] : null;
+                    const typeLabel = a.allocation_type === "STAFF" ? "צוות / VIP" : "תלמידים";
+                    const genderLabel = GENDER_LABELS[a.gender_group] || a.gender_group;
+                    const statusLabel = a.status === "CONFIRMED" ? "מאושר" : "טיוטה";
+                    return (
+                      <div key={a.id} className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs space-y-0.5">
+                        <div className="flex items-center justify-between">
+                          <p className="font-semibold text-slate-800">
+                            אוהל {tent?.code || a.tent_id}
+                            {neighborhood && <span className="font-normal text-slate-500"> · {neighborhood.name}</span>}
+                          </p>
+                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${a.status === "CONFIRMED" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                            {statusLabel}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3 text-slate-500 flex-wrap">
+                          <span>{genderLabel} · {a.allocated_pax} {typeLabel}</span>
+                          <span dir="ltr">{a.arrival_date} → {a.departure_date}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
