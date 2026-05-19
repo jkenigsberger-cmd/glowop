@@ -1,14 +1,7 @@
-import { useState } from "react";
-import { AlertTriangle, ChevronDown, ChevronUp } from "lucide-react";
-import TentAllocationRow from "./TentAllocationRow";
+import { AlertTriangle } from "lucide-react";
+import NeighborhoodMapCard from "./NeighborhoodMapCard";
 
 const GENDER_LABEL = { BOYS: "בנים", GIRLS: "בנות", MEN: "גברים", WOMEN: "נשים" };
-
-function getTentNumber(tent) {
-  const raw = String(tent?.code || tent?.name || "");
-  const match = raw.match(/\d+/);
-  return match ? Number(match[0]) : 9999;
-}
 
 function genderBreakdown(allocations) {
   const counts = {};
@@ -19,60 +12,6 @@ function genderBreakdown(allocations) {
   return counts;
 }
 
-// ── Neighborhood section card ─────────────────────────────────────────────────
-
-function NeighborhoodSection({ neighborhood, allocations, tentsMap }) {
-  const [collapsed, setCollapsed] = useState(false);
-  const totalPax = allocations.reduce((s, a) => s + (a.allocated_pax || 0), 0);
-
-  // Sort allocations numerically by tent code
-  const sorted = [...allocations].sort((a, b) => {
-    const ta = tentsMap[a.tent_id];
-    const tb = tentsMap[b.tent_id];
-    return getTentNumber(ta) - getTentNumber(tb);
-  });
-
-  const name = neighborhood?.name || "שכונה לא ידועה";
-
-  return (
-    <div className="border border-slate-200 bg-white rounded-xl overflow-hidden">
-      {/* Card header */}
-      <button
-        type="button"
-        onClick={() => setCollapsed(c => !c)}
-        className="w-full flex items-center justify-between gap-2 px-3 py-2.5 bg-slate-50 border-b border-slate-200 hover:bg-slate-100 transition-colors text-right"
-      >
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="font-bold text-sm text-slate-800">{name}</span>
-          <span className="text-[11px] text-slate-500">
-            · {allocations.length} אוהלים · {totalPax} אנשים
-          </span>
-        </div>
-        {collapsed
-          ? <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-          : <ChevronUp   className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-        }
-      </button>
-
-      {!collapsed && (
-        <div className="p-2 space-y-1.5">
-          {sorted.map(alloc => (
-            <TentAllocationRow
-              key={alloc.id}
-              allocation={alloc}
-              tent={tentsMap[alloc.tent_id]}
-              neighborhood={neighborhood}
-              hideNeighborhood
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Main component ────────────────────────────────────────────────────────────
-
 export default function GroupAllocationCard({ group, allocations, tentsMap, neighborhoodsMap, type }) {
   const typeLabel = type === "checkin" ? "CHECK IN" : type === "checkout" ? "CHECK OUT" : "תפוס";
   const typeBadgeClass = type === "checkin"
@@ -81,10 +20,9 @@ export default function GroupAllocationCard({ group, allocations, tentsMap, neig
     ? "bg-orange-100 text-orange-700 border-orange-300"
     : "bg-slate-100 text-slate-600 border-slate-300";
 
-  const totalPax = allocations.reduce((s, a) => s + (a.allocated_pax || 0), 0);
+  const totalPax  = allocations.reduce((s, a) => s + (a.allocated_pax || 0), 0);
   const breakdown = genderBreakdown(allocations);
 
-  // No allocation warning
   if (!group) return null;
   if (allocations.length === 0) {
     return (
@@ -103,7 +41,7 @@ export default function GroupAllocationCard({ group, allocations, tentsMap, neig
     );
   }
 
-  // Group allocations by neighborhood, sorted naturally by neighborhood sort_order then name
+  // Group allocations by neighborhood
   const byNeighborhood = {};
   allocations.forEach(a => {
     const nid = a.neighborhood_id || "__none__";
@@ -111,19 +49,26 @@ export default function GroupAllocationCard({ group, allocations, tentsMap, neig
     byNeighborhood[nid].push(a);
   });
 
-  const neighborhoodEntries = Object.entries(byNeighborhood).sort(([aidId], [bidId]) => {
-    const a = neighborhoodsMap[aidId];
-    const b = neighborhoodsMap[bidId];
+  // Sort neighborhood entries: by sort_order, VIP last
+  const neighborhoodEntries = Object.entries(byNeighborhood).sort(([aId], [bId]) => {
+    const a = neighborhoodsMap[aId];
+    const b = neighborhoodsMap[bId];
     if (!a && !b) return 0;
     if (!a) return 1;
     if (!b) return -1;
-    // VIP last
     if (a.is_vip && !b.is_vip) return 1;
     if (!a.is_vip && b.is_vip) return -1;
-    // sort_order first, then numeric from name
     const ao = a.sort_order ?? 999;
     const bo = b.sort_order ?? 999;
     return ao !== bo ? ao - bo : (a.name || "").localeCompare(b.name || "");
+  });
+
+  // Build all tents per neighborhood from tentsMap (for the map to show empty tents too)
+  const tentsByNeighborhood = {};
+  Object.values(tentsMap).forEach(t => {
+    if (!t?.neighborhood_id) return;
+    if (!tentsByNeighborhood[t.neighborhood_id]) tentsByNeighborhood[t.neighborhood_id] = [];
+    tentsByNeighborhood[t.neighborhood_id].push(t);
   });
 
   return (
@@ -144,14 +89,15 @@ export default function GroupAllocationCard({ group, allocations, tentsMap, neig
         </div>
       </div>
 
-      {/* Neighborhood cards — 2-column grid on md+ */}
+      {/* Neighborhood map cards — 2-column on md+ */}
       <div className="p-3 grid grid-cols-1 md:grid-cols-2 gap-3">
         {neighborhoodEntries.map(([nid, allocs]) => (
-          <NeighborhoodSection
+          <NeighborhoodMapCard
             key={nid}
             neighborhood={neighborhoodsMap[nid]}
             allocations={allocs}
             tentsMap={tentsMap}
+            allNeighborhoodTents={tentsByNeighborhood[nid] || []}
           />
         ))}
       </div>
