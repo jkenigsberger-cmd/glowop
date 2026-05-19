@@ -94,6 +94,77 @@ function PairNode({ tents, allocByTentId, isSelected, onSelect }) {
   );
 }
 
+// ── VIP Grid Map ───────────────────────────────────────────────────────────────
+
+function VipGridMap({ tents, allocByTentId, selectedTentId, onSelect }) {
+  // VIP layout: 88, 89, 80, 81 (top) | 87 (left), center, 82 (right) | 86, 85, 84, 83 (bottom)
+  const vipOrder = [88, 89, 80, 81, 87, 82, 86, 85, 84, 83];
+  const tentByNum = {};
+  tents.forEach(t => {
+    const num = parseInt(t.code, 10);
+    tentByNum[num] = t;
+  });
+
+  const topRow = [88, 89, 80, 81].map(n => tentByNum[n]).filter(Boolean);
+  const midLeft = tentByNum[87];
+  const midRight = tentByNum[82];
+  const bottomRow = [86, 85, 84, 83].map(n => tentByNum[n]).filter(Boolean);
+
+  return (
+    <div className="flex flex-col items-center gap-2 py-2">
+      {/* Top row */}
+      <div className="flex gap-2 justify-center">
+        {topRow.map(tent => (
+          <TentNode
+            key={tent.id}
+            tent={tent}
+            allocation={allocByTentId[tent.id] || null}
+            isSelected={selectedTentId === tent.id}
+            onClick={() => onSelect(tent.id)}
+          />
+        ))}
+      </div>
+
+      {/* Middle row */}
+      <div className="flex gap-4 items-center justify-center">
+        {midLeft && (
+          <TentNode
+            tent={midLeft}
+            allocation={allocByTentId[midLeft.id] || null}
+            isSelected={selectedTentId === midLeft.id}
+            onClick={() => onSelect(midLeft.id)}
+          />
+        )}
+        {/* Center icon */}
+        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-amber-100 to-orange-100 border-2 border-amber-300 flex items-center justify-center text-2xl">
+          🔥
+        </div>
+        {midRight && (
+          <TentNode
+            tent={midRight}
+            allocation={allocByTentId[midRight.id] || null}
+            isSelected={selectedTentId === midRight.id}
+            onClick={() => onSelect(midRight.id)}
+          />
+        )}
+      </div>
+
+      {/* Bottom row */}
+      <div className="flex gap-2 justify-center">
+        {bottomRow.map(tent => (
+          <TentNode
+            key={tent.id}
+            tent={tent}
+            allocation={allocByTentId[tent.id] || null}
+            isSelected={selectedTentId === tent.id}
+            onClick={() => onSelect(tent.id)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── Radial Map ─────────────────────────────────────────────────────────────────
 
 function TentRadialMap({ tentGroups, allocByTentId, selectedTentId, onSelect }) {
@@ -290,12 +361,21 @@ export default function NeighborhoodMapCard({ neighborhood, allocations, tentsMa
             <p className="text-xs text-slate-400 text-center py-4">טרם בוצע פירוט לאוהלים</p>
           ) : view === "map" ? (
             <div className="space-y-3">
-              <TentRadialMap
-                tentGroups={tentGroups}
-                allocByTentId={allocByTentId}
-                selectedTentId={selectedTentId}
-                onSelect={handleSelectTent}
-              />
+              {neighborhood?.is_vip ? (
+                <VipGridMap
+                  tents={sortedTents}
+                  allocByTentId={allocByTentId}
+                  selectedTentId={selectedTentId}
+                  onSelect={handleSelectTent}
+                />
+              ) : (
+                <TentRadialMap
+                  tentGroups={tentGroups}
+                  allocByTentId={allocByTentId}
+                  selectedTentId={selectedTentId}
+                  onSelect={handleSelectTent}
+                />
+              )}
               {/* Detail panel */}
               {selectedTent && (
                 <TentDetailPanel
