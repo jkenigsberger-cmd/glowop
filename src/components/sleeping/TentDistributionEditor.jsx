@@ -197,6 +197,17 @@ export default function TentDistributionEditor({
     }
   };
 
+  // Natural numeric sort by tent code
+  const getTentNumber = (tent) => {
+    const raw = String(tent.code || tent.name || "");
+    const match = raw.match(/\d+/);
+    return match ? Number(match[0]) : 9999;
+  };
+  const sortedTents = [...tents].sort((a, b) => {
+    const diff = getTentNumber(a) - getTentNumber(b);
+    return diff !== 0 ? diff : String(a.code).localeCompare(String(b.code));
+  });
+
   if (!neighborhood) return null;
 
   return (
@@ -224,7 +235,7 @@ export default function TentDistributionEditor({
             <span className="w-28">הערות</span>
           </div>
 
-          {tents.map(tent => {
+          {sortedTents.map(tent => {
             const pax = Number(paxMap[tent.id]) || 0;
             const isOverBooked = overbookedTentIds.has(tent.id);
             const isOverCap = pax > (tent.capacity || 0);

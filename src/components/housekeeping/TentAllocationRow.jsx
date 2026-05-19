@@ -12,7 +12,7 @@ const HK_STATUSES = [
   { value: "ISSUE",       label: "בעיה" },
 ];
 
-export default function TentAllocationRow({ allocation, tent, neighborhood }) {
+export default function TentAllocationRow({ allocation, tent, neighborhood, hideNeighborhood = false }) {
   const queryClient = useQueryClient();
 
   const handleStatusChange = async (newStatus) => {
@@ -46,8 +46,8 @@ export default function TentAllocationRow({ allocation, tent, neighborhood }) {
           </span>
         )}
 
-        {/* Neighborhood */}
-        {neighborhood && (
+        {/* Neighborhood — hidden when rendered inside a neighborhood card */}
+        {neighborhood && !hideNeighborhood && (
           <span className="text-xs text-slate-500 shrink-0">
             {neighborhood.name}
           </span>
