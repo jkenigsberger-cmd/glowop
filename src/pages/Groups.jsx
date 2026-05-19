@@ -95,8 +95,8 @@ export default function Groups() {
       })
       .sort((a, b) => {
         // Sort by departure_date (lodging) or arrival_date (day-use), descending
-        const dateA = g.group_type === "LODGING" ? (a.departure_date || "") : (a.arrival_date || "");
-        const dateB = g.group_type === "LODGING" ? (b.departure_date || "") : (b.arrival_date || "");
+        const dateA = a.group_type === "LODGING" ? (a.departure_date || "") : (a.arrival_date || "");
+        const dateB = b.group_type === "LODGING" ? (b.departure_date || "") : (b.arrival_date || "");
         return dateB.localeCompare(dateA);
       });
   }, [groups]);
