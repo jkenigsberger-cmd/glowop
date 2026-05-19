@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Save, CheckCircle2, Clock, AlertTriangle, Users, Star, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 import PeopleSummaryCard from "./PeopleSummaryCard";
-import TentDistributionEditor from "./TentDistributionEditor";
+import StudentTentPlanningEditor from "./StudentTentPlanningEditor";
 import VipRequirementsEditor from "./VipRequirementsEditor";
 
 const VIP_TOTAL_TENTS  = 10;
@@ -276,36 +276,33 @@ export default function SleepingRequirementsTab({ groupId, profile }) {
 
         {hasGenderSplit ? (
           <>
-            <TentDistributionEditor
+            <StudentTentPlanningEditor
               title="חלוקת אוהלים — בנים"
               required={form.boys_beds_needed}
               rows={boysDist}
               onChange={setBoysDist}
               maxPerTent={STUDENT_CAPACITY}
-              capacityPerTent={STUDENT_CAPACITY}
               color="bg-blue-50"
             />
-            <TentDistributionEditor
+            <StudentTentPlanningEditor
               title="חלוקת אוהלים — בנות"
               required={form.girls_beds_needed}
               rows={girlsDist}
               onChange={setGirlsDist}
               maxPerTent={STUDENT_CAPACITY}
-              capacityPerTent={STUDENT_CAPACITY}
-              color="bg-pink-50/70"
+              color="bg-pink-50"
             />
             <div className="text-[11px] text-blue-600 bg-blue-100 rounded-lg px-3 py-2">
               ℹ️ בנים ובנות ישכנו באוהלים נפרדים. משק הבית יקצה את האוהלים הספציפיים בפועל.
             </div>
           </>
         ) : (
-          <TentDistributionEditor
-            title="חלוקת אוהלים — כללי"
+          <StudentTentPlanningEditor
+            title="חלוקת אוהלים — כללי / שיבוץ כללי"
             required={form.general_beds_needed}
             rows={boysDist}
             onChange={setBoysDist}
             maxPerTent={STUDENT_CAPACITY}
-            capacityPerTent={STUDENT_CAPACITY}
             color="bg-blue-50"
           />
         )}
