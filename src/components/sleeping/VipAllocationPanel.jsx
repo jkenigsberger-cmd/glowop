@@ -102,6 +102,7 @@ function AssignmentDialog({ req, reqIndex, tent, existingAlloc, profile, groupId
 
   const handleRelease = async () => {
     if (!existingAlloc) { onReleased(); return; }
+    if (!window.confirm(`לשחרר את אוהל ${tent.code}?`)) return;
     setReleasing(true);
     setErrors([]);
     try {
@@ -113,7 +114,8 @@ function AssignmentDialog({ req, reqIndex, tent, existingAlloc, profile, groupId
       toast.success(`אוהל ${tent.code} שוחרר`);
       onReleased();
     } catch (err) {
-      setErrors([err.message || "שגיאה בשחרור"]);
+      console.error("[VipAllocationPanel] handleRelease error:", err);
+      setErrors([err?.response?.data?.error || err?.message || "שגיאה בשחרור — נסה שוב"]);
     } finally {
       setReleasing(false);
     }
@@ -515,16 +517,22 @@ export default function VipAllocationPanel({
     if (!draftIds.length) { toast.error("אין טיוטות לאישור"); return; }
     setConfirming(true);
     setServerErrors([]);
-    const res = await base44.functions.invoke("confirmSleepingAllocations", {
-      group_id: groupId,
-      draft_allocation_ids: draftIds,
-    });
-    setConfirming(false);
-    if (res.data?.success) {
-      toast.success(`${res.data.confirmed_count} הקצאות VIP אושרו ✓`);
-      onInvalidate();
-    } else {
-      setServerErrors(res.data?.errors || ["שגיאה לא ידועה"]);
+    try {
+      const res = await base44.functions.invoke("confirmSleepingAllocations", {
+        group_id: groupId,
+        draft_allocation_ids: draftIds,
+      });
+      if (res.data?.success) {
+        toast.success(`${res.data.confirmed_count} הקצאות VIP אושרו ✓`);
+        onInvalidate();
+      } else {
+        setServerErrors(res.data?.errors || ["שגיאה לא ידועה"]);
+      }
+    } catch (err) {
+      console.error("[VipAllocationPanel] handleConfirmAll error:", err);
+      setServerErrors([err?.response?.data?.error || err?.message || "שגיאה באישור ההקצאות — נסה שוב"]);
+    } finally {
+      setConfirming(false);
     }
   };
 

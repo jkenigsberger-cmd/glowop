@@ -163,24 +163,36 @@ export default function SleepingAllocationTab({ groupId }) {
 
   const handleReserveNeighborhood = async (payload) => {
     setSaving(true);
-    const existing = myActiveNhoodRes.find(r => r.neighborhood_id === payload.neighborhood_id);
-    if (existing) {
-      await base44.entities.NeighborhoodReservation.update(existing.id, payload);
-      toast.success("שכונה עודכנה");
-    } else {
-      await base44.entities.NeighborhoodReservation.create(payload);
-      toast.success("שכונה הוקצתה לקבוצה ✓");
+    try {
+      const existing = myActiveNhoodRes.find(r => r.neighborhood_id === payload.neighborhood_id);
+      if (existing) {
+        await base44.entities.NeighborhoodReservation.update(existing.id, payload);
+        toast.success("שכונה עודכנה");
+      } else {
+        await base44.entities.NeighborhoodReservation.create(payload);
+        toast.success("שכונה הוקצתה לקבוצה ✓");
+      }
+      invalidate();
+    } catch (err) {
+      console.error("[SleepingAllocationTab] handleReserveNeighborhood error:", err);
+      toast.error(err?.message || "שגיאה בשמירת השכונה — נסה שוב");
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
-    invalidate();
   };
 
   const handleReleaseNeighborhood = async (id) => {
     setSaving(true);
-    await base44.entities.NeighborhoodReservation.update(id, { status: "CANCELLED" });
-    setSaving(false);
-    invalidate();
-    toast.success("שכונה שוחררה");
+    try {
+      await base44.entities.NeighborhoodReservation.update(id, { status: "CANCELLED" });
+      toast.success("שכונה שוחררה");
+      invalidate();
+    } catch (err) {
+      console.error("[SleepingAllocationTab] handleReleaseNeighborhood error:", err);
+      toast.error(err?.message || "שגיאה בשחרור השכונה — נסה שוב");
+    } finally {
+      setSaving(false);
+    }
   };
 
   // ── Guard ──────────────────────────────────────────────────────────────────
