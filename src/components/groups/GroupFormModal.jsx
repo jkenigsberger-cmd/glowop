@@ -22,7 +22,7 @@ export default function GroupFormModal({ group, onClose, onSaved }) {
     contact_phone: group?.contact_phone || "",
     contact_email: group?.contact_email || "",
     internal_notes: group?.internal_notes || "",
-    status:        group?.status        || "CONFIRMED",
+    status:        isEdit ? (group?.status || "CONFIRMED") : "CONFIRMED",
   });
   const [saving, setSaving] = useState(false);
 
