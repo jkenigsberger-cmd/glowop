@@ -68,8 +68,24 @@ export default function GroupFormModal({ group, onClose, onSaved }) {
       else delete payload[k];
     });
 
+    const profilePaxFields = {
+      total_pax: payload.total_pax || null,
+      participant_count: payload.participant_count || null,
+      staff_count: payload.staff_count || null,
+      boys_count: payload.boys_count || null,
+      girls_count: payload.girls_count || null,
+    };
+
     if (isEdit) {
       await base44.entities.Group.update(group.id, payload);
+      // Keep OperationalGroupProfile in sync with group pax edits
+      const existingProfiles = await base44.entities.OperationalGroupProfile.filter({ group_id: group.id });
+      if (existingProfiles.length > 0) {
+        await base44.entities.OperationalGroupProfile.update(existingProfiles[0].id, {
+          ...profilePaxFields,
+          is_sleeping_group: payload.group_type === "LODGING",
+        });
+      }
     } else {
       const newGroup = await base44.entities.Group.create(payload);
       // Auto-create minimal OperationalGroupProfile so Group Detail is immediately operational
@@ -81,14 +97,13 @@ export default function GroupFormModal({ group, onClose, onSaved }) {
           guest_form_submission_id: null,
           status: "ACCEPTED",
           accepted_at: new Date().toISOString(),
-          total_pax: payload.total_pax || null,
-          participant_count: payload.participant_count || null,
-          staff_count: payload.staff_count || null,
-          boys_count: payload.boys_count || null,
-          girls_count: payload.girls_count || null,
+          ...profilePaxFields,
           general_notes: payload.internal_notes || null,
           is_sleeping_group: payload.group_type === "LODGING",
         });
+      } else {
+        // Profile already exists (race condition guard) — still sync pax
+        await base44.entities.OperationalGroupProfile.update(existingProfiles[0].id, profilePaxFields);
       }
     }
 

@@ -91,7 +91,7 @@ export default function SleepingRequirementsTab({ groupId, profile }) {
   useEffect(() => {
     if (!profile) return;
     setForm({
-      boys_beds_needed:    profile.boys_beds_needed  ?? profile.boys_count  ?? null,
+      boys_beds_needed:    profile.boys_beds_needed  ?? profile.boys_count  ?? profile.participant_count ?? null,
       girls_beds_needed:   profile.girls_beds_needed ?? profile.girls_count ?? null,
       student_sleeping_notes:       profile.student_sleeping_notes       ?? "",
       staff_sleeping_notes:         profile.staff_sleeping_notes         ?? "",
