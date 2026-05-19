@@ -2,7 +2,7 @@ import { useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Plus, Users, Calendar, ChevronLeft, FileText, Trash2, ChevronDown, ChevronUp, Clock, AlertTriangle } from "lucide-react";
+import { Plus, Users, Calendar, ChevronLeft, FileText, Trash2, ChevronDown, ChevronUp, Clock, AlertTriangle, Snowflake, CheckCircle2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import GroupStatusBadge from "@/components/groups/GroupStatusBadge";
 import GroupFormModal from "@/components/groups/GroupFormModal";
@@ -14,7 +14,10 @@ const GROUP_TYPE_LABEL = { LODGING: "לינה", DAY_USE: "יום כיף" };
 
 const today = new Date().toISOString().slice(0, 10);
 
+const INACTIVE_STATUSES = new Set(["CANCELLED", "COMPLETED", "ARCHIVED"]);
+
 function isFinished(g) {
+  if (INACTIVE_STATUSES.has(g.status)) return true;
   const endDate = g.departure_date || g.arrival_date;
   return !!endDate && endDate < today;
 }
@@ -151,7 +154,7 @@ export default function Groups() {
           </div>
         ))}
 
-        {/* History section */}
+        {/* History section — completed, archived, cancelled, past date */}
         {history.length > 0 && (
           <div className="pt-4">
             <button
@@ -161,7 +164,7 @@ export default function Groups() {
               <div className="flex-1 border-t border-dashed border-border" />
               <span className="flex items-center gap-1.5 px-2 whitespace-nowrap">
                 <Clock className="w-3.5 h-3.5" />
-                היסטוריה — {history.length} קבוצות שסיימו
+                היסטוריית קבוצות — {history.length}
                 {showHistory ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
               </span>
               <div className="flex-1 border-t border-dashed border-border" />
@@ -206,10 +209,9 @@ export default function Groups() {
                 <AlertTriangle className="w-5 h-5 text-red-600" />
               </div>
               <div>
-                <h2 className="text-base font-bold text-slate-800">מחיקת קבוצה</h2>
+                <h2 className="text-base font-bold text-slate-800">מחיקה מוחלטת</h2>
                 <p className="text-sm text-slate-600 mt-1">
-                  מחיקת הקבוצה <strong>"{deleteTarget.group_name}"</strong> תסיר גם את כל הנתונים התפעוליים הקשורים אליה:
-                  שיבוצי לינה, לוח פעילויות, ארוחות, שמירת שכונות ועוד.
+                  פעולה זו תמחק את הקבוצה <strong>"{deleteTarget.group_name}"</strong> ואת כל הנתונים התפעוליים הקשורים אליה. פעולה זו אינה מיועדת לקבוצות שהסתיימו או קבוצות בהמתנה.
                 </p>
                 <p className="text-xs text-slate-400 mt-2">
                   הנתונים הפיזיים של החווה (אוהלים, מיטות, שכונות, מרחבים) לא יימחקו.
@@ -224,7 +226,7 @@ export default function Groups() {
                 onClick={confirmDelete}
               >
                 <Trash2 className="w-3.5 h-3.5" />
-                מחק קבוצה ונתונים קשורים
+                מחק לצמיתות
               </Button>
             </div>
           </div>

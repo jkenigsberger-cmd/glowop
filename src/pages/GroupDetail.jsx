@@ -18,9 +18,12 @@ import OperationalProfileDisplay from "@/components/groups/OperationalProfileDis
 import OperationalHoldCard from "@/components/groups/OperationalHoldCard";
 import SleepingRequirementsTab from "@/components/sleeping/SleepingRequirementsTab";
 import ScheduleAndMealsTab from "@/components/schedule/ScheduleAndMealsTab";
+import GroupLifecycleActions from "@/components/groups/GroupLifecycleActions";
+import { useNavigate } from "react-router-dom";
 
 export default function GroupDetail() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
 
   const [editGroup, setEditGroup] = useState(false);
@@ -271,6 +274,13 @@ export default function GroupDetail() {
             <p className="text-sm text-amber-900">{group.internal_notes}</p>
           </section>
         )}
+
+        {/* Lifecycle Actions */}
+        <GroupLifecycleActions
+          group={group}
+          onDeleted={() => navigate("/groups")}
+          onUpdated={refetch}
+        />
 
         </>}
       </div>

@@ -31,10 +31,13 @@ function getMonthDates(pivot) {
   return days;
 }
 
-// ─── Event builders (UNCHANGED logic) ────────────────────────────────────────
+// ─── Event builders ───────────────────────────────────────────────────────────
+const EXCLUDED_STATUSES = new Set(["CANCELLED", "COMPLETED", "ARCHIVED"]);
+
 function buildGroupEvents(groups) {
   const events = [];
   groups.forEach((g) => {
+    if (EXCLUDED_STATUSES.has(g.status)) return;
     if (!g.arrival_date || !g.departure_date) return;
     const arr = moment(g.arrival_date);
     const dep = moment(g.departure_date);

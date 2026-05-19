@@ -54,9 +54,23 @@
       "enum": [
         "DRAFT",
         "CONFIRMED",
-        "CANCELLED"
+        "CANCELLED",
+        "COMPLETED",
+        "ARCHIVED"
       ],
       "default": "DRAFT"
+    },
+    "completed_at": {
+      "type": "string",
+      "description": "ISO datetime \u2014 set when group is marked COMPLETED"
+    },
+    "archived_at": {
+      "type": "string",
+      "description": "ISO datetime \u2014 set when group is frozen/archived"
+    },
+    "archived_reason": {
+      "type": "string",
+      "description": "Reason for freezing/archiving the group"
     }
   },
   "required": [

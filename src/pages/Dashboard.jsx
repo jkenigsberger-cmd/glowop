@@ -130,8 +130,10 @@ export default function Dashboard() {
   //   - DAY_USE: arrival === today only
   // NOTE: empty string "" is treated as "no departure" — we explicitly exclude those
   //       unless arrival is today (they just arrived today, acceptable to show).
+  const EXCLUDED = new Set(["CANCELLED", "COMPLETED", "ARCHIVED"]);
+
   const activeGroups = groups.filter(g => {
-    if (g.status === "CANCELLED") return false;
+    if (EXCLUDED.has(g.status)) return false;
     if (g.group_type === "DAY_USE") {
       return g.arrival_date === TODAY;
     }
@@ -143,14 +145,14 @@ export default function Dashboard() {
     }
     return g.arrival_date <= TODAY && dep > TODAY;
   });
-  const arrivingToday  = groups.filter(g => g.status !== "CANCELLED" && g.arrival_date === TODAY);
+  const arrivingToday  = groups.filter(g => !EXCLUDED.has(g.status) && g.arrival_date === TODAY);
   // sleeping tonight: arrival <= today AND departure > today (must have a real non-empty departure)
   const sleepingTonight = groups.filter(g => {
-    if (g.status === "CANCELLED") return false;
+    if (EXCLUDED.has(g.status)) return false;
     const dep = g.departure_date && g.departure_date.trim() !== "" ? g.departure_date : null;
     return dep && g.arrival_date <= TODAY && dep > TODAY;
   });
-  const departingToday = groups.filter(g => g.status !== "CANCELLED" && g.departure_date === TODAY);
+  const departingToday = groups.filter(g => !EXCLUDED.has(g.status) && g.departure_date === TODAY);
 
   // ── Stats ─────────────────────────────────────────────────────────────────
   const totalPaxOnSite = activeGroups.reduce((sum, g) => {
