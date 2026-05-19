@@ -1,7 +1,7 @@
 import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
-import { ShieldCheck } from "lucide-react";
+import { ShieldCheck, CalendarDays, UtensilsCrossed, BedDouble } from "lucide-react";
 
 function safeJson(str, fallback) {
   try { const r = JSON.parse(str); return r ?? fallback; } catch { return fallback; }
@@ -28,6 +28,10 @@ function Row({ label, value }) {
   );
 }
 
+const MEAL_LABELS = { BREAKFAST: "ארוחת בוקר", LUNCH: "ארוחת צהריים", DINNER: "ארוחת ערב", OTHER: "אחר" };
+const GENDER_LABELS = { BOYS: "בנים", GIRLS: "בנות", MEN: "גברים", WOMEN: "נשים" };
+const ALLOC_TYPE_LABELS = { STUDENT: "חניכים", STAFF: "צוות/VIP" };
+
 export default function OperationalProfileDisplay({ groupId }) {
   const { data: profiles = [], isLoading } = useQuery({
     queryKey: ["operationalProfile", groupId],
@@ -35,10 +39,34 @@ export default function OperationalProfileDisplay({ groupId }) {
     enabled: !!groupId,
   });
 
+  const { data: mealReservations = [] } = useQuery({
+    queryKey: ["mealReservations", groupId],
+    queryFn: () => base44.entities.MealReservation.filter({ group_id: groupId }),
+    enabled: !!groupId,
+  });
+
+  const { data: scheduleItems = [] } = useQuery({
+    queryKey: ["groupScheduleItems", groupId],
+    queryFn: () => base44.entities.GroupScheduleItem.filter({ group_id: groupId }),
+    enabled: !!groupId,
+  });
+
+  const { data: sleepingAllocations = [] } = useQuery({
+    queryKey: ["sleepingAllocations", groupId],
+    queryFn: () => base44.entities.SleepingAllocation.filter({ group_id: groupId }),
+    enabled: !!groupId,
+  });
+
   if (isLoading) return null;
 
-  const profile = profiles[0]; // latest / only accepted profile
+  const profile = profiles[0];
   if (!profile) return null;
+
+  // Live operational records
+  const activeMeals = mealReservations.filter(m => m.status === "ACTIVE");
+  const activeActivities = scheduleItems.filter(s => s.status === "ACTIVE");
+  const activeAllocations = sleepingAllocations.filter(a => a.status !== "CANCELLED");
+  const hasLiveData = activeMeals.length > 0 || activeActivities.length > 0 || activeAllocations.length > 0;
 
   const diets = safeJson(profile.special_diets, {});
   const meals = safeJson(profile.meal_plan, []);
@@ -198,6 +226,76 @@ export default function OperationalProfileDisplay({ groupId }) {
           )}
         </div>
       </div>
+
+      {/* ── Live Operational Records ───────────────────────────────────────── */}
+      {hasLiveData && (
+        <div className="bg-white border border-blue-200 rounded-xl overflow-hidden mt-4">
+          <div className="bg-blue-50 px-4 py-2.5 border-b border-blue-200 flex items-center gap-2">
+            <span className="text-xs font-semibold text-blue-700">נתונים תפעוליים שנוספו ידנית</span>
+          </div>
+          <div className="px-4 py-4 space-y-5">
+
+            {/* Active meals */}
+            {activeMeals.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-slate-400 mb-2 flex items-center gap-1.5">
+                  <UtensilsCrossed className="w-3.5 h-3.5" /> ארוחות מתוכננות ({activeMeals.length})
+                </p>
+                <div className="space-y-1">
+                  {[...activeMeals].sort((a,b) => a.date.localeCompare(b.date) || (a.start_time||"").localeCompare(b.start_time||"")).map(m => (
+                    <div key={m.id} className="flex items-center justify-between text-xs bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5">
+                      <span className="font-medium text-slate-700">{MEAL_LABELS[m.meal_type] || m.meal_type}</span>
+                      <span className="text-slate-500">{m.date} · {m.start_time}–{m.end_time}</span>
+                      {m.pax > 0 && <span className="text-slate-400">👥 {m.pax}</span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Active activities */}
+            {activeActivities.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-slate-400 mb-2 flex items-center gap-1.5">
+                  <CalendarDays className="w-3.5 h-3.5" /> פעילויות מתוכננות ({activeActivities.length})
+                </p>
+                <div className="space-y-1">
+                  {[...activeActivities].sort((a,b) => a.date.localeCompare(b.date) || (a.start_time||"").localeCompare(b.start_time||"")).map(s => (
+                    <div key={s.id} className="flex items-center justify-between text-xs bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5">
+                      <span className="font-medium text-slate-700">{s.activity_name}</span>
+                      <span className="text-slate-500">{s.date} · {s.start_time}–{s.end_time}</span>
+                      {s.pax > 0 && <span className="text-slate-400">👥 {s.pax}</span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Sleeping allocations */}
+            {activeAllocations.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-slate-400 mb-2 flex items-center gap-1.5">
+                  <BedDouble className="w-3.5 h-3.5" /> שיבוצי לינה ({activeAllocations.length} אוהלים)
+                </p>
+                <div className="space-y-1">
+                  {activeAllocations.map(a => (
+                    <div key={a.id} className="flex items-center justify-between text-xs bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5">
+                      <span className="font-medium text-slate-700">
+                        {ALLOC_TYPE_LABELS[a.allocation_type] || a.allocation_type} · {GENDER_LABELS[a.gender_group] || a.gender_group}
+                      </span>
+                      <span className="text-slate-500">{a.arrival_date} → {a.departure_date}</span>
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${a.status === 'CONFIRMED' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                        {a.status === 'CONFIRMED' ? 'מאושר' : 'טיוטה'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+          </div>
+        </div>
+      )}
     </section>
   );
 }

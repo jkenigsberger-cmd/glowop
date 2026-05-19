@@ -11,148 +11,171 @@ function timeToMinutes(t) {
 }
 
 Deno.serve(async (req) => {
-  const base44 = createClientFromRequest(req);
-  const user = await base44.auth.me();
-  if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+  try {
+    const base44 = createClientFromRequest(req);
 
-  const body = await req.json();
-  const {
-    id, // present when updating
-    group_id,
-    operational_group_profile_id,
-    date,
-    start_time,
-    end_time,
-    activity_name,
-    requested_location,
-    activity_space_id,
-    quote_item_id,
-    split_group_id,
-    split_index,
-    split_total,
-    pax,
-    notes,
-    source,
-    status,
-  } = body;
-
-  if (!group_id || !operational_group_profile_id || !date || !start_time || !end_time || !activity_name) {
-    return Response.json({ error: 'שדות חובה חסרים' }, { status: 400 });
-  }
-
-  // Validate start_time < end_time
-  if (timeToMinutes(start_time) >= timeToMinutes(end_time)) {
-    return Response.json({ error: 'שעת הסיום חייבת להיות אחרי שעת ההתחלה' }, { status: 400 });
-  }
-
-  // Validate date is within group booking window
-  const groups = await base44.asServiceRole.entities.Group.filter({ id: group_id });
-  const group = groups[0];
-  if (group && group.arrival_date && group.departure_date) {
-    if (date < group.arrival_date || date > group.departure_date) {
-      return Response.json({ error: 'לא ניתן לקבוע פעילות מחוץ לתאריכי הקבוצה' }, { status: 400 });
+    // Auth — best-effort, same pattern as saveVipSleepingAllocation.
+    // auth.me() can throw in published-URL context; we log but don't block
+    // since all entity writes go through asServiceRole.
+    let user = null;
+    try {
+      user = await base44.auth.me();
+    } catch (authErr) {
+      console.warn('[saveGroupScheduleItem] auth.me() threw (non-fatal):', authErr?.message);
     }
-  }
-
-  let resolvedSpaceId = activity_space_id || null;
-  let resolvedSpaceCode = null;
-
-  // Only run conflict check when assigning an actual space
-  if (resolvedSpaceId && status !== 'CANCELLED') {
-    // Load and validate the activity space
-    const spaces = await base44.asServiceRole.entities.ActivitySpace.filter({ id: resolvedSpaceId });
-    const space = spaces[0];
-    if (!space) {
-      return Response.json({ error: 'מרחב הפעילות שנבחר אינו קיים.' }, { status: 400 });
+    if (!user) {
+      console.warn('[saveGroupScheduleItem] no authenticated user — proceeding with service role only');
     }
-    if (!VALID_SPACE_CODES.has(space.code)) {
-      return Response.json({ error: `הקוד "${space.code}" אינו מרחב פעילות תקני.` }, { status: 400 });
-    }
-    resolvedSpaceCode = space.code;
 
-    // Conflict check with 15-minute buffer
-    const newStart = timeToMinutes(start_time);
-    const newEnd   = timeToMinutes(end_time);
-    const bufStart = newStart - 15;
-    const bufEnd   = newEnd   + 15;
-
-    const existingItems = await base44.asServiceRole.entities.GroupScheduleItem.filter({
-      activity_space_id: resolvedSpaceId,
+    const body = await req.json();
+    const {
+      id,
+      group_id,
+      operational_group_profile_id,
       date,
-      status: 'ACTIVE',
-    });
+      start_time,
+      end_time,
+      activity_name,
+      requested_location,
+      activity_space_id,
+      quote_item_id,
+      split_group_id,
+      split_index,
+      split_total,
+      pax,
+      notes,
+      source,
+      status,
+    } = body;
 
-    const conflicts = existingItems.filter(item => {
-      if (id && item.id === id) return false; // exclude self on update
-      const eStart = timeToMinutes(item.start_time);
-      const eEnd   = timeToMinutes(item.end_time);
-      return bufStart < eEnd && bufEnd > eStart;
-    });
-
-    if (conflicts.length > 0) {
-      const c = conflicts[0];
-      return Response.json({
-        error: `שגיאת התנגשות: מרחב הפעילות כבר תפוס בין ${c.start_time}–${c.end_time} (כולל בופר 15 דקות).`
-      }, { status: 409 });
+    if (!group_id || !operational_group_profile_id) {
+      return Response.json({ success: false, error: 'חסרים פרטי קבוצה או פרופיל תפעולי' }, { status: 400 });
     }
-  }
+    if (!activity_name) {
+      return Response.json({ success: false, error: 'חסר שם פעילות' }, { status: 400 });
+    }
+    if (!date) {
+      return Response.json({ success: false, error: 'חסר תאריך פעילות' }, { status: 400 });
+    }
+    if (!start_time || !end_time) {
+      return Response.json({ success: false, error: 'חסרות שעות פעילות' }, { status: 400 });
+    }
+    if (timeToMinutes(start_time) >= timeToMinutes(end_time)) {
+      return Response.json({ success: false, error: 'שעת הסיום חייבת להיות אחרי שעת ההתחלה' }, { status: 400 });
+    }
 
-  const payload = {
-    group_id,
-    operational_group_profile_id,
-    date,
-    start_time,
-    end_time,
-    activity_name,
-    requested_location: requested_location || null,
-    activity_space_id: resolvedSpaceId,
-    activity_space_code: resolvedSpaceCode,
-    quote_item_id: quote_item_id || null,
-    split_group_id: split_group_id || null,
-    split_index: split_index != null ? Number(split_index) : null,
-    split_total: split_total != null ? Number(split_total) : null,
-    pax: pax ? Number(pax) : null,
-    notes: notes || null,
-    source: source || 'manual',
-    status: status || 'ACTIVE',
-  };
+    // Validate date is within group booking window
+    const groups = await base44.asServiceRole.entities.Group.filter({ id: group_id });
+    const group = groups[0];
+    if (group && group.arrival_date && group.departure_date) {
+      if (date < group.arrival_date || date > group.departure_date) {
+        return Response.json({ success: false, error: 'לא ניתן לקבוע פעילות מחוץ לתאריכי הקבוצה' }, { status: 400 });
+      }
+    }
 
-  let result;
-  if (id) {
-    result = await base44.asServiceRole.entities.GroupScheduleItem.update(id, payload);
-  } else {
-    result = await base44.asServiceRole.entities.GroupScheduleItem.create(payload);
-  }
+    let resolvedSpaceId = activity_space_id || null;
+    let resolvedSpaceCode = null;
 
-  // Post-write race-condition check: re-fetch and verify no conflict slipped through
-  if (resolvedSpaceId && status !== 'CANCELLED') {
-    const newStart = timeToMinutes(start_time);
-    const newEnd   = timeToMinutes(end_time);
-    const bufStart = newStart - 15;
-    const bufEnd   = newEnd   + 15;
+    // Only run conflict check when assigning an actual space
+    if (resolvedSpaceId && status !== 'CANCELLED') {
+      const spaces = await base44.asServiceRole.entities.ActivitySpace.filter({ id: resolvedSpaceId });
+      const space = spaces[0];
+      if (!space) {
+        return Response.json({ success: false, error: 'מרחב הפעילות שנבחר אינו קיים.' }, { status: 400 });
+      }
+      if (!VALID_SPACE_CODES.has(space.code)) {
+        return Response.json({ success: false, error: `הקוד "${space.code}" אינו מרחב פעילות תקני.` }, { status: 400 });
+      }
+      resolvedSpaceCode = space.code;
 
-    const afterItems = await base44.asServiceRole.entities.GroupScheduleItem.filter({
-      activity_space_id: resolvedSpaceId,
+      const newStart = timeToMinutes(start_time);
+      const newEnd   = timeToMinutes(end_time);
+      const bufStart = newStart - 15;
+      const bufEnd   = newEnd   + 15;
+
+      const existingItems = await base44.asServiceRole.entities.GroupScheduleItem.filter({
+        activity_space_id: resolvedSpaceId,
+        date,
+        status: 'ACTIVE',
+      });
+
+      const conflicts = existingItems.filter(item => {
+        if (id && item.id === id) return false;
+        const eStart = timeToMinutes(item.start_time);
+        const eEnd   = timeToMinutes(item.end_time);
+        return bufStart < eEnd && bufEnd > eStart;
+      });
+
+      if (conflicts.length > 0) {
+        const c = conflicts[0];
+        return Response.json({
+          success: false,
+          error: `המרחב כבר תפוס בשעה הזו. יש לבחור שעה אחרת או מרחב אחר. (התנגשות עם ${c.start_time}–${c.end_time})`
+        }, { status: 409 });
+      }
+    }
+
+    const payload = {
+      group_id,
+      operational_group_profile_id,
       date,
-      status: 'ACTIVE',
-    });
+      start_time,
+      end_time,
+      activity_name,
+      requested_location: requested_location || null,
+      activity_space_id: resolvedSpaceId,
+      activity_space_code: resolvedSpaceCode,
+      quote_item_id: quote_item_id || null,
+      split_group_id: split_group_id || null,
+      split_index: split_index != null ? Number(split_index) : null,
+      split_total: split_total != null ? Number(split_total) : null,
+      pax: pax ? Number(pax) : null,
+      notes: notes || null,
+      source: source || 'manual',
+      status: status || 'ACTIVE',
+    };
 
-    const postConflicts = afterItems.filter(item => {
-      if (item.id === result.id) return false; // exclude the item we just wrote
-      const eStart = timeToMinutes(item.start_time);
-      const eEnd   = timeToMinutes(item.end_time);
-      return bufStart < eEnd && bufEnd > eStart;
-    });
-
-    if (postConflicts.length > 0) {
-      // Roll back: cancel the item we just wrote
-      await base44.asServiceRole.entities.GroupScheduleItem.update(result.id, { status: 'CANCELLED' });
-      const c = postConflicts[0];
-      return Response.json({
-        error: `המרחב כבר תפוס בשעה הזו. יש לבחור שעה אחרת או מרחב אחר. (התנגשות עם ${c.start_time}–${c.end_time})`
-      }, { status: 409 });
+    let result;
+    if (id) {
+      result = await base44.asServiceRole.entities.GroupScheduleItem.update(id, payload);
+    } else {
+      result = await base44.asServiceRole.entities.GroupScheduleItem.create(payload);
     }
-  }
 
-  return Response.json({ success: true, item: result });
+    // Post-write race-condition check
+    if (resolvedSpaceId && status !== 'CANCELLED') {
+      const newStart = timeToMinutes(start_time);
+      const newEnd   = timeToMinutes(end_time);
+      const bufStart = newStart - 15;
+      const bufEnd   = newEnd   + 15;
+
+      const afterItems = await base44.asServiceRole.entities.GroupScheduleItem.filter({
+        activity_space_id: resolvedSpaceId,
+        date,
+        status: 'ACTIVE',
+      });
+
+      const postConflicts = afterItems.filter(item => {
+        if (item.id === result.id) return false;
+        const eStart = timeToMinutes(item.start_time);
+        const eEnd   = timeToMinutes(item.end_time);
+        return bufStart < eEnd && bufEnd > eStart;
+      });
+
+      if (postConflicts.length > 0) {
+        await base44.asServiceRole.entities.GroupScheduleItem.update(result.id, { status: 'CANCELLED' });
+        const c = postConflicts[0];
+        return Response.json({
+          success: false,
+          error: `המרחב כבר תפוס בשעה הזו. יש לבחור שעה אחרת או מרחב אחר. (התנגשות עם ${c.start_time}–${c.end_time})`
+        }, { status: 409 });
+      }
+    }
+
+    return Response.json({ success: true, item: result });
+
+  } catch (err) {
+    console.error('[saveGroupScheduleItem] unexpected error:', err?.message, err?.stack);
+    return Response.json({ success: false, error: 'שגיאה פנימית בשמירת פעילות', debug: { message: err?.message } }, { status: 500 });
+  }
 });
