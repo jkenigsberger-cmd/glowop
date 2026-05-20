@@ -4,6 +4,15 @@ function datesOverlap(a1, a2, b1, b2) {
   return a1 < b2 && b1 < a2;
 }
 
+// VIP tents and accessible tents support operational override of up to 4 pax
+function getOperationalMaxPax(tent, allocation) {
+  const isVipTent       = tent.tent_type === 'VIP' || String(tent.code || '').match(/^8\d/);
+  const isAccessible    = tent.is_accessible === true;
+  const isStaffAlloc    = allocation.allocation_type === 'STAFF';
+  if (isVipTent || isAccessible || isStaffAlloc) return 4;
+  return tent.capacity || 8;
+}
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
@@ -29,7 +38,7 @@ Deno.serve(async (req) => {
     try {
       body = await req.json();
     } catch {
-      return Response.json({ success: false, error: 'בקשה לא תקינה — JSON שגוי' }, { status: 400 });
+      return Response.json({ success: false, error: 'בקשה לא תקינה — JSON שגוי' }, { status: 200 });
     }
 
     const { group_id, draft_allocation_ids } = body;
@@ -38,14 +47,14 @@ Deno.serve(async (req) => {
     console.log('[confirmSleepingAllocations] draft_allocation_ids:', JSON.stringify(draft_allocation_ids));
 
     if (!group_id) {
-      return Response.json({ success: false, error: 'חסר group_id', debug: { reasonCode: 'NO_GROUP_ID' } }, { status: 400 });
+      return Response.json({ success: false, error: 'חסר group_id', debug: { reasonCode: 'NO_GROUP_ID' } }, { status: 200 });
     }
     if (!Array.isArray(draft_allocation_ids) || draft_allocation_ids.length === 0) {
       return Response.json({
         success: false,
-        error: 'אין שיבוצי טיוטה לאישור',
+        error: 'אין הקצאות VIP לאישור',
         debug: { reasonCode: 'NO_DRAFT_IDS', received: draft_allocation_ids }
-      }, { status: 400 });
+      }, { status: 200 });
     }
 
     // ── 1. Load draft allocations for this group ──────────────────────────────
@@ -66,7 +75,7 @@ Deno.serve(async (req) => {
           requested: draft_allocation_ids,
           found: allGroupAllocations.map(a => ({ id: a.id, status: a.status }))
         }
-      }, { status: 400 });
+      }, { status: 200 });
     }
 
     // ── 2. Load other groups' allocations for conflict checking ──────────────
@@ -95,9 +104,10 @@ Deno.serve(async (req) => {
       const neighborhood = neighborhoodMap[draft.neighborhood_id];
       const isVip = neighborhood?.is_vip === true;
 
-      // Rule 1: capacity
-      if (draft.allocated_pax > tent.capacity) {
-        errors.push(`אוהל ${tent.code}: הקצאת ${draft.allocated_pax} מקומות חורגת מהקיבולת (${tent.capacity}).`);
+      // Rule 1: capacity (VIP/accessible tents allow up to 4 operationally)
+      const operationalMax = getOperationalMaxPax(tent, draft);
+      if (draft.allocated_pax > operationalMax) {
+        errors.push(`אוהל ${tent.code}: כמות האנשים (${draft.allocated_pax}) גדולה מהמקסימום התפעולי (${operationalMax}).`);
       }
 
       // Rule 2: tent exclusivity across groups
@@ -135,7 +145,8 @@ Deno.serve(async (req) => {
     const uniqueErrors = [...new Set(errors)];
     if (uniqueErrors.length > 0) {
       console.warn('[confirmSleepingAllocations] validation errors:', uniqueErrors);
-      return Response.json({ success: false, errors: uniqueErrors }, { status: 409 });
+      // Return 200 so SDK doesn't throw — frontend checks success:false
+      return Response.json({ success: false, errors: uniqueErrors }, { status: 200 });
     }
 
     // ── 5. Confirm all drafts ─────────────────────────────────────────────────
