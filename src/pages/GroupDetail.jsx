@@ -348,7 +348,7 @@ export default function GroupDetail() {
       </div>
 
       {/* Modals */}
-      {editGroup && <GroupFormModal group={group} onClose={() => setEditGroup(false)} onSaved={() => { refetch(); setEditGroup(false); }} />}
+      {editGroup && <GroupFormModal group={group} initialProfileDiets={operationalProfile?.special_diets || null} onClose={() => setEditGroup(false)} onSaved={() => { refetch(); setEditGroup(false); }} />}
       {showQuoteForm && <QuoteFormModal quote={editQuote} group={group} onClose={() => { setShowQuoteForm(false); setEditQuote(null); }} onSaved={() => { refetch(); setShowQuoteForm(false); setEditQuote(null); }} />}
       {reviewSubmission && !showSubmissionForm && (
         <SubmissionReviewModal

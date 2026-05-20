@@ -6,8 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import DietaryFields, { EMPTY_DIETS, parseDiets, mergeDiets } from "@/components/shared/DietaryFields";
 
-export default function GroupFormModal({ group, onClose, onSaved }) {
+export default function GroupFormModal({ group, onClose, onSaved, initialProfileDiets = null }) {
   const isEdit = !!group;
   const [form, setForm] = useState({
     group_name:    group?.group_name    || "",
@@ -24,6 +25,8 @@ export default function GroupFormModal({ group, onClose, onSaved }) {
     internal_notes: group?.internal_notes || "",
     status:        isEdit ? (group?.status || "CONFIRMED") : "CONFIRMED",
   });
+  // Dietary data — pre-loaded from profile.special_diets when editing
+  const [diets, setDiets] = useState(() => mergeDiets(parseDiets(initialProfileDiets)));
   const [saving, setSaving] = useState(false);
 
   // ── Derived values ────────────────────────────────────────────────────────
@@ -76,14 +79,22 @@ export default function GroupFormModal({ group, onClose, onSaved }) {
       girls_count: payload.girls_count || null,
     };
 
+    // Only save dietary data if at least one field is non-zero or has notes
+    const hasAnyDiet = Object.entries(diets).some(([k, v]) => k === "diet_notes" ? !!v : Number(v) > 0);
+    const dietPayload = hasAnyDiet ? { special_diets: JSON.stringify(diets) } : {};
+
     if (isEdit) {
       await base44.entities.Group.update(group.id, payload);
-      // Keep OperationalGroupProfile in sync with group pax edits
+      // Keep OperationalGroupProfile in sync with group pax edits + dietary
       const existingProfiles = await base44.entities.OperationalGroupProfile.filter({ group_id: group.id });
       if (existingProfiles.length > 0) {
+        // Do not overwrite richer GuestForm dietary data with empty manual values
+        const existingDiets = parseDiets(existingProfiles[0].special_diets);
+        const shouldUpdateDiets = hasAnyDiet || !existingDiets;
         await base44.entities.OperationalGroupProfile.update(existingProfiles[0].id, {
           ...profilePaxFields,
           is_sleeping_group: payload.group_type === "LODGING",
+          ...(shouldUpdateDiets ? dietPayload : {}),
         });
       }
     } else {
@@ -98,12 +109,16 @@ export default function GroupFormModal({ group, onClose, onSaved }) {
           status: "ACCEPTED",
           accepted_at: new Date().toISOString(),
           ...profilePaxFields,
+          ...dietPayload,
           general_notes: payload.internal_notes || null,
           is_sleeping_group: payload.group_type === "LODGING",
         });
       } else {
-        // Profile already exists (race condition guard) — still sync pax
-        await base44.entities.OperationalGroupProfile.update(existingProfiles[0].id, profilePaxFields);
+        // Profile already exists (race condition guard) — still sync pax + diets
+        await base44.entities.OperationalGroupProfile.update(existingProfiles[0].id, {
+          ...profilePaxFields,
+          ...dietPayload,
+        });
       }
     }
 
@@ -230,6 +245,12 @@ export default function GroupFormModal({ group, onClose, onSaved }) {
           <div className="space-y-1">
             <Label>הערות פנימיות</Label>
             <Textarea rows={3} value={form.internal_notes} onChange={e => set("internal_notes", e.target.value)} />
+          </div>
+
+          {/* Dietary / allergy section */}
+          <div className="border border-amber-200 rounded-xl px-4 py-3 bg-amber-50/40 space-y-3">
+            <p className="text-sm font-semibold text-amber-800">🍽️ צרכים תזונתיים ואלרגיות</p>
+            <DietaryFields value={diets} onChange={setDiets} />
           </div>
 
           <div className="flex gap-2 justify-end pt-1">

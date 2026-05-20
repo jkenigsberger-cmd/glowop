@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import ScheduleItemRow from "./ScheduleItemRow";
 import MealReservationRow from "./MealReservationRow";
 import QuoteTalksPanel, { extractQuoteTalks } from "./QuoteTalksPanel";
+import DietaryFields, { EMPTY_DIETS, parseDiets, mergeDiets } from "@/components/shared/DietaryFields";
 
 const MEAL_LABELS = { BREAKFAST: "ארוחת בוקר", LUNCH: "ארוחת צהריים", DINNER: "ארוחת ערב", OTHER: "אחר" };
 
@@ -41,6 +42,7 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
   const [addingSchedule, setAddingSchedule] = useState(false);
   const [addingMeal, setAddingMeal] = useState(false);
   const [newMeal, setNewMeal] = useState(EMPTY_MEAL());
+  const [newMealDiets, setNewMealDiets] = useState(() => mergeDiets(parseDiets(profile?.special_diets)));
   const [newScheduleError, setNewScheduleError] = useState(null);
 
   // Split state
@@ -312,6 +314,7 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
     await base44.entities.MealReservation.create({
       ...newMeal,
       pax: Number(newMeal.pax) || 0,
+      special_diets_summary: JSON.stringify(newMealDiets),
       group_id: groupId,
       operational_group_profile_id: profileId,
       source: "manual",
@@ -319,6 +322,7 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
     });
     setSaving(false);
     setNewMeal(EMPTY_MEAL());
+    setNewMealDiets(mergeDiets(parseDiets(profile?.special_diets)));
     setAddingMeal(false);
     invalidate();
     toast.success("ארוחה נוספה");
@@ -772,6 +776,24 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
                 <Input value={newMeal.notes} onChange={e => setNewMeal(m => ({ ...m, notes: e.target.value }))} placeholder="הערות..." />
               </div>
             </div>
+
+            {/* Dietary section */}
+            <div className="border border-amber-200 rounded-xl px-3 py-3 bg-amber-50/40 space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold text-amber-800">🍽️ צרכים תזונתיים ואלרגיות</p>
+                {profile?.special_diets && (
+                  <button
+                    type="button"
+                    onClick={() => setNewMealDiets(mergeDiets(parseDiets(profile.special_diets)))}
+                    className="text-[10px] text-primary hover:underline"
+                  >
+                    טען מהפרופיל
+                  </button>
+                )}
+              </div>
+              <DietaryFields value={newMealDiets} onChange={setNewMealDiets} compact />
+            </div>
+
             <div className="flex gap-2 justify-end">
               <Button size="sm" variant="outline" onClick={() => setAddingMeal(false)}>ביטול</Button>
               <Button size="sm" onClick={handleAddMeal} disabled={saving}>הוסף</Button>
