@@ -160,7 +160,9 @@ export default function SleepingAllocationTab({ groupId }) {
   // ── Handlers ───────────────────────────────────────────────────────────────
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["sleepingAllocations", groupId] });
+    queryClient.invalidateQueries({ queryKey: ["sleepingAllocations"] });       // housekeeping broad key
     queryClient.invalidateQueries({ queryKey: ["allConfirmedAllocations"] });
+    queryClient.invalidateQueries({ queryKey: ["allAllocations"] });            // dashboard/housekeeping
     queryClient.invalidateQueries({ queryKey: ["nhoodReservations", groupId] });
     queryClient.invalidateQueries({ queryKey: ["allNhoodReservations"] });
   };
@@ -185,15 +187,34 @@ export default function SleepingAllocationTab({ groupId }) {
     }
   };
 
-  const handleReleaseNeighborhood = async (id) => {
+  const handleReleaseNeighborhood = async (reservationId) => {
     setSaving(true);
     try {
-      await base44.entities.NeighborhoodReservation.update(id, { status: "CANCELLED" });
-      toast.success("שכונה שוחררה");
+      // 1. Cancel the neighborhood reservation itself
+      const reservation = myActiveNhoodRes.find(r => r.id === reservationId);
+      await base44.entities.NeighborhoodReservation.update(reservationId, { status: "CANCELLED" });
+
+      // 2. Also cancel all active SleepingAllocation rows for this group in this neighborhood
+      //    so that DB and UI stay in sync
+      if (reservation) {
+        const neighborhoodAllocs = myAllocations.filter(
+          a => a.neighborhood_id === reservation.neighborhood_id && a.status !== "CANCELLED"
+        );
+        console.log("[SleepingAllocationTab] releasing neighborhood allocs:", neighborhoodAllocs.length, "rows");
+        await Promise.all(
+          neighborhoodAllocs.map(a =>
+            a.status === "DRAFT"
+              ? base44.entities.SleepingAllocation.delete(a.id)
+              : base44.entities.SleepingAllocation.update(a.id, { status: "CANCELLED" })
+          )
+        );
+      }
+
+      toast.success("השכונה שוחררה וכל האוהלים הוקצאו בה בוטלו");
       invalidate();
     } catch (err) {
       console.error("[SleepingAllocationTab] handleReleaseNeighborhood error:", err);
-      toast.error(err?.message || "שגיאה בשחרור השכונה — נסה שוב");
+      toast.error(err?.message || "שגיאת בשחרור השכונה — נסה שוב");
     } finally {
       setSaving(false);
     }
