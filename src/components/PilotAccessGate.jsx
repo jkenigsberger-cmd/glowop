@@ -3,7 +3,7 @@ import { Lock, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-const PILOT_ACCESS_PASSWORD = "CHANGE_ME_PILOT_PASSWORD";
+const PILOT_ACCESS_PASSWORD = "HadorhabaGlow";
 const STORAGE_KEY = "pilot_access_granted";
 const STORAGE_TS_KEY = "pilot_access_granted_at";
 const EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
