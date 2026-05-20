@@ -41,8 +41,9 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
   const [syncing, setSyncing] = useState(false);
   const [addingSchedule, setAddingSchedule] = useState(false);
   const [addingMeal, setAddingMeal] = useState(false);
-  const [newMeal, setNewMeal] = useState(EMPTY_MEAL());
+  const [newMeal, setNewMeal] = useState(() => EMPTY_MEAL());
   const [newMealDiets, setNewMealDiets] = useState(() => mergeDiets(parseDiets(profile?.special_diets)));
+  const [newMealError, setNewMealError] = useState(null);
   const [newScheduleError, setNewScheduleError] = useState(null);
 
   // Split state
@@ -55,8 +56,22 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
   const profileId = profile?.id;
   const arrivalDate   = group?.arrival_date   || "";
   const departureDate = group?.departure_date || "";
+  const groupType     = group?.group_type || "LODGING";
 
-  // Resolved group participant count for pax auto-fill
+  // Allowed meal date range by group type
+  const mealMinDate = arrivalDate || undefined;
+  const mealMaxDate = groupType === "DAY_USE" ? arrivalDate : (departureDate || undefined);
+
+  // Default pax for meals: participant_count + staff_count (or total_pax fallback)
+  const defaultMealPax = useMemo(() => {
+    const participants = group?.participant_count ?? profile?.participant_count;
+    const staff = group?.staff_count ?? profile?.staff_count;
+    if (participants != null && staff != null) return participants + staff;
+    if (participants != null) return participants;
+    return group?.total_pax ?? profile?.total_pax ?? "";
+  }, [group, profile]);
+
+  // Resolved group participant count for pax auto-fill (for activities)
   const groupParticipantCount = useMemo(() =>
     group?.participant_count || group?.total_pax ||
     profile?.participant_count || profile?.total_pax || null,
@@ -309,11 +324,17 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
   };
 
   const handleAddMeal = async () => {
-    if (!newMeal.date) { toast.error("יש לבחור תאריך"); return; }
+    setNewMealError(null);
+    // Validation
+    if (!newMeal.meal_type) { setNewMealError("יש לבחור סוג ארוחה"); return; }
+    if (!newMeal.date) { setNewMealError("תאריך הארוחה חייב להיות בטווח שהות הקבוצה"); return; }
+    if (mealMinDate && newMeal.date < mealMinDate) { setNewMealError("תאריך הארוחה חייב להיות בטווח שהות הקבוצה"); return; }
+    if (mealMaxDate && newMeal.date > mealMaxDate) { setNewMealError("תאריך הארוחה חייב להיות בטווח שהות הקבוצה"); return; }
+    if (!newMeal.pax || Number(newMeal.pax) <= 0) { setNewMealError("חסרה כמות משתתפים"); return; }
     setSaving(true);
     await base44.entities.MealReservation.create({
       ...newMeal,
-      pax: Number(newMeal.pax) || 0,
+      pax: Number(newMeal.pax),
       special_diets_summary: JSON.stringify(newMealDiets),
       group_id: groupId,
       operational_group_profile_id: profileId,
@@ -323,6 +344,7 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
     setSaving(false);
     setNewMeal(EMPTY_MEAL());
     setNewMealDiets(mergeDiets(parseDiets(profile?.special_diets)));
+    setNewMealError(null);
     setAddingMeal(false);
     invalidate();
     toast.success("ארוחה נוספה");
@@ -726,7 +748,17 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
           <h3 className="font-semibold flex items-center gap-2 text-slate-800">
             <UtensilsCrossed className="w-4 h-4" /> ארוחות
           </h3>
-          <Button size="sm" variant="outline" onClick={() => setAddingMeal(v => !v)} className="gap-1">
+          <Button size="sm" variant="outline" onClick={() => {
+            if (addingMeal) {
+              setAddingMeal(false);
+              setNewMealError(null);
+            } else {
+              setNewMeal(m => ({ ...m, pax: String(defaultMealPax ?? "") }));
+              setNewMealDiets(mergeDiets(parseDiets(profile?.special_diets)));
+              setNewMealError(null);
+              setAddingMeal(true);
+            }
+          }} className="gap-1">
             <Plus className="w-3.5 h-3.5" /> הוסף ארוחה
           </Button>
         </div>
@@ -734,13 +766,28 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
         {addingMeal && (
           <div className="bg-slate-50 border border-primary/30 rounded-xl p-4 space-y-3 mb-3">
             <p className="text-xs font-semibold text-primary">ארוחה חדשה (ידנית)</p>
+
+            {/* No date warning */}
+            {!mealMinDate ? (
+              <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                חסר תאריך לקבוצה — לא ניתן להוסיף ארוחה
+              </div>
+            ) : null}
+
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <label className="text-xs text-slate-500">תאריך *</label>
-                <Input type="date" value={newMeal.date} onChange={e => setNewMeal(m => ({ ...m, date: e.target.value }))} />
+                <Input
+                  type="date"
+                  value={newMeal.date}
+                  min={mealMinDate}
+                  max={mealMaxDate}
+                  onChange={e => setNewMeal(m => ({ ...m, date: e.target.value }))}
+                />
+                <p className="text-[10px] text-slate-400">תאריכים זמינים לפי שהות הקבוצה</p>
               </div>
               <div className="space-y-1">
-                <label className="text-xs text-slate-500">סוג ארוחה</label>
+                <label className="text-xs text-slate-500">סוג ארוחה *</label>
                 <Select value={newMeal.meal_type} onValueChange={setNewMealType}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -758,11 +805,14 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
                 <label className="text-xs text-slate-500">שעת סיום</label>
                 <Input type="time" value={newMeal.end_time} onChange={e => setNewMeal(m => ({ ...m, end_time: e.target.value }))} />
               </div>
-              <div className="space-y-1">
-                <label className="text-xs text-slate-500">מספר אנשים</label>
-                <Input type="number" min="0" value={newMeal.pax} onChange={e => setNewMeal(m => ({ ...m, pax: e.target.value }))} />
+              <div className="space-y-1 col-span-2">
+                <label className="text-xs text-slate-500">מספר משתתפים *</label>
+                <Input type="number" min="1" value={newMeal.pax} onChange={e => setNewMeal(m => ({ ...m, pax: e.target.value }))} />
+                {defaultMealPax && (
+                  <p className="text-[10px] text-slate-400">כמות משתתפים הוגדרה אוטומטית לפי פרטי הקבוצה</p>
+                )}
               </div>
-              <div className="flex items-center gap-2 pt-5 space-y-1">
+              <div className="flex items-center gap-2 pt-1 col-span-2">
                 <input
                   type="checkbox"
                   checked={!!newMeal.sandwich_option}
@@ -794,9 +844,12 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
               <DietaryFields value={newMealDiets} onChange={setNewMealDiets} compact />
             </div>
 
+            {newMealError && (
+              <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{newMealError}</p>
+            )}
             <div className="flex gap-2 justify-end">
-              <Button size="sm" variant="outline" onClick={() => setAddingMeal(false)}>ביטול</Button>
-              <Button size="sm" onClick={handleAddMeal} disabled={saving}>הוסף</Button>
+              <Button size="sm" variant="outline" onClick={() => { setAddingMeal(false); setNewMealError(null); }}>ביטול</Button>
+              <Button size="sm" onClick={handleAddMeal} disabled={saving || !mealMinDate}>הוסף</Button>
             </div>
           </div>
         )}
