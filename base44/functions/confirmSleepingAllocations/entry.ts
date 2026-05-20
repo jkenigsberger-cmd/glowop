@@ -1,132 +1,171 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
-/**
- * Checks whether two date ranges overlap (departure_date is exclusive on both sides).
- * [a1, a2) overlaps [b1, b2) iff a1 < b2 && b1 < a2
- */
 function datesOverlap(a1, a2, b1, b2) {
   return a1 < b2 && b1 < a2;
 }
 
 Deno.serve(async (req) => {
-  const base44 = createClientFromRequest(req);
+  try {
+    const base44 = createClientFromRequest(req);
 
-  const user = await base44.auth.me();
-  if (!user) {
-    return Response.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  const body = await req.json();
-  const { group_id, draft_allocation_ids } = body;
-
-  if (!group_id || !Array.isArray(draft_allocation_ids) || draft_allocation_ids.length === 0) {
-    return Response.json({ error: 'group_id and draft_allocation_ids are required' }, { status: 400 });
-  }
-
-  // 1. Load the draft allocations to confirm
-  const allGroupAllocations = await base44.asServiceRole.entities.SleepingAllocation.filter({ group_id });
-  const draftsToConfirm = allGroupAllocations.filter(a =>
-    draft_allocation_ids.includes(a.id) && a.status === 'DRAFT'
-  );
-
-  if (draftsToConfirm.length === 0) {
-    return Response.json({ error: 'No DRAFT allocations found for the given IDs' }, { status: 400 });
-  }
-
-  // 2. Load all CONFIRMED + DRAFT allocations from OTHER groups (for conflict checking)
-  // We must check against DRAFT rows too — otherwise two groups can both create drafts
-  // for the same tent and race to confirm, causing overbooking.
-  const allConfirmed = await base44.asServiceRole.entities.SleepingAllocation.filter({ status: 'CONFIRMED' });
-  const allDrafts    = await base44.asServiceRole.entities.SleepingAllocation.filter({ status: 'DRAFT' });
-  const otherActive  = [...allConfirmed, ...allDrafts].filter(a =>
-    a.group_id !== group_id &&
-    !draft_allocation_ids.includes(a.id)  // exclude the very rows we're confirming
-  );
-  // Keep backward-compat variable name used below
-  const otherConfirmed = otherActive;
-
-  // 3. Load neighborhoods for is_vip lookup
-  const neighborhoods = await base44.asServiceRole.entities.Neighborhood.list();
-  const neighborhoodMap = {};
-  neighborhoods.forEach(n => { neighborhoodMap[n.id] = n; });
-
-  // 4. Load tents for capacity lookup
-  const tents = await base44.asServiceRole.entities.Tent.list();
-  const tentMap = {};
-  tents.forEach(t => { tentMap[t.id] = t; });
-
-  const errors = [];
-
-  for (const draft of draftsToConfirm) {
-    const tent = tentMap[draft.tent_id];
-    if (!tent) {
-      errors.push(`אוהל לא נמצא עבור הקצאה ${draft.id}`);
-      continue;
-    }
-    const neighborhood = neighborhoodMap[draft.neighborhood_id];
-    const isVipNeighborhood = neighborhood?.is_vip === true;
-
-    // ── Rule 1: Tent capacity ──────────────────────────────────────────────────
-    if (draft.allocated_pax > tent.capacity) {
-      errors.push(
-        `אוהל ${tent.code}: הקצאת ${draft.allocated_pax} מקומות חורגת מהקיבולת (${tent.capacity}).`
-      );
+    // ── Auth ─────────────────────────────────────────────────────────────────
+    let user = null;
+    try {
+      user = await base44.auth.me();
+    } catch (authErr) {
+      console.error('[confirmSleepingAllocations] auth error:', authErr?.message);
+      return Response.json({
+        success: false,
+        error: 'הפעולה נכשלה. יש להתחבר מחדש או לבדוק הרשאות.',
+        debug: { reasonCode: 'AUTH_ERROR', message: authErr?.message }
+      }, { status: 401 });
     }
 
-    // ── Rule 2: Tent exclusivity — same tent cannot be used by another group on overlapping nights ──
-    const tentConflicts = otherConfirmed.filter(o =>
-      o.tent_id === draft.tent_id &&
-      datesOverlap(draft.arrival_date, draft.departure_date, o.arrival_date, o.departure_date)
+    if (!user) {
+      return Response.json({
+        success: false,
+        error: 'אין הרשאה לבצע פעולה זו',
+        debug: { reasonCode: 'NOT_AUTHENTICATED' }
+      }, { status: 401 });
+    }
+
+    // ── Parse body ────────────────────────────────────────────────────────────
+    let body;
+    try {
+      body = await req.json();
+    } catch {
+      return Response.json({ success: false, error: 'בקשה לא תקינה — JSON שגוי' }, { status: 400 });
+    }
+
+    const { group_id, draft_allocation_ids } = body;
+
+    console.log('[confirmSleepingAllocations] group_id:', group_id);
+    console.log('[confirmSleepingAllocations] draft_allocation_ids:', JSON.stringify(draft_allocation_ids));
+
+    if (!group_id) {
+      return Response.json({ success: false, error: 'חסר group_id', debug: { reasonCode: 'NO_GROUP_ID' } }, { status: 400 });
+    }
+    if (!Array.isArray(draft_allocation_ids) || draft_allocation_ids.length === 0) {
+      return Response.json({
+        success: false,
+        error: 'אין שיבוצי טיוטה לאישור',
+        debug: { reasonCode: 'NO_DRAFT_IDS', received: draft_allocation_ids }
+      }, { status: 400 });
+    }
+
+    // ── 1. Load draft allocations for this group ──────────────────────────────
+    const allGroupAllocations = await base44.asServiceRole.entities.SleepingAllocation.filter({ group_id });
+    console.log('[confirmSleepingAllocations] allGroupAllocations count:', allGroupAllocations.length);
+
+    const draftsToConfirm = allGroupAllocations.filter(a =>
+      draft_allocation_ids.includes(a.id) && a.status === 'DRAFT'
     );
-    if (tentConflicts.length > 0) {
-      errors.push(
-        `אוהל ${tent.code}: כבר מוקצה לקבוצה אחרת בתאריכים אלו.`
-      );
+    console.log('[confirmSleepingAllocations] draftsToConfirm count:', draftsToConfirm.length);
+
+    if (draftsToConfirm.length === 0) {
+      return Response.json({
+        success: false,
+        error: 'שיבוץ לינה לא נמצא — ייתכן שכבר אושר, בוטל, או שה-ID שגוי',
+        debug: {
+          reasonCode: 'NO_DRAFTS_MATCHED',
+          requested: draft_allocation_ids,
+          found: allGroupAllocations.map(a => ({ id: a.id, status: a.status }))
+        }
+      }, { status: 400 });
     }
 
-    // ── Rule 3: Student neighborhood exclusivity ───────────────────────────────
-    // Only applies to STUDENT allocations in non-VIP neighborhoods
-    if (draft.allocation_type === 'STUDENT' && !isVipNeighborhood) {
-      const neighborhoodConflicts = otherConfirmed.filter(o =>
-        o.allocation_type === 'STUDENT' &&
-        o.neighborhood_id === draft.neighborhood_id &&
+    // ── 2. Load other groups' allocations for conflict checking ──────────────
+    const allConfirmed = await base44.asServiceRole.entities.SleepingAllocation.filter({ status: 'CONFIRMED' });
+    const allDrafts    = await base44.asServiceRole.entities.SleepingAllocation.filter({ status: 'DRAFT' });
+    const otherActive  = [...allConfirmed, ...allDrafts].filter(a =>
+      a.group_id !== group_id && !draft_allocation_ids.includes(a.id)
+    );
+
+    // ── 3. Load neighborhoods and tents ──────────────────────────────────────
+    const neighborhoods = await base44.asServiceRole.entities.Neighborhood.list();
+    const neighborhoodMap = Object.fromEntries(neighborhoods.map(n => [n.id, n]));
+
+    const tents = await base44.asServiceRole.entities.Tent.list();
+    const tentMap = Object.fromEntries(tents.map(t => [t.id, t]));
+
+    // ── 4. Validate each draft ────────────────────────────────────────────────
+    const errors = [];
+
+    for (const draft of draftsToConfirm) {
+      const tent = tentMap[draft.tent_id];
+      if (!tent) {
+        errors.push(`שיבוץ לינה לא נמצא — אוהל חסר (id: ${draft.tent_id})`);
+        continue;
+      }
+      const neighborhood = neighborhoodMap[draft.neighborhood_id];
+      const isVip = neighborhood?.is_vip === true;
+
+      // Rule 1: capacity
+      if (draft.allocated_pax > tent.capacity) {
+        errors.push(`אוהל ${tent.code}: הקצאת ${draft.allocated_pax} מקומות חורגת מהקיבולת (${tent.capacity}).`);
+      }
+
+      // Rule 2: tent exclusivity across groups
+      const tentConflicts = otherActive.filter(o =>
+        o.tent_id === draft.tent_id &&
         datesOverlap(draft.arrival_date, draft.departure_date, o.arrival_date, o.departure_date)
       );
-      if (neighborhoodConflicts.length > 0) {
-        errors.push(
-          `שכונה "${neighborhood?.name || draft.neighborhood_id}": כבר תפוסה על ידי קבוצת חניכים אחרת בתאריכים אלו. שכונות חניכים הן בלעדיות לקבוצה אחת בכל זמן.`
+      if (tentConflicts.length > 0) {
+        errors.push(`אחד האוהלים כבר משובץ לקבוצה אחרת בתאריכים אלו (אוהל ${tent.code}).`);
+      }
+
+      // Rule 3: student neighborhood exclusivity (non-VIP only)
+      if (draft.allocation_type === 'STUDENT' && !isVip) {
+        const nhoodConflicts = otherActive.filter(o =>
+          o.allocation_type === 'STUDENT' &&
+          o.neighborhood_id === draft.neighborhood_id &&
+          datesOverlap(draft.arrival_date, draft.departure_date, o.arrival_date, o.departure_date)
         );
+        if (nhoodConflicts.length > 0) {
+          errors.push(`שכונה "${neighborhood?.name || draft.neighborhood_id}": כבר תפוסה על ידי קבוצת חניכים אחרת בתאריכים אלו.`);
+        }
+      }
+
+      // Rule 4: no mixed-gender within same tent in same batch
+      const genderConflict = draftsToConfirm.some(other =>
+        other.id !== draft.id &&
+        other.tent_id === draft.tent_id &&
+        other.gender_group !== draft.gender_group
+      );
+      if (genderConflict) {
+        errors.push(`אוהל ${tent.code}: לא ניתן לשבץ שני מגדרים שונים לאותו אוהל.`);
       }
     }
 
-    // ── Rule 4: No mixed-gender tents ─────────────────────────────────────────
-    // A tent allocated to this group in a different gender is a conflict
-    // (Checked within this group's own drafts too)
-    const sameGroupSameTentDifferentGender = draftsToConfirm.filter(other =>
-      other.id !== draft.id &&
-      other.tent_id === draft.tent_id &&
-      other.gender_group !== draft.gender_group
-    );
-    if (sameGroupSameTentDifferentGender.length > 0) {
-      errors.push(
-        `אוהל ${tent.code}: לא ניתן לשבץ שני מגדרים שונים לאותו אוהל.`
-      );
+    const uniqueErrors = [...new Set(errors)];
+    if (uniqueErrors.length > 0) {
+      console.warn('[confirmSleepingAllocations] validation errors:', uniqueErrors);
+      return Response.json({ success: false, errors: uniqueErrors }, { status: 409 });
     }
+
+    // ── 5. Confirm all drafts ─────────────────────────────────────────────────
+    await Promise.all(
+      draftsToConfirm.map(draft =>
+        base44.asServiceRole.entities.SleepingAllocation.update(draft.id, { status: 'CONFIRMED' })
+      )
+    );
+
+    const confirmedIds = draftsToConfirm.map(d => d.id);
+    console.log('[confirmSleepingAllocations] confirmed IDs:', confirmedIds);
+
+    return Response.json({
+      success: true,
+      confirmed_count: draftsToConfirm.length,
+      confirmed_ids: confirmedIds,
+      message: 'שיבוץ הלינה אושר',
+    });
+
+  } catch (err) {
+    console.error('[confirmSleepingAllocations] unexpected error:', err?.message, err?.stack);
+    return Response.json({
+      success: false,
+      error: 'שגיאה פנימית באישור שיבוץ לינה',
+      debug: { reasonCode: 'UNEXPECTED_EXCEPTION', message: err?.message }
+    }, { status: 500 });
   }
-
-  // De-duplicate errors
-  const uniqueErrors = [...new Set(errors)];
-
-  if (uniqueErrors.length > 0) {
-    return Response.json({ success: false, errors: uniqueErrors }, { status: 409 });
-  }
-
-  // 5. All checks passed — confirm all drafts
-  await Promise.all(
-    draftsToConfirm.map(draft =>
-      base44.asServiceRole.entities.SleepingAllocation.update(draft.id, { status: 'CONFIRMED' })
-    )
-  );
-
-  return Response.json({ success: true, confirmed_count: draftsToConfirm.length });
 });

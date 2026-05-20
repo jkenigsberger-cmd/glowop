@@ -201,8 +201,11 @@ export default function SleepingAllocationTab({ groupId }) {
 
   const handleConfirmAllocations = async () => {
     const draftIds = myAllocations.filter(a => a.status === "DRAFT").map(a => a.id);
+    console.log("[SleepingAllocationTab] Confirm allocation draftIds:", draftIds);
+    console.log("[SleepingAllocationTab] Confirm allocation groupId:", groupId);
+
     if (draftIds.length === 0) {
-      toast.error("אין הקצאות טיוטה לאישור");
+      toast.error("אין שיבוצי טיוטה לאישור — יש לבצע שיבוץ לפני האישור");
       return;
     }
     setSaving(true);
@@ -211,16 +214,30 @@ export default function SleepingAllocationTab({ groupId }) {
         group_id: groupId,
         draft_allocation_ids: draftIds,
       });
+      console.log("[SleepingAllocationTab] Confirm allocation response:", res.data);
+
       if (res.data?.success) {
-        toast.success(`שיבוץ הלינה נשמר ואושר — ${res.data.confirmed_count} שורות ✓`);
-        invalidate();
+        toast.success(`שיבוץ הלינה אושר — ${res.data.confirmed_count} שורות ✓`);
+        // Invalidate all relevant queries including housekeeping
+        queryClient.invalidateQueries({ queryKey: ["sleepingAllocations", groupId] });
+        queryClient.invalidateQueries({ queryKey: ["allConfirmedAllocations"] });
+        queryClient.invalidateQueries({ queryKey: ["allAllocations"] });
+        queryClient.invalidateQueries({ queryKey: ["sleepingAllocations"] });
+        queryClient.invalidateQueries({ queryKey: ["nhoodReservations", groupId] });
+        queryClient.invalidateQueries({ queryKey: ["allNhoodReservations"] });
+        queryClient.invalidateQueries({ queryKey: ["operationalProfile", groupId] });
       } else {
-        const errList = res.data?.errors || ["שגיאה לא ידועה"];
+        // Show all Hebrew errors from backend
+        const errMsg = res.data?.error || null;
+        const errList = res.data?.errors || (errMsg ? [errMsg] : ["שגיאה לא ידועה"]);
+        console.error("[SleepingAllocationTab] Confirm allocation error:", errList, res.data?.debug);
         toast.error("לא ניתן לאשר — " + errList[0]);
         if (errList.length > 1) errList.slice(1).forEach(e => toast.error(e));
       }
     } catch (err) {
-      toast.error(err?.message || "שגיאה באישור השיבוץ — נסה שוב");
+      console.error("[SleepingAllocationTab] Confirm allocation exception:", err);
+      const msg = err?.response?.data?.error || err?.message || "שגיאה באישור השיבוץ — נסה שוב";
+      toast.error(msg);
     } finally {
       setSaving(false);
     }
