@@ -210,12 +210,15 @@ Deno.serve(async (req) => {
       console.error('[saveVipSleepingAllocation] SleepingAllocation.filter (tent) error:', e?.message);
     }
 
-    const activeForTent = existingForTent.filter(a =>
-      a.status !== 'CANCELLED' && a.id !== allocation_id
+    // Only block on OTHER groups — same-group rows are handled by stale-row logic below.
+    const activeForOtherGroups = existingForTent.filter(a =>
+      a.status !== 'CANCELLED' &&
+      a.id !== allocation_id &&
+      a.group_id !== group_id
     );
-    dbg.existingActiveAllocationsCount = activeForTent.length;
+    dbg.existingActiveAllocationsCount = activeForOtherGroups.length;
 
-    const conflicting = activeForTent.filter(a =>
+    const conflicting = activeForOtherGroups.filter(a =>
       datesOverlap(arrival_date, departure_date, a.arrival_date, a.departure_date)
     );
     dbg.conflictingAllocationIds = conflicting.map(a => a.id);
@@ -228,11 +231,19 @@ Deno.serve(async (req) => {
         conflictGroupName = cgs[0]?.group_name || conflict.group_id;
       } catch (_) { /* non-fatal */ }
 
-      const msg = conflict.group_id === group_id
-        ? `אוהל ${tent.code} כבר משויך לדרישה אחרת של קבוצה זו (${conflict.arrival_date} — ${conflict.departure_date})`
-        : `האוהל כבר משובץ לקבוצה אחרת (${conflictGroupName}) בתאריכים ${conflict.arrival_date} — ${conflict.departure_date}`;
-
-      return fail('CONFLICT', msg, dbg);
+      return Response.json({
+        success: false,
+        error: `האוהל כבר משובץ לקבוצה אחרת (${conflictGroupName}) בתאריכים ${conflict.arrival_date} — ${conflict.departure_date}`,
+        debug: {
+          reasonCode: 'TENT_CONFLICT',
+          tent_id,
+          tent_code: tent.code,
+          conflicting_group_id: conflict.group_id,
+          conflicting_allocation_id: conflict.id,
+          status: conflict.status,
+          dates: { arrival_date: conflict.arrival_date, departure_date: conflict.departure_date },
+        },
+      }, { status: 400 });
     }
 
     // ── 6. Check for stale row: same req already on a different tent ─────────

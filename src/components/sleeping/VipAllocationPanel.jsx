@@ -100,10 +100,11 @@ function AssignmentDialog({ req, reqIndex, tent, existingAlloc, profile, groupId
         setErrors([res.data?.error || "שגיאה בשמירה"]);
       }
     } catch (err) {
-      console.error("[VIP Alloc] catch err →", err);
-      console.error("[VIP Alloc] err.response?.data →", err?.response?.data);
-      const serverMsg = err?.response?.data?.error || err?.response?.data?.message;
-      if (err?.response?.data?.debug) console.warn("[VIP Alloc Debug]", err.response.data.debug);
+      console.error("[VIP Alloc] catch err →", err?.message);
+      const backendData = err?.response?.data;
+      console.error("[VIP Save] backend error", backendData);
+      if (backendData?.debug) console.warn("[VIP Alloc Debug]", backendData.debug);
+      const serverMsg = backendData?.error || backendData?.message || err?.message;
       setErrors([serverMsg || "שגיאה בשמירה — נסה שוב"]);
     } finally {
       setSaving(false);
