@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { format, parseISO } from "date-fns";
 import { Pencil, CheckCircle2, ShieldCheck } from "lucide-react";
+import { toast } from "sonner";
 
 // ── Safe JSON parse ────────────────────────────────────────────────────────────
 function safeJson(str, fallback) {
@@ -228,11 +229,29 @@ export default function SubmissionReviewModal({ submission, quoteData, onClose, 
 
   const acceptAsOperationalProfile = async () => {
     setAcceptingProfile(true);
+    console.log("[Approve Operational Profile] clicked", {
+      groupId: submission.group_id,
+      quoteId: submission.quote_id,
+      submissionId: submission.id,
+    });
     try {
-      const user = await base44.auth.me();
+      // Step 1: upsert profile via backend function (handles auth correctly)
+      const res = await base44.functions.invoke("createOrUpdateOperationalGroupProfile", {
+        group_id: submission.group_id,
+        quote_id: submission.quote_id || undefined,
+      });
+      console.log("[Approve Operational Profile] createOrUpdate response", res);
+
+      if (!res.data?.success) {
+        const errMsg = res.data?.error || "שגיאה לא ידועה";
+        toast.error(`אישור הפרופיל נכשל: ${errMsg}`);
+        return;
+      }
+
+      const profileId = res.data.profile_id;
+
+      // Step 2: sync submission data directly into the profile
       const profilePayload = {
-        group_id:                 submission.group_id,
-        quote_id:                 submission.quote_id,
         guest_form_submission_id: submission.id,
         total_pax:                submission.total_pax,
         participant_count:        submission.participant_count,
@@ -249,23 +268,23 @@ export default function SubmissionReviewModal({ submission, quoteData, onClose, 
         special_diets:            submission.special_diets,
         meal_plan:                submission.meal_plan,
         tent_distribution_notes:  submission.tent_distribution_notes,
-        schedule_requests:        submission.schedule_notes, // schedule_notes from submission becomes schedule_requests in profile
+        schedule_requests:        submission.schedule_notes,
         general_notes:            submission.general_notes,
         status:                   "ACCEPTED",
         accepted_at:              new Date().toISOString(),
-        accepted_by:              user?.email || "",
       };
+      await base44.entities.OperationalGroupProfile.update(profileId, profilePayload);
 
-      // Check if a profile already exists for this group — update if so
-      const existing = await base44.entities.OperationalGroupProfile.filter({ group_id: submission.group_id });
-      if (existing.length > 0) {
-        await base44.entities.OperationalGroupProfile.update(existing[0].id, profilePayload);
-      } else {
-        await base44.entities.OperationalGroupProfile.create(profilePayload);
-      }
+      // Step 3: mark submission as reviewed
+      await base44.entities.GuestFormSubmission.update(submission.id, { status: "REVIEWED" });
 
+      toast.success("הפרופיל התפעולי אושר בהצלחה");
       setProfileAccepted(true);
       onSaved();
+    } catch (err) {
+      console.error("[Approve Operational Profile] error", err);
+      console.error("[Approve Operational Profile] backend error", err?.response?.data);
+      toast.error(err?.response?.data?.error || err?.message || "אישור הפרופיל נכשל");
     } finally {
       setAcceptingProfile(false);
     }

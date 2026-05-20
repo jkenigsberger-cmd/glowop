@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { ChevronRight, Calendar, Users, Phone, Mail, Pencil, Plus, FileText, ClipboardList, Copy, Check } from "lucide-react";
+import { ChevronRight, Calendar, Users, Phone, Mail, Pencil, Plus, FileText, ClipboardList, Copy, Check, ShieldCheck } from "lucide-react";
 import QuotePdfButton from "@/components/quotes/QuotePdfButton";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -19,7 +19,6 @@ import OperationalHoldCard from "@/components/groups/OperationalHoldCard";
 import SleepingRequirementsTab from "@/components/sleeping/SleepingRequirementsTab";
 import ScheduleAndMealsTab from "@/components/schedule/ScheduleAndMealsTab";
 import GroupLifecycleActions from "@/components/groups/GroupLifecycleActions";
-import { useNavigate } from "react-router-dom";
 
 export default function GroupDetail() {
   const { id } = useParams();
@@ -34,6 +33,7 @@ export default function GroupDetail() {
   const [reviewSubmission, setReviewSubmission] = useState(null);
   const [copiedId, setCopiedId] = useState(null);
   const [activeTab, setActiveTab] = useState("overview");
+  const [approvingProfile, setApprovingProfile] = useState(false);
 
   const { data: group } = useQuery({
     queryKey: ["group", id],
@@ -68,6 +68,30 @@ export default function GroupDetail() {
   };
 
   const activeQuote = quotes.find(q => q.status === "APPROVED") || quotes[0];
+
+  const handleApproveProfile = async () => {
+    setApprovingProfile(true);
+    console.log("[Approve Operational Profile] clicked", { groupId: id, profileId: operationalProfile?.id, quoteId: activeQuote?.id });
+    try {
+      const res = await base44.functions.invoke("createOrUpdateOperationalGroupProfile", {
+        group_id: id,
+        quote_id: activeQuote?.id || undefined,
+      });
+      console.log("[Approve Operational Profile] response", res);
+      if (res.data?.success) {
+        toast.success("הפרופיל התפעולי אושר בהצלחה");
+        refetch();
+      } else {
+        toast.error(res.data?.error || "אישור הפרופיל נכשל");
+      }
+    } catch (err) {
+      console.error("[Approve Operational Profile] error", err);
+      console.error("[Approve Operational Profile] backend error", err?.response?.data);
+      toast.error(err?.response?.data?.error || err?.message || "אישור הפרופיל נכשל");
+    } finally {
+      setApprovingProfile(false);
+    }
+  };
 
   const copyGuestFormLink = (quoteId) => {
     const url = `${window.location.origin}/guest-form?quote=${quoteId}`;
@@ -261,6 +285,43 @@ export default function GroupDetail() {
             </div>
           )}
         </section>
+
+        {/* Approve operational profile — shown when profile exists but not yet ACCEPTED, or group not yet CONFIRMED */}
+        {operationalProfile && operationalProfile.status !== "ACCEPTED" && (
+          <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
+            <div>
+              <p className="text-sm font-semibold text-blue-800">פרופיל תפעולי ממתין לאישור</p>
+              <p className="text-xs text-blue-600 mt-0.5">לחץ לאישור הפרופיל ומעבר הקבוצה לסטטוס מאושר</p>
+            </div>
+            <Button
+              size="sm"
+              className="gap-1.5 bg-blue-700 hover:bg-blue-800 text-white"
+              onClick={handleApproveProfile}
+              disabled={approvingProfile}
+            >
+              <ShieldCheck className="w-3.5 h-3.5" />
+              {approvingProfile ? "מאשר..." : "אשר פרופיל תפעולי"}
+            </Button>
+          </div>
+        )}
+        {!operationalProfile && group && (group.status === "DRAFT" || group.status === "CONFIRMED") && (
+          <div className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
+            <div>
+              <p className="text-sm font-semibold text-slate-700">אין פרופיל תפעולי עדיין</p>
+              <p className="text-xs text-slate-500 mt-0.5">ניתן ליצור פרופיל תפעולי מנתוני הקבוצה/ההצעה</p>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1.5 border-slate-300"
+              onClick={handleApproveProfile}
+              disabled={approvingProfile}
+            >
+              <ShieldCheck className="w-3.5 h-3.5" />
+              {approvingProfile ? "מאשר..." : "צור ואשר פרופיל תפעולי"}
+            </Button>
+          </div>
+        )}
 
         {/* Operational Profile */}
         <OperationalProfileDisplay groupId={id} />
