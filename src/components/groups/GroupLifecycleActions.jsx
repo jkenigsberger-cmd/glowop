@@ -40,6 +40,11 @@ function ConfirmModal({ config, onConfirm, onCancel, loading }) {
           </div>
         )}
 
+        {loading && (
+          <p className="text-xs text-slate-600 bg-slate-100 border border-slate-200 rounded px-2 py-1.5">
+            מחיקה מתבצעת... זה יכול לקחת כמה שניות
+          </p>
+        )}
         {config.debugMarker && (
           <p className="text-[10px] text-slate-400 font-mono">{config.debugMarker}</p>
         )}
