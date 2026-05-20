@@ -93,7 +93,7 @@ const MODAL_CONFIGS = {
   delete: {
     title: "מחיקה מוחלטת",
     text: "פעולה זו תמחק את הקבוצה ואת כל הנתונים התפעוליים הקשורים אליה. פעולה זו אינה מיועדת לקבוצות שהסתיימו או קבוצות בהמתנה.",
-    debugMarker: "delete handler v2",
+    debugMarker: "delete handler v3",
     confirmLabel: "מחק לצמיתות",
     requireReason: false,
     Icon: AlertTriangle,
@@ -142,11 +142,11 @@ export default function GroupLifecycleActions({ group, onDeleted, onUpdated }) {
 
   const handleDelete = async () => {
     setLoading(true);
-    console.log("[Delete UI v2] clicked delete", group.id);
+    console.log("[Delete UI v3] clicked delete", group.id);
     try {
-      console.log("[Delete UI v2] calling deleteGroup");
+      console.log("[Delete UI v3] calling deleteGroup");
       const res = await base44.functions.invoke("deleteGroup", { group_id: group.id });
-      console.log("[Delete UI v2] response", res);
+      console.log("[Delete UI v3] response", res);
       if (res.data?.success) {
         setModal(null);
         toast.success('הקבוצה נמחקה לצמיתות');

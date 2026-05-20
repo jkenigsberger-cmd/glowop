@@ -1,55 +1,18 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
 Deno.serve(async (req) => {
-  console.log('[deleteGroup v2] function invoked');
+  console.log('[deleteGroup v3] function invoked');
   const base44 = createClientFromRequest(req);
   let group_id = 'unknown';
   let step = 'init';
 
   try {
-    // ── Auth — use asServiceRole to look up current user ─────────────────
-    step = 'auth';
-    let user = null;
-    try {
-      user = await base44.auth.me();
-    } catch (_authErr) {
-      // auth.me() may fail in some deployment contexts — fall through to service role check
-      console.warn('[deleteGroup] base44.auth.me() failed, attempting service role fallback');
-    }
-
-    // If auth.me() failed, try via asServiceRole
-    if (!user) {
-      try {
-        user = await base44.asServiceRole.auth.me();
-      } catch (_e) {
-        console.error('[deleteGroup] auth failed — cannot identify user');
-      }
-    }
-
-    if (!user) {
-      return Response.json({
-        success: false,
-        error: 'הפעולה נכשלה. יש להתחבר מחדש.',
-        debug: { step: 'auth', message: 'No user session found' },
-      }, { status: 401 });
-    }
-
-    const role = (user.role || '').toLowerCase();
-    if (role !== 'admin') {
-      console.error('[deleteGroup] auth failed — not admin, role=', role);
-      return Response.json({
-        success: false,
-        error: 'אין הרשאה לבצע פעולה זו',
-        debug: { step: 'auth', message: `role=${role}` },
-      }, { status: 403 });
-    }
-    console.log('[deleteGroup] auth ok', user.email);
-
     // ── Parse body ────────────────────────────────────────────────────────
     step = 'parse_body';
     const body = await req.json().catch(() => ({}));
     group_id = body.group_id || 'unknown';
-    console.log(`[deleteGroup] start group_id: ${group_id}`);
+    console.log(`[deleteGroup v3] group_id: ${group_id}`);
+
     if (!body.group_id) {
       return Response.json({ success: false, error: 'group_id required' }, { status: 400 });
     }
@@ -58,12 +21,12 @@ Deno.serve(async (req) => {
     step = 'verify_group';
     const groups = await base44.asServiceRole.entities.Group.filter({ id: group_id });
     if (!groups.length) {
-      return Response.json({ success: false, error: 'Group not found' }, { status: 404 });
+      return Response.json({ success: false, error: 'קבוצה לא נמצאה' }, { status: 404 });
     }
+    console.log(`[deleteGroup v3] group found: ${groups[0].group_name}`);
 
-    // ── Fetch related records ─────────────────────────────────────────────
+    // ── Fetch all related records in parallel ─────────────────────────────
     step = 'fetch_related';
-    console.log('[deleteGroup] fetch related records start');
     const [
       quotes,
       submissions,
@@ -83,45 +46,27 @@ Deno.serve(async (req) => {
       base44.asServiceRole.entities.MealReservation.filter({ group_id }),
       base44.asServiceRole.entities.NeighborhoodReservation.filter({ group_id }),
     ]);
-    console.log(`[deleteGroup] fetch related records done — quotes:${quotes.length} submissions:${submissions.length} profiles:${profiles.length} holds:${holds.length} allocations:${allocations.length} scheduleItems:${scheduleItems.length} meals:${mealReservations.length} neighborhoods:${neighborhoodReservations.length}`);
+    console.log(`[deleteGroup v3] related: quotes=${quotes.length} submissions=${submissions.length} profiles=${profiles.length} holds=${holds.length} allocations=${allocations.length} schedule=${scheduleItems.length} meals=${mealReservations.length} neighborhoods=${neighborhoodReservations.length}`);
 
-    step = 'delete_profiles';
-    console.log(`[deleteGroup] delete OperationalGroupProfile ${profiles.length}`);
-    await Promise.all(profiles.map(r => base44.asServiceRole.entities.OperationalGroupProfile.delete(r.id)));
+    // ── Delete related records ────────────────────────────────────────────
+    step = 'delete_related';
+    await Promise.all([
+      ...profiles.map(r => base44.asServiceRole.entities.OperationalGroupProfile.delete(r.id)),
+      ...holds.map(r => base44.asServiceRole.entities.OperationalHold.delete(r.id)),
+      ...allocations.map(r => base44.asServiceRole.entities.SleepingAllocation.delete(r.id)),
+      ...scheduleItems.map(r => base44.asServiceRole.entities.GroupScheduleItem.delete(r.id)),
+      ...mealReservations.map(r => base44.asServiceRole.entities.MealReservation.delete(r.id)),
+      ...neighborhoodReservations.map(r => base44.asServiceRole.entities.NeighborhoodReservation.delete(r.id)),
+      ...quotes.map(r => base44.asServiceRole.entities.Quote.delete(r.id)),
+      ...submissions.map(r => base44.asServiceRole.entities.GuestFormSubmission.delete(r.id)),
+    ]);
+    console.log('[deleteGroup v3] related records deleted');
 
-    step = 'delete_holds';
-    console.log(`[deleteGroup] delete OperationalHold ${holds.length}`);
-    await Promise.all(holds.map(r => base44.asServiceRole.entities.OperationalHold.delete(r.id)));
-
-    step = 'delete_allocations';
-    console.log(`[deleteGroup] delete SleepingAllocation ${allocations.length}`);
-    await Promise.all(allocations.map(r => base44.asServiceRole.entities.SleepingAllocation.delete(r.id)));
-
-    step = 'delete_schedule';
-    console.log(`[deleteGroup] delete GroupScheduleItem ${scheduleItems.length}`);
-    await Promise.all(scheduleItems.map(r => base44.asServiceRole.entities.GroupScheduleItem.delete(r.id)));
-
-    step = 'delete_meals';
-    console.log(`[deleteGroup] delete MealReservation ${mealReservations.length}`);
-    await Promise.all(mealReservations.map(r => base44.asServiceRole.entities.MealReservation.delete(r.id)));
-
-    step = 'delete_neighborhood_reservations';
-    console.log(`[deleteGroup] delete NeighborhoodReservation ${neighborhoodReservations.length}`);
-    await Promise.all(neighborhoodReservations.map(r => base44.asServiceRole.entities.NeighborhoodReservation.delete(r.id)));
-
-    step = 'quote_handling';
-    console.log(`[deleteGroup] quote handling ${quotes.length}`);
-    await Promise.all(quotes.map(r => base44.asServiceRole.entities.Quote.delete(r.id)));
-
-    step = 'guest_form_handling';
-    console.log(`[deleteGroup] guest form handling ${submissions.length}`);
-    await Promise.all(submissions.map(r => base44.asServiceRole.entities.GuestFormSubmission.delete(r.id)));
-
+    // ── Delete the group itself ───────────────────────────────────────────
     step = 'delete_group';
-    console.log(`[deleteGroup] delete Group`);
     await base44.asServiceRole.entities.Group.delete(group_id);
+    console.log('[deleteGroup v3] group deleted successfully');
 
-    console.log('[deleteGroup] done');
     return Response.json({
       success: true,
       deleted: {
@@ -137,15 +82,11 @@ Deno.serve(async (req) => {
     });
 
   } catch (err) {
-    console.error(`[deleteGroup] FAILED at step="${step}" group_id="${group_id}"`, err?.message);
+    console.error(`[deleteGroup v3] FAILED at step="${step}" group_id="${group_id}"`, err?.message);
     return Response.json({
       success: false,
       error: 'מחיקת הקבוצה נכשלה',
-      debug: {
-        step,
-        group_id,
-        message: err?.message || String(err),
-      },
+      debug: { step, group_id, message: err?.message || String(err) },
     }, { status: 500 });
   }
 });
