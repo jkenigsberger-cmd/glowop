@@ -28,6 +28,15 @@ function getPurposeCfg(p) {
   return PURPOSE_CFG[p.toUpperCase()] || { label: p, Icon: User };
 }
 
+// ── Operational capacity helper ───────────────────────────────────────────────
+// VIP tents and accessible tents support an operational override of up to 4.
+function getOperationalMaxPax(tent) {
+  const isVip        = tent.tent_type === "VIP" || String(tent.code || "").match(/^8\d/);
+  const isAccessible = tent.is_accessible === true;
+  if (isVip || isAccessible) return 4;
+  return tent.capacity || 8;
+}
+
 // ── Assignment Dialog ─────────────────────────────────────────────────────────
 // Opens after user selects req → tent. Lets them confirm/adjust/release.
 
@@ -41,8 +50,10 @@ function AssignmentDialog({ req, reqIndex, tent, existingAlloc, profile, groupId
   const existingGender = existingAlloc?.gender_group;
   const normaliseGender = (g) => (g === "BOYS" || g === "MEN") ? "MEN" : "WOMEN";
 
+  const maxPax = getOperationalMaxPax(tent);
+
   const [gender, setGender]   = useState(existingGender ? normaliseGender(existingGender) : defaultGender);
-  const [pax,    setPax]      = useState(existingAlloc?.allocated_pax ?? Math.min(req.people_count || 1, tent.capacity));
+  const [pax,    setPax]      = useState(existingAlloc?.allocated_pax ?? Math.min(req.people_count || 1, maxPax));
   const [notes,  setNotes]    = useState((existingAlloc?.notes || "").replace(/__vip_req_\d+__\s*/g, "").trim());
   const [saving,  setSaving]  = useState(false);
   const [releasing, setReleasing] = useState(false);
@@ -55,7 +66,7 @@ function AssignmentDialog({ req, reqIndex, tent, existingAlloc, profile, groupId
     const errs = [];
     if (!gender) errs.push("יש לבחור מגדר");
     if (pax < 1) errs.push("מספר האנשים חייב להיות לפחות 1");
-    if (pax > 4) errs.push("מקסימום 4 אנשים לאוהל VIP");
+    if (pax > maxPax) errs.push(`מקסימום ${maxPax} אנשים לאוהל זה`);
     return errs;
   };
 
@@ -187,7 +198,7 @@ function AssignmentDialog({ req, reqIndex, tent, existingAlloc, profile, groupId
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-600">
                 מספר אנשים
-                <span className="text-slate-400 font-normal mr-1">(מקס׳ 4)</span>
+                <span className="text-slate-400 font-normal mr-1">(מקס׳ {maxPax})</span>
               </label>
               <div className="flex items-center gap-3">
                 <button
@@ -198,7 +209,7 @@ function AssignmentDialog({ req, reqIndex, tent, existingAlloc, profile, groupId
                 <span className="text-2xl font-bold text-slate-700 min-w-[32px] text-center">{pax}</span>
                 <button
                   type="button"
-                  onClick={() => setPax(p => Math.min(4, p + 1))}
+                  onClick={() => setPax(p => Math.min(maxPax, p + 1))}
                   className="w-9 h-9 rounded-lg border border-slate-200 bg-white text-slate-600 text-lg font-bold hover:bg-slate-50 transition-colors flex items-center justify-center"
                 >+</button>
                 {/* Dot indicators */}

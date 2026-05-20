@@ -135,8 +135,13 @@ Deno.serve(async (req) => {
     if (tent.working_status !== 'WORKING') {
       return fail('TENT_NOT_WORKING', 'האוהל אינו זמין לשימוש', dbg);
     }
-    if (pax > tent.capacity) {
-      return fail('PAX_EXCEEDS_CAPACITY', 'כמות האנשים גדולה מקיבולת האוהל', dbg);
+    // VIP and accessible tents support an operational override of up to 4.
+    // We do NOT block on tent.capacity for VIP tents — the operational max is 4.
+    const VIP_OPERATIONAL_MAX = 4;
+    const isVipTent = tent.tent_type === 'VIP' || tent.is_accessible === true || String(tent.code || '').match(/^8\d/);
+    const operationalMax = isVipTent ? VIP_OPERATIONAL_MAX : tent.capacity;
+    if (pax > operationalMax) {
+      return fail('PAX_EXCEEDS_CAPACITY', `מקסימום ${operationalMax} אנשים לאוהל זה`, dbg);
     }
 
     // ── 3. Load VIP neighborhood for this tent ───────────────────────────────
