@@ -1,5 +1,8 @@
 import { useState } from "react";
 import { ChevronDown, ChevronUp, AlertTriangle, CheckCircle2, MapPin, Users } from "lucide-react";
+import { base44 } from "@/api/base44Client";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 import NeighborhoodMapCard from "./NeighborhoodMapCard";
 import NeighborhoodOnlyCard from "./NeighborhoodOnlyCard";
 
@@ -62,8 +65,10 @@ export default function GroupAllocationCard({
   tentsMap,
   neighborhoodsMap,
   type,
+  onRefresh,
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [markingReady, setMarkingReady] = useState(false);
 
   if (!group) return null;
 
@@ -74,6 +79,25 @@ export default function GroupAllocationCard({
 
   const totalPax = allocations.reduce((s, a) => s + (a.allocated_pax || 0), 0);
   const groupPax = group.total_pax || group.participant_count || 0;
+
+  const handleMarkAllReady = async () => {
+    const pendingIds = allocations
+      .filter(a => a.status === "CONFIRMED" && a.housekeeping_status !== "READY")
+      .map(a => a.id);
+    if (!pendingIds.length) { toast.info("כל האוהלים כבר מסומנים כמוכנים"); return; }
+    setMarkingReady(true);
+    try {
+      await Promise.all(pendingIds.map(id =>
+        base44.entities.SleepingAllocation.update(id, { housekeeping_status: "READY" })
+      ));
+      toast.success(`כל האוהלים סומנו כמוכנים (${pendingIds.length})`);
+      onRefresh?.();
+    } catch (err) {
+      toast.error(err?.message || "שגיאה בסימון האוהלים");
+    } finally {
+      setMarkingReady(false);
+    }
+  };
 
   const typeBadgeClass = TYPE_BADGE[type] || TYPE_BADGE.checkin;
   const typeLabel      = TYPE_LABEL[type] || "CHECK IN";
@@ -123,12 +147,28 @@ export default function GroupAllocationCard({
 
           {/* A: CONFIRMED specific tents */}
           {status === "confirmed" && (
-            <ConfirmedTenatils
-              allocations={allocations}
-              tentsMap={tentsMap}
-              neighborhoodsMap={neighborhoodsMap}
-              type={type}
-            />
+            <>
+              {type === "checkin" && (
+                <div className="flex justify-end">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs gap-1 border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                    onClick={handleMarkAllReady}
+                    disabled={markingReady}
+                  >
+                    <CheckCircle2 className="w-3 h-3" />
+                    {markingReady ? "מסמן..." : "סמן הכל כמוכן"}
+                  </Button>
+                </div>
+              )}
+              <ConfirmedTenatils
+                allocations={allocations}
+                tentsMap={tentsMap}
+                neighborhoodsMap={neighborhoodsMap}
+                type={type}
+              />
+            </>
           )}
 
           {/* B: DRAFT specific tents — show tent list but warn */}

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { base44 } from "@/api/base44Client";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
 import { he } from "date-fns/locale";
 import { ChevronLeft, ChevronRight, BedDouble } from "lucide-react";
@@ -20,6 +20,8 @@ function formatDateHebrew(dateStr) {
 
 export default function Housekeeping() {
   const [startDate, setStartDate] = useState(TODAY);
+  const queryClient = useQueryClient();
+  const refetchAllocations = () => queryClient.invalidateQueries({ queryKey: ["sleepingAllocations"] });
 
   const { data: allocations = [] } = useQuery({
     queryKey: ["sleepingAllocations"],
@@ -192,6 +194,7 @@ export default function Housekeeping() {
     tentsMap,
     neighborhoodsMap,
     type,
+    onRefresh:         refetchAllocations,
   });
 
   const warnCardProps = (group, type) => ({
@@ -203,6 +206,7 @@ export default function Housekeeping() {
     tentsMap,
     neighborhoodsMap,
     type,
+    onRefresh:         refetchAllocations,
   });
 
   return (

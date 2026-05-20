@@ -35,7 +35,7 @@ function expandDist(rows) {
   return flat;
 }
 
-/** Auto-generate a flat distribution from totalPax and defaultCapacity */
+/** Auto-generate a flat distribution from totalPax and actual tent capacities */
 function autoExpandFromPax(totalPax, defaultCap = 8) {
   if (!totalPax || totalPax <= 0) return [];
   const flat = [];
@@ -43,6 +43,22 @@ function autoExpandFromPax(totalPax, defaultCap = 8) {
   while (remaining > 0) {
     flat.push(Math.min(remaining, defaultCap));
     remaining -= defaultCap;
+  }
+  return flat;
+}
+
+/**
+ * Auto-generate distribution using actual available tent capacities
+ * instead of a hardcoded default capacity.
+ */
+function autoExpandFromPaxWithTents(totalPax, sortedAvailableTents) {
+  if (!totalPax || totalPax <= 0 || !sortedAvailableTents.length) return [];
+  const flat = [];
+  let remaining = totalPax;
+  for (const tent of sortedAvailableTents) {
+    if (remaining <= 0) break;
+    flat.push(Math.min(remaining, tent.capacity || 8));
+    remaining -= (tent.capacity || 8);
   }
   return flat;
 }
@@ -126,6 +142,14 @@ export default function AutoAllocationButton({
   }, [existingGroupAllocs]);
 
   // ── Core: compute what still needs to be allocated ──────────────────────────
+  // Available tents sorted (needed for capacity-aware auto-expand)
+  const sortedAvailableTents = useMemo(() =>
+    tents
+      .filter(t => t.working_status === "WORKING" && !blockedTentIds.has(t.id) && !usedByMeTentIds.has(t.id))
+      .sort((a, b) => tentSortKey(a) - tentSortKey(b)),
+    [tents, blockedTentIds, usedByMeTentIds]
+  );
+
   const segments = useMemo(() => {
     if (!profile) return [];
 
@@ -133,14 +157,16 @@ export default function AutoAllocationButton({
       // Boys
       let boysFlat = expandDist(parseDist(profile.boys_tent_distribution_json));
       if (!boysFlat.length && profile.boys_beds_needed > 0) {
-        boysFlat = autoExpandFromPax(profile.boys_beds_needed);
+        boysFlat = autoExpandFromPaxWithTents(profile.boys_beds_needed, sortedAvailableTents)
+          || autoExpandFromPax(profile.boys_beds_needed);
       }
       const boysRemaining = subtractAllocated(boysFlat, allocatedPaxByGender.BOYS);
 
       // Girls
       let girlsFlat = expandDist(parseDist(profile.girls_tent_distribution_json));
       if (!girlsFlat.length && profile.girls_beds_needed > 0) {
-        girlsFlat = autoExpandFromPax(profile.girls_beds_needed);
+        girlsFlat = autoExpandFromPaxWithTents(profile.girls_beds_needed, sortedAvailableTents)
+          || autoExpandFromPax(profile.girls_beds_needed);
       }
       const girlsRemaining = subtractAllocated(girlsFlat, allocatedPaxByGender.GIRLS);
 
@@ -153,14 +179,15 @@ export default function AutoAllocationButton({
       let flat = expandDist(parseDist(profile.boys_tent_distribution_json));
       if (!flat.length) {
         const totalPax = profile.participant_count || profile.total_pax || 0;
-        flat = autoExpandFromPax(totalPax);
+        flat = autoExpandFromPaxWithTents(totalPax, sortedAvailableTents)
+          || autoExpandFromPax(totalPax);
       }
       const remaining = subtractAllocated(flat, allocatedPaxByGender.MIXED);
       return remaining.length > 0
         ? [{ gender: "MIXED", label: "כללי", remaining }]
         : [];
     }
-  }, [profile, hasGenderSplit, allocatedPaxByGender]);
+  }, [profile, hasGenderSplit, allocatedPaxByGender, sortedAvailableTents]);
 
   const totalRemainingTents = segments.reduce((s, seg) => s + seg.remaining.length, 0);
 
@@ -178,47 +205,45 @@ export default function AutoAllocationButton({
       return;
     }
 
-    // Available tents pool (sorted naturally, excluding blocked + already used)
-    const available = tents
-      .filter(t =>
-        t.working_status === "WORKING" &&
-        !blockedTentIds.has(t.id) &&
-        !usedByMeTentIds.has(t.id)
-      )
-      .sort((a, b) => tentSortKey(a) - tentSortKey(b));
+    // Available tents pool — reuse the memoized sortedAvailableTents
+    const available = sortedAvailableTents;
 
-    if (available.length < totalRemainingTents) {
-      setPreview({
-        error: `אין מספיק אוהלים זמינים בשכונה זו. נדרשים ${totalRemainingTents} אוהלים, נמצאו ${available.length} פנויים.`,
-      });
+    if (available.length === 0) {
+      setPreview({ error: "אין אוהלים פנויים בשכונה זו לשיבוץ." });
       return;
     }
 
-    // Assign tents sequentially across segments (BOYS first, then GIRLS, no mixing)
+    // PARTIAL FILL: if neighborhood can't fit the full requirement,
+    // fill as many tents as available and leave the rest for the next neighborhood.
     const result = [];
     let tentCursor = 0;
+    let isPartial = false;
 
     for (const seg of segments) {
       const rows = [];
       for (const pax of seg.remaining) {
         const tent = available[tentCursor];
         if (!tent) {
-          setPreview({ error: `לא נותרו אוהלים זמינים לאחר שיבוץ ${seg.label}.` });
-          return;
+          // No more tents in this neighborhood — stop (partial fill is OK)
+          isPartial = true;
+          break;
         }
-        if (pax > (tent.capacity || 0)) {
-          setPreview({
-            error: `אוהל ${tent.code} — קיבולת ${tent.capacity} אך נדרשים ${pax} ל${seg.label}. יש לעדכן את חלוקת האוהלים בדרישות לינה.`,
-          });
-          return;
-        }
-        rows.push({ tent, pax });
+        // Use actual tent capacity — clamp pax to what this tent can hold
+        const effectivePax = Math.min(pax, tent.capacity || 8);
+        rows.push({ tent, pax: effectivePax });
         tentCursor++;
       }
-      result.push({ gender: seg.gender, label: seg.label, rows });
+      if (rows.length > 0) {
+        result.push({ gender: seg.gender, label: seg.label, rows });
+      }
     }
 
-    setPreview({ segments: result, error: null });
+    if (result.length === 0) {
+      setPreview({ error: "לא ניתן לשבץ אף אוהל בשכונה זו." });
+      return;
+    }
+
+    setPreview({ segments: result, error: null, isPartial });
   };
 
   // ── Save all segments as DRAFT rows ────────────────────────────────────────
@@ -319,7 +344,16 @@ export default function AutoAllocationButton({
               <p className="text-xs font-semibold text-violet-800 flex items-center gap-1.5">
                 <Wand2 className="w-3.5 h-3.5" />
                 תצוגה מקדימה — שיבוץ אוטומטי
+                {preview.isPartial && (
+                  <span className="text-amber-600 font-normal normal-case">· שיבוץ חלקי — לא כל השכונה מספיקה</span>
+                )}
               </p>
+              {preview.isPartial && (
+                <div className="flex items-start gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                  <span>השכונה אינה מספיקה לכל הדרישה. ניתן לאשר שיבוץ חלקי זה ולהמשיך לשכונה נוספת עבור הנותרים.</span>
+                </div>
+              )}
 
               {preview.segments.map(seg => (
                 <div key={seg.gender} className={`border rounded-lg p-2 space-y-1 ${GENDER_STYLE[seg.gender]}`}>

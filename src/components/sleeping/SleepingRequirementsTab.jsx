@@ -10,7 +10,7 @@ import StudentTentPlanningEditor from "./StudentTentPlanningEditor";
 import VipRequirementsEditor from "./VipRequirementsEditor";
 
 const VIP_TOTAL_TENTS  = 10;
-const VIP_MAX_PER_TENT = 3;
+const VIP_MAX_PER_TENT = 4; // allow up to 4 for operational override
 const STUDENT_CAPACITY = 8;
 
 // ── small helpers ──────────────────────────────────────────────────────────
@@ -233,7 +233,7 @@ export default function SleepingRequirementsTab({ groupId, profile }) {
           </p>
           {studentOverMax  && <p className="text-xs text-red-600">• יש שורת חלוקה תלמידים עם יותר מ-{STUDENT_CAPACITY} לאוהל</p>}
           {vipExceedsMax   && <p className="text-xs text-red-600">• סה"כ שורות VIP ({vipRows.length}) חורג מהמקסימום ({VIP_TOTAL_TENTS})</p>}
-          {vipOverPaxRow   && <p className="text-xs text-red-600">• יש שורת VIP עם יותר מ-{VIP_MAX_PER_TENT} אנשים לאוהל</p>}
+          {vipOverPaxRow   && <p className="text-xs text-red-600">• יש שורת VIP עם יותר מ-{VIP_MAX_PER_TENT} אנשים לאוהל (מקסימום 4 לאוהל VIP)</p>}
           {vipMissingData  && <p className="text-xs text-red-600">• יש שורת VIP עם מגדר או מספר אנשים חסר</p>}
         </div>
       )}

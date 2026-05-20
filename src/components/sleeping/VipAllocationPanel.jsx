@@ -55,8 +55,7 @@ function AssignmentDialog({ req, reqIndex, tent, existingAlloc, profile, groupId
     const errs = [];
     if (!gender) errs.push("יש לבחור מגדר");
     if (pax < 1) errs.push("מספר האנשים חייב להיות לפחות 1");
-    if (pax > tent.capacity) errs.push(`מספר האנשים חורג מקיבולת האוהל (${tent.capacity})`);
-    if (pax > 3) errs.push("מקסימום 3 אנשים לאוהל VIP");
+    if (pax > 4) errs.push("מקסימום 4 אנשים לאוהל VIP");
     return errs;
   };
 
@@ -188,7 +187,7 @@ function AssignmentDialog({ req, reqIndex, tent, existingAlloc, profile, groupId
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-600">
                 מספר אנשים
-                <span className="text-slate-400 font-normal mr-1">(מקס׳ {Math.min(tent.capacity, 3)})</span>
+                <span className="text-slate-400 font-normal mr-1">(מקס׳ 4)</span>
               </label>
               <div className="flex items-center gap-3">
                 <button
@@ -199,12 +198,12 @@ function AssignmentDialog({ req, reqIndex, tent, existingAlloc, profile, groupId
                 <span className="text-2xl font-bold text-slate-700 min-w-[32px] text-center">{pax}</span>
                 <button
                   type="button"
-                  onClick={() => setPax(p => Math.min(Math.min(tent.capacity, 3), p + 1))}
+                  onClick={() => setPax(p => Math.min(4, p + 1))}
                   className="w-9 h-9 rounded-lg border border-slate-200 bg-white text-slate-600 text-lg font-bold hover:bg-slate-50 transition-colors flex items-center justify-center"
                 >+</button>
                 {/* Dot indicators */}
                 <div className="flex gap-1 mr-2">
-                  {[1,2,3].map(n => (
+                  {[1,2,3,4].map(n => (
                     <span key={n} className={`w-2.5 h-2.5 rounded-full transition-colors ${n <= pax ? (gender === "MEN" ? "bg-emerald-400" : "bg-orange-400") : "bg-slate-200"}`} />
                   ))}
                 </div>
@@ -593,7 +592,11 @@ export default function VipAllocationPanel({
             {selectedReqIndex !== null && <span className="text-primary normal-case mr-1.5">← לחץ לשיוך</span>}
           </p>
           <div className="flex flex-wrap gap-2">
-            {vipTents.map(tent => {
+            {[...vipTents].sort((a, b) => {
+              const na = Number(String(a.code || "").match(/\d+/)?.[0] || 0);
+              const nb = Number(String(b.code || "").match(/\d+/)?.[0] || 0);
+              return nb - na; // descending: 89, 88, 87...
+            }).map(tent => {
               // A tent occupied by OTHER group (not me) in conflicting dates
               const occupiedByOther = !!conflictMap[tent.id];
               // My effective alloc for this tent
