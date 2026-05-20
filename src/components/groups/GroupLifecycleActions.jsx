@@ -142,19 +142,28 @@ export default function GroupLifecycleActions({ group, onDeleted, onUpdated }) {
       console.log("[Delete UI] calling deleteGroup", group.id);
       const res = await base44.functions.invoke("deleteGroup", { group_id: group.id });
       console.log("[Delete UI] response", res);
-      setModal(null);
       if (res.data?.success) {
+        setModal(null);
         toast.success('הקבוצה נמחקה לצמיתות');
         onDeleted?.();
       } else {
-        console.error("[Delete UI] backend error", res.data);
-        toast.error(res.data?.error || 'המחיקה נכשלה');
+        console.error("[Delete UI] deleteGroup success false", res.data);
+        toast.error(
+          res.data?.error ||
+          res.data?.debug?.message ||
+          'מחיקת הקבוצה נכשלה'
+        );
       }
     } catch (err) {
-      console.error("[Delete UI] error", err);
-      console.error("[Delete UI] backend error", err?.response?.data);
-      const msg = err?.response?.data?.error || err?.message || 'המחיקה נכשלה';
-      toast.error(msg);
+      const backend = err?.response?.data;
+      console.error("[Delete UI] full error", err);
+      console.error("[Delete UI] backend error", backend);
+      toast.error(
+        backend?.error ||
+        backend?.debug?.message ||
+        err?.message ||
+        'מחיקת הקבוצה נכשלה'
+      );
     } finally {
       setLoading(false);
     }

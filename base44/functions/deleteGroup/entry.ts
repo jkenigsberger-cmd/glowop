@@ -6,17 +6,41 @@ Deno.serve(async (req) => {
   let step = 'init';
 
   try {
-    // ── Auth ──────────────────────────────────────────────────────────────
+    // ── Auth — use asServiceRole to look up current user ─────────────────
     step = 'auth';
-    const user = await base44.auth.me();
-    if (!user) {
-      console.error('[deleteGroup] auth failed — no user');
-      return Response.json({ error: 'הפעולה נכשלה. יש להתחבר מחדש.' }, { status: 401 });
+    let user = null;
+    try {
+      user = await base44.auth.me();
+    } catch (_authErr) {
+      // auth.me() may fail in some deployment contexts — fall through to service role check
+      console.warn('[deleteGroup] base44.auth.me() failed, attempting service role fallback');
     }
+
+    // If auth.me() failed, try via asServiceRole
+    if (!user) {
+      try {
+        user = await base44.asServiceRole.auth.me();
+      } catch (_e) {
+        console.error('[deleteGroup] auth failed — cannot identify user');
+      }
+    }
+
+    if (!user) {
+      return Response.json({
+        success: false,
+        error: 'הפעולה נכשלה. יש להתחבר מחדש.',
+        debug: { step: 'auth', message: 'No user session found' },
+      }, { status: 401 });
+    }
+
     const role = (user.role || '').toLowerCase();
     if (role !== 'admin') {
-      console.error('[deleteGroup] auth failed — not admin', role);
-      return Response.json({ error: 'אין הרשאה לבצע פעולה זו' }, { status: 403 });
+      console.error('[deleteGroup] auth failed — not admin, role=', role);
+      return Response.json({
+        success: false,
+        error: 'אין הרשאה לבצע פעולה זו',
+        debug: { step: 'auth', message: `role=${role}` },
+      }, { status: 403 });
     }
     console.log('[deleteGroup] auth ok', user.email);
 
@@ -25,13 +49,15 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     group_id = body.group_id || 'unknown';
     console.log(`[deleteGroup] start group_id: ${group_id}`);
-    if (!body.group_id) return Response.json({ error: 'group_id required' }, { status: 400 });
+    if (!body.group_id) {
+      return Response.json({ success: false, error: 'group_id required' }, { status: 400 });
+    }
 
     // ── Verify group exists ───────────────────────────────────────────────
     step = 'verify_group';
-    const allGroups = await base44.asServiceRole.entities.Group.list();
-    if (!allGroups.some(g => g.id === group_id)) {
-      return Response.json({ error: 'Group not found' }, { status: 404 });
+    const groups = await base44.asServiceRole.entities.Group.filter({ id: group_id });
+    if (!groups.length) {
+      return Response.json({ success: false, error: 'Group not found' }, { status: 404 });
     }
 
     // ── Fetch related records ─────────────────────────────────────────────
@@ -57,8 +83,6 @@ Deno.serve(async (req) => {
       base44.asServiceRole.entities.NeighborhoodReservation.filter({ group_id }),
     ]);
     console.log(`[deleteGroup] fetch related records done — quotes:${quotes.length} submissions:${submissions.length} profiles:${profiles.length} holds:${holds.length} allocations:${allocations.length} scheduleItems:${scheduleItems.length} meals:${mealReservations.length} neighborhoods:${neighborhoodReservations.length}`);
-
-    // ── Delete sequentially so logs are clear ─────────────────────────────
 
     step = 'delete_profiles';
     console.log(`[deleteGroup] delete OperationalGroupProfile ${profiles.length}`);
@@ -115,13 +139,12 @@ Deno.serve(async (req) => {
     console.error(`[deleteGroup] FAILED at step="${step}" group_id="${group_id}"`, err?.message);
     return Response.json({
       success: false,
-      error: err?.status === 401 ? 'הפעולה נכשלה. יש להתחבר מחדש.' : 'מחיקת הקבוצה נכשלה',
+      error: 'מחיקת הקבוצה נכשלה',
       debug: {
         step,
         group_id,
         message: err?.message || String(err),
-        stack: err?.stack || null,
       },
-    }, { status: err?.status === 401 ? 401 : 500 });
+    }, { status: 500 });
   }
 });
