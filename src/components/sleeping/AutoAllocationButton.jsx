@@ -21,59 +21,7 @@ import { toast } from "sonner";
 
 // ── Pure helpers ───────────────────────────────────────────────────────────────
 
-function parseDist(json) {
-  if (!json) return [];
-  try { return JSON.parse(json); } catch { return []; }
-}
 
-/** [{tent_count, people_per_tent}] → flat list e.g. [8, 8, 4] */
-function expandDist(rows) {
-  const flat = [];
-  rows.forEach(r => {
-    for (let i = 0; i < (r.tent_count || 0); i++) flat.push(r.people_per_tent || 0);
-  });
-  return flat;
-}
-
-/** Auto-generate a flat distribution from totalPax and actual tent capacities */
-function autoExpandFromPax(totalPax, defaultCap = 8) {
-  if (!totalPax || totalPax <= 0) return [];
-  const flat = [];
-  let remaining = totalPax;
-  while (remaining > 0) {
-    flat.push(Math.min(remaining, defaultCap));
-    remaining -= defaultCap;
-  }
-  return flat;
-}
-
-/**
- * Auto-generate distribution using actual available tent capacities
- * instead of a hardcoded default capacity.
- */
-function autoExpandFromPaxWithTents(totalPax, sortedAvailableTents) {
-  if (!totalPax || totalPax <= 0 || !sortedAvailableTents.length) return [];
-  const flat = [];
-  let remaining = totalPax;
-  for (const tent of sortedAvailableTents) {
-    if (remaining <= 0) break;
-    flat.push(Math.min(remaining, tent.capacity || 8));
-    remaining -= (tent.capacity || 8);
-  }
-  return flat;
-}
-
-/** Subtract already-allocated pax from a flat list (from the front) */
-function subtractAllocated(flatList, alreadyPax) {
-  let rem = alreadyPax;
-  const result = [];
-  for (const pax of flatList) {
-    if (rem >= pax) { rem -= pax; continue; }
-    result.push(rem > 0 ? pax - rem : pax);
-    rem = 0;
-  }
-  return result;
-}
 
 function tentSortKey(tent) {
   const m = String(tent.code || "").match(/(\d+)/);
@@ -150,46 +98,32 @@ export default function AutoAllocationButton({
     [tents, blockedTentIds, usedByMeTentIds]
   );
 
+  // ── Compute required remaining pax per segment (total-based, not slot-based) ──
   const segments = useMemo(() => {
     if (!profile) return [];
 
     if (hasGenderSplit) {
-      // Boys
-      let boysFlat = expandDist(parseDist(profile.boys_tent_distribution_json));
-      if (!boysFlat.length && profile.boys_beds_needed > 0) {
-        boysFlat = autoExpandFromPaxWithTents(profile.boys_beds_needed, sortedAvailableTents)
-          || autoExpandFromPax(profile.boys_beds_needed);
-      }
-      const boysRemaining = subtractAllocated(boysFlat, allocatedPaxByGender.BOYS);
-
-      // Girls
-      let girlsFlat = expandDist(parseDist(profile.girls_tent_distribution_json));
-      if (!girlsFlat.length && profile.girls_beds_needed > 0) {
-        girlsFlat = autoExpandFromPaxWithTents(profile.girls_beds_needed, sortedAvailableTents)
-          || autoExpandFromPax(profile.girls_beds_needed);
-      }
-      const girlsRemaining = subtractAllocated(girlsFlat, allocatedPaxByGender.GIRLS);
+      // Total pax required for boys / girls
+      const totalBoys  = profile.boys_beds_needed  || profile.boys_count  || 0;
+      const totalGirls = profile.girls_beds_needed || profile.girls_count || 0;
+      const boysNeeded  = Math.max(0, totalBoys  - allocatedPaxByGender.BOYS);
+      const girlsNeeded = Math.max(0, totalGirls - allocatedPaxByGender.GIRLS);
 
       return [
-        { gender: "BOYS",  label: "בנים",  remaining: boysRemaining  },
-        { gender: "GIRLS", label: "בנות",  remaining: girlsRemaining },
-      ].filter(s => s.remaining.length > 0);
+        boysNeeded  > 0 ? { gender: "BOYS",  label: "בנים", requiredPax: boysNeeded  } : null,
+        girlsNeeded > 0 ? { gender: "GIRLS", label: "בנות", requiredPax: girlsNeeded } : null,
+      ].filter(Boolean);
     } else {
       // MIXED/general
-      let flat = expandDist(parseDist(profile.boys_tent_distribution_json));
-      if (!flat.length) {
-        const totalPax = profile.participant_count || profile.total_pax || 0;
-        flat = autoExpandFromPaxWithTents(totalPax, sortedAvailableTents)
-          || autoExpandFromPax(totalPax);
-      }
-      const remaining = subtractAllocated(flat, allocatedPaxByGender.MIXED);
-      return remaining.length > 0
-        ? [{ gender: "MIXED", label: "כללי", remaining }]
+      const totalPax  = profile.participant_count || profile.total_pax || 0;
+      const mixedNeeded = Math.max(0, totalPax - allocatedPaxByGender.MIXED);
+      return mixedNeeded > 0
+        ? [{ gender: "MIXED", label: "כללי", requiredPax: mixedNeeded }]
         : [];
     }
-  }, [profile, hasGenderSplit, allocatedPaxByGender, sortedAvailableTents]);
+  }, [profile, hasGenderSplit, allocatedPaxByGender]);
 
-  const totalRemainingTents = segments.reduce((s, seg) => s + seg.remaining.length, 0);
+  const totalRemainingPax = segments.reduce((s, seg) => s + seg.requiredPax, 0);
 
   // ── Run allocation logic ────────────────────────────────────────────────────
   const runAutoAllocation = () => {
@@ -213,28 +147,38 @@ export default function AutoAllocationButton({
       return;
     }
 
-    // PARTIAL FILL: if neighborhood can't fit the full requirement,
-    // fill as many tents as available and leave the rest for the next neighborhood.
+    // TOTAL-BASED FILL: drive allocation by remaining required pax,
+    // not by the original slot list. This ensures smaller-capacity tents
+    // add extra tents to cover the full required count.
     const result = [];
     let tentCursor = 0;
     let isPartial = false;
 
     for (const seg of segments) {
       const rows = [];
-      for (const pax of seg.remaining) {
+      let remaining = seg.requiredPax;
+
+      while (remaining > 0) {
         const tent = available[tentCursor];
         if (!tent) {
-          // No more tents in this neighborhood — stop (partial fill is OK)
+          // No more tents in this neighborhood — partial fill
           isPartial = true;
           break;
         }
-        // Use actual tent capacity — clamp pax to what this tent can hold
-        const effectivePax = Math.min(pax, tent.capacity || 8);
+        const effectivePax = Math.min(remaining, tent.capacity || 8);
         rows.push({ tent, pax: effectivePax });
+        remaining -= effectivePax;
         tentCursor++;
       }
+
       if (rows.length > 0) {
-        result.push({ gender: seg.gender, label: seg.label, rows });
+        result.push({
+          gender: seg.gender,
+          label: seg.label,
+          rows,
+          allocatedPax: rows.reduce((s, r) => s + r.pax, 0),
+          requiredPax: seg.requiredPax,
+        });
       }
     }
 
@@ -292,11 +236,7 @@ export default function AutoAllocationButton({
     GIRLS: "bg-orange-50 border-orange-200 text-orange-800",
     MIXED: "bg-violet-50 border-violet-200 text-violet-800",
   };
-  const ROW_STYLE = {
-    BOYS:  "bg-emerald-50 border-emerald-200",
-    GIRLS: "bg-orange-50 border-orange-200",
-    MIXED: "bg-violet-50 border-violet-200",
-  };
+
 
   return (
     <div className="space-y-2">
@@ -355,19 +295,34 @@ export default function AutoAllocationButton({
                 </div>
               )}
 
-              {preview.segments.map(seg => (
-                <div key={seg.gender} className={`border rounded-lg p-2 space-y-1 ${GENDER_STYLE[seg.gender]}`}>
-                  <p className="text-[11px] font-bold">
-                    {seg.label} — {seg.rows.length} אוהלים · {seg.rows.reduce((s, r) => s + r.pax, 0)} אנשים
-                  </p>
-                  {seg.rows.map(({ tent, pax }) => (
-                    <div key={tent.id} className={`flex items-center justify-between text-xs px-3 py-1.5 border rounded-lg bg-white`}>
-                      <span className="font-semibold text-slate-800">אוהל {tent.code}</span>
-                      <span className="font-medium">{pax} מיטות</span>
+              {preview.segments.map(seg => {
+                const segAllocated = seg.allocatedPax;
+                const segRequired  = seg.requiredPax;
+                const segPartial   = segAllocated < segRequired;
+                return (
+                  <div key={seg.gender} className={`border rounded-lg p-2 space-y-1 ${GENDER_STYLE[seg.gender]}`}>
+                    <div className="flex items-center justify-between">
+                      <p className="text-[11px] font-bold">
+                        {seg.label} — {seg.rows.length} אוהלים
+                      </p>
+                      <p className={`text-[11px] font-semibold ${segPartial ? "text-amber-700" : "text-emerald-700"}`}>
+                        שובץ בשכונה זו: {segAllocated} מתוך {segRequired}
+                      </p>
                     </div>
-                  ))}
-                </div>
-              ))}
+                    {segPartial && (
+                      <p className="text-[10px] text-amber-600 font-medium">
+                        נותרו לשיבוץ: {segRequired - segAllocated} משתתפים
+                      </p>
+                    )}
+                    {seg.rows.map(({ tent, pax }) => (
+                      <div key={tent.id} className="flex items-center justify-between text-xs px-3 py-1.5 border rounded-lg bg-white">
+                        <span className="font-semibold text-slate-800">אוהל {tent.code}</span>
+                        <span className="font-medium">{pax} מיטות</span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
 
               <div className="flex gap-2 pt-1">
                 <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleCancel} disabled={saving}>ביטול</Button>
