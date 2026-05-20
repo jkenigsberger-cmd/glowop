@@ -76,6 +76,14 @@ export default function Kitchen() {
 
   const isToday = selectedDate === TODAY;
 
+  const goToPreviousDay = () => {
+    setSelectedDate(prev => format(subDays(parseISO(prev), 1), "yyyy-MM-dd"));
+  };
+
+  const goToNextDay = () => {
+    setSelectedDate(prev => format(addDays(parseISO(prev), 1), "yyyy-MM-dd"));
+  };
+
   return (
     <div className="min-h-screen bg-background" dir="rtl">
       {/* Header */}
@@ -94,10 +102,12 @@ export default function Kitchen() {
             <div className="flex items-center gap-2">
               <Button
                 variant="ghost"
-                size="icon"
-                onClick={() => setSelectedDate(d => subDays(parseISO(d), 1).toISOString().slice(0, 10))}
+                size="sm"
+                onClick={goToPreviousDay}
+                aria-label="יום קודם"
               >
                 <ChevronRight className="w-4 h-4" />
+                <span className="text-xs mr-1">יום קודם</span>
               </Button>
 
               <div className="text-center min-w-[9rem]">
@@ -109,9 +119,11 @@ export default function Kitchen() {
 
               <Button
                 variant="ghost"
-                size="icon"
-                onClick={() => setSelectedDate(d => addDays(parseISO(d), 1).toISOString().slice(0, 10))}
+                size="sm"
+                onClick={goToNextDay}
+                aria-label="יום הבא"
               >
+                <span className="text-xs ml-1">יום הבא</span>
                 <ChevronLeft className="w-4 h-4" />
               </Button>
 
