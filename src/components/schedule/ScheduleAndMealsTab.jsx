@@ -334,16 +334,35 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
     if (!profileId) { toast.error("אין פרופיל תפעולי"); return; }
     if (!window.confirm("לסנכרן לוח זמנים וארוחות מהשאלון? שורות קיימות מסנכרון קודם יעודכנו. שורות ידניות לא יושפעו.")) return;
     setSyncing(true);
-    const res = await base44.functions.invoke("prefillGroupScheduleAndMeals", {
-      operational_group_profile_id: profileId,
+    console.log("[Sync Profile LIVE] clicked", { groupId, profileId, submissionId: guestFormSubmission?.id });
+    console.log("[Sync Profile LIVE] sources", {
+      hasGroup: !!group,
+      hasProfile: !!profile,
+      hasSubmission: !!guestFormSubmission,
     });
-    setSyncing(false);
-    if (res.data?.success) {
-      const { schedule, meals } = res.data;
-      toast.success(`סנכרון הושלם: ${schedule.created} פעילויות חדשות, ${meals.created} ארוחות חדשות`);
-      invalidate();
-    } else {
-      toast.error(res.data?.error || "שגיאה בסנכרון");
+    try {
+      console.log("[Sync Profile LIVE] before function call");
+      const res = await base44.functions.invoke("prefillGroupScheduleAndMeals", {
+        operational_group_profile_id: profileId,
+      });
+      console.log("[Sync Profile LIVE] response", res);
+      if (res.data?.success) {
+        if (res.data.partial) {
+          toast.success("סנכרון חלקי בוצע — שאלון לקוח עדיין לא התקבל. הנתונים סונכרנו מתוך הקבוצה וההצעה.");
+        } else {
+          const { schedule, meals } = res.data;
+          toast.success(`סנכרון הושלם: ${schedule.created} פעילויות חדשות, ${meals.created} ארוחות חדשות`);
+        }
+        invalidate();
+      } else {
+        toast.error(res.data?.error || "שגיאה בסנכרון");
+      }
+    } catch (err) {
+      console.error("[Sync Profile LIVE] error", err);
+      console.error("[Sync Profile LIVE] backend error", err?.response?.data);
+      toast.error(err?.response?.data?.error || err?.message || "סנכרון נכשל");
+    } finally {
+      setSyncing(false);
     }
   };
 
