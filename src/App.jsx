@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Toaster } from "@/components/ui/toaster"
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
@@ -6,6 +7,7 @@ import PageNotFound from './lib/PageNotFound';
 import AppNav from './components/AppNav';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
+import PilotAccessGate, { checkAccess, revokeAccess } from "@/components/PilotAccessGate";
 // Add page imports here
 import Inventory from "./pages/Inventory";
 import Groups from "./pages/Groups.jsx";
@@ -22,7 +24,12 @@ import Allocation from "./pages/Allocation.jsx";
 import CommonSpaces from "./pages/CommonSpaces.jsx";
 
 const AuthenticatedApp = () => {
+  const [accessGranted, setAccessGranted] = useState(checkAccess());
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
+
+  if (!accessGranted) {
+    return <PilotAccessGate onGranted={() => setAccessGranted(true)} />;
+  }
 
   // Show loading spinner while checking app public settings or auth
   if (isLoadingPublicSettings || isLoadingAuth) {

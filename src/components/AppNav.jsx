@@ -1,8 +1,9 @@
 import { Link, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, CheckSquare, CalendarDays, BedDouble,
-  UtensilsCrossed, Wrench, ShieldAlert, Layers
+  UtensilsCrossed, Wrench, ShieldAlert, Layers, Lock
 } from "lucide-react";
+import { revokeAccess } from "@/components/PilotAccessGate";
 
 const OPS_LINKS = [
   { to: "/dashboard",       label: "בית",            icon: LayoutDashboard },
@@ -44,6 +45,16 @@ export default function AppNav() {
         {OPS_LINKS.map(link => (
           <NavLink key={link.to} {...link} pathname={pathname} />
         ))}
+
+        {/* Lock button */}
+        <button
+          onClick={() => { revokeAccess(); window.location.reload(); }}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded text-sm font-medium whitespace-nowrap text-slate-500 hover:text-red-600 hover:bg-red-50 transition-colors"
+          title="נעילת מערכת"
+        >
+          <Lock className="w-3.5 h-3.5 shrink-0" />
+          נעילה
+        </button>
 
         {/* Admin link — visually distinct, pushed to left */}
         <div className="mr-auto shrink-0">
