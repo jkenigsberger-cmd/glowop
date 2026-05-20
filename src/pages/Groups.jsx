@@ -3,11 +3,12 @@ import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { format, parseISO, isPast, isToday } from "date-fns";
-import { Users, Plus, AlertTriangle, Clock } from "lucide-react";
+import { Users, Plus, AlertTriangle, Clock, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import GroupFormModal from "@/components/groups/GroupFormModal";
+import QuoteFormModal from "@/components/quotes/QuoteFormModal";
 
 const TODAY = new Date().toISOString().slice(0, 10);
 
@@ -49,6 +50,7 @@ function GroupRow({ group, showUnmarkedBadge = false }) {
 
 export default function Groups() {
   const [showForm, setShowForm] = useState(false);
+  const [showQuoteForm, setShowQuoteForm] = useState(false);
 
   const { data: groups = [], refetch } = useQuery({
     queryKey: ["groups"],
@@ -138,9 +140,14 @@ export default function Groups() {
               <p className="text-xs text-muted-foreground mt-0.5">{groups.length} קבוצות בסך הכל</p>
             </div>
           </div>
-          <Button size="sm" className="gap-1.5" onClick={() => setShowForm(true)}>
-            <Plus className="w-4 h-4" /> קבוצה חדשה
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setShowQuoteForm(true)}>
+              <FileText className="w-4 h-4" /> הצעת מחיר לקבוצה חדשה
+            </Button>
+            <Button size="sm" className="gap-1.5" onClick={() => setShowForm(true)}>
+              <Plus className="w-4 h-4" /> קבוצה חדשה
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -169,6 +176,13 @@ export default function Groups() {
         <GroupFormModal
           onClose={() => setShowForm(false)}
           onSaved={() => { setShowForm(false); refetch(); }}
+        />
+      )}
+
+      {showQuoteForm && (
+        <QuoteFormModal
+          onClose={() => setShowQuoteForm(false)}
+          onSaved={() => { setShowQuoteForm(false); refetch(); }}
         />
       )}
     </div>

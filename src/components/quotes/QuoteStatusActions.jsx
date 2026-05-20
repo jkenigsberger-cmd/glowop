@@ -2,6 +2,7 @@ import { useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { Send, CheckCircle, XCircle, Clock } from "lucide-react";
+import { toast } from "sonner";
 import QuoteStatusBadge from "./QuoteStatusBadge";
 import ApprovalCapacityDialog from "./ApprovalCapacityDialog";
 
@@ -77,8 +78,22 @@ export default function QuoteStatusActions({ quote, group, onUpdated }) {
     };
     await base44.entities.Quote.update(quote.id, quoteUpdate);
 
-    if (group) {
-      await base44.entities.Group.update(group.id, { status: "CONFIRMED" });
+    // ── Create / update OperationalGroupProfile + confirm group ───────────
+    const targetGroupId = group?.id || quote.group_id;
+    if (targetGroupId) {
+      try {
+        const profileRes = await base44.functions.invoke("createOrUpdateOperationalGroupProfile", {
+          group_id: targetGroupId,
+          quote_id: quote.id,
+        });
+        if (!profileRes.data?.success) {
+          const errMsg = profileRes.data?.error || "שגיאה לא ידועה";
+          toast.warning(`ההצעה אושרה אך הפרופיל התפעולי לא נוצר: ${errMsg}`);
+        }
+      } catch (profileErr) {
+        console.error("[QuoteStatusActions] createOrUpdateOperationalGroupProfile failed:", profileErr?.message);
+        toast.warning("ההצעה אושרה אך הפרופיל התפעולי לא נוצר. יש לבדוק את הקבוצה.");
+      }
     }
 
     // Create or update OperationalHold
