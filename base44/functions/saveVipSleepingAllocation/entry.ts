@@ -18,7 +18,8 @@ function isValidDate(str) {
 
 function fail(reasonCode, errorMsg, dbg) {
   console.error(`[saveVipSleepingAllocation] FAIL: ${reasonCode} — ${errorMsg}`, JSON.stringify(dbg));
-  return Response.json({ success: false, error: errorMsg, debug: { reasonCode, ...dbg } }, { status: 400 });
+  // Return 200 so the SDK doesn't throw — frontend checks success:false
+  return Response.json({ success: false, error: errorMsg, debug: { reasonCode, ...dbg } }, { status: 200 });
 }
 
 Deno.serve(async (req) => {
@@ -243,7 +244,7 @@ Deno.serve(async (req) => {
           status: conflict.status,
           dates: { arrival_date: conflict.arrival_date, departure_date: conflict.departure_date },
         },
-      }, { status: 400 });
+      }, { status: 200 }); // 200 so SDK doesn't throw; frontend checks success:false
     }
 
     // ── 6. Check for stale row: same req already on a different tent ─────────
@@ -256,11 +257,14 @@ Deno.serve(async (req) => {
       console.error('[saveVipSleepingAllocation] SleepingAllocation.filter (group) error:', e?.message);
     }
 
+    // Only consider STAFF/VIP allocations for stale-row matching — never touch student rows.
     const staleRow = groupAllocs.find(a =>
       a.status !== 'CANCELLED' &&
       a.id !== allocation_id &&
+      a.allocation_type === 'STAFF' &&
       (a.notes || '').includes(noteMarker)
     );
+    console.log('[saveVipSleepingAllocation] staleRow:', staleRow ? `id=${staleRow.id} tent=${staleRow.tent_id}` : 'none');
 
     // ── 7. Build & persist ───────────────────────────────────────────────────
 
@@ -281,15 +285,19 @@ Deno.serve(async (req) => {
 
     let savedId;
     if (allocation_id) {
+      console.log(`[saveVipSleepingAllocation] UPDATE existing allocation_id=${allocation_id}`);
       await base44.asServiceRole.entities.SleepingAllocation.update(allocation_id, savePayload);
       savedId = allocation_id;
       if (staleRow && staleRow.id !== allocation_id) {
+        console.log(`[saveVipSleepingAllocation] DELETE stale id=${staleRow.id}`);
         await base44.asServiceRole.entities.SleepingAllocation.delete(staleRow.id);
       }
     } else if (staleRow) {
+      console.log(`[saveVipSleepingAllocation] REUSE stale id=${staleRow.id} (tent was ${staleRow.tent_id})`);
       await base44.asServiceRole.entities.SleepingAllocation.update(staleRow.id, savePayload);
       savedId = staleRow.id;
     } else {
+      console.log(`[saveVipSleepingAllocation] CREATE new allocation`);
       const created = await base44.asServiceRole.entities.SleepingAllocation.create(savePayload);
       savedId = created.id;
     }
