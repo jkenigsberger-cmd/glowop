@@ -40,6 +40,9 @@ function ConfirmModal({ config, onConfirm, onCancel, loading }) {
           </div>
         )}
 
+        {config.debugMarker && (
+          <p className="text-[10px] text-slate-400 font-mono">{config.debugMarker}</p>
+        )}
         <div className="flex gap-2 justify-end pt-1">
           <Button variant="outline" size="sm" onClick={onCancel} disabled={loading}>ביטול</Button>
           <Button
@@ -90,6 +93,7 @@ const MODAL_CONFIGS = {
   delete: {
     title: "מחיקה מוחלטת",
     text: "פעולה זו תמחק את הקבוצה ואת כל הנתונים התפעוליים הקשורים אליה. פעולה זו אינה מיועדת לקבוצות שהסתיימו או קבוצות בהמתנה.",
+    debugMarker: "delete handler v2",
     confirmLabel: "מחק לצמיתות",
     requireReason: false,
     Icon: AlertTriangle,
@@ -138,16 +142,17 @@ export default function GroupLifecycleActions({ group, onDeleted, onUpdated }) {
 
   const handleDelete = async () => {
     setLoading(true);
+    console.log("[Delete UI v2] clicked delete", group.id);
     try {
-      console.log("[Delete UI] calling deleteGroup", group.id);
+      console.log("[Delete UI v2] calling deleteGroup");
       const res = await base44.functions.invoke("deleteGroup", { group_id: group.id });
-      console.log("[Delete UI] response", res);
+      console.log("[Delete UI v2] response", res);
       if (res.data?.success) {
         setModal(null);
         toast.success('הקבוצה נמחקה לצמיתות');
         onDeleted?.();
       } else {
-        console.error("[Delete UI] deleteGroup success false", res.data);
+        console.error("[Delete UI v2] deleteGroup success false", res.data);
         toast.error(
           res.data?.error ||
           res.data?.debug?.message ||
@@ -156,8 +161,8 @@ export default function GroupLifecycleActions({ group, onDeleted, onUpdated }) {
       }
     } catch (err) {
       const backend = err?.response?.data;
-      console.error("[Delete UI] full error", err);
-      console.error("[Delete UI] backend error", backend);
+      console.error("[Delete UI v2] full error", err);
+      console.error("[Delete UI v2] backend error", backend);
       toast.error(
         backend?.error ||
         backend?.debug?.message ||

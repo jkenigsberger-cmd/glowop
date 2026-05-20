@@ -1,6 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
 Deno.serve(async (req) => {
+  console.log('[deleteGroup v2] function invoked');
   const base44 = createClientFromRequest(req);
   let group_id = 'unknown';
   let step = 'init';
