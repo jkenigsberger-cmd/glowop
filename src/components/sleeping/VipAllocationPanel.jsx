@@ -317,7 +317,7 @@ function VipReqCard({ req, index, assignedTentCode, assignedStatus, isSelected, 
 
       {/* People dots */}
       <div className="flex items-center gap-1">
-        {Array.from({ length: Math.min(req.people_count || 1, 3) }).map((_, i) => (
+        {Array.from({ length: Math.min(req.people_count || 1, 4) }).map((_, i) => (
           <span key={i} className={`w-2 h-2 rounded-full ${gc.dot}`} />
         ))}
       </div>

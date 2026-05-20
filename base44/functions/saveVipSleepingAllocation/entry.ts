@@ -106,8 +106,8 @@ Deno.serve(async (req) => {
       return fail('INVALID_GENDER', 'יש לבחור מגדר (גברים/נשים)', dbg);
     }
     const pax = Number(allocated_pax);
-    if (!pax || pax < 1 || pax > 3) {
-      return fail('INVALID_PAX', 'מספר האנשים חייב להיות בין 1 ל-3', dbg);
+    if (!pax || pax < 1 || pax > 4) {
+      return fail('INVALID_PAX', 'מקסימום 4 אנשים לאוהל VIP', dbg);
     }
 
     // ── 2. Load & validate tent ──────────────────────────────────────────────

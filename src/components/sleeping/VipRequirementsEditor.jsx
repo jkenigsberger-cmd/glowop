@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const VIP_MAX = 10;
-const VIP_MAX_PER_TENT = 3;
+const VIP_MAX_PER_TENT = 4;
 
 const PURPOSE_OPTIONS = [
   { value: "STAFF",    label: "צוות" },
@@ -193,7 +193,7 @@ export default function VipRequirementsEditor({ rows, onChange, staffTotal, driv
                   <div className="col-span-2 space-y-1">
                     <label className="text-[11px] text-slate-500">אנשים *</label>
                     <Input
-                      type="number" min="1" max="3"
+                     type="number" min="1" max="4"
                       value={row.people_count || ""}
                       onChange={e => updateRow(i, "people_count", e.target.value === "" ? "" : Number(e.target.value))}
                       className={`h-7 text-xs text-center ${overPax || missingPax ? "border-red-400 bg-red-50" : ""}`}
