@@ -1,0 +1,743 @@
+import { useParams, Link } from "react-router-dom";
+import { base44 } from "@/api/base44Client";
+import { useQuery } from "@tanstack/react-query";
+import { format, parseISO, eachDayOfInterval, isWithinInterval } from "date-fns";
+import { he } from "date-fns/locale";
+
+// ── helpers ────────────────────────────────────────────────────────────────
+function safeJson(str, fallback) {
+  try { const r = JSON.parse(str); return r ?? fallback; } catch { return fallback; }
+}
+
+function fmtDate(dateStr) {
+  try {
+    return format(parseISO(dateStr), "EEEE, d בMMMM yyyy", { locale: he });
+  } catch {
+    return dateStr;
+  }
+}
+
+const MEAL_LABELS = { BREAKFAST: "ארוחת בוקר", LUNCH: "ארוחת צהריים", DINNER: "ארוחת ערב", OTHER: "אחר" };
+const GENDER_LABELS = { BOYS: "בנים", GIRLS: "בנות", MEN: "גברים", WOMEN: "נשים", MIXED: "מעורב" };
+const ALLOC_TYPE_LABELS = { STUDENT: "חניכים", STAFF: "צוות" };
+const GROUP_TYPE_LABELS = { LODGING: "לינה", DAY_USE: "יום כיף" };
+
+const DIET_LABELS = [
+  { key: "vegetarian_count",     label: "צמחונים",              critical: false },
+  { key: "vegan_count",          label: "טבעונים",               critical: false },
+  { key: "glutenFree_count",     label: "ללא גלוטן",             critical: false },
+  { key: "lactoseFree_count",    label: "ללא לקטוז",             critical: false },
+  { key: "eggFree_count",        label: "ללא ביצים",             critical: false },
+  { key: "nutFree_count",        label: "ללא אגוזים",            critical: false },
+  { key: "mehadrinKosher_count", label: "מהדרין / כשרות מיוחדת", critical: false },
+  { key: "lifeThreatening_count",label: "אלרגיות מסכנות חיים",  critical: true  },
+];
+
+// ── sub-components ─────────────────────────────────────────────────────────
+
+function TentCard({ allocation, tent, neighborhood }) {
+  const tentCode = tent?.code || allocation.tent_id;
+  const isVip = tent?.tent_type === "VIP";
+  const capacity = tent?.capacity || 0;
+
+  return (
+    <div className="tent-card">
+      <div className="tent-header">
+        {isVip ? "VIP " : "אוהל "}{tentCode}
+      </div>
+      <div className="tent-body">
+        {neighborhood && <div className="tent-meta">{neighborhood.name}</div>}
+        <div className="tent-pax">{allocation.allocated_pax}{capacity > 0 ? `/${capacity}` : ""}</div>
+        <div className="tent-tags">
+          <span className="tag">{GENDER_LABELS[allocation.gender_group] || allocation.gender_group}</span>
+          <span className={`tag ${isVip ? "tag-vip" : ""}`}>
+            {isVip ? "VIP" : ALLOC_TYPE_LABELS[allocation.allocation_type] || allocation.allocation_type}
+          </span>
+        </div>
+        {allocation.notes && <div className="tent-notes">{allocation.notes}</div>}
+      </div>
+    </div>
+  );
+}
+
+function MealCard({ meal }) {
+  const diets = safeJson(meal.special_diets_summary, {});
+  const hasDiets = DIET_LABELS.some(d => Number(diets[d.key]) > 0) || diets.diet_notes;
+  const lifeThreat = Number(diets.lifeThreatening_count) || 0;
+
+  return (
+    <div className="meal-card">
+      <div className="meal-header">
+        <span className="meal-type">{MEAL_LABELS[meal.meal_type] || meal.meal_type}</span>
+        <span className="meal-time" dir="ltr">{meal.start_time}–{meal.end_time}</span>
+      </div>
+      <div className="meal-pax">👥 {meal.pax} משתתפים</div>
+      {lifeThreat > 0 && (
+        <div className="allergy-critical">⚠ אלרגיות מסכנות חיים: {lifeThreat}</div>
+      )}
+      {hasDiets && (
+        <div className="diet-row">
+          {DIET_LABELS.filter(d => d.key !== "lifeThreatening_count").map(({ key, label }) => {
+            const count = Number(diets[key]) || 0;
+            if (!count) return null;
+            return <span key={key} className="diet-badge">{label}: {count}</span>;
+          })}
+          {diets.diet_notes && <span className="diet-badge">{diets.diet_notes}</span>}
+        </div>
+      )}
+      {meal.notes && <div className="meal-notes">{meal.notes}</div>}
+    </div>
+  );
+}
+
+function ActivityCard({ item, space }) {
+  return (
+    <div className="activity-card">
+      <div className="activity-time" dir="ltr">{item.start_time}–{item.end_time}</div>
+      <div className="activity-name">{item.activity_name}</div>
+      {space && <div className="activity-location">📍 {space.name}</div>}
+      {!space && item.requested_location && (
+        <div className="activity-location">📍 {item.requested_location}</div>
+      )}
+      {item.pax > 0 && <div className="activity-pax">👥 {item.pax} משתתפים</div>}
+      {item.notes && <div className="activity-notes">{item.notes}</div>}
+    </div>
+  );
+}
+
+// ── main ───────────────────────────────────────────────────────────────────
+export default function OperationalSummaryPrint() {
+  const { id } = useParams();
+
+  const { data: groupArr = [] } = useQuery({
+    queryKey: ["group", id],
+    queryFn: () => base44.entities.Group.filter({ id }),
+  });
+
+  const { data: profiles = [] } = useQuery({
+    queryKey: ["operationalProfile", id],
+    queryFn: () => base44.entities.OperationalGroupProfile.filter({ group_id: id }),
+    enabled: !!id,
+  });
+
+  const { data: mealReservations = [] } = useQuery({
+    queryKey: ["mealReservations", id],
+    queryFn: () => base44.entities.MealReservation.filter({ group_id: id }),
+    enabled: !!id,
+  });
+
+  const { data: scheduleItems = [] } = useQuery({
+    queryKey: ["groupScheduleItems", id],
+    queryFn: () => base44.entities.GroupScheduleItem.filter({ group_id: id }),
+    enabled: !!id,
+  });
+
+  const { data: sleepingAllocations = [] } = useQuery({
+    queryKey: ["sleepingAllocations", id],
+    queryFn: () => base44.entities.SleepingAllocation.filter({ group_id: id }),
+    enabled: !!id,
+  });
+
+  const { data: allTents = [] } = useQuery({
+    queryKey: ["tents"],
+    queryFn: () => base44.entities.Tent.list(),
+  });
+
+  const { data: allNeighborhoods = [] } = useQuery({
+    queryKey: ["neighborhoods"],
+    queryFn: () => base44.entities.Neighborhood.list("sort_order"),
+  });
+
+  const { data: allActivitySpaces = [] } = useQuery({
+    queryKey: ["activitySpaces"],
+    queryFn: () => base44.entities.ActivitySpace.list(),
+  });
+
+  const group = groupArr[0];
+  const profile = profiles[0];
+
+  if (!group) {
+    return (
+      <div style={{ padding: 40, fontFamily: "Arial", direction: "rtl" }}>
+        <p>טוען נתוני קבוצה...</p>
+      </div>
+    );
+  }
+
+  // lookup maps
+  const tentById = Object.fromEntries(allTents.map(t => [t.id, t]));
+  const neighborhoodById = Object.fromEntries(allNeighborhoods.map(n => [n.id, n]));
+  const spaceById = Object.fromEntries(allActivitySpaces.map(s => [s.id, s]));
+
+  // global diets from profile
+  const globalDiets = profile ? safeJson(profile.special_diets, {}) : {};
+  const hasLifeThreat = Number(globalDiets.lifeThreatening_count) > 0;
+  const hasDiets = DIET_LABELS.some(d => Number(globalDiets[d.key]) > 0) || globalDiets.diet_notes;
+
+  // date range
+  const startDate = group.arrival_date;
+  const endDate = group.departure_date || group.arrival_date;
+  let days = [];
+  try {
+    days = eachDayOfInterval({ start: parseISO(startDate), end: parseISO(endDate) });
+  } catch {
+    days = [];
+  }
+
+  // confirmed allocations only
+  const confirmedAllocations = sleepingAllocations.filter(a => a.status === "CONFIRMED");
+  const activeMeals = mealReservations.filter(m => m.status === "ACTIVE");
+  const activeActivities = scheduleItems.filter(s => s.status === "ACTIVE");
+  const hasConfirmedSleeping = confirmedAllocations.length > 0;
+
+  const generatedAt = format(new Date(), "dd/MM/yyyy HH:mm");
+
+  // group sleeping allocations by neighborhood per day
+  function getAllocsForDay(dateStr) {
+    return confirmedAllocations.filter(a => {
+      const arrivalOk = a.arrival_date <= dateStr;
+      const departureOk = a.departure_date > dateStr;
+      return arrivalOk && departureOk;
+    });
+  }
+
+  function getMealsForDay(dateStr) {
+    return [...activeMeals.filter(m => m.date === dateStr)]
+      .sort((a, b) => (a.start_time || "").localeCompare(b.start_time || ""));
+  }
+
+  function getActivitiesForDay(dateStr) {
+    return [...activeActivities.filter(s => s.date === dateStr)]
+      .sort((a, b) => (a.start_time || "").localeCompare(b.start_time || ""));
+  }
+
+  // group allocs by neighborhood
+  function groupAllocsByNeighborhood(allocs) {
+    const map = {};
+    allocs.forEach(a => {
+      const nid = a.neighborhood_id || "unknown";
+      if (!map[nid]) map[nid] = [];
+      map[nid].push(a);
+    });
+    return map;
+  }
+
+  return (
+    <>
+      {/* Inline styles for print */}
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Heebo:wght@400;600;700&display=swap');
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body, html {
+          direction: rtl;
+          font-family: 'Heebo', 'Arial Hebrew', Arial, sans-serif;
+          font-size: 13px;
+          background: #f8f9fa;
+          color: #1e293b;
+        }
+
+        .print-page {
+          max-width: 800px;
+          margin: 0 auto;
+          background: white;
+          padding: 24px 28px;
+        }
+
+        /* ── Header ─────────────────────────────────────────────────── */
+        .doc-header {
+          border-bottom: 3px solid #1e40af;
+          padding-bottom: 16px;
+          margin-bottom: 20px;
+        }
+        .doc-title {
+          font-size: 22px;
+          font-weight: 700;
+          color: #1e40af;
+          margin-bottom: 6px;
+        }
+        .doc-group-name {
+          font-size: 18px;
+          font-weight: 700;
+          color: #1e293b;
+          margin-bottom: 4px;
+        }
+        .doc-meta {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 12px;
+          margin-top: 8px;
+          font-size: 12px;
+          color: #64748b;
+        }
+        .doc-meta span { display: flex; align-items: center; gap: 4px; }
+        .doc-generated {
+          font-size: 11px;
+          color: #94a3b8;
+          margin-top: 6px;
+        }
+
+        /* ── Global Allergy Warning ──────────────────────────────────── */
+        .global-allergy-warning {
+          background: #fef2f2;
+          border: 2px solid #dc2626;
+          border-radius: 8px;
+          padding: 10px 14px;
+          margin-bottom: 16px;
+          font-weight: 700;
+          font-size: 14px;
+          color: #dc2626;
+        }
+
+        /* ── Diet Summary ────────────────────────────────────────────── */
+        .diet-section {
+          background: #f8fafc;
+          border: 1px solid #cbd5e1;
+          border-radius: 8px;
+          padding: 12px 16px;
+          margin-bottom: 20px;
+        }
+        .diet-section-title {
+          font-size: 13px;
+          font-weight: 700;
+          color: #475569;
+          margin-bottom: 8px;
+        }
+        .diet-grid {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+        }
+        .diet-chip {
+          background: #e2e8f0;
+          border-radius: 20px;
+          padding: 3px 10px;
+          font-size: 12px;
+          color: #334155;
+        }
+        .diet-chip-critical {
+          background: #fef2f2;
+          border: 1px solid #dc2626;
+          color: #dc2626;
+          font-weight: 700;
+        }
+
+        /* ── Day Section ─────────────────────────────────────────────── */
+        .day-section {
+          margin-bottom: 20px;
+          page-break-inside: avoid;
+        }
+        .day-header {
+          background: #1e40af;
+          color: white;
+          padding: 8px 14px;
+          border-radius: 8px 8px 0 0;
+          font-size: 14px;
+          font-weight: 700;
+          border-bottom: 2px solid #1d4ed8;
+        }
+        .day-body {
+          border: 1px solid #e2e8f0;
+          border-top: none;
+          border-radius: 0 0 8px 8px;
+          overflow: hidden;
+        }
+
+        /* ── Sub-section ─────────────────────────────────────────────── */
+        .sub-section {
+          padding: 12px 14px;
+          border-bottom: 1px solid #e2e8f0;
+        }
+        .sub-section:last-child { border-bottom: none; }
+        .sub-title {
+          font-size: 12px;
+          font-weight: 700;
+          color: #475569;
+          text-transform: uppercase;
+          letter-spacing: 0.04em;
+          margin-bottom: 8px;
+        }
+
+        /* ── Neighborhood ────────────────────────────────────────────── */
+        .neighborhood-block {
+          margin-bottom: 10px;
+        }
+        .neighborhood-label {
+          font-size: 11px;
+          font-weight: 700;
+          color: #94a3b8;
+          margin-bottom: 6px;
+          padding-right: 4px;
+          border-right: 3px solid #cbd5e1;
+        }
+        .tents-row {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+        }
+        .no-sleeping {
+          font-size: 12px;
+          color: #94a3b8;
+          font-style: italic;
+          padding: 6px 0;
+        }
+
+        /* ── Tent Card ───────────────────────────────────────────────── */
+        .tent-card {
+          border: 1px solid #94a3b8;
+          border-radius: 8px;
+          overflow: hidden;
+          width: 100px;
+          page-break-inside: avoid;
+        }
+        .tent-header {
+          background: #334155;
+          color: white;
+          text-align: center;
+          padding: 4px 6px;
+          font-size: 12px;
+          font-weight: 700;
+        }
+        .tent-header.vip {
+          background: #7c3aed;
+        }
+        .tent-body {
+          padding: 6px 8px;
+          background: white;
+          text-align: center;
+        }
+        .tent-meta {
+          font-size: 10px;
+          color: #94a3b8;
+          margin-bottom: 2px;
+        }
+        .tent-pax {
+          font-size: 15px;
+          font-weight: 700;
+          color: #1e293b;
+          margin-bottom: 4px;
+        }
+        .tent-tags {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+          align-items: center;
+        }
+        .tag {
+          font-size: 10px;
+          background: #f1f5f9;
+          border: 1px solid #e2e8f0;
+          border-radius: 4px;
+          padding: 1px 6px;
+          color: #475569;
+        }
+        .tag-vip {
+          background: #ede9fe;
+          border-color: #a78bfa;
+          color: #6d28d9;
+          font-weight: 700;
+        }
+        .tent-notes {
+          font-size: 10px;
+          color: #94a3b8;
+          margin-top: 4px;
+        }
+
+        /* ── Meal Card ───────────────────────────────────────────────── */
+        .meal-card {
+          background: #f0fdf4;
+          border: 1px solid #86efac;
+          border-radius: 8px;
+          padding: 10px 14px;
+          margin-bottom: 8px;
+          page-break-inside: avoid;
+        }
+        .meal-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 4px;
+        }
+        .meal-type {
+          font-weight: 700;
+          font-size: 14px;
+          color: #15803d;
+        }
+        .meal-time {
+          font-size: 12px;
+          color: #4ade80;
+          font-weight: 600;
+          direction: ltr;
+        }
+        .meal-pax {
+          font-size: 12px;
+          color: #166534;
+          margin-bottom: 4px;
+        }
+        .allergy-critical {
+          background: #dc2626;
+          color: white;
+          font-weight: 700;
+          font-size: 12px;
+          border-radius: 4px;
+          padding: 3px 8px;
+          margin: 4px 0;
+          display: inline-block;
+        }
+        .diet-row {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 4px;
+          margin-top: 4px;
+        }
+        .diet-badge {
+          background: white;
+          border: 1px solid #86efac;
+          border-radius: 12px;
+          padding: 1px 8px;
+          font-size: 11px;
+          color: #166534;
+        }
+        .meal-notes {
+          font-size: 11px;
+          color: #4ade80;
+          margin-top: 4px;
+        }
+
+        /* ── Activity Card ───────────────────────────────────────────── */
+        .activity-card {
+          background: #f8fafc;
+          border: 1px solid #cbd5e1;
+          border-right: 4px solid #1e40af;
+          border-radius: 0 8px 8px 0;
+          padding: 8px 12px;
+          margin-bottom: 6px;
+          page-break-inside: avoid;
+        }
+        .activity-time {
+          font-size: 12px;
+          font-weight: 700;
+          color: #1e40af;
+          direction: ltr;
+          display: inline-block;
+          margin-bottom: 2px;
+        }
+        .activity-name {
+          font-size: 14px;
+          font-weight: 700;
+          color: #1e293b;
+          margin-bottom: 3px;
+        }
+        .activity-location {
+          font-size: 12px;
+          color: #475569;
+        }
+        .activity-pax {
+          font-size: 12px;
+          color: #64748b;
+          margin-top: 2px;
+        }
+        .activity-notes {
+          font-size: 11px;
+          color: #94a3b8;
+          margin-top: 3px;
+        }
+
+        /* ── Print Controls ──────────────────────────────────────────── */
+        .print-controls {
+          display: flex;
+          gap: 12px;
+          margin-bottom: 20px;
+        }
+        .btn-print {
+          background: #1e40af;
+          color: white;
+          border: none;
+          border-radius: 8px;
+          padding: 9px 20px;
+          font-size: 14px;
+          font-weight: 600;
+          cursor: pointer;
+          font-family: inherit;
+        }
+        .btn-print:hover { background: #1d4ed8; }
+        .btn-back {
+          background: white;
+          color: #1e40af;
+          border: 2px solid #1e40af;
+          border-radius: 8px;
+          padding: 9px 20px;
+          font-size: 14px;
+          font-weight: 600;
+          cursor: pointer;
+          font-family: inherit;
+          text-decoration: none;
+          display: inline-flex;
+          align-items: center;
+        }
+        .btn-back:hover { background: #eff6ff; }
+
+        /* ── Print Media ─────────────────────────────────────────────── */
+        @media print {
+          body { background: white; font-size: 12px; }
+          .print-controls { display: none !important; }
+          .print-page { padding: 10px 14px; }
+          .day-section { page-break-inside: avoid; }
+          .tent-card, .meal-card, .activity-card { page-break-inside: avoid; }
+          @page { size: A4; margin: 15mm 12mm; }
+        }
+
+        @media (max-width: 600px) {
+          .tents-row { gap: 6px; }
+          .tent-card { width: 90px; }
+        }
+      `}</style>
+
+      <div className="print-page" dir="rtl">
+
+        {/* Print controls */}
+        <div className="print-controls">
+          <button className="btn-print" onClick={() => window.print()}>
+            🖨 הדפס / שמור כ-PDF
+          </button>
+          <Link to={`/groups/${id}`} className="btn-back">
+            ← חזרה לקבוצה
+          </Link>
+        </div>
+
+        {/* Header */}
+        <div className="doc-header">
+          <div className="doc-title">סיכום תפעולי לקבוצה</div>
+          <div className="doc-group-name">{group.group_name}</div>
+          <div className="doc-meta">
+            <span>📅 {fmtDate(startDate)}{endDate !== startDate ? ` — ${fmtDate(endDate)}` : ""}</span>
+            <span>🏕️ {GROUP_TYPE_LABELS[group.group_type] || group.group_type}</span>
+            {group.total_pax > 0 && <span>👥 סה"כ {group.total_pax} משתתפים</span>}
+            {group.participant_count > 0 && <span>🎒 חניכים: {group.participant_count}</span>}
+            {group.staff_count > 0 && <span>👤 צוות: {group.staff_count}</span>}
+            {group.boys_count > 0 && <span>👦 בנים: {group.boys_count}</span>}
+            {group.girls_count > 0 && <span>👧 בנות: {group.girls_count}</span>}
+            {group.contact_name && <span>📞 {group.contact_name}{group.contact_phone ? ` · ${group.contact_phone}` : ""}</span>}
+          </div>
+          <div className="doc-generated">הופק: {generatedAt}</div>
+        </div>
+
+        {/* Global Life-threatening allergy banner */}
+        {hasLifeThreat && (
+          <div className="global-allergy-warning">
+            ⚠ אלרגיות מסכנות חיים: {Number(globalDiets.lifeThreatening_count)} — נדרש תיאום עם צוות מטבח!
+          </div>
+        )}
+
+        {/* Global dietary summary */}
+        {hasDiets && (
+          <div className="diet-section">
+            <div className="diet-section-title">🥗 צרכים תזונתיים ואלרגיות — סיכום כללי</div>
+            <div className="diet-grid">
+              {DIET_LABELS.map(({ key, label, critical }) => {
+                const count = Number(globalDiets[key]) || 0;
+                if (!count) return null;
+                return (
+                  <span key={key} className={`diet-chip ${critical ? "diet-chip-critical" : ""}`}>
+                    {critical && "⚠ "}{label}: {count}
+                  </span>
+                );
+              })}
+              {globalDiets.diet_notes && (
+                <span className="diet-chip">הערות: {globalDiets.diet_notes}</span>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Daily sections */}
+        {days.map(day => {
+          const dateStr = format(day, "yyyy-MM-dd");
+          const dayLabel = fmtDate(dateStr);
+          const allocsForDay = getAllocsForDay(dateStr);
+          const mealsForDay = getMealsForDay(dateStr);
+          const activitiesForDay = getActivitiesForDay(dateStr);
+
+          const hasAnything = allocsForDay.length > 0 || mealsForDay.length > 0 || activitiesForDay.length > 0;
+          if (!hasAnything && days.length > 1) {
+            // still show the day but with a message
+          }
+
+          const allocsByNeighborhood = groupAllocsByNeighborhood(allocsForDay);
+
+          return (
+            <div key={dateStr} className="day-section">
+              <div className="day-header">{dayLabel}</div>
+              <div className="day-body">
+
+                {/* Sleeping */}
+                {group.group_type === "LODGING" && (
+                  <div className="sub-section">
+                    <div className="sub-title">🛏 לינה</div>
+                    {allocsForDay.length === 0 ? (
+                      <div className="no-sleeping">שיבוץ לינה טרם אושר</div>
+                    ) : (
+                      Object.entries(allocsByNeighborhood).map(([nid, allocs]) => {
+                        const neighborhood = neighborhoodById[nid];
+                        return (
+                          <div key={nid} className="neighborhood-block">
+                            {neighborhood && (
+                              <div className="neighborhood-label">{neighborhood.name}</div>
+                            )}
+                            <div className="tents-row">
+                              {allocs.map(a => (
+                                <TentCard
+                                  key={a.id}
+                                  allocation={a}
+                                  tent={tentById[a.tent_id]}
+                                  neighborhood={neighborhood}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
+
+                {/* Meals */}
+                {mealsForDay.length > 0 && (
+                  <div className="sub-section">
+                    <div className="sub-title">🍽 ארוחות</div>
+                    {mealsForDay.map(m => (
+                      <MealCard key={m.id} meal={m} />
+                    ))}
+                  </div>
+                )}
+
+                {/* Activities */}
+                {activitiesForDay.length > 0 && (
+                  <div className="sub-section">
+                    <div className="sub-title">⚡ פעילויות</div>
+                    {activitiesForDay.map(item => (
+                      <ActivityCard
+                        key={item.id}
+                        item={item}
+                        space={item.activity_space_id ? spaceById[item.activity_space_id] : null}
+                      />
+                    ))}
+                  </div>
+                )}
+
+                {/* Empty day fallback */}
+                {allocsForDay.length === 0 && mealsForDay.length === 0 && activitiesForDay.length === 0 && (
+                  <div className="sub-section">
+                    <div style={{ fontSize: 12, color: "#94a3b8", fontStyle: "italic" }}>אין פעילויות מתוכננות ליום זה</div>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+
+      </div>
+    </>
+  );
+}

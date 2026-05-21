@@ -22,6 +22,7 @@ import Kitchen from "./pages/Kitchen.jsx";
 import Maintenance from "./pages/Maintenance.jsx";
 import Allocation from "./pages/Allocation.jsx";
 import CommonSpaces from "./pages/CommonSpaces.jsx";
+import OperationalSummaryPrint from "./pages/OperationalSummaryPrint.jsx";
 
 const AuthenticatedApp = () => {
   const [accessGranted, setAccessGranted] = useState(checkAccess());
@@ -60,6 +61,7 @@ const AuthenticatedApp = () => {
         <Route path="/inventory" element={<Inventory />} />
         <Route path="/groups" element={<Groups />} />
         <Route path="/groups/:id" element={<GroupDetail />} />
+        <Route path="/groups/:id/operational-summary-print" element={<OperationalSummaryPrint />} />
         <Route path="/approved-groups" element={<ApprovedGroups />} />
         <Route path="/admin" element={<Admin />} />
         <Route path="/dashboard" element={<Dashboard />} />

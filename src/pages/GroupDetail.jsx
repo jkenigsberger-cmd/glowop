@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { ChevronRight, Calendar, Users, Phone, Mail, Pencil, Plus, FileText, ClipboardList, Copy, Check, ShieldCheck } from "lucide-react";
+import { ChevronRight, Calendar, Users, Phone, Mail, Pencil, Plus, FileText, ClipboardList, Copy, Check, ShieldCheck, Printer } from "lucide-react";
 import QuotePdfButton from "@/components/quotes/QuotePdfButton";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -138,9 +138,14 @@ export default function GroupDetail() {
                 {group.contact_email && <span className="flex items-center gap-1"><Mail className="w-3.5 h-3.5" />{group.contact_email}</span>}
               </div>
             </div>
-            <Button variant="outline" size="sm" onClick={() => setEditGroup(true)} className="gap-1">
-              <Pencil className="w-3.5 h-3.5" /> עריכה
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => window.open(`/groups/${id}/operational-summary-print`, "_blank")} className="gap-1">
+                <Printer className="w-3.5 h-3.5" /> הפק סיכום תפעולי
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setEditGroup(true)} className="gap-1">
+                <Pencil className="w-3.5 h-3.5" /> עריכה
+              </Button>
+            </div>
           </div>
         </div>
       </div>
