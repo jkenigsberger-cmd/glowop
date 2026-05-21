@@ -642,16 +642,16 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
   return (
     <Dialog open onOpenChange={onClose}>
       <DialogContent
-        className="max-w-[95vw] w-[1100px] max-h-[95vh] overflow-hidden p-0"
+        className="w-full max-w-[95vw] sm:w-[1100px] h-dvh sm:h-auto sm:max-h-[95vh] overflow-hidden p-0 flex flex-col"
         dir="rtl"
       >
         {/* Header bar */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-white">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-slate-200 bg-white shrink-0">
           <DialogTitle className="text-base font-bold text-slate-800">
             {isEdit ? "עריכת הצעת מחיר" : isNewGroupFlow ? "הצעת מחיר — לקוח חדש" : "הצעת מחיר חדשה"}
           </DialogTitle>
           <div className="flex items-center gap-2 text-sm">
-            {form.quote_number && <span className="text-slate-400 font-mono">{form.quote_number}</span>}
+            {form.quote_number && <span className="text-slate-400 font-mono hidden sm:inline">{form.quote_number}</span>}
             <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
               form.status === "APPROVED" ? "bg-green-100 text-green-700" :
               form.status === "SENT"     ? "bg-blue-100 text-blue-700" :
@@ -661,11 +661,11 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
           </div>
         </div>
 
-        {/* Two-column layout */}
-        <div className="flex overflow-hidden" style={{ height: "calc(95vh - 65px)" }}>
+        {/* Body — desktop: two columns | mobile: single scrollable column */}
+        <div className="flex-1 overflow-y-auto sm:overflow-hidden flex flex-col sm:flex-row">
 
-          {/* ── Left: scrollable form ── */}
-          <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+          {/* ── Form (scrollable) ── */}
+          <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-5 space-y-4">
             <form id="quote-form" onSubmit={handleSubmit} className="space-y-4">
 
               {/* Group shell (new-group flow) */}
@@ -857,8 +857,8 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
             </form>
           </div>
 
-          {/* ── Right: sticky sidebar ── */}
-          <div className="w-72 flex-shrink-0 bg-slate-50 border-r border-slate-200 overflow-y-auto px-4 py-5 space-y-4">
+          {/* ── Sidebar — right on desktop, bottom section on mobile ── */}
+          <div className="w-full sm:w-72 sm:flex-shrink-0 bg-slate-50 sm:border-r border-t sm:border-t-0 border-slate-200 sm:overflow-y-auto px-4 py-5 space-y-4">
 
             <CalendarCard arrival={form.arrival_date} departure={form.departure_date} nights={nights} isDayUse={groupType === "DAY_USE"} />
 

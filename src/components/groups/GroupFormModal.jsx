@@ -130,47 +130,57 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
 
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto" dir="rtl">
-        <DialogHeader>
+      <DialogContent className="w-full max-w-lg sm:max-h-[90vh] h-dvh sm:h-auto flex flex-col p-0 gap-0 overflow-hidden" dir="rtl">
+        {/* Sticky header */}
+        <DialogHeader className="px-4 sm:px-6 py-4 border-b border-border shrink-0">
           <DialogTitle className="text-right">{isEdit ? "עריכת קבוצה" : "קבוצה חדשה"}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4 text-sm">
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="col-span-2 space-y-1">
+        {/* Scrollable form body */}
+        <form id="group-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-4 text-sm">
+
+          {/* Name + Type + Status */}
+          <div className="space-y-3">
+            <div className="space-y-1">
               <Label>שם קבוצה *</Label>
               <Input value={form.group_name} onChange={e => set("group_name", e.target.value)} required />
             </div>
-            <div className="space-y-1">
-              <Label>סוג</Label>
-              <Select value={form.group_type} onValueChange={v => set("group_type", v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="LODGING">לינה</SelectItem>
-                  <SelectItem value="DAY_USE">יום כיף</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {isEdit && (
+            <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label>סטטוס</Label>
-                <Select value={form.status} onValueChange={v => set("status", v)}>
+                <Label>סוג</Label>
+                <Select value={form.group_type} onValueChange={v => set("group_type", v)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="CONFIRMED">מאושר</SelectItem>
-                    <SelectItem value="COMPLETED">הסתיים</SelectItem>
-                    <SelectItem value="ARCHIVED">מוקפא</SelectItem>
-                    <SelectItem value="CANCELLED">מבוטל</SelectItem>
+                    <SelectItem value="LODGING">לינה</SelectItem>
+                    <SelectItem value="DAY_USE">יום כיף</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-            )}
+              {isEdit && (
+                <div className="space-y-1">
+                  <Label>סטטוס</Label>
+                  <Select value={form.status} onValueChange={v => set("status", v)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="CONFIRMED">מאושר</SelectItem>
+                      <SelectItem value="COMPLETED">הסתיים</SelectItem>
+                      <SelectItem value="ARCHIVED">מוקפא</SelectItem>
+                      <SelectItem value="CANCELLED">מבוטל</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Dates */}
+          <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label>תאריך הגעה *</Label>
               <Input type="date" value={form.arrival_date} onChange={e => set("arrival_date", e.target.value)} required />
             </div>
             <div className="space-y-1">
-              <Label>{isDayUse ? "תאריך האירוע (אופציונלי)" : "תאריך עזיבה"}</Label>
+              <Label>{isDayUse ? "תאריך האירוע" : "תאריך עזיבה"}</Label>
               <Input type="date" value={form.departure_date} onChange={e => set("departure_date", e.target.value)} />
             </div>
           </div>
@@ -178,7 +188,7 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
           {/* Participant counts */}
           <div className="grid grid-cols-3 gap-3">
             <div className="space-y-1">
-              <Label>סה"כ משתתפים</Label>
+              <Label>סה"כ</Label>
               <Input type="number" min="0" value={form.total_pax} onChange={e => set("total_pax", e.target.value)} />
             </div>
             <div className="space-y-1">
@@ -186,14 +196,13 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
               <Input type="number" min="0" value={form.staff_count} onChange={e => set("staff_count", e.target.value)} />
             </div>
             <div className="space-y-1">
-              <Label>חניכים (מחושב)</Label>
+              <Label>חניכים</Label>
               <div className="h-9 flex items-center px-3 rounded-md border bg-muted/40 text-sm font-medium">
                 {participantCount}
               </div>
             </div>
           </div>
 
-          {/* Warnings */}
           {staffExceedsTotal && (
             <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
               ⚠️ מספר הצוות ({staffCount}) גדול מסה"כ המשתתפים ({totalPax})
@@ -204,19 +213,11 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label>בנים</Label>
-              <Input
-                type="number" min="0" max={participantCount}
-                value={form.boys_count}
-                onChange={e => handleBoysChange(e.target.value)}
-              />
+              <Input type="number" min="0" max={participantCount} value={form.boys_count} onChange={e => handleBoysChange(e.target.value)} />
             </div>
             <div className="space-y-1">
               <Label>בנות</Label>
-              <Input
-                type="number" min="0" max={participantCount}
-                value={form.girls_count}
-                onChange={e => handleGirlsChange(e.target.value)}
-              />
+              <Input type="number" min="0" max={participantCount} value={form.girls_count} onChange={e => handleGirlsChange(e.target.value)} />
             </div>
           </div>
 
@@ -247,17 +248,18 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
             <Textarea rows={3} value={form.internal_notes} onChange={e => set("internal_notes", e.target.value)} />
           </div>
 
-          {/* Dietary / allergy section */}
           <div className="border border-amber-200 rounded-xl px-4 py-3 bg-amber-50/40 space-y-3">
             <p className="text-sm font-semibold text-amber-800">🍽️ צרכים תזונתיים ואלרגיות</p>
             <DietaryFields value={diets} onChange={setDiets} />
           </div>
 
-          <div className="flex gap-2 justify-end pt-1">
-            <Button type="button" variant="outline" onClick={onClose}>ביטול</Button>
-            <Button type="submit" disabled={saving}>{saving ? "שומר..." : isEdit ? "שמור" : "צור קבוצה"}</Button>
-          </div>
         </form>
+
+        {/* Sticky footer */}
+        <div className="px-4 sm:px-6 py-4 border-t border-border shrink-0 flex gap-2 justify-end bg-card">
+          <Button type="button" variant="outline" onClick={onClose}>ביטול</Button>
+          <Button type="submit" form="group-form" disabled={saving}>{saving ? "שומר..." : isEdit ? "שמור" : "צור קבוצה"}</Button>
+        </div>
       </DialogContent>
     </Dialog>
   );

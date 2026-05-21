@@ -118,31 +118,34 @@ export default function GroupDetail() {
               <ChevronRight className="w-4 h-4" /> קבוצות
             </Link>
           </div>
-          <div className="flex items-start justify-between">
-            <div>
-              <div className="flex items-center gap-3">
-                <h1 className="text-2xl font-bold">{group.group_name}</h1>
-                <GroupStatusBadge status={group.status} />
-                <span className="text-xs bg-muted px-2 py-0.5 rounded text-muted-foreground">{GROUP_TYPE_LABEL[group.group_type]}</span>
-              </div>
-              <div className="flex flex-wrap items-center gap-4 mt-2 text-sm text-muted-foreground">
-                {group.arrival_date && (
-                  <span className="flex items-center gap-1">
-                    <Calendar className="w-3.5 h-3.5" />
-                    {format(new Date(group.arrival_date), "dd/MM/yyyy")}
-                    {group.departure_date && ` — ${format(new Date(group.departure_date), "dd/MM/yyyy")}`}
-                  </span>
-                )}
-                {group.total_pax && <span className="flex items-center gap-1"><Users className="w-3.5 h-3.5" />{group.total_pax} משתתפים</span>}
-                {group.contact_phone && <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5" />{group.contact_phone}</span>}
-                {group.contact_email && <span className="flex items-center gap-1"><Mail className="w-3.5 h-3.5" />{group.contact_email}</span>}
+          <div className="flex flex-col gap-3">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h1 className="text-2xl font-bold">{group.group_name}</h1>
+                  <GroupStatusBadge status={group.status} />
+                  <span className="text-xs bg-muted px-2 py-0.5 rounded text-muted-foreground">{GROUP_TYPE_LABEL[group.group_type]}</span>
+                </div>
+                <div className="flex flex-wrap items-center gap-3 mt-2 text-sm text-muted-foreground">
+                  {group.arrival_date && (
+                    <span className="flex items-center gap-1">
+                      <Calendar className="w-3.5 h-3.5" />
+                      {format(new Date(group.arrival_date), "dd/MM/yyyy")}
+                      {group.departure_date && ` — ${format(new Date(group.departure_date), "dd/MM/yyyy")}`}
+                    </span>
+                  )}
+                  {group.total_pax && <span className="flex items-center gap-1"><Users className="w-3.5 h-3.5" />{group.total_pax} משתתפים</span>}
+                  {group.contact_phone && <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5" />{group.contact_phone}</span>}
+                  {group.contact_email && <span className="flex items-center gap-1 break-all"><Mail className="w-3.5 h-3.5" />{group.contact_email}</span>}
+                </div>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={() => window.open(`/groups/${id}/operational-summary-print`, "_blank")} className="gap-1">
+            {/* Action buttons — stack on mobile */}
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" size="sm" onClick={() => window.open(`/groups/${id}/operational-summary-print`, "_blank")} className="gap-1 flex-shrink-0">
                 <Printer className="w-3.5 h-3.5" /> הפק סיכום תפעולי
               </Button>
-              <Button variant="outline" size="sm" onClick={() => setEditGroup(true)} className="gap-1">
+              <Button variant="outline" size="sm" onClick={() => setEditGroup(true)} className="gap-1 flex-shrink-0">
                 <Pencil className="w-3.5 h-3.5" /> עריכה
               </Button>
             </div>
