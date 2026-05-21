@@ -87,9 +87,11 @@ export default function Kitchen() {
   return (
     <div className="min-h-screen bg-background" dir="rtl">
       {/* Header */}
-      <div className="border-b border-border bg-card sticky top-0 z-10">
+      <div className="border-b border-border bg-card sticky top-12 sm:top-0 z-10">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-4">
-          <div className="flex items-center justify-between">
+
+          {/* Desktop layout */}
+          <div className="hidden sm:flex items-center justify-between">
             <div className="flex items-center gap-3">
               <UtensilsCrossed className="w-5 h-5 text-primary" />
               <div>
@@ -97,51 +99,27 @@ export default function Kitchen() {
                 <p className="text-xs text-muted-foreground">ארוחות יומיות לצוות המטבח</p>
               </div>
             </div>
-
-            {/* Date navigation */}
             <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={goToPreviousDay}
-                aria-label="יום קודם"
-              >
+              <Button variant="ghost" size="sm" onClick={goToPreviousDay}>
                 <ChevronRight className="w-4 h-4" />
                 <span className="text-xs mr-1">יום קודם</span>
               </Button>
-
               <div className="text-center min-w-[9rem]">
                 <p className="text-sm font-semibold">{dateLabel}</p>
-                {isToday && (
-                  <span className="text-[10px] bg-primary/10 text-primary rounded-full px-2 py-0.5">היום</span>
-                )}
+                {isToday && <span className="text-[10px] bg-primary/10 text-primary rounded-full px-2 py-0.5">היום</span>}
               </div>
-
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={goToNextDay}
-                aria-label="יום הבא"
-              >
+              <Button variant="ghost" size="sm" onClick={goToNextDay}>
                 <span className="text-xs ml-1">יום הבא</span>
                 <ChevronLeft className="w-4 h-4" />
               </Button>
-
               {!isToday && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setSelectedDate(TODAY)}
-                  className="text-xs"
-                >
-                  היום
-                </Button>
+                <Button variant="outline" size="sm" onClick={() => setSelectedDate(TODAY)} className="text-xs">היום</Button>
               )}
             </div>
           </div>
 
-          {/* Date input for quick jump */}
-          <div className="mt-2 flex justify-end">
+          {/* Desktop: date input */}
+          <div className="hidden sm:flex mt-2 justify-end">
             <input
               type="date"
               value={selectedDate}
@@ -149,6 +127,35 @@ export default function Kitchen() {
               className="text-xs border border-input rounded-md px-2 py-1 bg-transparent text-slate-600 focus:outline-none focus:ring-1 focus:ring-ring"
             />
           </div>
+
+          {/* Mobile layout */}
+          <div className="flex sm:hidden flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold">{dateLabel}</p>
+                {isToday && <span className="text-[10px] bg-primary/10 text-primary rounded-full px-2 py-0.5">היום</span>}
+              </div>
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={e => setSelectedDate(e.target.value)}
+                className="text-sm border border-input rounded-md px-2 py-1 bg-transparent text-slate-600 focus:outline-none focus:ring-1 focus:ring-ring"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" className="flex-1 h-10 text-sm gap-1" onClick={goToPreviousDay}>
+                <ChevronRight className="w-4 h-4" /> יום קודם
+              </Button>
+              {!isToday && (
+                <Button variant="outline" size="sm" className="h-10 px-4 text-sm font-semibold"
+                  onClick={() => setSelectedDate(TODAY)}>היום</Button>
+              )}
+              <Button variant="outline" size="sm" className="flex-1 h-10 text-sm gap-1" onClick={goToNextDay}>
+                יום הבא <ChevronLeft className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+
         </div>
       </div>
 

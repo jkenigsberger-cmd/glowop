@@ -604,8 +604,18 @@ export default function OperationalSummaryPrint() {
         }
 
         @media (max-width: 600px) {
+          .print-page { padding: 14px 12px; }
+          .print-controls { flex-direction: column; }
+          .btn-print, .btn-back { width: 100%; justify-content: center; padding: 12px 16px; font-size: 15px; }
           .tents-row { gap: 6px; }
-          .tent-card { width: 90px; }
+          .tent-card { width: 88px; }
+          .doc-title { font-size: 18px; }
+          .doc-group-name { font-size: 15px; }
+          .day-header { font-size: 13px; }
+          .sub-section { padding: 10px 10px; }
+          .meal-card { padding: 8px 10px; }
+          .activity-card { padding: 8px 10px; }
+          .doc-meta { gap: 8px; font-size: 11px; }
         }
       `}</style>
 

@@ -212,9 +212,10 @@ export default function Housekeeping() {
   return (
     <div className="min-h-screen bg-background" dir="rtl">
       {/* Header */}
-      <div className="border-b border-border bg-card">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 py-5">
-          <div className="flex items-center justify-between">
+      <div className="border-b border-border bg-card sticky top-12 sm:top-0 z-10">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 py-3 sm:py-5">
+          {/* Desktop: side by side */}
+          <div className="hidden sm:flex items-center justify-between">
             <div className="flex items-center gap-3">
               <BedDouble className="w-5 h-5 text-primary" />
               <div>
@@ -222,30 +223,46 @@ export default function Housekeeping() {
                 <p className="text-xs text-muted-foreground mt-0.5">הכנת אוהלים ומעקב ניקיון לפי קבוצה ותאריך</p>
               </div>
             </div>
-            {/* Date navigation */}
             <div className="flex items-center gap-2">
-              <Button
-                variant="outline" size="icon"
-                onClick={() => setStartDate(d => {
-                  const nd = new Date(d); nd.setDate(nd.getDate() - 1); return nd.toISOString().slice(0, 10);
-                })}
-              >
+              <Button variant="outline" size="icon"
+                onClick={() => setStartDate(d => { const nd = new Date(d); nd.setDate(nd.getDate() - 1); return nd.toISOString().slice(0, 10); })}>
                 <ChevronRight className="w-4 h-4" />
               </Button>
-              <Button
-                variant="outline" size="sm"
-                onClick={() => setStartDate(TODAY)}
-                className="text-xs"
-              >
+              <Button variant="outline" size="sm" onClick={() => setStartDate(TODAY)} className="text-xs">היום</Button>
+              <Button variant="outline" size="icon"
+                onClick={() => setStartDate(d => { const nd = new Date(d); nd.setDate(nd.getDate() + 1); return nd.toISOString().slice(0, 10); })}>
+                <ChevronLeft className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+
+          {/* Mobile: stacked */}
+          <div className="flex sm:hidden flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <BedDouble className="w-4 h-4 text-primary" />
+                <span className="text-sm font-semibold text-slate-700">הכנת אוהלים</span>
+              </div>
+              {/* Date input */}
+              <input
+                type="date"
+                value={startDate}
+                onChange={e => setStartDate(e.target.value)}
+                className="text-sm border border-input rounded-md px-2 py-1 bg-transparent text-slate-600 focus:outline-none focus:ring-1 focus:ring-ring"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" className="flex-1 h-10 text-sm gap-1"
+                onClick={() => setStartDate(d => { const nd = new Date(d); nd.setDate(nd.getDate() - 1); return nd.toISOString().slice(0, 10); })}>
+                <ChevronRight className="w-4 h-4" /> יום קודם
+              </Button>
+              <Button variant="outline" size="sm" className="h-10 px-4 text-sm font-semibold"
+                onClick={() => setStartDate(TODAY)}>
                 היום
               </Button>
-              <Button
-                variant="outline" size="icon"
-                onClick={() => setStartDate(d => {
-                  const nd = new Date(d); nd.setDate(nd.getDate() + 1); return nd.toISOString().slice(0, 10);
-                })}
-              >
-                <ChevronLeft className="w-4 h-4" />
+              <Button variant="outline" size="sm" className="flex-1 h-10 text-sm gap-1"
+                onClick={() => setStartDate(d => { const nd = new Date(d); nd.setDate(nd.getDate() + 1); return nd.toISOString().slice(0, 10); })}>
+                יום הבא <ChevronLeft className="w-4 h-4" />
               </Button>
             </div>
           </div>
