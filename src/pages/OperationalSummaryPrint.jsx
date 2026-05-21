@@ -45,7 +45,14 @@ const DIET_LABELS = [
 function TentCard({ allocation, tent, neighborhood }) {
   const tentCode = tent?.code || allocation.tent_id;
   const isVip = tent?.tent_type === "VIP";
-  const capacity = tent?.capacity || 0;
+  const isAccessible = tent?.is_accessible;
+  const baseCapacity = tent?.capacity || 0;
+  
+  // For VIP or accessible tents, display operational capacity (allowing 4-bed override)
+  const displayCapacity = (isVip || isAccessible)
+    ? Math.max(baseCapacity, allocation.allocated_pax || 0, 4)
+    : baseCapacity;
+
   const cleanedNotes = cleanOperationalNote(allocation.notes);
 
   return (
@@ -55,7 +62,7 @@ function TentCard({ allocation, tent, neighborhood }) {
       </div>
       <div className="tent-body">
         {neighborhood && <div className="tent-meta">{neighborhood.name}</div>}
-        <div className="tent-pax">{allocation.allocated_pax}{capacity > 0 ? `/${capacity}` : ""}</div>
+        <div className="tent-pax">{allocation.allocated_pax}{displayCapacity > 0 ? `/${displayCapacity}` : ""}</div>
         <div className="tent-tags">
           <span className="tag">{GENDER_LABELS[allocation.gender_group] || allocation.gender_group}</span>
           <span className={`tag ${isVip ? "tag-vip" : ""}`}>
