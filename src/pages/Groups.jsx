@@ -132,21 +132,43 @@ export default function Groups() {
     <div className="min-h-screen bg-background" dir="rtl">
       {/* Header */}
       <div className="border-b border-border bg-card">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-5 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Users className="w-5 h-5 text-primary" />
-            <div>
-              <h1 className="text-xl font-bold">קבוצות</h1>
-              <p className="text-xs text-muted-foreground mt-0.5">{groups.length} קבוצות בסך הכל</p>
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-4">
+          {/* Desktop: single row */}
+          <div className="hidden sm:flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Users className="w-5 h-5 text-primary" />
+              <div>
+                <h1 className="text-xl font-bold">קבוצות</h1>
+                <p className="text-xs text-muted-foreground mt-0.5">{groups.length} קבוצות בסך הכל</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setShowQuoteForm(true)}>
+                <FileText className="w-4 h-4" /> הצעת מחיר לקבוצה חדשה
+              </Button>
+              <Button size="sm" className="gap-1.5" onClick={() => setShowForm(true)}>
+                <Plus className="w-4 h-4" /> קבוצה חדשה
+              </Button>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setShowQuoteForm(true)}>
-              <FileText className="w-4 h-4" /> הצעת מחיר לקבוצה חדשה
-            </Button>
-            <Button size="sm" className="gap-1.5" onClick={() => setShowForm(true)}>
-              <Plus className="w-4 h-4" /> קבוצה חדשה
-            </Button>
+
+          {/* Mobile: stacked */}
+          <div className="flex sm:hidden flex-col gap-3">
+            <div className="flex items-center gap-3">
+              <Users className="w-5 h-5 text-primary" />
+              <div>
+                <h1 className="text-xl font-bold">קבוצות</h1>
+                <p className="text-xs text-muted-foreground">{groups.length} קבוצות בסך הכל</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <Button size="sm" variant="outline" className="gap-1.5 h-10 text-xs" onClick={() => setShowQuoteForm(true)}>
+                <FileText className="w-4 h-4" /> הצעת מחיר
+              </Button>
+              <Button size="sm" className="gap-1.5 h-10 text-sm" onClick={() => setShowForm(true)}>
+                <Plus className="w-4 h-4" /> קבוצה חדשה
+              </Button>
+            </div>
           </div>
         </div>
       </div>

@@ -372,6 +372,119 @@ function WeekView({ dates, allEvents, onClick }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// AGENDA VIEW — mobile-friendly single-day list
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function AgendaEventRow({ event, onClick }) {
+  const cfg = EVENT_TYPE_CONFIG[event.eventType] || EVENT_TYPE_CONFIG.meal;
+  return (
+    <button
+      type="button"
+      onClick={() => onClick(event)}
+      className={cn(
+        "w-full text-right rounded-xl border px-4 py-3 flex flex-col gap-1.5 hover:shadow-md transition-all",
+        cfg.bg, cfg.border
+      )}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className={cn("text-xs font-bold px-2 py-0.5 rounded-full shrink-0", cfg.badge)}>
+          {cfg.emoji} {cfg.label}
+        </span>
+        {event.pax > 0 && (
+          <span className="text-xs text-slate-500 font-medium">{event.pax} 👤</span>
+        )}
+      </div>
+      <span className={cn("text-base font-bold leading-tight", cfg.text)}>{event.groupName}</span>
+      <div className="flex flex-wrap gap-1.5 items-center">
+        {event.timeRange && (
+          <span className="text-xs text-slate-600 bg-white border border-slate-200 rounded px-2 py-0.5 font-medium" dir="ltr">
+            {event.timeRange}
+          </span>
+        )}
+        {event.mealType && (
+          <span className="text-xs text-amber-700 font-medium">{MEAL_TYPE_HEB[event.mealType] || event.mealType}</span>
+        )}
+        {event.activityName && (
+          <span className="text-xs text-purple-700 font-medium">{event.activityName}</span>
+        )}
+        {event.spaceName && (
+          <span className="text-xs text-slate-400">📍 {event.spaceName}</span>
+        )}
+      </div>
+    </button>
+  );
+}
+
+function AgendaView({ pivot, allEvents, onClick, onPrev, onNext, onToday }) {
+  const dateStr = fmt(pivot);
+  const dayEvents = allEvents.filter(e => e.date === dateStr);
+
+  const grouped = GROUP_ORDER.reduce((acc, type) => {
+    const grp = dayEvents.filter(e => e.eventType === type);
+    if (grp.length > 0) acc.push({ type, events: grp });
+    return acc;
+  }, []);
+
+  const isToday = isSameDay(pivot, moment());
+  const dayLabel = pivot.format("dddd, D בMMMM YYYY");
+
+  return (
+    <div className="space-y-4">
+      {/* Day nav */}
+      <div className="flex items-center gap-2">
+        <button onClick={onPrev} className="flex-1 flex items-center justify-center gap-1.5 h-11 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-600 hover:bg-slate-50">
+          <ChevronRight className="w-4 h-4" /> יום קודם
+        </button>
+        <button onClick={onToday} className={cn(
+          "h-11 px-4 rounded-xl border text-sm font-bold transition-colors",
+          isToday ? "bg-primary text-white border-primary" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+        )}>
+          היום
+        </button>
+        <button onClick={onNext} className="flex-1 flex items-center justify-center gap-1.5 h-11 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-600 hover:bg-slate-50">
+          יום הבא <ChevronLeft className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* Date label */}
+      <div className={cn(
+        "text-center py-3 rounded-xl font-bold text-base",
+        isToday ? "bg-primary/10 text-primary" : "bg-slate-50 text-slate-700"
+      )}>
+        {dayLabel}
+        {isToday && <span className="mr-2 text-sm font-normal">— היום</span>}
+      </div>
+
+      {/* Events */}
+      {grouped.length === 0 ? (
+        <div className="text-center py-16 text-slate-400">
+          <CalendarDays className="w-10 h-10 mx-auto mb-3 opacity-30" />
+          <p className="text-sm">אין אירועים ביום זה</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {grouped.map(({ type, events: grp }) => {
+            const cfg = EVENT_TYPE_CONFIG[type] || EVENT_TYPE_CONFIG.meal;
+            return (
+              <div key={type} className="space-y-2">
+                <div className="flex items-center gap-2 px-1">
+                  <span className={cn("w-2.5 h-2.5 rounded-full shrink-0", cfg.dot)} />
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wide">{cfg.label}</span>
+                  <div className="flex-1 h-px bg-slate-100" />
+                </div>
+                {grp.map(ev => (
+                  <AgendaEventRow key={ev.id} event={ev} onClick={onClick} />
+                ))}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // Main Page
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -417,6 +530,7 @@ export default function Calendar() {
   );
 
   const go = (dir) => setPivot((p) => p.clone().add(dir, view === "week" ? "week" : "month"));
+  const goAgendaDay = (dir) => setPivot((p) => p.clone().add(dir, "day"));
   const goToday = () => setPivot(moment());
 
   const titleStr = view === "week"
@@ -425,7 +539,28 @@ export default function Calendar() {
 
   return (
     <div className="min-h-screen bg-background" dir="rtl">
-      <div className="max-w-[1400px] mx-auto px-3 sm:px-6 py-6 space-y-4">
+
+      {/* ── MOBILE layout ────────────────────────────────────────────── */}
+      <div className="sm:hidden px-4 py-4 space-y-4">
+        <div>
+          <h1 className="text-lg font-bold flex items-center gap-2">
+            <CalendarDays className="w-5 h-5 text-primary" />
+            לוח שנה תפעולי
+          </h1>
+        </div>
+        <Legend />
+        <AgendaView
+          pivot={pivot}
+          allEvents={allEvents}
+          onClick={setSelected}
+          onPrev={() => goAgendaDay(-1)}
+          onNext={() => goAgendaDay(1)}
+          onToday={goToday}
+        />
+      </div>
+
+      {/* ── DESKTOP layout ───────────────────────────────────────────── */}
+      <div className="hidden sm:block max-w-[1400px] mx-auto px-3 sm:px-6 py-6 space-y-4">
 
         {/* Page header */}
         <div>
@@ -463,7 +598,7 @@ export default function Calendar() {
         {/* Legend */}
         <Legend />
 
-        {/* Calendar body — separate components per view */}
+        {/* Calendar body */}
         {view === "week" ? (
           <WeekView dates={dates} allEvents={allEvents} onClick={setSelected} />
         ) : (
