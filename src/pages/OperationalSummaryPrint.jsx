@@ -9,6 +9,13 @@ function safeJson(str, fallback) {
   try { const r = JSON.parse(str); return r ?? fallback; } catch { return fallback; }
 }
 
+function cleanOperationalNote(note) {
+  if (!note) return "";
+  return String(note)
+    .replace(/__vip_req_\d+__/g, "")
+    .trim();
+}
+
 function fmtDate(dateStr) {
   try {
     return format(parseISO(dateStr), "EEEE, d בMMMM yyyy", { locale: he });
@@ -39,6 +46,7 @@ function TentCard({ allocation, tent, neighborhood }) {
   const tentCode = tent?.code || allocation.tent_id;
   const isVip = tent?.tent_type === "VIP";
   const capacity = tent?.capacity || 0;
+  const cleanedNotes = cleanOperationalNote(allocation.notes);
 
   return (
     <div className="tent-card">
@@ -54,7 +62,7 @@ function TentCard({ allocation, tent, neighborhood }) {
             {isVip ? "VIP" : ALLOC_TYPE_LABELS[allocation.allocation_type] || allocation.allocation_type}
           </span>
         </div>
-        {allocation.notes && <div className="tent-notes">{allocation.notes}</div>}
+        {cleanedNotes && <div className="tent-notes">{cleanedNotes}</div>}
       </div>
     </div>
   );
