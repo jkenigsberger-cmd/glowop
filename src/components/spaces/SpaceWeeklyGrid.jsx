@@ -64,7 +64,6 @@ export default function SpaceWeeklyGrid({ spaces, allItems, pivot, onSelectDay }
               {/* Space label */}
               <td className="px-3 py-2.5 border border-slate-200 bg-white">
                 <div className="font-semibold text-slate-700 text-xs">{space.name}</div>
-                <div className="text-[10px] text-slate-400 font-mono">{space.code}</div>
                 <div className="text-[10px] text-slate-400">
                   {SPACE_TYPE_LABELS[space.space_type] || space.space_type}
                 </div>

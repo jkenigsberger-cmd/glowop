@@ -64,7 +64,6 @@ export default function SpaceOverviewCard({ space, items, onSelectDay }) {
         <div className="flex items-start justify-between gap-2">
           <div>
             <div className="font-bold text-slate-800 text-sm">{space.name}</div>
-            <div className="text-xs text-slate-400 font-mono">{space.code}</div>
           </div>
           <div className="flex flex-col items-end gap-1">
             {/* Type badge */}

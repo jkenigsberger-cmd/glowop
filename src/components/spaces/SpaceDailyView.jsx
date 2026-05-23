@@ -44,7 +44,6 @@ export default function SpaceDailyView({ spaces, itemsBySpace, date }) {
             <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="font-bold text-slate-700">{space.name}</span>
-                <span className="text-xs text-slate-400 font-mono">{space.code}</span>
                 <span className="text-[10px] bg-slate-200 text-slate-500 px-2 py-0.5 rounded-full">
                   {SPACE_TYPE_LABELS[space.space_type] || space.space_type}
                 </span>

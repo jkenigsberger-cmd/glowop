@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Pencil, Trash2, Check, X, MapPin, Copy } from "lucide-react";
+import { sortActivitySpaces, getActivitySpaceDisplayName } from "@/lib/activitySpaceUtils";
 
 const LOCATION_OPTIONS = ["כיתה", "מתחם חוץ", "מחוץ לחווה", "אחר"];
 
@@ -121,8 +122,8 @@ export default function ScheduleItemRow({ item, activitySpaces, quoteActivities 
               <SelectTrigger><SelectValue placeholder="לא הוקצה" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">— לא הוקצה —</SelectItem>
-                {activitySpaces.map(s => (
-                  <SelectItem key={s.id} value={s.id}>{s.name} ({s.code})</SelectItem>
+                {sortActivitySpaces(activitySpaces).map(s => (
+                  <SelectItem key={s.id} value={s.id}>{getActivitySpaceDisplayName(s)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>

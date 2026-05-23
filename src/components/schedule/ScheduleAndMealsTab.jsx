@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { base44 } from "@/api/base44Client";
+import { sortActivitySpaces, getActivitySpaceDisplayName } from "@/lib/activitySpaceUtils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -610,8 +611,8 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
                     <SelectTrigger><SelectValue placeholder="לא הוקצה (אופציונלי)" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">— לא הוקצה —</SelectItem>
-                      {activitySpaces.map(sp => (
-                        <SelectItem key={sp.id} value={sp.id}>{sp.name} ({sp.code})</SelectItem>
+                      {sortActivitySpaces(activitySpaces).map(sp => (
+                        <SelectItem key={sp.id} value={sp.id}>{getActivitySpaceDisplayName(sp)}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -664,10 +665,10 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
                         <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="בחר מרחב..." /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">— בחר מרחב —</SelectItem>
-                          {activitySpaces
+                          {sortActivitySpaces(activitySpaces)
                             .filter(sp => !splitRows.some((r, i) => i !== idx && r.activity_space_id === sp.id))
                             .map(sp => (
-                              <SelectItem key={sp.id} value={sp.id}>{sp.name} ({sp.code})</SelectItem>
+                              <SelectItem key={sp.id} value={sp.id}>{getActivitySpaceDisplayName(sp)}</SelectItem>
                             ))}
                         </SelectContent>
                       </Select>

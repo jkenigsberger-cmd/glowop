@@ -6,6 +6,7 @@ import "moment/locale/he";
 import { Layers, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { sortActivitySpaces } from "@/lib/activitySpaceUtils";
 
 import SpaceOverviewCard from "../components/spaces/SpaceOverviewCard.jsx";
 import SpaceDailyView from "../components/spaces/SpaceDailyView.jsx";
@@ -19,10 +20,11 @@ export default function CommonSpaces() {
   const [weekPivot, setWeekPivot] = useState(moment());
 
   // ── Data ──────────────────────────────────────────────────────────────────
-  const { data: activitySpaces = [] } = useQuery({
+  const { data: rawSpaces = [] } = useQuery({
     queryKey: ["spaces-list"],
-    queryFn: () => base44.entities.ActivitySpace.list("sort_order"),
+    queryFn: () => base44.entities.ActivitySpace.list(),
   });
+  const activitySpaces = sortActivitySpaces(rawSpaces);
 
   const { data: scheduleItems = [] } = useQuery({
     queryKey: ["spaces-schedule-items"],
