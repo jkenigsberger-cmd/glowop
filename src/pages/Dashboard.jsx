@@ -12,7 +12,7 @@ import DashboardQuickLinks from "@/components/dashboard/DashboardQuickLinks";
 import { Button } from "@/components/ui/button";
 import { FileText, ChevronRight, ChevronLeft } from "lucide-react";
 
-const toDateStr = (date) => date.toISOString().slice(0, 10);
+const toDateStr = (date) => format(date, "yyyy-MM-dd");
 const TODAY = toDateStr(new Date());
 
 function Section({ title, children }) {
