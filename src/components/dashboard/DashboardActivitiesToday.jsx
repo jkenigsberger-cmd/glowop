@@ -3,7 +3,7 @@ import { ChevronLeft, MapPin, AlertCircle } from "lucide-react";
 
 export default function DashboardActivitiesToday({ activities, groupById, spaceById }) {
   if (activities.length === 0) {
-    return <p className="text-sm text-muted-foreground text-center py-4">אין פעילויות מתוכננות להיום</p>;
+    return <p className="text-sm text-muted-foreground text-center py-4">אין פעילויות מתוכננות לתאריך זה</p>;
   }
 
   const sorted = [...activities].sort((a, b) => (a.start_time || "").localeCompare(b.start_time || ""));

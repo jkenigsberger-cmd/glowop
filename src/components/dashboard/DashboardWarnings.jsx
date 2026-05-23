@@ -59,30 +59,34 @@ function YellowAlert({ title, items, linkBase }) {
   );
 }
 
-export default function DashboardWarnings({ warnings }) {
+export default function DashboardWarnings({ warnings, selectedDate, today }) {
+  const isToday = selectedDate === today;
   const hasAny = Object.values(warnings).some(arr => arr.length > 0);
   if (!hasAny) {
     return (
       <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 text-sm text-emerald-700 font-medium flex items-center gap-2">
-        <CheckCircle2 className="w-4 h-4" /> אין התראות תפעוליות פעילות להיום
+        <CheckCircle2 className="w-4 h-4" /> אין התראות תפעוליות פעילות לתאריך זה
       </div>
     );
   }
 
+  const dayLabel = isToday ? "היום" : "ביום הנבחר";
+  const nextDayLabel = isToday ? "מחר" : "למחרת";
+
   return (
     <div className="space-y-3">
       <RedAlert
-        title="מגיעים היום — דרישות לינה לא הושלמו"
+        title={`מגיעים ${dayLabel} — דרישות לינה לא הושלמו`}
         items={warnings.arrivingNoSleeping}
         linkBase="/groups"
       />
       <YellowAlert
-        title="מגיעים מחר — דרישות לינה לא הושלמו"
-        items={warnings.arrivingTomorrowNoSleeping}
+        title={`מגיעים ${nextDayLabel} — דרישות לינה לא הושלמו`}
+        items={warnings.arrivingNextNoSleeping}
         linkBase="/groups"
       />
       <YellowAlert
-        title="מגיעים היום/מחר — מוכן למשק בית, אוהלים לא שובצו"
+        title={`מגיעים ${dayLabel}/${nextDayLabel} — מוכן למשק בית, אוהלים לא שובצו`}
         items={warnings.arrivingSoonPendingAllocation}
         linkBase="/groups"
       />

@@ -21,7 +21,7 @@ function parseDiets(json) {
 
 export default function DashboardMealsToday({ meals, groupById, profileById }) {
   if (meals.length === 0) {
-    return <p className="text-sm text-muted-foreground text-center py-4">אין ארוחות מתוכננות להיום</p>;
+    return <p className="text-sm text-muted-foreground text-center py-4">אין ארוחות מתוכננות לתאריך זה</p>;
   }
 
   const sorted = [...meals].sort((a, b) => (a.start_time || "").localeCompare(b.start_time || ""));

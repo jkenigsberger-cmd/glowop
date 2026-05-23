@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
-import { format } from "date-fns";
+import { format, addDays } from "date-fns";
 import { he } from "date-fns/locale";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import DashboardSummaryCards from "@/components/dashboard/DashboardSummaryCards";
 import DashboardGroupCard from "@/components/dashboard/DashboardGroupCard";
 import DashboardWarnings from "@/components/dashboard/DashboardWarnings";
@@ -10,9 +10,10 @@ import DashboardMealsToday from "@/components/dashboard/DashboardMealsToday";
 import DashboardActivitiesToday from "@/components/dashboard/DashboardActivitiesToday";
 import DashboardQuickLinks from "@/components/dashboard/DashboardQuickLinks";
 import { Button } from "@/components/ui/button";
-import { FileText } from "lucide-react";
+import { FileText, ChevronRight, ChevronLeft } from "lucide-react";
 
-const TODAY = new Date().toISOString().slice(0, 10);
+const toDateStr = (date) => date.toISOString().slice(0, 10);
+const TODAY = toDateStr(new Date());
 
 function Section({ title, children }) {
   return (
@@ -79,6 +80,15 @@ function PaxDebugPanel({ activeGroups, profileByGroupId }) {
 }
 
 export default function Dashboard() {
+  const [selectedDate, setSelectedDate] = useState(TODAY);
+  const isToday = selectedDate === TODAY;
+
+  const shiftDate = (days) => {
+    const d = new Date(selectedDate + "T00:00:00");
+    setSelectedDate(toDateStr(addDays(d, days)));
+  };
+
+  // ── Data fetching ──────────────────────────────────────────────────────────
   const { data: groups = [] } = useQuery({
     queryKey: ["groups"],
     queryFn: () => base44.entities.Group.list("-arrival_date", 300),
@@ -90,13 +100,13 @@ export default function Dashboard() {
   });
 
   const { data: meals = [] } = useQuery({
-    queryKey: ["mealsToday"],
-    queryFn: () => base44.entities.MealReservation.filter({ date: TODAY, status: "ACTIVE" }),
+    queryKey: ["allMeals"],
+    queryFn: () => base44.entities.MealReservation.filter({ status: "ACTIVE" }),
   });
 
   const { data: activities = [] } = useQuery({
-    queryKey: ["activitiesToday"],
-    queryFn: () => base44.entities.GroupScheduleItem.filter({ date: TODAY, status: "ACTIVE" }),
+    queryKey: ["allActivities"],
+    queryFn: () => base44.entities.GroupScheduleItem.filter({ status: "ACTIVE" }),
   });
 
   const { data: allocations = [] } = useQuery({
@@ -120,127 +130,178 @@ export default function Dashboard() {
   });
 
   // ── Lookup maps ────────────────────────────────────────────────────────────
-  const groupById = Object.fromEntries(groups.map(g => [g.id, g]));
-  const profileByGroupId = Object.fromEntries(profiles.map(p => [p.group_id, p]));
-  const profileById = Object.fromEntries(profiles.map(p => [p.id, p]));
-  const spaceById = Object.fromEntries(activitySpaces.map(s => [s.id, s]));
-  const allocatedGroupIds = new Set(allocations.map(a => a.group_id));
+  const groupById = useMemo(() => Object.fromEntries(groups.map(g => [g.id, g])), [groups]);
+  const profileByGroupId = useMemo(() => Object.fromEntries(profiles.map(p => [p.group_id, p])), [profiles]);
+  const profileById = useMemo(() => Object.fromEntries(profiles.map(p => [p.id, p])), [profiles]);
+  const spaceById = useMemo(() => Object.fromEntries(activitySpaces.map(s => [s.id, s])), [activitySpaces]);
+  const allocatedGroupIds = useMemo(() => new Set(allocations.map(a => a.group_id)), [allocations]);
 
-  // ── Date buckets ──────────────────────────────────────────────────────────
-  // active:
-  //   - LODGING: arrival <= today AND departure > today (must have a real departure date)
-  //   - DAY_USE: arrival === today only
-  // NOTE: empty string "" is treated as "no departure" — we explicitly exclude those
-  //       unless arrival is today (they just arrived today, acceptable to show).
+  // ── Date-filtered data (all driven by selectedDate) ───────────────────────
   const EXCLUDED = new Set(["CANCELLED", "COMPLETED", "ARCHIVED"]);
+  const NEXT_DATE = toDateStr(addDays(new Date(selectedDate + "T00:00:00"), 1));
 
-  const activeGroups = groups.filter(g => {
+  const activeGroups = useMemo(() => groups.filter(g => {
     if (EXCLUDED.has(g.status)) return false;
-    if (g.group_type === "DAY_USE") {
-      return g.arrival_date === TODAY;
-    }
-    // LODGING: must have a valid departure_date that is strictly after today
+    if (g.group_type === "DAY_USE") return g.arrival_date === selectedDate;
     const dep = g.departure_date && g.departure_date.trim() !== "" ? g.departure_date : null;
-    if (!dep) {
-      // No departure date — only count if arriving today (first day)
-      return g.arrival_date === TODAY;
-    }
-    return g.arrival_date <= TODAY && dep > TODAY;
-  });
-  const arrivingToday  = groups.filter(g => !EXCLUDED.has(g.status) && g.arrival_date === TODAY);
-  // sleeping tonight: arrival <= today AND departure > today (must have a real non-empty departure)
-  const sleepingTonight = groups.filter(g => {
+    if (!dep) return g.arrival_date === selectedDate;
+    return g.arrival_date <= selectedDate && dep > selectedDate;
+  }), [groups, selectedDate]);
+
+  const arrivingToday = useMemo(() =>
+    groups.filter(g => !EXCLUDED.has(g.status) && g.arrival_date === selectedDate),
+    [groups, selectedDate]
+  );
+
+  const sleepingTonight = useMemo(() => groups.filter(g => {
     if (EXCLUDED.has(g.status)) return false;
     const dep = g.departure_date && g.departure_date.trim() !== "" ? g.departure_date : null;
-    return dep && g.arrival_date <= TODAY && dep > TODAY;
-  });
-  const departingToday = groups.filter(g => !EXCLUDED.has(g.status) && g.departure_date === TODAY);
+    return dep && g.arrival_date <= selectedDate && dep > selectedDate;
+  }), [groups, selectedDate]);
+
+  const departingToday = useMemo(() =>
+    groups.filter(g => !EXCLUDED.has(g.status) && g.departure_date === selectedDate),
+    [groups, selectedDate]
+  );
+
+  const mealsForDate = useMemo(() =>
+    meals.filter(m => m.date === selectedDate),
+    [meals, selectedDate]
+  );
+
+  const activitiesForDate = useMemo(() =>
+    activities.filter(a => a.date === selectedDate),
+    [activities, selectedDate]
+  );
 
   // ── Stats ─────────────────────────────────────────────────────────────────
-  const totalPaxOnSite = activeGroups.reduce((sum, g) => {
-    const p = profileByGroupId[g.id];
-    return sum + (p?.total_pax ?? g.total_pax ?? 0);
-  }, 0);
+  const totalPaxOnSite = useMemo(() =>
+    activeGroups.reduce((sum, g) => {
+      const p = profileByGroupId[g.id];
+      return sum + (p?.total_pax ?? g.total_pax ?? 0);
+    }, 0),
+    [activeGroups, profileByGroupId]
+  );
 
-  const brokenFacilities = facilities.filter(f => f.working_status !== "WORKING");
-  const brokenTents = tents.filter(t => t.working_status !== "WORKING");
+  const brokenFacilities = useMemo(() => facilities.filter(f => f.working_status !== "WORKING"), [facilities]);
+  const brokenTents = useMemo(() => tents.filter(t => t.working_status !== "WORKING"), [tents]);
   const maintenanceIssues = brokenFacilities.length + brokenTents.length;
 
-  // Groups with profile where sleeping is complete but no confirmed allocation yet
-  const pendingHousekeepingProfiles = profiles.filter(p =>
-    p.sleeping_requirements_completed && !allocatedGroupIds.has(p.group_id)
+  const pendingHousekeepingProfiles = useMemo(() =>
+    profiles.filter(p => p.sleeping_requirements_completed && !allocatedGroupIds.has(p.group_id)),
+    [profiles, allocatedGroupIds]
   );
 
   const stats = {
-    activeGroups:       activeGroups.length,
-    arrivingToday:      arrivingToday.length,
-    sleepingTonight:    sleepingTonight.length,
-    departingToday:     departingToday.length,
+    activeGroups:        activeGroups.length,
+    arrivingToday:       arrivingToday.length,
+    sleepingTonight:     sleepingTonight.length,
+    departingToday:      departingToday.length,
     totalPaxOnSite,
-    mealsToday:         meals.length,
-    activitiesToday:    activities.length,
+    mealsToday:          mealsForDate.length,
+    activitiesToday:     activitiesForDate.length,
     pendingHousekeeping: pendingHousekeepingProfiles.length,
     maintenanceIssues,
   };
 
-  // ── Operational warnings — scoped to today/tomorrow only ─────────────────
-  const TOMORROW = new Date(new Date().getTime() + 86400000).toISOString().slice(0, 10);
-
-  // Groups arriving TODAY with no sleeping requirements completed
-  const arrivingNoSleeping = arrivingToday
-    .map(g => profileByGroupId[g.id])
-    .filter(p => p && !p.sleeping_requirements_completed)
-    .map(p => ({ id: p.group_id, label: groupById[p.group_id]?.group_name || p.group_id }));
-
-  // Groups arriving TOMORROW with no sleeping requirements completed
-  const arrivingTomorrowNoSleeping = groups
-    .filter(g => g.arrival_date === TOMORROW)
-    .map(g => profileByGroupId[g.id])
-    .filter(p => p && !p.sleeping_requirements_completed)
-    .map(p => ({ id: p.group_id, label: groupById[p.group_id]?.group_name || p.group_id }));
-
-  // Groups arriving today or tomorrow: sleeping complete but no allocation yet
-  const arrivingSoonGroupIds = new Set(
-    groups.filter(g => g.arrival_date === TODAY || g.arrival_date === TOMORROW).map(g => g.id)
+  // ── Operational warnings ──────────────────────────────────────────────────
+  const arrivingNoSleeping = useMemo(() =>
+    arrivingToday
+      .map(g => profileByGroupId[g.id])
+      .filter(p => p && !p.sleeping_requirements_completed)
+      .map(p => ({ id: p.group_id, label: groupById[p.group_id]?.group_name || p.group_id })),
+    [arrivingToday, profileByGroupId, groupById]
   );
-  const arrivingSoonPendingAllocation = profiles
-    .filter(p => p.sleeping_requirements_completed && !allocatedGroupIds.has(p.group_id) && arrivingSoonGroupIds.has(p.group_id))
-    .map(p => ({ id: p.group_id, label: groupById[p.group_id]?.group_name || p.group_id }));
 
-  // Broken facilities/tents — always show
-  const brokenItemsList = [
+  const arrivingNextNoSleeping = useMemo(() =>
+    groups
+      .filter(g => g.arrival_date === NEXT_DATE)
+      .map(g => profileByGroupId[g.id])
+      .filter(p => p && !p.sleeping_requirements_completed)
+      .map(p => ({ id: p.group_id, label: groupById[p.group_id]?.group_name || p.group_id })),
+    [groups, NEXT_DATE, profileByGroupId, groupById]
+  );
+
+  const arrivingSoonGroupIds = useMemo(() =>
+    new Set(groups.filter(g => g.arrival_date === selectedDate || g.arrival_date === NEXT_DATE).map(g => g.id)),
+    [groups, selectedDate, NEXT_DATE]
+  );
+
+  const arrivingSoonPendingAllocation = useMemo(() =>
+    profiles
+      .filter(p => p.sleeping_requirements_completed && !allocatedGroupIds.has(p.group_id) && arrivingSoonGroupIds.has(p.group_id))
+      .map(p => ({ id: p.group_id, label: groupById[p.group_id]?.group_name || p.group_id })),
+    [profiles, allocatedGroupIds, arrivingSoonGroupIds, groupById]
+  );
+
+  const brokenItemsList = useMemo(() => [
     ...brokenFacilities.map(f => ({ id: f.id, label: `מתקן: ${f.label} (${f.working_status})` })),
     ...brokenTents.map(t => ({ id: t.id, label: `אוהל: ${t.code} (${t.working_status})` })),
-  ];
+  ], [brokenFacilities, brokenTents]);
 
-  const warnings = { arrivingNoSleeping, arrivingTomorrowNoSleeping, arrivingSoonPendingAllocation, brokenItems: brokenItemsList };
+  const warnings = { arrivingNoSleeping, arrivingNextNoSleeping, arrivingSoonPendingAllocation, brokenItems: brokenItemsList };
 
-  // ── Per-group counts for sleeping cards ───────────────────────────────────
-  const mealsByGroup = {};
-  meals.forEach(m => { mealsByGroup[m.group_id] = (mealsByGroup[m.group_id] || 0) + 1; });
-  const activitiesByGroup = {};
-  activities.forEach(a => { activitiesByGroup[a.group_id] = (activitiesByGroup[a.group_id] || 0) + 1; });
+  // ── Per-group counts ───────────────────────────────────────────────────────
+  const mealsByGroup = useMemo(() => {
+    const map = {};
+    mealsForDate.forEach(m => { map[m.group_id] = (map[m.group_id] || 0) + 1; });
+    return map;
+  }, [mealsForDate]);
 
-  const todayDisplay = format(new Date(), "EEEE, d בMMMM yyyy", { locale: he });
+  const activitiesByGroup = useMemo(() => {
+    const map = {};
+    activitiesForDate.forEach(a => { map[a.group_id] = (map[a.group_id] || 0) + 1; });
+    return map;
+  }, [activitiesForDate]);
+
+  const selectedDateDisplay = format(new Date(selectedDate + "T00:00:00"), "EEEE, d בMMMM yyyy", { locale: he });
 
   return (
     <div className="min-h-screen bg-background" dir="rtl">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 space-y-8">
 
         {/* Header */}
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
           <div>
-            <h1 className="text-2xl font-bold">בית</h1>
-            <p className="text-muted-foreground text-sm mt-0.5">תמונת מצב תפעולית להיום — {todayDisplay}</p>
+            <h1 className="text-2xl font-bold flex items-center gap-2">
+              דאשבורד יומי
+              {isToday && (
+                <span className="text-xs font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5">היום</span>
+              )}
+            </h1>
+            <p className="text-muted-foreground text-sm mt-0.5">{selectedDateDisplay}</p>
           </div>
           <Button
             variant="outline"
             size="sm"
             className="shrink-0 gap-1.5"
-            onClick={() => window.open(`/daily-print?date=${TODAY}`, "_blank")}
+            onClick={() => window.open(`/daily-print?date=${selectedDate}`, "_blank")}
           >
             <FileText className="w-3.5 h-3.5" /> הפק סיכום יומי
           </Button>
+        </div>
+
+        {/* Date navigation */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button size="sm" variant="outline" onClick={() => shiftDate(-1)} className="gap-1">
+            <ChevronRight className="w-4 h-4" /> יום קודם
+          </Button>
+          <Button
+            size="sm"
+            variant={isToday ? "default" : "outline"}
+            onClick={() => setSelectedDate(TODAY)}
+          >
+            היום
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => shiftDate(1)} className="gap-1">
+            יום הבא <ChevronLeft className="w-4 h-4" />
+          </Button>
+          <input
+            type="date"
+            value={selectedDate}
+            onChange={e => e.target.value && setSelectedDate(e.target.value)}
+            className="border border-input bg-transparent rounded-md px-3 py-1.5 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+          />
         </div>
 
         {/* Summary cards */}
@@ -256,12 +317,12 @@ export default function Dashboard() {
 
         {/* Operational warnings */}
         <Section title="התראות תפעוליות">
-          <DashboardWarnings warnings={warnings} />
+          <DashboardWarnings warnings={warnings} selectedDate={selectedDate} today={TODAY} />
         </Section>
 
-        {/* Arriving today */}
+        {/* Arriving */}
         {arrivingToday.length > 0 && (
-          <Section title={`מגיעים היום (${arrivingToday.length})`}>
+          <Section title={`קבוצות נכנסות (${arrivingToday.length})`}>
             <div className="space-y-2">
               {arrivingToday.map(g => (
                 <DashboardGroupCard
@@ -275,9 +336,9 @@ export default function Dashboard() {
           </Section>
         )}
 
-        {/* Sleeping tonight */}
+        {/* Sleeping */}
         {sleepingTonight.length > 0 && (
-          <Section title={`לנים הלילה (${sleepingTonight.length})`}>
+          <Section title={`לנים בלילה (${sleepingTonight.length})`}>
             <div className="space-y-2">
               {sleepingTonight.map(g => (
                 <DashboardGroupCard
@@ -293,9 +354,9 @@ export default function Dashboard() {
           </Section>
         )}
 
-        {/* Departing today */}
+        {/* Departing */}
         {departingToday.length > 0 && (
-          <Section title={`עוזבים היום (${departingToday.length})`}>
+          <Section title={`קבוצות יוצאות (${departingToday.length})`}>
             <div className="space-y-2">
               {departingToday.map(g => (
                 <DashboardGroupCard
@@ -309,14 +370,14 @@ export default function Dashboard() {
           </Section>
         )}
 
-        {/* Today meals */}
-        <Section title={`ארוחות היום (${meals.length})`}>
-          <DashboardMealsToday meals={meals} groupById={groupById} profileById={profileById} />
+        {/* Meals */}
+        <Section title={`ארוחות (${mealsForDate.length})`}>
+          <DashboardMealsToday meals={mealsForDate} groupById={groupById} profileById={profileById} />
         </Section>
 
-        {/* Today activities */}
-        <Section title={`פעילויות היום (${activities.length})`}>
-          <DashboardActivitiesToday activities={activities} groupById={groupById} spaceById={spaceById} />
+        {/* Activities */}
+        <Section title={`פעילויות (${activitiesForDate.length})`}>
+          <DashboardActivitiesToday activities={activitiesForDate} groupById={groupById} spaceById={spaceById} />
         </Section>
 
       </div>
