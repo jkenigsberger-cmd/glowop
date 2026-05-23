@@ -87,6 +87,11 @@ function MealCard({ meal }) {
         <span className="meal-time" dir="ltr">{meal.start_time}–{meal.end_time}</span>
       </div>
       <div className="meal-pax">👥 {meal.pax} משתתפים</div>
+      {meal.sandwich_option && (
+        <div style={{ display: "inline-block", background: "#fef3c7", border: "1px solid #f59e0b", color: "#92400e", fontWeight: "700", borderRadius: "6px", padding: "2px 8px", fontSize: "12px", margin: "4px 0" }}>
+          🥪 כריכים במקום ארוחה רגילה
+        </div>
+      )}
       {lifeThreat > 0 && (
         <div className="allergy-critical">⚠ אלרגיות מסכנות חיים: {lifeThreat}</div>
       )}
@@ -97,7 +102,7 @@ function MealCard({ meal }) {
             if (!count) return null;
             return <span key={key} className="diet-badge">{label}: {count}</span>;
           })}
-          {diets.diet_notes && <span className="diet-badge">{diets.diet_notes}</span>}
+          {diets.diet_notes && <span className="diet-badge">📝 {diets.diet_notes}</span>}
         </div>
       )}
       {meal.notes && <div className="meal-notes">{meal.notes}</div>}
@@ -633,7 +638,7 @@ export default function OperationalSummaryPrint() {
 
         {/* Header */}
         <div className="doc-header">
-          <div className="doc-title">סיכום תפעולי לקבוצה</div>
+          <div className="doc-title">סיכום תפעולי לקבוצה — {group.group_name}</div>
           <div className="doc-group-name">{group.group_name}</div>
           <div className="doc-meta">
             <span>📅 {fmtDate(startDate)}{endDate !== startDate ? ` — ${fmtDate(endDate)}` : ""}</span>

@@ -122,6 +122,34 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
     queryClient.invalidateQueries({ queryKey: ["mealReservations", groupId] });
   };
 
+  // Duplicate an existing activity — opens the add form prefilled (date/time cleared)
+  const handleDuplicateActivity = (item) => {
+    setNewSchedule({
+      ...makeEmptySchedule(),
+      activity_name: item.activity_name,
+      requested_location: item.requested_location || "",
+      activity_space_id: item.activity_space_id || null,
+      pax: item.pax ? String(item.pax) : (groupParticipantCount ? String(groupParticipantCount) : ""),
+      notes: item.notes || "",
+      quote_item_id: null,
+      // date/time intentionally left blank so admin must pick a new slot
+      date: "",
+      start_time: item.start_time || "09:00",
+      end_time: item.end_time || "10:00",
+    });
+    setSplitEnabled(false);
+    setSplitRows([
+      { activity_space_id: "", pax: "" },
+      { activity_space_id: "", pax: "" },
+    ]);
+    setNewScheduleError(null);
+    setAddingSchedule(true);
+    toast("שכפול פעילות — בחר תאריך חדש ושמור", { icon: "📋" });
+    setTimeout(() => {
+      document.getElementById("add-activity-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 50);
+  };
+
   // Open Add Activity form, optionally prefilled from a suggestion or quote talk
   const openActivityForm = (prefill = {}) => {
     const base = makeEmptySchedule();
@@ -713,6 +741,7 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
                 groupDateRange={{ arrivalDate, departureDate }}
                 onSave={handleSaveScheduleItem}
                 onCancel={handleCancelScheduleItem}
+                onDuplicate={handleDuplicateActivity}
                 saving={saving}
               />
             ))}

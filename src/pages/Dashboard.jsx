@@ -9,6 +9,8 @@ import DashboardWarnings from "@/components/dashboard/DashboardWarnings";
 import DashboardMealsToday from "@/components/dashboard/DashboardMealsToday";
 import DashboardActivitiesToday from "@/components/dashboard/DashboardActivitiesToday";
 import DashboardQuickLinks from "@/components/dashboard/DashboardQuickLinks";
+import { Button } from "@/components/ui/button";
+import { FileText } from "lucide-react";
 
 const TODAY = new Date().toISOString().slice(0, 10);
 
@@ -226,9 +228,19 @@ export default function Dashboard() {
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 space-y-8">
 
         {/* Header */}
-        <div>
-          <h1 className="text-2xl font-bold">בית</h1>
-          <p className="text-muted-foreground text-sm mt-0.5">תמונת מצב תפעולית להיום — {todayDisplay}</p>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold">בית</h1>
+            <p className="text-muted-foreground text-sm mt-0.5">תמונת מצב תפעולית להיום — {todayDisplay}</p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="shrink-0 gap-1.5"
+            onClick={() => window.open(`/daily-print?date=${TODAY}`, "_blank")}
+          >
+            <FileText className="w-3.5 h-3.5" /> הפק סיכום יומי
+          </Button>
         </div>
 
         {/* Summary cards */}

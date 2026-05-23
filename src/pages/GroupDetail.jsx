@@ -143,7 +143,7 @@ export default function GroupDetail() {
             {/* Action buttons — stack on mobile */}
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" size="sm" onClick={() => window.open(`/groups/${id}/operational-summary-print`, "_blank")} className="gap-1 flex-shrink-0">
-                <Printer className="w-3.5 h-3.5" /> הפק סיכום תפעולי
+                <Printer className="w-3.5 h-3.5" /> הפק סיכום קבוצה
               </Button>
               <Button variant="outline" size="sm" onClick={() => setEditGroup(true)} className="gap-1 flex-shrink-0">
                 <Pencil className="w-3.5 h-3.5" /> עריכה

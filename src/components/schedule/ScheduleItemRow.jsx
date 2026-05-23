@@ -2,11 +2,11 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Pencil, Trash2, Check, X, MapPin } from "lucide-react";
+import { Pencil, Trash2, Check, X, MapPin, Copy } from "lucide-react";
 
 const LOCATION_OPTIONS = ["כיתה", "מתחם חוץ", "מחוץ לחווה", "אחר"];
 
-export default function ScheduleItemRow({ item, activitySpaces, quoteActivities = [], groupDateRange = {}, onSave, onCancel, saving }) {
+export default function ScheduleItemRow({ item, activitySpaces, quoteActivities = [], groupDateRange = {}, onSave, onCancel, onDuplicate, saving }) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ ...item });
   const [error, setError] = useState(null);
@@ -185,10 +185,15 @@ export default function ScheduleItemRow({ item, activitySpaces, quoteActivities 
       </div>
       {item.status !== "CANCELLED" && (
         <div className="flex gap-1 shrink-0">
-          <Button size="sm" variant="ghost" onClick={handleStartEdit} className="h-7 w-7 p-0">
+          <Button size="sm" variant="ghost" onClick={handleStartEdit} className="h-7 w-7 p-0" title="עריכה">
             <Pencil className="w-3.5 h-3.5" />
           </Button>
-          <Button size="sm" variant="ghost" onClick={() => onCancel(item.id)} className="h-7 w-7 p-0 text-red-400 hover:text-red-600">
+          {onDuplicate && (
+            <Button size="sm" variant="ghost" onClick={() => onDuplicate(item)} className="h-7 w-7 p-0 text-blue-500 hover:text-blue-700" title="שכפל פעילות">
+              <Copy className="w-3.5 h-3.5" />
+            </Button>
+          )}
+          <Button size="sm" variant="ghost" onClick={() => onCancel(item.id)} className="h-7 w-7 p-0 text-red-400 hover:text-red-600" title="בטל">
             <Trash2 className="w-3.5 h-3.5" />
           </Button>
         </div>

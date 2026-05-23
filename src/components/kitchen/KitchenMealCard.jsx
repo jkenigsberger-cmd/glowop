@@ -41,9 +41,6 @@ export default function KitchenMealCard({ meal, group, profile }) {
       <div className={`px-4 py-2 flex items-center justify-between ${headerColor}`}>
         <span className="font-bold text-sm">
           {label}
-          {hasSandwich && (
-            <span className="mr-2 text-xs font-normal opacity-75">(כריכים)</span>
-          )}
         </span>
         {meal.start_time && (
           <span className="flex items-center gap-1 text-xs font-medium opacity-80">
@@ -55,6 +52,13 @@ export default function KitchenMealCard({ meal, group, profile }) {
 
       {/* Body */}
       <div className="px-4 py-3 bg-white space-y-2">
+        {/* Sandwich banner */}
+        {hasSandwich && (
+          <div className="flex items-center gap-2 bg-amber-50 border border-amber-300 rounded-lg px-3 py-2">
+            <span className="text-base">🥪</span>
+            <span className="text-sm font-bold text-amber-800">כריכים במקום ארוחה רגילה</span>
+          </div>
+        )}
         {/* Group + pax */}
         <div className="flex items-start justify-between gap-3">
           <div>
