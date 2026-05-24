@@ -19,6 +19,7 @@ import OperationalHoldCard from "@/components/groups/OperationalHoldCard";
 import SleepingRequirementsTab from "@/components/sleeping/SleepingRequirementsTab";
 import ScheduleAndMealsTab from "@/components/schedule/ScheduleAndMealsTab";
 import GroupLifecycleActions from "@/components/groups/GroupLifecycleActions";
+import RoleGate from "@/components/RoleGate";
 
 export default function GroupDetail() {
   const { id } = useParams();
@@ -142,12 +143,16 @@ export default function GroupDetail() {
             </div>
             {/* Action buttons — stack on mobile */}
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" size="sm" onClick={() => window.open(`/groups/${id}/operational-summary-print`, "_blank")} className="gap-1 flex-shrink-0">
-                <Printer className="w-3.5 h-3.5" /> הפק סיכום קבוצה
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => setEditGroup(true)} className="gap-1 flex-shrink-0">
-                <Pencil className="w-3.5 h-3.5" /> עריכה
-              </Button>
+              <RoleGate permission="GENERATE_REPORTS">
+                <Button variant="outline" size="sm" onClick={() => window.open(`/groups/${id}/operational-summary-print`, "_blank")} className="gap-1 flex-shrink-0">
+                  <Printer className="w-3.5 h-3.5" /> הפק סיכום קבוצה
+                </Button>
+              </RoleGate>
+              <RoleGate permission="EDIT_GROUP">
+                <Button variant="outline" size="sm" onClick={() => setEditGroup(true)} className="gap-1 flex-shrink-0">
+                  <Pencil className="w-3.5 h-3.5" /> עריכה
+                </Button>
+              </RoleGate>
             </div>
           </div>
         </div>
@@ -212,9 +217,11 @@ export default function GroupDetail() {
         <section>
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold flex items-center gap-2"><FileText className="w-4 h-4" /> הצעות מחיר</h2>
-            <Button size="sm" variant="outline" onClick={() => { setEditQuote(null); setShowQuoteForm(true); }} className="gap-1">
-              <Plus className="w-3.5 h-3.5" /> הצעה חדשה
-            </Button>
+            <RoleGate permission="CREATE_QUOTE">
+              <Button size="sm" variant="outline" onClick={() => { setEditQuote(null); setShowQuoteForm(true); }} className="gap-1">
+                <Plus className="w-3.5 h-3.5" /> הצעה חדשה
+              </Button>
+            </RoleGate>
           </div>
           {quotes.length === 0 ? (
             <p className="text-sm text-muted-foreground py-4 text-center">אין הצעות מחיר עדיין.</p>
@@ -243,10 +250,14 @@ export default function GroupDetail() {
                           }
                         </Button>
                       )}
-                      <QuotePdfButton quote={q} group={group} />
-                      <Button size="sm" variant="ghost" onClick={() => { setEditQuote(q); setShowQuoteForm(true); }} className="gap-1">
-                        <Pencil className="w-3 h-3" /> עריכה
-                      </Button>
+                      <RoleGate permission="GENERATE_REPORTS">
+                        <QuotePdfButton quote={q} group={group} />
+                      </RoleGate>
+                      <RoleGate permission="EDIT_QUOTE">
+                        <Button size="sm" variant="ghost" onClick={() => { setEditQuote(q); setShowQuoteForm(true); }} className="gap-1">
+                          <Pencil className="w-3 h-3" /> עריכה
+                        </Button>
+                      </RoleGate>
                     </div>
                   </div>
                   <QuoteStatusActions quote={q} group={group} onUpdated={refetch} />
@@ -260,15 +271,17 @@ export default function GroupDetail() {
         <section>
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold flex items-center gap-2"><ClipboardList className="w-4 h-4" /> טפסי קבלה</h2>
-            {quotes.length === 0 ? (
-              <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
-                יש ליצור הצעת מחיר תחילה
-              </span>
-            ) : (
-              <Button size="sm" variant="outline" onClick={() => { setEditSubmission(null); setShowSubmissionForm(true); }} className="gap-1">
-                <Plus className="w-3.5 h-3.5" /> טופס חדש
-              </Button>
-            )}
+            <RoleGate permission="EDIT_GROUP">
+              {quotes.length === 0 ? (
+                <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                  יש ליצור הצעת מחיר תחילה
+                </span>
+              ) : (
+                <Button size="sm" variant="outline" onClick={() => { setEditSubmission(null); setShowSubmissionForm(true); }} className="gap-1">
+                  <Plus className="w-3.5 h-3.5" /> טופס חדש
+                </Button>
+              )}
+            </RoleGate>
           </div>
           {submissions.length === 0 ? (
             <p className="text-sm text-muted-foreground py-4 text-center">אין טפסי קבלה עדיין.</p>
@@ -295,41 +308,43 @@ export default function GroupDetail() {
         </section>
 
         {/* Approve operational profile — shown when profile exists but not yet ACCEPTED, or group not yet CONFIRMED */}
-        {operationalProfile && operationalProfile.status !== "ACCEPTED" && (
-          <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
-            <div>
-              <p className="text-sm font-semibold text-blue-800">פרופיל תפעולי ממתין לאישור</p>
-              <p className="text-xs text-blue-600 mt-0.5">לחץ לאישור הפרופיל ומעבר הקבוצה לסטטוס מאושר</p>
+        <RoleGate permission="APPROVE_PROFILE">
+          {operationalProfile && operationalProfile.status !== "ACCEPTED" && (
+            <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
+              <div>
+                <p className="text-sm font-semibold text-blue-800">פרופיל תפעולי ממתין לאישור</p>
+                <p className="text-xs text-blue-600 mt-0.5">לחץ לאישור הפרופיל ומעבר הקבוצה לסטטוס מאושר</p>
+              </div>
+              <Button
+                size="sm"
+                className="gap-1.5 bg-blue-700 hover:bg-blue-800 text-white"
+                onClick={handleApproveProfile}
+                disabled={approvingProfile}
+              >
+                <ShieldCheck className="w-3.5 h-3.5" />
+                {approvingProfile ? "מאשר..." : "אשר פרופיל תפעולי"}
+              </Button>
             </div>
-            <Button
-              size="sm"
-              className="gap-1.5 bg-blue-700 hover:bg-blue-800 text-white"
-              onClick={handleApproveProfile}
-              disabled={approvingProfile}
-            >
-              <ShieldCheck className="w-3.5 h-3.5" />
-              {approvingProfile ? "מאשר..." : "אשר פרופיל תפעולי"}
-            </Button>
-          </div>
-        )}
-        {!operationalProfile && group && (group.status === "DRAFT" || group.status === "CONFIRMED") && (
-          <div className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
-            <div>
-              <p className="text-sm font-semibold text-slate-700">אין פרופיל תפעולי עדיין</p>
-              <p className="text-xs text-slate-500 mt-0.5">ניתן ליצור פרופיל תפעולי מנתוני הקבוצה/ההצעה</p>
+          )}
+          {!operationalProfile && group && (group.status === "DRAFT" || group.status === "CONFIRMED") && (
+            <div className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
+              <div>
+                <p className="text-sm font-semibold text-slate-700">אין פרופיל תפעולי עדיין</p>
+                <p className="text-xs text-slate-500 mt-0.5">ניתן ליצור פרופיל תפעולי מנתוני הקבוצה/ההצעה</p>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1.5 border-slate-300"
+                onClick={handleApproveProfile}
+                disabled={approvingProfile}
+              >
+                <ShieldCheck className="w-3.5 h-3.5" />
+                {approvingProfile ? "מאשר..." : "צור ואשר פרופיל תפעולי"}
+              </Button>
             </div>
-            <Button
-              size="sm"
-              variant="outline"
-              className="gap-1.5 border-slate-300"
-              onClick={handleApproveProfile}
-              disabled={approvingProfile}
-            >
-              <ShieldCheck className="w-3.5 h-3.5" />
-              {approvingProfile ? "מאשר..." : "צור ואשר פרופיל תפעולי"}
-            </Button>
-          </div>
-        )}
+          )}
+        </RoleGate>
 
         {/* Operational Profile */}
         <OperationalProfileDisplay groupId={id} />

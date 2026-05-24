@@ -5,6 +5,7 @@ import { Send, CheckCircle, XCircle, Clock } from "lucide-react";
 import { toast } from "sonner";
 import QuoteStatusBadge from "./QuoteStatusBadge";
 import ApprovalCapacityDialog from "./ApprovalCapacityDialog";
+import RoleGate from "@/components/RoleGate";
 
 /**
  * Allowed transitions per the documented quote lifecycle:
@@ -172,19 +173,21 @@ export default function QuoteStatusActions({ quote, group, onUpdated }) {
     <>
       <div className="flex items-center gap-2 flex-wrap">
         <QuoteStatusBadge status={quote.status} />
-        {transitions.map(({ next, label, icon: Icon, variant }) => (
-          <Button
-            key={next}
-            size="sm"
-            variant={variant}
-            disabled={loading || pendingApproval}
-            onClick={() => handleTransition(next)}
-            className="gap-1.5 text-xs h-7"
-          >
-            <Icon className="w-3.5 h-3.5" />
-            {pendingApproval && next === "APPROVED" ? "בודק..." : label}
-          </Button>
-        ))}
+        <RoleGate permission="APPROVE_QUOTE">
+          {transitions.map(({ next, label, icon: Icon, variant }) => (
+            <Button
+              key={next}
+              size="sm"
+              variant={variant}
+              disabled={loading || pendingApproval}
+              onClick={() => handleTransition(next)}
+              className="gap-1.5 text-xs h-7"
+            >
+              <Icon className="w-3.5 h-3.5" />
+              {pendingApproval && next === "APPROVED" ? "בודק..." : label}
+            </Button>
+          ))}
+        </RoleGate>
       </div>
 
       {capacityWarnings && (

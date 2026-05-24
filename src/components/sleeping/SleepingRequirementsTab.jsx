@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import PeopleSummaryCard from "./PeopleSummaryCard";
 import StudentTentPlanningEditor from "./StudentTentPlanningEditor";
 import VipRequirementsEditor from "./VipRequirementsEditor";
+import RoleGate from "@/components/RoleGate";
 
 const VIP_TOTAL_TENTS  = 10;
 const VIP_MAX_PER_TENT = 4; // allow up to 4 for operational override
@@ -209,20 +210,22 @@ export default function SleepingRequirementsTab({ groupId, profile }) {
             }
           </p>
         </div>
-        <div className="mr-auto flex gap-2">
-          {isCompleted ? (
-            <Button size="sm" variant="outline" onClick={() => handleSave(false)} disabled={saving}
-              className="border-emerald-300 text-emerald-700 hover:bg-emerald-100 text-xs">
-              חזור לעריכה
-            </Button>
-          ) : (
-            <Button size="sm" onClick={() => handleSave(true)}
-              disabled={saving || hardBlocked}
-              className="bg-emerald-700 hover:bg-emerald-800 text-xs gap-1">
-              <CheckCircle2 className="w-3.5 h-3.5" /> סמן כמוכן למשק בית
-            </Button>
-          )}
-        </div>
+        <RoleGate permission="MANAGE_ALLOCATION">
+          <div className="mr-auto flex gap-2">
+            {isCompleted ? (
+              <Button size="sm" variant="outline" onClick={() => handleSave(false)} disabled={saving}
+                className="border-emerald-300 text-emerald-700 hover:bg-emerald-100 text-xs">
+                חזור לעריכה
+              </Button>
+            ) : (
+              <Button size="sm" onClick={() => handleSave(true)}
+                disabled={saving || hardBlocked}
+                className="bg-emerald-700 hover:bg-emerald-800 text-xs gap-1">
+                <CheckCircle2 className="w-3.5 h-3.5" /> סמן כמוכן למשק בית
+              </Button>
+            )}
+          </div>
+        </RoleGate>
       </div>
 
       {/* Hard-block warnings */}
@@ -350,12 +353,14 @@ export default function SleepingRequirementsTab({ groupId, profile }) {
       </SectionCard>
 
       {/* Save */}
-      <div className="flex justify-end pt-2">
-        <Button onClick={() => handleSave(null)} disabled={saving} className="gap-1.5">
-          <Save className="w-4 h-4" />
-          {saving ? "שומר..." : "שמור דרישות"}
-        </Button>
-      </div>
+      <RoleGate permission="MANAGE_ALLOCATION">
+        <div className="flex justify-end pt-2">
+          <Button onClick={() => handleSave(null)} disabled={saving} className="gap-1.5">
+            <Save className="w-4 h-4" />
+            {saving ? "שומר..." : "שמור דרישות"}
+          </Button>
+        </div>
+      </RoleGate>
     </div>
   );
 }

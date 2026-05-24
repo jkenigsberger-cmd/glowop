@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import GroupFormModal from "@/components/groups/GroupFormModal";
 import QuoteFormModal from "@/components/quotes/QuoteFormModal";
+import RoleGate from "@/components/RoleGate";
 
 const TODAY = new Date().toISOString().slice(0, 10);
 
@@ -143,12 +144,16 @@ export default function Groups() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setShowQuoteForm(true)}>
-                <FileText className="w-4 h-4" /> הצעת מחיר לקבוצה חדשה
-              </Button>
-              <Button size="sm" className="gap-1.5" onClick={() => setShowForm(true)}>
-                <Plus className="w-4 h-4" /> קבוצה חדשה
-              </Button>
+              <RoleGate permission="CREATE_QUOTE">
+                <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setShowQuoteForm(true)}>
+                  <FileText className="w-4 h-4" /> הצעת מחיר לקבוצה חדשה
+                </Button>
+              </RoleGate>
+              <RoleGate permission="CREATE_GROUP">
+                <Button size="sm" className="gap-1.5" onClick={() => setShowForm(true)}>
+                  <Plus className="w-4 h-4" /> קבוצה חדשה
+                </Button>
+              </RoleGate>
             </div>
           </div>
 
@@ -161,13 +166,17 @@ export default function Groups() {
                 <p className="text-xs text-muted-foreground">{groups.length} קבוצות בסך הכל</p>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <Button size="sm" variant="outline" className="gap-1.5 h-10 text-xs" onClick={() => setShowQuoteForm(true)}>
-                <FileText className="w-4 h-4" /> הצעת מחיר
-              </Button>
-              <Button size="sm" className="gap-1.5 h-10 text-sm" onClick={() => setShowForm(true)}>
-                <Plus className="w-4 h-4" /> קבוצה חדשה
-              </Button>
+            <div className="flex flex-wrap gap-2">
+              <RoleGate permission="CREATE_QUOTE">
+                <Button size="sm" variant="outline" className="gap-1.5 h-10 text-xs" onClick={() => setShowQuoteForm(true)}>
+                  <FileText className="w-4 h-4" /> הצעת מחיר
+                </Button>
+              </RoleGate>
+              <RoleGate permission="CREATE_GROUP">
+                <Button size="sm" className="gap-1.5 h-10 text-sm" onClick={() => setShowForm(true)}>
+                  <Plus className="w-4 h-4" /> קבוצה חדשה
+                </Button>
+              </RoleGate>
             </div>
           </div>
         </div>

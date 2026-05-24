@@ -2,6 +2,9 @@ import { base44 } from "@/api/base44Client";
 import { useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle } from "lucide-react";
 import HousekeepingStatusBadge from "./HousekeepingStatusBadge";
+import RoleGate from "@/components/RoleGate";
+import { useRoleContext } from "@/lib/RoleContext";
+import { hasPermission } from "@/lib/roles";
 
 const GENDER_LABEL = { BOYS: "בנים", GIRLS: "בנות", MEN: "גברים", WOMEN: "נשים" };
 
@@ -14,6 +17,8 @@ const HK_STATUSES = [
 
 export default function TentAllocationRow({ allocation, tent, neighborhood, hideNeighborhood = false }) {
   const queryClient = useQueryClient();
+  const { role } = useRoleContext();
+  const canMark = hasPermission(role, "MARK_TENT_READY");
 
   const handleStatusChange = async (newStatus) => {
     await base44.entities.SleepingAllocation.update(allocation.id, {
@@ -76,15 +81,17 @@ export default function TentAllocationRow({ allocation, tent, neighborhood, hide
       {/* Status selector */}
       <div className="shrink-0 flex items-center gap-2">
         <HousekeepingStatusBadge status={allocation.housekeeping_status || "PENDING"} />
-        <select
-          value={allocation.housekeeping_status || "PENDING"}
-          onChange={(e) => handleStatusChange(e.target.value)}
-          className="text-xs border border-slate-200 rounded-md px-1.5 py-1 bg-white text-slate-700 focus:outline-none focus:ring-1 focus:ring-primary"
-        >
-          {HK_STATUSES.map(s => (
-            <option key={s.value} value={s.value}>{s.label}</option>
-          ))}
-        </select>
+        {canMark ? (
+          <select
+            value={allocation.housekeeping_status || "PENDING"}
+            onChange={(e) => handleStatusChange(e.target.value)}
+            className="text-xs border border-slate-200 rounded-md px-1.5 py-1 bg-white text-slate-700 focus:outline-none focus:ring-1 focus:ring-primary"
+          >
+            {HK_STATUSES.map(s => (
+              <option key={s.value} value={s.value}>{s.label}</option>
+            ))}
+          </select>
+        ) : null}
       </div>
     </div>
   );

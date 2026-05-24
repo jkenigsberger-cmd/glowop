@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { base44 } from "@/api/base44Client";
 import { toast } from "sonner";
 import { CheckCircle2, Snowflake, RotateCcw, Trash2, AlertTriangle } from "lucide-react";
+import RoleGate from "@/components/RoleGate";
 
 // ── Confirmation Modal ─────────────────────────────────────────────────────────
 
@@ -191,48 +192,52 @@ export default function GroupLifecycleActions({ group, onDeleted, onUpdated }) {
       <div className="border border-slate-200 rounded-xl p-4 space-y-3 bg-slate-50">
         <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">פעולות מחזור חיים</p>
         <div className="flex flex-wrap gap-2">
-          {isActive && (
-            <>
+          <RoleGate permission="ARCHIVE_GROUP">
+            {isActive && (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5 border-teal-300 text-teal-700 hover:bg-teal-50"
+                  onClick={() => setModal("complete")}
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  סיים קבוצה
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5 border-amber-300 text-amber-700 hover:bg-amber-50"
+                  onClick={() => setModal("freeze")}
+                >
+                  <Snowflake className="w-3.5 h-3.5" />
+                  הקפא קבוצה
+                </Button>
+              </>
+            )}
+            {(isArchived || isCompleted) && (
               <Button
                 size="sm"
                 variant="outline"
-                className="gap-1.5 border-teal-300 text-teal-700 hover:bg-teal-50"
-                onClick={() => setModal("complete")}
+                className="gap-1.5 border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                onClick={() => setModal("reactivate")}
               >
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                סיים קבוצה
+                <RotateCcw className="w-3.5 h-3.5" />
+                הפעל מחדש
               </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                className="gap-1.5 border-amber-300 text-amber-700 hover:bg-amber-50"
-                onClick={() => setModal("freeze")}
-              >
-                <Snowflake className="w-3.5 h-3.5" />
-                הקפא קבוצה
-              </Button>
-            </>
-          )}
-          {(isArchived || isCompleted) && (
+            )}
+          </RoleGate>
+          <RoleGate permission="DELETE_GROUP">
             <Button
               size="sm"
               variant="outline"
-              className="gap-1.5 border-emerald-300 text-emerald-700 hover:bg-emerald-50"
-              onClick={() => setModal("reactivate")}
+              className="gap-1.5 border-red-200 text-red-500 hover:bg-red-50 mr-auto"
+              onClick={() => setModal("delete")}
             >
-              <RotateCcw className="w-3.5 h-3.5" />
-              הפעל מחדש
+              <Trash2 className="w-3.5 h-3.5" />
+              מחיקה מוחלטת
             </Button>
-          )}
-          <Button
-            size="sm"
-            variant="outline"
-            className="gap-1.5 border-red-200 text-red-500 hover:bg-red-50 mr-auto"
-            onClick={() => setModal("delete")}
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            מחיקה מוחלטת
-          </Button>
+          </RoleGate>
         </div>
         {isArchived && group.archived_reason && (
           <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">

@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Pencil, Trash2, Check, X, MapPin, Copy } from "lucide-react";
 import { sortActivitySpaces, getActivitySpaceDisplayName } from "@/lib/activitySpaceUtils";
+import RoleGate from "@/components/RoleGate";
 
 const LOCATION_OPTIONS = ["כיתה", "מתחם חוץ", "מחוץ לחווה", "אחר"];
 
@@ -185,19 +186,21 @@ export default function ScheduleItemRow({ item, activitySpaces, quoteActivities 
         {item.notes && <p className="text-xs text-muted-foreground italic">{item.notes}</p>}
       </div>
       {item.status !== "CANCELLED" && (
-        <div className="flex gap-1 shrink-0">
-          <Button size="sm" variant="ghost" onClick={handleStartEdit} className="h-7 w-7 p-0" title="עריכה">
-            <Pencil className="w-3.5 h-3.5" />
-          </Button>
-          {onDuplicate && (
-            <Button size="sm" variant="ghost" onClick={() => onDuplicate(item)} className="h-7 w-7 p-0 text-blue-500 hover:text-blue-700" title="שכפל פעילות">
-              <Copy className="w-3.5 h-3.5" />
+        <RoleGate permission="MANAGE_ACTIVITIES">
+          <div className="flex gap-1 shrink-0">
+            <Button size="sm" variant="ghost" onClick={handleStartEdit} className="h-7 w-7 p-0" title="עריכה">
+              <Pencil className="w-3.5 h-3.5" />
             </Button>
-          )}
-          <Button size="sm" variant="ghost" onClick={() => onCancel(item.id)} className="h-7 w-7 p-0 text-red-400 hover:text-red-600" title="בטל">
-            <Trash2 className="w-3.5 h-3.5" />
-          </Button>
-        </div>
+            {onDuplicate && (
+              <Button size="sm" variant="ghost" onClick={() => onDuplicate(item)} className="h-7 w-7 p-0 text-blue-500 hover:text-blue-700" title="שכפל פעילות">
+                <Copy className="w-3.5 h-3.5" />
+              </Button>
+            )}
+            <Button size="sm" variant="ghost" onClick={() => onCancel(item.id)} className="h-7 w-7 p-0 text-red-400 hover:text-red-600" title="בטל">
+              <Trash2 className="w-3.5 h-3.5" />
+            </Button>
+          </div>
+        </RoleGate>
       )}
     </div>
   );

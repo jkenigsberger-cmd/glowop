@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ChevronDown, ChevronUp, AlertTriangle, CheckCircle2, MapPin, Users } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
+import RoleGate from "@/components/RoleGate";
 import { toast } from "sonner";
 import NeighborhoodMapCard from "./NeighborhoodMapCard";
 import NeighborhoodOnlyCard from "./NeighborhoodOnlyCard";
@@ -149,18 +150,20 @@ export default function GroupAllocationCard({
           {status === "confirmed" && (
             <>
               {type === "checkin" && (
-                <div className="flex justify-end">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-7 text-xs gap-1 border-emerald-300 text-emerald-700 hover:bg-emerald-50"
-                    onClick={handleMarkAllReady}
-                    disabled={markingReady}
-                  >
-                    <CheckCircle2 className="w-3 h-3" />
-                    {markingReady ? "מסמן..." : "סמן הכל כמוכן"}
-                  </Button>
-                </div>
+                <RoleGate permission="MARK_TENT_READY">
+                  <div className="flex justify-end">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs gap-1 border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                      onClick={handleMarkAllReady}
+                      disabled={markingReady}
+                    >
+                      <CheckCircle2 className="w-3 h-3" />
+                      {markingReady ? "מסמן..." : "סמן הכל כמוכן"}
+                    </Button>
+                  </div>
+                </RoleGate>
               )}
               <ConfirmedTenatils
                 allocations={allocations}

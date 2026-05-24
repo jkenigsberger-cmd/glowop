@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Pencil, Trash2, Check, X, ChevronDown, ChevronUp } from "lucide-react";
+import RoleGate from "@/components/RoleGate";
 
 const MEAL_LABELS = { BREAKFAST: "ארוחת בוקר", LUNCH: "ארוחת צהריים", DINNER: "ארוחת ערב", OTHER: "אחר" };
 
@@ -245,14 +246,16 @@ export default function MealReservationRow({ item, onSave, onCancel, saving }) {
           )}
         </div>
         {item.status !== "CANCELLED" && (
-          <div className="flex gap-1 shrink-0">
-            <Button size="sm" variant="ghost" onClick={() => setEditing(true)} className="h-7 w-7 p-0">
-              <Pencil className="w-3.5 h-3.5" />
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => onCancel(item.id)} className="h-7 w-7 p-0 text-red-400 hover:text-red-600">
-              <Trash2 className="w-3.5 h-3.5" />
-            </Button>
-          </div>
+          <RoleGate permission="MANAGE_MEALS">
+            <div className="flex gap-1 shrink-0">
+              <Button size="sm" variant="ghost" onClick={() => setEditing(true)} className="h-7 w-7 p-0">
+                <Pencil className="w-3.5 h-3.5" />
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => onCancel(item.id)} className="h-7 w-7 p-0 text-red-400 hover:text-red-600">
+                <Trash2 className="w-3.5 h-3.5" />
+              </Button>
+            </div>
+          </RoleGate>
         )}
       </div>
     </div>

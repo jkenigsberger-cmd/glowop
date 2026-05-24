@@ -11,6 +11,7 @@ import ScheduleItemRow from "./ScheduleItemRow";
 import MealReservationRow from "./MealReservationRow";
 import QuoteTalksPanel, { extractQuoteTalks } from "./QuoteTalksPanel";
 import DietaryFields, { EMPTY_DIETS, parseDiets, mergeDiets } from "@/components/shared/DietaryFields";
+import RoleGate from "@/components/RoleGate";
 
 const MEAL_LABELS = { BREAKFAST: "ארוחת בוקר", LUNCH: "ארוחת צהריים", DINNER: "ארוחת ערב", OTHER: "אחר" };
 
@@ -481,12 +482,14 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
     <div className="space-y-8" dir="rtl">
 
       {/* Sync button */}
-      <div className="flex justify-end">
-        <Button size="sm" variant="outline" onClick={handleSync} disabled={syncing} className="gap-1.5 text-xs">
-          <RefreshCw className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`} />
-          {syncing ? "מסנכרן..." : "סנכרן מחדש מהשאלון"}
-        </Button>
-      </div>
+      <RoleGate permission="MANAGE_ACTIVITIES">
+        <div className="flex justify-end">
+          <Button size="sm" variant="outline" onClick={handleSync} disabled={syncing} className="gap-1.5 text-xs">
+            <RefreshCw className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`} />
+            {syncing ? "מסנכרן..." : "סנכרן מחדש מהשאלון"}
+          </Button>
+        </div>
+      </RoleGate>
 
       {/* ── Quote Talks Panel ────────────────────────────────────────────────── */}
       {quoteTalks.length > 0 && (
@@ -509,9 +512,11 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
           <h3 className="font-semibold flex items-center gap-2 text-slate-800">
             <CalendarDays className="w-4 h-4" /> לוח פעילויות
           </h3>
-          <Button size="sm" variant="outline" onClick={() => addingSchedule ? resetAddActivityForm() : openActivityForm()} className="gap-1">
-            <Plus className="w-3.5 h-3.5" /> הוסף פעילות
-          </Button>
+          <RoleGate permission="MANAGE_ACTIVITIES">
+            <Button size="sm" variant="outline" onClick={() => addingSchedule ? resetAddActivityForm() : openActivityForm()} className="gap-1">
+              <Plus className="w-3.5 h-3.5" /> הוסף פעילות
+            </Button>
+          </RoleGate>
         </div>
 
         {/* ── Unified Add Activity Form ─────────────────────────────────────── */}
@@ -778,19 +783,21 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
           <h3 className="font-semibold flex items-center gap-2 text-slate-800">
             <UtensilsCrossed className="w-4 h-4" /> ארוחות
           </h3>
-          <Button size="sm" variant="outline" onClick={() => {
-            if (addingMeal) {
-              setAddingMeal(false);
-              setNewMealError(null);
-            } else {
-              setNewMeal(m => ({ ...m, pax: String(defaultMealPax ?? "") }));
-              setNewMealDiets(mergeDiets(parseDiets(profile?.special_diets)));
-              setNewMealError(null);
-              setAddingMeal(true);
-            }
-          }} className="gap-1">
-            <Plus className="w-3.5 h-3.5" /> הוסף ארוחה
-          </Button>
+          <RoleGate permission="MANAGE_MEALS">
+            <Button size="sm" variant="outline" onClick={() => {
+              if (addingMeal) {
+                setAddingMeal(false);
+                setNewMealError(null);
+              } else {
+                setNewMeal(m => ({ ...m, pax: String(defaultMealPax ?? "") }));
+                setNewMealDiets(mergeDiets(parseDiets(profile?.special_diets)));
+                setNewMealError(null);
+                setAddingMeal(true);
+              }
+            }} className="gap-1">
+              <Plus className="w-3.5 h-3.5" /> הוסף ארוחה
+            </Button>
+          </RoleGate>
         </div>
 
         {addingMeal && (
