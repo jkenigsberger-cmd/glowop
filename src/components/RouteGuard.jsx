@@ -2,6 +2,7 @@
  * RouteGuard — wraps a page route and blocks access if the user's role
  * is not permitted to view it. Shows a friendly Hebrew error page instead of crashing.
  */
+import React from "react";
 import { useRoleContext } from "@/lib/RoleContext";
 import { canAccessRoute } from "@/lib/roles";
 import { useLocation } from "react-router-dom";
@@ -10,6 +11,15 @@ import { ShieldOff } from "lucide-react";
 export default function RouteGuard({ children }) {
   const { role, isLoadingRole, roleError } = useRoleContext();
   const { pathname } = useLocation();
+  const [debugEmail, setDebugEmail] = React.useState(null);
+
+  React.useEffect(() => {
+    if (roleError === "not_found") {
+      import("@/api/base44Client").then(({ base44 }) => {
+        base44.auth.me().then(u => setDebugEmail(u?.email || "unknown")).catch(() => setDebugEmail("error fetching email"));
+      });
+    }
+  }, [roleError]);
 
   if (isLoadingRole) return null;
 
@@ -35,6 +45,11 @@ export default function RouteGuard({ children }) {
           <p className="text-muted-foreground text-sm">
             המשתמש שלך אינו רשום במערכת. פנה למנהל לקבלת גישה.
           </p>
+          {debugEmail && (
+            <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-3 py-2 font-mono">
+              DEBUG — logged-in email: {debugEmail}
+            </p>
+          )}
         </div>
       </div>
     );
