@@ -9,6 +9,7 @@ import RoleGate from "@/components/RoleGate";
 import SleepingRequirementsSummary from "./SleepingRequirementsSummary";
 import StudentNeighborhoodPanel from "./StudentNeighborhoodPanel";
 import VipAllocationPanel from "./VipAllocationPanel";
+import AltTentAllocationPanel from "./AltTentAllocationPanel";
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -401,6 +402,19 @@ export default function SleepingAllocationTab({ groupId }) {
           <p className="text-xs text-slate-400 italic">לא הוגדרו דרישות VIP לקבוצה זו.</p>
         </section>
       )}
+
+      {/* ── ALT TENT ALLOCATION ── */}
+      <AltTentAllocationPanel
+        profile={{ ...profile, arrival_date: arrivalDate, departure_date: departureDate }}
+        groupId={groupId}
+        allTents={allTents}
+        neighborhoods={neighborhoods}
+        myAllocations={myAllocations}
+        allConfirmedAllocations={allConfirmedAllocations}
+        arrivalDate={arrivalDate}
+        departureDate={departureDate}
+        onInvalidate={invalidate}
+      />
 
       {/* ── CONFIRMATION PANEL ── */}
       {(() => {

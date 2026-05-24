@@ -1,0 +1,196 @@
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
+
+/**
+ * Saves an "alternative tent" allocation for staff overflow.
+ * This is a regular (non-VIP) tent used when VIP tents are exhausted.
+ *
+ * Marker in notes: __alt_tent__
+ * allocation_type: STAFF  (same as VIP rows — distinguishable via __alt_tent__ marker)
+ *
+ * Overlap rule: arrival_date inclusive, departure_date exclusive.
+ */
+
+function datesOverlap(a1, a2, b1, b2) {
+  if (!a1 || !a2 || !b1 || !b2) return false;
+  return a1 < b2 && b1 < a2;
+}
+
+function isValidDate(str) {
+  if (!str || typeof str !== 'string') return false;
+  return /^\d{4}-\d{2}-\d{2}$/.test(str) && !isNaN(Date.parse(str));
+}
+
+function fail(reasonCode, errorMsg, dbg) {
+  console.error(`[saveAltTentAllocation] FAIL: ${reasonCode} — ${errorMsg}`, JSON.stringify(dbg));
+  return Response.json({ success: false, error: errorMsg, debug: { reasonCode, ...dbg } }, { status: 200 });
+}
+
+const ALT_TENT_MARKER = '__alt_tent__';
+
+Deno.serve(async (req) => {
+  try {
+    const base44 = createClientFromRequest(req);
+
+    let user = null;
+    try {
+      user = await base44.auth.me();
+    } catch (authErr) {
+      console.warn('[saveAltTentAllocation] auth.me() threw (non-fatal):', authErr?.message);
+    }
+    if (!user) {
+      console.warn('[saveAltTentAllocation] no authenticated user — proceeding with service role only');
+    } else {
+      console.log(`[saveAltTentAllocation] user: ${user.email} role: ${user.role}`);
+    }
+
+    let body;
+    try {
+      body = await req.json();
+    } catch (parseErr) {
+      return Response.json({ success: false, error: 'חסרים פרטי שיבוץ', debug: { reasonCode: 'BODY_PARSE_ERROR', message: parseErr?.message } }, { status: 400 });
+    }
+
+    const {
+      allocation_id,           // string | null — if editing an existing row
+      group_id,
+      operational_group_profile_id,
+      tent_id,
+      gender_group,            // MEN | WOMEN | MIXED
+      allocated_pax,
+      notes,
+    } = body;
+
+    const dbg = { group_id, operational_group_profile_id, tent_id, gender_group, allocated_pax, allocation_id };
+
+    // ── 1. Input validation ─────────────────────────────────────────────────
+    if (!group_id || !operational_group_profile_id || !tent_id) {
+      return fail('MISSING_INPUT', 'חסרים פרטי שיבוץ', dbg);
+    }
+    if (!gender_group || !['MEN', 'WOMEN', 'MIXED'].includes(gender_group)) {
+      return fail('INVALID_GENDER', 'יש לבחור מגדר', dbg);
+    }
+    const pax = Number(allocated_pax);
+    if (!pax || pax < 1) {
+      return fail('INVALID_PAX', 'יש להזין מספר אנשים לאוהל חילופי', dbg);
+    }
+
+    // ── 2. Load & validate tent ─────────────────────────────────────────────
+    const tents = await base44.asServiceRole.entities.Tent.filter({ id: tent_id });
+    const tent  = tents[0] || null;
+    if (!tent) return fail('TENT_NOT_FOUND', 'האוהל לא נמצא במערכת', dbg);
+
+    dbg.tent_code    = tent.code;
+    dbg.tent_type    = tent.tent_type;
+    dbg.tent_capacity = tent.capacity;
+
+    // Alternative tent must NOT be a VIP tent
+    if (tent.tent_type === 'VIP') {
+      return fail('TENT_IS_VIP', 'אוהל חילופי חייב להיות אוהל רגיל, לא VIP', dbg);
+    }
+    if (tent.working_status !== 'WORKING') {
+      return fail('TENT_NOT_WORKING', 'האוהל אינו זמין לשימוש', dbg);
+    }
+
+    // For alternative (regular) tents: enforce real capacity
+    if (pax > (tent.capacity || 999)) {
+      return fail('PAX_EXCEEDS_CAPACITY', 'מספר האנשים גדול מקיבולת האוהל', dbg);
+    }
+
+    // ── 3. Load neighborhood ────────────────────────────────────────────────
+    const hoods        = await base44.asServiceRole.entities.Neighborhood.filter({ id: tent.neighborhood_id });
+    const neighborhood = hoods[0] || null;
+    if (!neighborhood) return fail('NEIGHBORHOOD_NOT_FOUND', 'שכונת האוהל לא נמצאה', dbg);
+
+    // ── 4. Load profile → dates ─────────────────────────────────────────────
+    const profiles = await base44.asServiceRole.entities.OperationalGroupProfile.filter({ id: operational_group_profile_id });
+    const profile  = profiles[0] || null;
+    if (!profile || profile.group_id !== group_id) {
+      return fail('PROFILE_NOT_FOUND', 'חסרים פרטי קבוצה או פרופיל תפעולי', dbg);
+    }
+
+    let arrival_date   = profile.arrival_date   || null;
+    let departure_date = profile.departure_date || null;
+    if (!arrival_date || !departure_date) {
+      const groups = await base44.asServiceRole.entities.Group.filter({ id: group_id });
+      const group  = groups[0];
+      arrival_date   = arrival_date   || group?.arrival_date   || null;
+      departure_date = departure_date || group?.departure_date || null;
+    }
+
+    if (!arrival_date || !departure_date) return fail('DATES_MISSING', 'חסרים תאריכי הגעה/עזיבה', dbg);
+    if (!isValidDate(arrival_date) || !isValidDate(departure_date)) return fail('DATES_INVALID', 'תאריכי השיבוץ אינם תקינים', dbg);
+    if (departure_date <= arrival_date) return fail('DATES_ORDER', 'תאריך עזיבה חייב להיות אחרי תאריך הגעה', dbg);
+
+    dbg.arrival_date   = arrival_date;
+    dbg.departure_date = departure_date;
+
+    // ── 5. Conflict check — other groups ────────────────────────────────────
+    const allForTent = await base44.asServiceRole.entities.SleepingAllocation.filter({ tent_id });
+    const conflicting = allForTent.filter(a =>
+      a.status !== 'CANCELLED' &&
+      a.id !== allocation_id &&
+      a.group_id !== group_id &&
+      datesOverlap(arrival_date, departure_date, a.arrival_date, a.departure_date)
+    );
+
+    if (conflicting.length > 0) {
+      const conflict = conflicting[0];
+      let conflictGroupName = conflict.group_id;
+      try {
+        const cgs = await base44.asServiceRole.entities.Group.filter({ id: conflict.group_id });
+        conflictGroupName = cgs[0]?.group_name || conflict.group_id;
+      } catch (_) { /* non-fatal */ }
+      return fail('TENT_CONFLICT',
+        `האוהל כבר משובץ לקבוצה אחרת (${conflictGroupName}) בתאריכים ${conflict.arrival_date} — ${conflict.departure_date}`,
+        dbg
+      );
+    }
+
+    // ── 6. Stale-row check — same group already has an alt tent row ─────────
+    const groupAllocs = await base44.asServiceRole.entities.SleepingAllocation.filter({ group_id });
+    const staleRow = groupAllocs.find(a =>
+      a.status !== 'CANCELLED' &&
+      a.id !== allocation_id &&
+      (a.notes || '').includes(ALT_TENT_MARKER)
+    );
+    console.log('[saveAltTentAllocation] staleRow:', staleRow ? `id=${staleRow.id}` : 'none');
+
+    // ── 7. Build & persist ──────────────────────────────────────────────────
+    const cleanNotes   = (notes || '').replace(/__alt_tent__\s*/g, '').trim();
+    const savePayload  = {
+      tent_id,
+      neighborhood_id:               neighborhood.id,
+      group_id,
+      operational_group_profile_id,
+      arrival_date,
+      departure_date,
+      allocated_pax:                 pax,
+      allocation_type:               'STAFF',
+      gender_group,
+      notes:                         `${ALT_TENT_MARKER}${cleanNotes ? ' ' + cleanNotes : ''}`.trim(),
+      status:                        'DRAFT',
+    };
+
+    let savedId;
+    if (allocation_id) {
+      await base44.asServiceRole.entities.SleepingAllocation.update(allocation_id, savePayload);
+      savedId = allocation_id;
+      if (staleRow && staleRow.id !== allocation_id) {
+        await base44.asServiceRole.entities.SleepingAllocation.delete(staleRow.id);
+      }
+    } else if (staleRow) {
+      await base44.asServiceRole.entities.SleepingAllocation.update(staleRow.id, savePayload);
+      savedId = staleRow.id;
+    } else {
+      const created = await base44.asServiceRole.entities.SleepingAllocation.create(savePayload);
+      savedId = created.id;
+    }
+
+    console.log(`[saveAltTentAllocation] SUCCESS: allocation ${savedId} tent ${tent.code}`);
+    return Response.json({ success: true, allocation_id: savedId, tent_code: tent.code, message: `אוהל ${tent.code} שויך בהצלחה כאוהל חילופי` });
+
+  } catch (unexpectedErr) {
+    console.error('[saveAltTentAllocation] UNEXPECTED_EXCEPTION:', unexpectedErr?.message, unexpectedErr?.stack);
+    return Response.json({ success: false, error: 'שגיאה פנימית בשמירת אוהל חילופי', debug: { reasonCode: 'UNEXPECTED_EXCEPTION', message: unexpectedErr?.message } }, { status: 500 });
+  }
+});
