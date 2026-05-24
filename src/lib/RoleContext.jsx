@@ -35,14 +35,43 @@ export function RoleProvider({ children }) {
 
   const loadRole = async (email) => {
     setIsLoadingRole(true);
+    const normalizedEmail = email.trim().toLowerCase();
+    console.log("[ROLE DEBUG] auth user email:", normalizedEmail);
     try {
-      const results = await base44.entities.InternalUser.filter({ email });
+      // Try exact match first, then case-insensitive scan
+      let results = await base44.entities.InternalUser.filter({ email: normalizedEmail });
       if (!results || results.length === 0) {
-        setRoleError("not_found");
-        setRole(null);
-        setInternalUser(null);
+        // Fallback: load all and match case-insensitively
+        const all = await base44.entities.InternalUser.list();
+        results = all.filter(u => u.email && u.email.trim().toLowerCase() === normalizedEmail);
+      }
+
+      if (!results || results.length === 0) {
+        // Emergency fallback: if NO InternalUser records exist at all, auto-promote current user
+        const allUsers = await base44.entities.InternalUser.list();
+        console.log("[ROLE DEBUG] InternalUser count:", allUsers.length);
+        if (allUsers.length === 0) {
+          console.log("[ROLE DEBUG] Empty InternalUser table — auto-creating SUPER_ADMIN for:", normalizedEmail);
+          const authUser = await base44.auth.me();
+          const created = await base44.entities.InternalUser.create({
+            email: normalizedEmail,
+            name: authUser?.full_name || normalizedEmail,
+            role: "SUPER_ADMIN",
+            active: true,
+            notes: "Auto-created on first setup",
+          });
+          setRoleError(null);
+          setRole("SUPER_ADMIN");
+          setInternalUser(created);
+        } else {
+          console.log("[ROLE DEBUG] not_found for email:", normalizedEmail);
+          setRoleError("not_found");
+          setRole(null);
+          setInternalUser(null);
+        }
       } else {
         const iu = results[0];
+        console.log("[ROLE DEBUG] found InternalUser:", iu.email, "role:", iu.role, "active:", iu.active);
         if (!iu.active) {
           setRoleError("inactive");
           setRole(null);
