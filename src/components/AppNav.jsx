@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, CheckSquare, CalendarDays, BedDouble,
-  UtensilsCrossed, Wrench, ShieldAlert, Layers, Lock, Menu, X, Users, ChevronDown
+  UtensilsCrossed, Wrench, ShieldAlert, Layers, Lock, Menu, X, Users
 } from "lucide-react";
 import { revokeAccess } from "@/components/PilotAccessGate";
 import { useRoleContext } from "@/lib/RoleContext";
@@ -33,8 +33,6 @@ const PAGE_TITLES = {
   "/admin/users":     "ניהול משתמשים",
 };
 
-// How many nav links to show inline before collapsing rest into "עוד"
-const MAX_VISIBLE = 5;
 
 function isActive(linkTo, pathname) {
   return linkTo === "/" ? pathname === "/" : pathname === linkTo || pathname.startsWith(linkTo + "/");
@@ -82,7 +80,6 @@ function DrawerNavLink({ to, label, icon: Icon, pathname, onClick }) {
 export default function AppNav() {
   const { pathname } = useLocation();
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [moreOpen, setMoreOpen] = useState(false);
   const { role, internalUser } = useRoleContext();
 
   const currentTitle = Object.entries(PAGE_TITLES).find(([path]) =>
@@ -95,12 +92,6 @@ export default function AppNav() {
   const visibleLinks = ALL_LINKS.filter(l => allowedKeys.includes(l.key));
   const showAdmin = allowedKeys.includes("admin");
   const showUserManagement = role === "SUPER_ADMIN";
-
-  // Split into primary (always visible) and overflow ("עוד" dropdown)
-  const primaryLinks = visibleLinks.slice(0, MAX_VISIBLE);
-  const overflowLinks = visibleLinks.slice(MAX_VISIBLE);
-  const hasOverflow = overflowLinks.length > 0;
-  const overflowActive = overflowLinks.some(l => isActive(l.to, pathname));
 
   const userName = internalUser?.name || "";
   const roleLabel = ROLE_LABELS[role] || role || "";
@@ -137,54 +128,9 @@ export default function AppNav() {
 
         {/* Nav tabs row */}
         <div className="max-w-6xl mx-auto px-4 sm:px-6 flex items-center gap-0.5 h-10">
-          {primaryLinks.map(link => (
+          {visibleLinks.map(link => (
             <NavTab key={link.to} {...link} pathname={pathname} />
           ))}
-
-          {/* "עוד" dropdown for overflow links */}
-          {hasOverflow && (
-            <div className="relative">
-              <button
-                onClick={() => setMoreOpen(v => !v)}
-                className={`relative flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium whitespace-nowrap transition-all rounded-md ${
-                  overflowActive
-                    ? "text-primary bg-primary/8 font-semibold"
-                    : "text-slate-500 hover:text-slate-800 hover:bg-slate-100"
-                }`}
-              >
-                עוד
-                <ChevronDown className="w-3 h-3" />
-                {overflowActive && (
-                  <span className="absolute bottom-0 right-2 left-2 h-0.5 bg-primary rounded-full" />
-                )}
-              </button>
-              {moreOpen && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setMoreOpen(false)} />
-                  <div className="absolute top-full mt-1 right-0 z-50 bg-white border border-slate-200 rounded-xl shadow-lg py-1 min-w-[160px]">
-                    {overflowLinks.map(link => {
-                      const active = isActive(link.to, pathname);
-                      return (
-                        <Link
-                          key={link.to}
-                          to={link.to}
-                          onClick={() => setMoreOpen(false)}
-                          className={`flex items-center gap-2.5 px-4 py-2.5 text-sm font-medium transition-colors ${
-                            active
-                              ? "text-primary bg-primary/8"
-                              : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                          }`}
-                        >
-                          <link.icon className="w-4 h-4 shrink-0" />
-                          {link.label}
-                        </Link>
-                      );
-                    })}
-                  </div>
-                </>
-              )}
-            </div>
-          )}
 
           {/* Spacer */}
           <div className="flex-1" />
