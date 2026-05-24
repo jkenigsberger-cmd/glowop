@@ -161,7 +161,11 @@ export default function SleepingRequirementsTab({ groupId, profile }) {
         boys_tent_distribution_json:  JSON.stringify(boysDist),
         girls_tent_distribution_json: JSON.stringify(girlsDist),
         vip_tent_requirements_json:   JSON.stringify(vipRows),
-        staff_alt_tent_pax:   saveForm.staff_alt_tent_pax ?? null,
+        staff_alt_tent_pax:   (() => {
+          const raw = saveForm.staff_alt_tent_pax;
+          if (raw == null || raw === "" || isNaN(Number(raw))) return null;
+          return Math.max(0, Math.floor(Number(raw)));
+        })(),
         staff_alt_tent_notes: saveForm.staff_alt_tent_notes ?? "",
       };
       if (markComplete !== null) payload.sleeping_requirements_completed = markComplete;
