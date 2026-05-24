@@ -226,7 +226,7 @@ export default function AppNav() {
         <div className="flex items-center justify-between px-2 h-14">
           <button
             onClick={() => setDrawerOpen(true)}
-            className="flex items-center justify-center w-11 h-11 rounded-xl text-slate-600 hover:bg-slate-100 active:bg-slate-200 transition-colors touch-manipulation"
+            className="flex items-center justify-center w-12 h-12 -mx-1 rounded-xl text-slate-600 hover:bg-slate-100 active:bg-slate-200 transition-colors touch-manipulation"
             aria-label="פתח תפריט"
           >
             <Menu className="w-5 h-5" />
@@ -236,7 +236,7 @@ export default function AppNav() {
           </div>
           <button
             onClick={() => { revokeAccess(); window.location.reload(); }}
-            className="flex items-center justify-center w-11 h-11 rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-50 active:bg-red-100 transition-colors touch-manipulation"
+            className="flex items-center justify-center w-12 h-12 -mx-1 rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-50 active:bg-red-100 transition-colors touch-manipulation"
             aria-label="נעילה"
           >
             <Lock className="w-4 h-4" />
