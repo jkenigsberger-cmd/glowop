@@ -26,6 +26,9 @@ export function RoleProvider({ children }) {
     if (isLoadingAuth) return;
 
     if (!isAuthenticated || !user?.email) {
+      // Not authenticated — stop loading, don't call backend
+      setRole(null);
+      setRoleError(null);
       setIsLoadingRole(false);
       return;
     }

@@ -1,29 +1,59 @@
 /**
- * RouteGuard — wraps a page route and blocks access if the user's role
- * is not permitted to view it. Shows a friendly Hebrew error page instead of crashing.
+ * RouteGuard — wraps a page route and blocks access based on auth + role.
+ * Flow: loading → not authenticated (show login) → role check → allow
  */
-import React from "react";
 import { useRoleContext } from "@/lib/RoleContext";
+import { useAuth } from "@/lib/AuthContext";
 import { canAccessRoute } from "@/lib/roles";
 import { useLocation } from "react-router-dom";
-import { ShieldOff } from "lucide-react";
+import { ShieldOff, LogIn, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { base44 } from "@/api/base44Client";
 
 export default function RouteGuard({ children }) {
   const { role, isLoadingRole, roleError } = useRoleContext();
+  const { isAuthenticated, isLoadingAuth, user } = useAuth();
   const { pathname } = useLocation();
-  const [debugEmail, setDebugEmail] = React.useState(null);
 
-  React.useEffect(() => {
-    if (roleError === "not_found") {
-      import("@/api/base44Client").then(({ base44 }) => {
-        base44.auth.me().then(u => setDebugEmail(u?.email || "unknown")).catch(() => setDebugEmail("error fetching email"));
-      });
-    }
-  }, [roleError]);
+  // 1. Still loading auth or role
+  if (isLoadingAuth || isLoadingRole) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
-  if (isLoadingRole) return null;
+  // 2. Not authenticated — show login screen
+  if (!isAuthenticated || !user?.email) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center" dir="rtl">
+        <div className="text-center space-y-5 max-w-sm">
+          <div className="flex justify-center">
+            <div className="bg-primary/10 rounded-full p-4">
+              <LogIn className="w-8 h-8 text-primary" />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <h1 className="text-xl font-bold text-foreground">כניסה למערכת</h1>
+            <p className="text-muted-foreground text-sm">יש להתחבר עם משתמש מורשה כדי להמשיך</p>
+          </div>
+          <Button
+            className="w-full gap-2"
+            onClick={() => base44.auth.redirectToLogin(window.location.href)}
+          >
+            <LogIn className="w-4 h-4" />
+            התחבר למערכת
+          </Button>
+          <p className="text-xs text-muted-foreground font-mono">
+            מצב: לא מחובר
+          </p>
+        </div>
+      </div>
+    );
+  }
 
-  // Role error states
+  // 3. Authenticated but inactive user
   if (roleError === "inactive") {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center" dir="rtl">
@@ -31,11 +61,13 @@ export default function RouteGuard({ children }) {
           <ShieldOff className="w-12 h-12 text-amber-500 mx-auto" />
           <h1 className="text-xl font-bold text-foreground">המשתמש אינו פעיל</h1>
           <p className="text-muted-foreground text-sm">חשבונך הושבת. פנה למנהל המערכת.</p>
+          <p className="text-xs text-muted-foreground font-mono">{user.email}</p>
         </div>
       </div>
     );
   }
 
+  // 4. Authenticated but not found in InternalUser
   if (roleError === "not_found" || !role) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center" dir="rtl">
@@ -45,16 +77,15 @@ export default function RouteGuard({ children }) {
           <p className="text-muted-foreground text-sm">
             המשתמש שלך אינו רשום במערכת. פנה למנהל לקבלת גישה.
           </p>
-          {debugEmail && (
-            <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-3 py-2 font-mono">
-              DEBUG — logged-in email: {debugEmail}
-            </p>
-          )}
+          <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-3 py-2 font-mono">
+            מחובר כ: {user.email}
+          </p>
         </div>
       </div>
     );
   }
 
+  // 5. Authenticated + has role, but can't access this route
   if (!canAccessRoute(role, pathname)) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center" dir="rtl">
