@@ -223,10 +223,10 @@ export default function AppNav() {
 
       {/* ── Mobile top bar ───────────────────────────────────────────────────── */}
       <div className="sm:hidden sticky top-0 z-40 bg-white border-b border-slate-200 shadow-sm" dir="rtl">
-        <div className="flex items-center justify-between px-4 h-13">
+        <div className="flex items-center justify-between px-2 h-14">
           <button
             onClick={() => setDrawerOpen(true)}
-            className="flex items-center justify-center w-9 h-9 rounded-lg text-slate-600 hover:bg-slate-100 transition-colors"
+            className="flex items-center justify-center w-11 h-11 rounded-xl text-slate-600 hover:bg-slate-100 active:bg-slate-200 transition-colors touch-manipulation"
             aria-label="פתח תפריט"
           >
             <Menu className="w-5 h-5" />
@@ -236,7 +236,7 @@ export default function AppNav() {
           </div>
           <button
             onClick={() => { revokeAccess(); window.location.reload(); }}
-            className="flex items-center justify-center w-9 h-9 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+            className="flex items-center justify-center w-11 h-11 rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-50 active:bg-red-100 transition-colors touch-manipulation"
             aria-label="נעילה"
           >
             <Lock className="w-4 h-4" />
@@ -261,9 +261,9 @@ export default function AppNav() {
               </div>
               <button
                 onClick={closeDrawer}
-                className="flex items-center justify-center w-8 h-8 rounded-lg text-slate-400 hover:bg-slate-100"
+                className="flex items-center justify-center w-11 h-11 rounded-xl text-slate-400 hover:bg-slate-100 active:bg-slate-200 transition-colors touch-manipulation"
               >
-                <X className="w-4 h-4" />
+                <X className="w-5 h-5" />
               </button>
             </div>
 
