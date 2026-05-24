@@ -1,0 +1,42 @@
+{
+  "name": "InternalUser",
+  "type": "object",
+  "properties": {
+    "email": {
+      "type": "string",
+      "description": "User email \u2014 must match base44 auth email"
+    },
+    "name": {
+      "type": "string",
+      "description": "Display name"
+    },
+    "role": {
+      "type": "string",
+      "enum": [
+        "SUPER_ADMIN",
+        "ADMIN",
+        "OPERATIONS",
+        "HOUSEKEEPING_MANAGER",
+        "HOUSEKEEPING_STAFF",
+        "KITCHEN",
+        "VIEWER"
+      ],
+      "default": "VIEWER"
+    },
+    "active": {
+      "type": "boolean",
+      "default": true
+    },
+    "phone": {
+      "type": "string"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "email",
+    "role",
+    "active"
+  ]
+}

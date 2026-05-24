@@ -6,6 +6,8 @@ import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import AppNav from './components/AppNav';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
+import { RoleProvider } from '@/lib/RoleContext';
+import RouteGuard from '@/components/RouteGuard';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import PilotAccessGate, { checkAccess, revokeAccess } from "@/components/PilotAccessGate";
 // Add page imports here
@@ -24,6 +26,7 @@ import Allocation from "./pages/Allocation.jsx";
 import CommonSpaces from "./pages/CommonSpaces.jsx";
 import OperationalSummaryPrint from "./pages/OperationalSummaryPrint.jsx";
 import DailyOperationalPrint from "./pages/DailyOperationalPrint.jsx";
+import UserManagement from "./pages/UserManagement.jsx";
 
 const AuthenticatedApp = () => {
   const [accessGranted, setAccessGranted] = useState(checkAccess());
@@ -55,28 +58,29 @@ const AuthenticatedApp = () => {
 
   // Render the main app
   return (
-    <>
+    <RoleProvider>
       <AppNav />
       <Routes>
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/inventory" element={<Inventory />} />
-        <Route path="/groups" element={<Groups />} />
-        <Route path="/groups/:id" element={<GroupDetail />} />
-        <Route path="/groups/:id/operational-summary-print" element={<OperationalSummaryPrint />} />
-        <Route path="/daily-print" element={<DailyOperationalPrint />} />
-        <Route path="/approved-groups" element={<ApprovedGroups />} />
-        <Route path="/admin" element={<Admin />} />
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/calendar" element={<Calendar />} />
-        <Route path="/housekeeping" element={<Housekeeping />} />
-        <Route path="/kitchen" element={<Kitchen />} />
-        <Route path="/maintenance" element={<Maintenance />} />
-        <Route path="/allocation" element={<Allocation />} />
-        <Route path="/common-spaces" element={<CommonSpaces />} />
+        <Route path="/" element={<RouteGuard><Dashboard /></RouteGuard>} />
+        <Route path="/inventory" element={<RouteGuard><Inventory /></RouteGuard>} />
+        <Route path="/groups" element={<RouteGuard><Groups /></RouteGuard>} />
+        <Route path="/groups/:id" element={<RouteGuard><GroupDetail /></RouteGuard>} />
+        <Route path="/groups/:id/operational-summary-print" element={<RouteGuard><OperationalSummaryPrint /></RouteGuard>} />
+        <Route path="/daily-print" element={<RouteGuard><DailyOperationalPrint /></RouteGuard>} />
+        <Route path="/approved-groups" element={<RouteGuard><ApprovedGroups /></RouteGuard>} />
+        <Route path="/admin" element={<RouteGuard><Admin /></RouteGuard>} />
+        <Route path="/admin/users" element={<RouteGuard><UserManagement /></RouteGuard>} />
+        <Route path="/dashboard" element={<RouteGuard><Dashboard /></RouteGuard>} />
+        <Route path="/calendar" element={<RouteGuard><Calendar /></RouteGuard>} />
+        <Route path="/housekeeping" element={<RouteGuard><Housekeeping /></RouteGuard>} />
+        <Route path="/kitchen" element={<RouteGuard><Kitchen /></RouteGuard>} />
+        <Route path="/maintenance" element={<RouteGuard><Maintenance /></RouteGuard>} />
+        <Route path="/allocation" element={<RouteGuard><Allocation /></RouteGuard>} />
+        <Route path="/common-spaces" element={<RouteGuard><CommonSpaces /></RouteGuard>} />
         {/* Add your page Route elements here */}
         <Route path="*" element={<PageNotFound />} />
       </Routes>
-    </>
+    </RoleProvider>
   );
 };
 

@@ -1,9 +1,10 @@
 import { Link } from "react-router-dom";
 import {
   Users, FileText, ClipboardList, Boxes, Settings,
-  TrendingUp, ChevronLeft, ShieldAlert
+  TrendingUp, ChevronLeft, ShieldAlert, UserCog
 } from "lucide-react";
 import OrphanCleanupPanel from "@/components/admin/OrphanCleanupPanel";
+import { useRoleContext } from "@/lib/RoleContext";
 
 const ADMIN_TILES = [
   {
@@ -49,6 +50,7 @@ const ADMIN_TILES = [
 ];
 
 export default function Admin() {
+  const { role } = useRoleContext();
   return (
     <div className="min-h-screen bg-slate-900" dir="rtl">
       {/* Header — dark, distinct from ops */}
@@ -98,8 +100,25 @@ export default function Admin() {
           <OrphanCleanupPanel />
         </div>
 
+        {role === "SUPER_ADMIN" && (
+          <div className="mt-6">
+            <Link
+              to="/admin/users"
+              className="flex items-center gap-4 border rounded-xl px-5 py-4 transition-colors bg-red-50 border-red-200 hover:bg-red-100"
+            >
+              <div className="shrink-0 text-red-600">
+                <UserCog className="w-6 h-6" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-sm text-slate-800">ניהול משתמשים</p>
+                <p className="text-xs text-slate-500 mt-0.5">הוסף, ערוך והשבת משתמשים — SUPER_ADMIN בלבד</p>
+              </div>
+              <ChevronLeft className="w-4 h-4 text-slate-400 shrink-0" />
+            </Link>
+          </div>
+        )}
         <p className="text-center text-xs text-slate-600 mt-8">
-          הרשאות מלאות יתווספו בעתיד — כרגע גישה פתוחה למנהלים רשומים
+          גישה לפי תפקיד — מערכת הרשאות פעילה
         </p>
       </div>
     </div>
