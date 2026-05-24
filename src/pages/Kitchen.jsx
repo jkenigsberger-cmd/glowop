@@ -206,20 +206,38 @@ export default function Kitchen() {
             </div>
 
             {/* Meals grouped by type */}
-            {Object.entries(mealsByType).map(([mealType, meals]) => (
-              <section key={mealType}>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  {meals.map(meal => (
-                    <KitchenMealCard
-                      key={meal.id}
-                      meal={meal}
-                      group={groupMap[meal.group_id]}
-                      profile={profileMap[meal.group_id]}
-                    />
-                  ))}
-                </div>
-              </section>
-            ))}
+            {Object.entries(mealsByType).map(([mealType, mealsInGroup]) => {
+              const MEAL_TYPE_HEB = { BREAKFAST: "ארוחת בוקר", LUNCH: "ארוחת צהריים", DINNER: "ארוחת ערב", OTHER: "אחר" };
+              const MEAL_TYPE_COLORS = {
+                BREAKFAST: "bg-amber-100 text-amber-800 border-amber-200",
+                LUNCH:     "bg-green-100 text-green-800 border-green-200",
+                DINNER:    "bg-blue-100 text-blue-800 border-blue-200",
+                OTHER:     "bg-slate-100 text-slate-700 border-slate-200",
+              };
+              const totalPaxForType = mealsInGroup.reduce((s, m) => s + (Number(m.pax) || 0), 0);
+              return (
+                <section key={mealType} className="space-y-3">
+                  <div className={`flex items-center justify-between rounded-xl border px-4 py-2.5 ${MEAL_TYPE_COLORS[mealType] || MEAL_TYPE_COLORS.OTHER}`}>
+                    <h2 className="font-bold text-base">{MEAL_TYPE_HEB[mealType] || mealType}</h2>
+                    <div className="flex items-center gap-3 text-sm font-medium">
+                      <span>{mealsInGroup.length} קבוצות</span>
+                      <span className="opacity-60">·</span>
+                      <span>{totalPaxForType} מנות</span>
+                    </div>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    {mealsInGroup.map(meal => (
+                      <KitchenMealCard
+                        key={meal.id}
+                        meal={meal}
+                        group={groupMap[meal.group_id]}
+                        profile={profileMap[meal.group_id]}
+                      />
+                    ))}
+                  </div>
+                </section>
+              );
+            })}
           </>
         )}
       </div>

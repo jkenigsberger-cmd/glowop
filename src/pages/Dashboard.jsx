@@ -11,6 +11,7 @@ import DashboardActivitiesToday from "@/components/dashboard/DashboardActivities
 import DashboardQuickLinks from "@/components/dashboard/DashboardQuickLinks";
 import { Button } from "@/components/ui/button";
 import { FileText, ChevronRight, ChevronLeft } from "lucide-react";
+import { useRoleContext } from "@/lib/RoleContext";
 
 const toDateStr = (date) => format(date, "yyyy-MM-dd");
 const TODAY = toDateStr(new Date());
@@ -26,11 +27,8 @@ function Section({ title, children }) {
 
 function PaxDebugPanel({ activeGroups, profileByGroupId }) {
   const [open, setOpen] = useState(false);
-  const { data: user } = useQuery({
-    queryKey: ["me"],
-    queryFn: () => base44.auth.me(),
-  });
-  if (user?.role !== "admin") return null;
+  const { role } = useRoleContext();
+  if (role !== "SUPER_ADMIN" && role !== "ADMIN") return null;
   return (
     <div className="bg-amber-50 border border-amber-300 rounded-xl p-3 text-xs" dir="rtl">
       <button
@@ -282,30 +280,33 @@ export default function Dashboard() {
         </div>
 
         {/* Date navigation */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <Button size="sm" variant="outline" onClick={() => shiftDate(-1)} className="gap-1">
-            <ChevronRight className="w-4 h-4" /> יום קודם
-          </Button>
-          <Button
-            size="sm"
-            variant={isToday ? "default" : "outline"}
-            onClick={() => setSelectedDate(TODAY)}
-          >
-            היום
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => shiftDate(1)} className="gap-1">
-            יום הבא <ChevronLeft className="w-4 h-4" />
-          </Button>
+        <div className="space-y-2 sm:space-y-0 sm:flex sm:items-center sm:gap-2 sm:flex-wrap">
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" onClick={() => shiftDate(-1)} className="gap-1 flex-1 sm:flex-none h-9">
+              <ChevronRight className="w-4 h-4" /> יום קודם
+            </Button>
+            <Button
+              size="sm"
+              variant={isToday ? "default" : "outline"}
+              onClick={() => setSelectedDate(TODAY)}
+              className="h-9 px-4"
+            >
+              היום
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => shiftDate(1)} className="gap-1 flex-1 sm:flex-none h-9">
+              יום הבא <ChevronLeft className="w-4 h-4" />
+            </Button>
+          </div>
           <input
             type="date"
             value={selectedDate}
             onChange={e => e.target.value && setSelectedDate(e.target.value)}
-            className="border border-input bg-transparent rounded-md px-3 py-1.5 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+            className="w-full sm:w-auto border border-input bg-transparent rounded-md px-3 py-1.5 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
           />
         </div>
 
         {/* Summary cards */}
-        <DashboardSummaryCards stats={stats} />
+        <DashboardSummaryCards stats={stats} isToday={isToday} />
 
         {/* Admin pax debug panel */}
         <PaxDebugPanel activeGroups={activeGroups} profileByGroupId={profileByGroupId} />
