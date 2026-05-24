@@ -127,7 +127,7 @@ export default function AppNav() {
         </div>
 
         {/* Nav tabs row */}
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 flex items-center gap-0.5 h-10">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 flex items-center gap-0.5 h-10 overflow-x-auto">
           {visibleLinks.map(link => (
             <NavTab key={link.to} {...link} pathname={pathname} />
           ))}
