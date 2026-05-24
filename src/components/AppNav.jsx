@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, CheckSquare, CalendarDays, BedDouble,
-  UtensilsCrossed, Wrench, ShieldAlert, Layers, Lock, Menu, X, Users
+  UtensilsCrossed, Wrench, ShieldAlert, Layers, Lock, Menu, X, Users, ChevronDown
 } from "lucide-react";
 import { revokeAccess } from "@/components/PilotAccessGate";
 import { useRoleContext } from "@/lib/RoleContext";
@@ -33,24 +33,30 @@ const PAGE_TITLES = {
   "/admin/users":     "ניהול משתמשים",
 };
 
+// How many nav links to show inline before collapsing rest into "עוד"
+const MAX_VISIBLE = 5;
+
 function isActive(linkTo, pathname) {
   return linkTo === "/" ? pathname === "/" : pathname === linkTo || pathname.startsWith(linkTo + "/");
 }
 
-function NavLink({ to, label, icon: Icon, pathname, onClick }) {
+function NavTab({ to, label, icon: Icon, pathname, onClick }) {
   const active = isActive(to, pathname);
   return (
     <Link
       to={to}
       onClick={onClick}
-      className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-sm font-medium whitespace-nowrap transition-colors ${
+      className={`relative flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium whitespace-nowrap transition-all duration-150 rounded-md ${
         active
-          ? "bg-primary text-primary-foreground"
-          : "text-muted-foreground hover:text-foreground hover:bg-muted"
+          ? "text-primary bg-primary/8 font-semibold"
+          : "text-slate-500 hover:text-slate-800 hover:bg-slate-100"
       }`}
     >
       <Icon className="w-3.5 h-3.5 shrink-0" />
       {label}
+      {active && (
+        <span className="absolute bottom-0 right-2 left-2 h-0.5 bg-primary rounded-full" />
+      )}
     </Link>
   );
 }
@@ -61,13 +67,13 @@ function DrawerNavLink({ to, label, icon: Icon, pathname, onClick }) {
     <Link
       to={to}
       onClick={onClick}
-      className={`flex items-center gap-3 px-4 py-3.5 rounded-xl text-base font-medium transition-colors ${
+      className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
         active
-          ? "bg-primary text-primary-foreground"
-          : "text-slate-700 hover:bg-slate-100"
+          ? "bg-primary/10 text-primary font-semibold"
+          : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
       }`}
     >
-      <Icon className="w-5 h-5 shrink-0" />
+      <Icon className="w-4.5 h-4.5 shrink-0" />
       {label}
     </Link>
   );
@@ -76,6 +82,7 @@ function DrawerNavLink({ to, label, icon: Icon, pathname, onClick }) {
 export default function AppNav() {
   const { pathname } = useLocation();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const { role, internalUser } = useRoleContext();
 
   const currentTitle = Object.entries(PAGE_TITLES).find(([path]) =>
@@ -84,45 +91,113 @@ export default function AppNav() {
 
   const closeDrawer = () => setDrawerOpen(false);
 
-  // Filter visible links based on role
   const allowedKeys = role ? (ROLE_NAV_LINKS[role] || []) : [];
   const visibleLinks = ALL_LINKS.filter(l => allowedKeys.includes(l.key));
   const showAdmin = allowedKeys.includes("admin");
   const showUserManagement = role === "SUPER_ADMIN";
 
+  // Split into primary (always visible) and overflow ("עוד" dropdown)
+  const primaryLinks = visibleLinks.slice(0, MAX_VISIBLE);
+  const overflowLinks = visibleLinks.slice(MAX_VISIBLE);
+  const hasOverflow = overflowLinks.length > 0;
+  const overflowActive = overflowLinks.some(l => isActive(l.to, pathname));
+
+  const userName = internalUser?.name || "";
+  const roleLabel = ROLE_LABELS[role] || role || "";
+
   return (
     <>
-      {/* ── Desktop nav ──────────────────────────────────────────────────────── */}
-      <nav className="hidden sm:block border-b border-border bg-card" dir="rtl">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 flex items-center gap-1 h-11 overflow-x-auto">
-          {visibleLinks.map(link => (
-            <NavLink key={link.to} {...link} pathname={pathname} />
+      {/* ── Desktop header ───────────────────────────────────────────────────── */}
+      <header className="hidden sm:block bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm" dir="rtl">
+        {/* Top strip: brand + user info */}
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 flex items-center justify-between h-10 border-b border-slate-100">
+          <span className="text-xs font-bold text-slate-400 tracking-widest uppercase select-none">
+            הדור הבא
+          </span>
+          <div className="flex items-center gap-3">
+            {role && (
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-slate-500">{userName}</span>
+                {userName && <span className="text-slate-300 text-xs">·</span>}
+                <span className="text-[11px] font-semibold text-primary bg-primary/8 rounded-full px-2 py-0.5">
+                  {roleLabel}
+                </span>
+              </div>
+            )}
+            <button
+              onClick={() => { revokeAccess(); window.location.reload(); }}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+              title="נעילת מערכת"
+            >
+              <Lock className="w-3 h-3" />
+              נעילה
+            </button>
+          </div>
+        </div>
+
+        {/* Nav tabs row */}
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 flex items-center gap-0.5 h-10">
+          {primaryLinks.map(link => (
+            <NavTab key={link.to} {...link} pathname={pathname} />
           ))}
 
-          <button
-            onClick={() => { revokeAccess(); window.location.reload(); }}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded text-sm font-medium whitespace-nowrap text-slate-500 hover:text-red-600 hover:bg-red-50 transition-colors"
-            title="נעילת מערכת"
-          >
-            <Lock className="w-3.5 h-3.5 shrink-0" />
-            נעילה
-          </button>
-
-          {/* Role badge */}
-          {role && (
-            <span className="text-[10px] text-muted-foreground border border-border rounded-full px-2 py-0.5 whitespace-nowrap">
-              {internalUser?.name || ""} · {ROLE_LABELS[role] || role}
-            </span>
+          {/* "עוד" dropdown for overflow links */}
+          {hasOverflow && (
+            <div className="relative">
+              <button
+                onClick={() => setMoreOpen(v => !v)}
+                className={`relative flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium whitespace-nowrap transition-all rounded-md ${
+                  overflowActive
+                    ? "text-primary bg-primary/8 font-semibold"
+                    : "text-slate-500 hover:text-slate-800 hover:bg-slate-100"
+                }`}
+              >
+                עוד
+                <ChevronDown className="w-3 h-3" />
+                {overflowActive && (
+                  <span className="absolute bottom-0 right-2 left-2 h-0.5 bg-primary rounded-full" />
+                )}
+              </button>
+              {moreOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setMoreOpen(false)} />
+                  <div className="absolute top-full mt-1 right-0 z-50 bg-white border border-slate-200 rounded-xl shadow-lg py-1 min-w-[160px]">
+                    {overflowLinks.map(link => {
+                      const active = isActive(link.to, pathname);
+                      return (
+                        <Link
+                          key={link.to}
+                          to={link.to}
+                          onClick={() => setMoreOpen(false)}
+                          className={`flex items-center gap-2.5 px-4 py-2.5 text-sm font-medium transition-colors ${
+                            active
+                              ? "text-primary bg-primary/8"
+                              : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                          }`}
+                        >
+                          <link.icon className="w-4 h-4 shrink-0" />
+                          {link.label}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
           )}
 
-          <div className="mr-auto shrink-0 flex items-center gap-1">
+          {/* Spacer */}
+          <div className="flex-1" />
+
+          {/* Admin / Users links — right-aligned */}
+          <div className="flex items-center gap-1">
             {showUserManagement && (
               <Link
                 to="/admin/users"
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-sm font-medium whitespace-nowrap transition-colors border ${
+                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-md text-sm font-medium whitespace-nowrap transition-all ${
                   pathname.startsWith("/admin/users")
-                    ? "bg-red-700 text-white border-red-600"
-                    : "bg-red-50 text-red-700 border-red-200 hover:bg-red-100"
+                    ? "text-red-700 bg-red-50 font-semibold"
+                    : "text-slate-500 hover:text-red-700 hover:bg-red-50"
                 }`}
               >
                 <Users className="w-3.5 h-3.5 shrink-0" />
@@ -132,10 +207,10 @@ export default function AppNav() {
             {showAdmin && (
               <Link
                 to="/admin"
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-sm font-medium whitespace-nowrap transition-colors border ${
+                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-md text-sm font-medium whitespace-nowrap transition-all ${
                   pathname.startsWith("/admin") && !pathname.startsWith("/admin/users")
-                    ? "bg-slate-800 text-amber-400 border-slate-600"
-                    : "bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-800 hover:text-amber-400 hover:border-slate-600"
+                    ? "text-amber-700 bg-amber-50 font-semibold"
+                    : "text-slate-500 hover:text-amber-700 hover:bg-amber-50"
                 }`}
               >
                 <ShieldAlert className="w-3.5 h-3.5 shrink-0" />
@@ -144,22 +219,24 @@ export default function AppNav() {
             )}
           </div>
         </div>
-      </nav>
+      </header>
 
       {/* ── Mobile top bar ───────────────────────────────────────────────────── */}
-      <div className="sm:hidden sticky top-0 z-40 border-b border-border bg-card shadow-sm" dir="rtl">
-        <div className="flex items-center justify-between px-4 h-12">
+      <div className="sm:hidden sticky top-0 z-40 bg-white border-b border-slate-200 shadow-sm" dir="rtl">
+        <div className="flex items-center justify-between px-4 h-13">
           <button
             onClick={() => setDrawerOpen(true)}
-            className="flex items-center justify-center w-10 h-10 rounded-lg text-slate-600 hover:bg-muted transition-colors"
+            className="flex items-center justify-center w-9 h-9 rounded-lg text-slate-600 hover:bg-slate-100 transition-colors"
             aria-label="פתח תפריט"
           >
             <Menu className="w-5 h-5" />
           </button>
-          <span className="text-base font-bold text-slate-800">{currentTitle || "הדור הבא"}</span>
+          <div className="text-center">
+            <span className="text-sm font-bold text-slate-800">{currentTitle || "הדור הבא"}</span>
+          </div>
           <button
             onClick={() => { revokeAccess(); window.location.reload(); }}
-            className="flex items-center justify-center w-10 h-10 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+            className="flex items-center justify-center w-9 h-9 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
             aria-label="נעילה"
           >
             <Lock className="w-4 h-4" />
@@ -170,36 +247,46 @@ export default function AppNav() {
       {/* ── Mobile drawer ────────────────────────────────────────────────────── */}
       {drawerOpen && (
         <div className="sm:hidden fixed inset-0 z-50 flex" dir="rtl">
-          <div className="absolute inset-0 bg-black/40" onClick={closeDrawer} />
-          <div className="relative mr-auto w-72 max-w-[85vw] h-full bg-white shadow-2xl flex flex-col overflow-y-auto">
-            <div className="flex items-center justify-between px-4 h-14 border-b border-slate-200">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={closeDrawer} />
+          <div className="relative mr-auto w-72 max-w-[85vw] h-full bg-white shadow-2xl flex flex-col">
+            {/* Drawer header */}
+            <div className="flex items-center justify-between px-4 h-14 border-b border-slate-100 shrink-0">
               <div>
-                <span className="text-base font-bold text-slate-800">תפריט ראשי</span>
+                <p className="text-sm font-bold text-slate-800">תפריט ראשי</p>
                 {role && (
-                  <p className="text-xs text-slate-400">{internalUser?.name || ""} · {ROLE_LABELS[role] || role}</p>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    {userName}{userName ? " · " : ""}{roleLabel}
+                  </p>
                 )}
               </div>
-              <button onClick={closeDrawer} className="flex items-center justify-center w-9 h-9 rounded-lg text-slate-500 hover:bg-slate-100">
-                <X className="w-5 h-5" />
+              <button
+                onClick={closeDrawer}
+                className="flex items-center justify-center w-8 h-8 rounded-lg text-slate-400 hover:bg-slate-100"
+              >
+                <X className="w-4 h-4" />
               </button>
             </div>
-            <div className="flex-1 p-3 space-y-1">
+
+            {/* Nav links */}
+            <div className="flex-1 overflow-y-auto p-3 space-y-0.5">
               {visibleLinks.map(link => (
                 <DrawerNavLink key={link.to} {...link} pathname={pathname} onClick={closeDrawer} />
               ))}
             </div>
-            <div className="p-3 border-t border-slate-200 space-y-1">
+
+            {/* Bottom section */}
+            <div className="shrink-0 p-3 border-t border-slate-100 space-y-0.5">
               {showUserManagement && (
                 <Link
                   to="/admin/users"
                   onClick={closeDrawer}
-                  className={`flex items-center gap-3 px-4 py-3.5 rounded-xl text-base font-medium transition-colors border ${
+                  className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
                     pathname.startsWith("/admin/users")
-                      ? "bg-red-700 text-white border-red-600"
-                      : "bg-red-50 text-red-700 border-red-200"
+                      ? "bg-red-50 text-red-700 font-semibold"
+                      : "text-slate-600 hover:bg-red-50 hover:text-red-700"
                   }`}
                 >
-                  <Users className="w-5 h-5" />
+                  <Users className="w-4 h-4" />
                   ניהול משתמשים
                 </Link>
               )}
@@ -207,21 +294,21 @@ export default function AppNav() {
                 <Link
                   to="/admin"
                   onClick={closeDrawer}
-                  className={`flex items-center gap-3 px-4 py-3.5 rounded-xl text-base font-medium transition-colors border ${
+                  className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
                     pathname.startsWith("/admin") && !pathname.startsWith("/admin/users")
-                      ? "bg-slate-800 text-amber-400 border-slate-600"
-                      : "bg-slate-100 text-slate-600 border-slate-300"
+                      ? "bg-amber-50 text-amber-700 font-semibold"
+                      : "text-slate-600 hover:bg-amber-50 hover:text-amber-700"
                   }`}
                 >
-                  <ShieldAlert className="w-5 h-5" />
+                  <ShieldAlert className="w-4 h-4" />
                   ניהול
                 </Link>
               )}
               <button
                 onClick={() => { revokeAccess(); window.location.reload(); }}
-                className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-base font-medium text-red-600 hover:bg-red-50 transition-colors"
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-500 hover:text-red-600 hover:bg-red-50 transition-colors"
               >
-                <Lock className="w-5 h-5" />
+                <Lock className="w-4 h-4" />
                 נעילת מערכת
               </button>
             </div>
