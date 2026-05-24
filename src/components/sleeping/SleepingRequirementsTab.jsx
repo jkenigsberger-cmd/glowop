@@ -83,6 +83,8 @@ export default function SleepingRequirementsTab({ groupId, profile }) {
     accessibility_sleeping_notes:"",
     housekeeping_sleeping_notes: "",
     sleeping_requirements_completed: false,
+    staff_alt_tent_pax:   null,
+    staff_alt_tent_notes: "",
   });
 
   const [boysDist,    setBoysDist]  = useState([]);
@@ -110,6 +112,8 @@ export default function SleepingRequirementsTab({ groupId, profile }) {
       accessibility_sleeping_notes: profile.accessibility_sleeping_notes ?? "",
       housekeeping_sleeping_notes:  profile.housekeeping_sleeping_notes  ?? "",
       sleeping_requirements_completed: !!profile.sleeping_requirements_completed,
+      staff_alt_tent_pax:   profile.staff_alt_tent_pax   ?? null,
+      staff_alt_tent_notes: profile.staff_alt_tent_notes ?? "",
     });
     setBoysDist( parseDist(profile.boys_tent_distribution_json));
     setGirlsDist(parseDist(profile.girls_tent_distribution_json));
@@ -157,6 +161,8 @@ export default function SleepingRequirementsTab({ groupId, profile }) {
         boys_tent_distribution_json:  JSON.stringify(boysDist),
         girls_tent_distribution_json: JSON.stringify(girlsDist),
         vip_tent_requirements_json:   JSON.stringify(vipRows),
+        staff_alt_tent_pax:   saveForm.staff_alt_tent_pax ?? null,
+        staff_alt_tent_notes: saveForm.staff_alt_tent_notes ?? "",
       };
       if (markComplete !== null) payload.sleeping_requirements_completed = markComplete;
 
@@ -242,7 +248,14 @@ export default function SleepingRequirementsTab({ groupId, profile }) {
       )}
 
       {/* Part A — People summary */}
-      <PeopleSummaryCard profile={profile} vipRows={vipRows} boysDist={boysDist} girlsDist={girlsDist} />
+      <PeopleSummaryCard
+        profile={profile}
+        vipRows={vipRows}
+        boysDist={boysDist}
+        girlsDist={girlsDist}
+        staffAltTentPax={form.staff_alt_tent_pax}
+        staffAltTentNotes={form.staff_alt_tent_notes}
+      />
 
       {/* Part B+C+D — Students */}
       <SectionCard icon={Users} title="דרישות לינה — תלמידים / משתתפים" color="bg-blue-50/50 border-blue-200">
@@ -327,6 +340,10 @@ export default function SleepingRequirementsTab({ groupId, profile }) {
           driversTotal={(profile.drivers_men_count != null || profile.drivers_women_count != null)
             ? (profile.drivers_men_count ?? 0) + (profile.drivers_women_count ?? 0)
             : null}
+          altTentPax={form.staff_alt_tent_pax}
+          altTentNotes={form.staff_alt_tent_notes}
+          onAltTentPaxChange={v => set("staff_alt_tent_pax", v)}
+          onAltTentNotesChange={v => set("staff_alt_tent_notes", v)}
         />
         <TextArea
           label="הערות לינה — צוות / VIP"

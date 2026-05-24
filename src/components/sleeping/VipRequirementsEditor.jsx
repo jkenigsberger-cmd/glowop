@@ -115,7 +115,7 @@ function VipSummary({ rows }) {
   );
 }
 
-export default function VipRequirementsEditor({ rows, onChange, staffTotal, driversTotal }) {
+export default function VipRequirementsEditor({ rows, onChange, staffTotal, driversTotal, altTentPax, altTentNotes, onAltTentPaxChange, onAltTentNotesChange }) {
   const addRow    = () => onChange([...rows, EMPTY_ROW()]);
   const removeRow = (i) => onChange(rows.filter((_, idx) => idx !== i));
   const updateRow = (i, field, val) => {
@@ -261,6 +261,46 @@ export default function VipRequirementsEditor({ rows, onChange, staffTotal, driv
       )}
 
       <VipSummary rows={rows} />
+
+      {/* ── Alternative tent section ──────────────────────────────────────── */}
+      <div className="border border-amber-300 bg-amber-50/60 rounded-xl p-3 space-y-3">
+        <div className="space-y-0.5">
+          <p className="text-xs font-semibold text-amber-800 flex items-center gap-1.5">
+            <Plus className="w-3.5 h-3.5" /> אוהל חילופי לצוות
+          </p>
+          <p className="text-[11px] text-amber-700">
+            אוהלי VIP מוגבלים ל-10 אוהלים אמיתיים. אם יש צורך בלינה נוספת לצוות, יש להזין זאת כאוהל חילופי ולא כ-VIP נוסף.
+          </p>
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-slate-600">אנשי צוות לאוהל חילופי</label>
+          <input
+            type="number"
+            min="0"
+            value={altTentPax ?? ""}
+            onChange={e => onAltTentPaxChange(e.target.value === "" ? null : Number(e.target.value))}
+            className="w-32 h-8 rounded-md border border-input bg-transparent px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          />
+          {/* Soft warning if exceeds staff total */}
+          {staffTotal != null && altTentPax != null && altTentPax > staffTotal && (
+            <p className="text-[11px] text-amber-700 flex items-center gap-1">
+              <AlertTriangle className="w-3 h-3" /> מספר זה עולה על סה"כ הצוות ({staffTotal})
+            </p>
+          )}
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-slate-600">הערות לאוהל חילופי</label>
+          <textarea
+            value={altTentNotes ?? ""}
+            onChange={e => onAltTentNotesChange(e.target.value)}
+            placeholder="מיקום מועדף, הערות נוספות..."
+            rows={2}
+            className="w-full rounded-md border border-input bg-transparent px-3 py-1.5 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none"
+          />
+        </div>
+      </div>
     </div>
   );
 }

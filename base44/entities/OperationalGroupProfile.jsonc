@@ -156,6 +156,15 @@
     "vip_tent_requirements_json": {
       "type": "string",
       "description": "JSON array [{gender_group, people_count, purpose, notes}] \u2014 one entry per required VIP tent"
+    },
+    "staff_alt_tent_pax": {
+      "type": "number",
+      "description": "Number of staff/teachers who need an alternative regular tent (overflow beyond VIP tents)",
+      "default": 0
+    },
+    "staff_alt_tent_notes": {
+      "type": "string",
+      "description": "Notes for the alternative tent requirement (location preference, etc.)"
     }
   },
   "required": [

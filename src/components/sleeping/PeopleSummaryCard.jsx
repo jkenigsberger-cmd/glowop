@@ -38,7 +38,7 @@ function SummaryGroup({ color, borderColor, title, children }) {
   );
 }
 
-export default function PeopleSummaryCard({ profile, vipRows = [], boysDist = [], girlsDist = [] }) {
+export default function PeopleSummaryCard({ profile, vipRows = [], boysDist = [], girlsDist = [], staffAltTentPax, staffAltTentNotes }) {
   const staffTotal   = profile.staff_count        ?? null;
   const staffBoys    = profile.staff_men_count     ?? null;  // "בנים" in staff = men
   const staffGirls   = profile.staff_women_count   ?? null;  // "בנות" in staff = women
@@ -128,6 +128,12 @@ export default function PeopleSummaryCard({ profile, vipRows = [], boysDist = []
             color="bg-violet-50 border-violet-200 text-violet-700"
           />
           <p className="text-[10px] text-violet-500 pt-0.5">→ אוהלי VIP (80–89)</p>
+          {staffAltTentPax > 0 && (
+            <div className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs space-y-0.5">
+              <p className="font-semibold text-amber-800">צוות לאוהל חילופי: {staffAltTentPax} אנשים</p>
+              {staffAltTentNotes && <p className="text-amber-700">הערות: {staffAltTentNotes}</p>}
+            </div>
+          )}
         </SummaryGroup>
 
         {/* Drivers / Security — pink */}
