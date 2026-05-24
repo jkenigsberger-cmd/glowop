@@ -38,49 +38,25 @@ export function RoleProvider({ children }) {
     const normalizedEmail = email.trim().toLowerCase();
     console.log("[ROLE DEBUG] auth user email:", normalizedEmail);
     try {
-      // Try exact match first, then case-insensitive scan
-      let results = await base44.entities.InternalUser.filter({ email: normalizedEmail });
-      if (!results || results.length === 0) {
-        // Fallback: load all and match case-insensitively
-        const all = await base44.entities.InternalUser.list();
-        results = all.filter(u => u.email && u.email.trim().toLowerCase() === normalizedEmail);
-      }
+      // Use backend function with service role to bypass row-level security
+      const res = await base44.functions.invoke('getMyInternalUser', {});
+      const data = res.data;
+      console.log("[ROLE DEBUG] getMyInternalUser response:", data);
 
-      if (!results || results.length === 0) {
-        // Emergency fallback: if NO InternalUser records exist at all, auto-promote current user
-        const allUsers = await base44.entities.InternalUser.list();
-        console.log("[ROLE DEBUG] InternalUser count:", allUsers.length);
-        if (allUsers.length === 0) {
-          console.log("[ROLE DEBUG] Empty InternalUser table — auto-creating SUPER_ADMIN for:", normalizedEmail);
-          const authUser = await base44.auth.me();
-          const created = await base44.entities.InternalUser.create({
-            email: normalizedEmail,
-            name: authUser?.full_name || normalizedEmail,
-            role: "SUPER_ADMIN",
-            active: true,
-            notes: "Auto-created on first setup",
-          });
-          setRoleError(null);
-          setRole("SUPER_ADMIN");
-          setInternalUser(created);
-        } else {
-          console.log("[ROLE DEBUG] not_found for email:", normalizedEmail);
-          setRoleError("not_found");
-          setRole(null);
-          setInternalUser(null);
-        }
+      if (!data.found) {
+        console.log("[ROLE DEBUG] not_found for email:", normalizedEmail);
+        setRoleError("not_found");
+        setRole(null);
+        setInternalUser(null);
+      } else if (!data.active) {
+        setRoleError("inactive");
+        setRole(null);
+        setInternalUser(data);
       } else {
-        const iu = results[0];
-        console.log("[ROLE DEBUG] found InternalUser:", iu.email, "role:", iu.role, "active:", iu.active);
-        if (!iu.active) {
-          setRoleError("inactive");
-          setRole(null);
-          setInternalUser(iu);
-        } else {
-          setRoleError(null);
-          setRole(iu.role);
-          setInternalUser(iu);
-        }
+        setRoleError(null);
+        setRole(data.role);
+        setInternalUser(data);
+        console.log("[ROLE DEBUG] role set to:", data.role);
       }
     } catch (err) {
       console.error("Failed to load internal user role:", err);
