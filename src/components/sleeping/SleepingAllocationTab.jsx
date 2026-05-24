@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, Lightbulb, CheckCircle2, Shield } from "lucide-react";
 import { toast } from "sonner";
+import RoleGate from "@/components/RoleGate";
 
 import SleepingRequirementsSummary from "./SleepingRequirementsSummary";
 import StudentNeighborhoodPanel from "./StudentNeighborhoodPanel";
@@ -443,14 +444,16 @@ export default function SleepingAllocationTab({ groupId }) {
                   )}
                 </div>
               </div>
-              <Button
-                className="w-full gap-2 bg-emerald-700 hover:bg-emerald-800 text-white"
-                onClick={handleConfirmAllocations}
-                disabled={saving}
-              >
-                <CheckCircle2 className="w-4 h-4" />
-                {saving ? "מאשר..." : "אשר שיבוץ לינה"}
-              </Button>
+              <RoleGate permission="CONFIRM_ALLOCATION">
+                <Button
+                  className="w-full gap-2 bg-emerald-700 hover:bg-emerald-800 text-white"
+                  onClick={handleConfirmAllocations}
+                  disabled={saving}
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  {saving ? "מאשר..." : "אשר שיבוץ לינה"}
+                </Button>
+              </RoleGate>
             </div>
           );
         }

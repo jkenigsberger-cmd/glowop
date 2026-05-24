@@ -18,6 +18,7 @@ import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { Wand2, AlertTriangle, CheckCircle2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import RoleGate from "@/components/RoleGate";
 
 // ── Pure helpers ───────────────────────────────────────────────────────────────
 
@@ -242,15 +243,17 @@ export default function AutoAllocationButton({
     <div className="space-y-2">
       {/* Trigger */}
       {!preview && !done && (
-        <Button
-          size="sm"
-          variant="outline"
-          className="h-7 text-xs gap-1 border-violet-200 text-violet-700 hover:bg-violet-50"
-          onClick={runAutoAllocation}
-        >
-          <Wand2 className="w-3 h-3" />
-          שיבוץ אוטומטי
-        </Button>
+        <RoleGate permission="MANAGE_ALLOCATION">
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs gap-1 border-violet-200 text-violet-700 hover:bg-violet-50"
+            onClick={runAutoAllocation}
+          >
+            <Wand2 className="w-3 h-3" />
+            שיבוץ אוטומטי
+          </Button>
+        </RoleGate>
       )}
 
       {/* Done badge — show button again to allow re-run for next neighborhood */}
@@ -326,17 +329,19 @@ export default function AutoAllocationButton({
 
               <div className="flex gap-2 pt-1">
                 <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleCancel} disabled={saving}>ביטול</Button>
-                <Button
-                  size="sm"
-                  className="h-7 text-xs gap-1 bg-violet-700 hover:bg-violet-800 text-white flex-1"
-                  onClick={handleSave}
-                  disabled={saving}
-                >
-                  {saving
-                    ? <><Loader2 className="w-3 h-3 animate-spin" /> שומר...</>
-                    : <><CheckCircle2 className="w-3 h-3" /> צור שיבוץ טיוטה</>
-                  }
-                </Button>
+                <RoleGate permission="MANAGE_ALLOCATION">
+                  <Button
+                    size="sm"
+                    className="h-7 text-xs gap-1 bg-violet-700 hover:bg-violet-800 text-white flex-1"
+                    onClick={handleSave}
+                    disabled={saving}
+                  >
+                    {saving
+                      ? <><Loader2 className="w-3 h-3 animate-spin" /> שומר...</>
+                      : <><CheckCircle2 className="w-3 h-3" /> צור שיבוץ טיוטה</>
+                    }
+                  </Button>
+                </RoleGate>
               </div>
               <p className="text-[10px] text-slate-400 text-center">
                 השיבוץ יישמר כטיוטה — לאחר מכן לחץ "אשר שיבוץ לינה" לאישור סופי
