@@ -35,11 +35,11 @@ export const ROLE_NAV_LINKS = {
 // Pages (route prefixes) each role can access
 export const ROLE_ALLOWED_ROUTES = {
   SUPER_ADMIN: "*", // all
-  ADMIN:       ["dashboard", "approved-groups", "calendar", "allocation", "common-spaces", "housekeeping", "kitchen", "maintenance", "admin", "groups", "inventory"],
-  OPERATIONS:  ["dashboard", "approved-groups", "calendar", "allocation", "common-spaces", "housekeeping", "kitchen", "maintenance", "groups"],
+  ADMIN:       ["dashboard", "approved-groups", "calendar", "allocation", "common-spaces", "housekeeping", "kitchen", "kitchen-report", "maintenance", "admin", "groups", "inventory"],
+  OPERATIONS:  ["dashboard", "approved-groups", "calendar", "allocation", "common-spaces", "housekeeping", "kitchen", "kitchen-report", "maintenance", "groups"],
   HOUSEKEEPING_MANAGER: ["dashboard", "calendar", "allocation", "housekeeping", "approved-groups"],
   HOUSEKEEPING_STAFF:   ["dashboard", "calendar", "housekeeping"],
-  KITCHEN:              ["dashboard", "calendar", "kitchen"],
+  KITCHEN:              ["dashboard", "calendar", "kitchen", "kitchen-report"],
   VIEWER:               ["dashboard", "calendar"],
 };
 

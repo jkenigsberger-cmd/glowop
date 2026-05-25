@@ -3,8 +3,9 @@ import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
 import { format, addDays, subDays, parseISO } from "date-fns";
 import { he } from "date-fns/locale";
-import { ChevronRight, ChevronLeft, UtensilsCrossed, CalendarDays } from "lucide-react";
+import { ChevronRight, ChevronLeft, UtensilsCrossed, CalendarDays, FileText, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useNavigate } from "react-router-dom";
 import KitchenMealCard from "@/components/kitchen/KitchenMealCard";
 
 const MEAL_ORDER = { BREAKFAST: 0, LUNCH: 1, DINNER: 2, OTHER: 3 };
@@ -13,6 +14,10 @@ const TODAY = new Date().toISOString().slice(0, 10);
 
 export default function Kitchen() {
   const [selectedDate, setSelectedDate] = useState(TODAY);
+  const [reportModal, setReportModal] = useState(false);
+  const [reportFrom,  setReportFrom]  = useState(TODAY);
+  const [reportTo,    setReportTo]    = useState(TODAY);
+  const navigate = useNavigate();
 
   // Load all active meal reservations
   const { data: allMeals = [], isLoading: loadingMeals } = useQuery({
@@ -118,6 +123,19 @@ export default function Kitchen() {
             </div>
           </div>
 
+          {/* Report button — desktop */}
+          <div className="hidden sm:flex mt-2 justify-between items-center">
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1.5 text-xs border-green-300 text-green-700 hover:bg-green-50"
+              onClick={() => { setReportFrom(selectedDate); setReportTo(selectedDate); setReportModal(true); }}
+            >
+              <FileText className="w-3.5 h-3.5" />
+              הפק דוח מטבח
+            </Button>
+          </div>
+
           {/* Desktop: date input */}
           <div className="hidden sm:flex mt-2 justify-end">
             <input
@@ -154,6 +172,15 @@ export default function Kitchen() {
                 יום הבא <ChevronLeft className="w-4 h-4" />
               </Button>
             </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="w-full gap-1.5 text-sm border-green-300 text-green-700 hover:bg-green-50"
+              onClick={() => { setReportFrom(selectedDate); setReportTo(selectedDate); setReportModal(true); }}
+            >
+              <FileText className="w-4 h-4" />
+              הפק דוח מטבח
+            </Button>
           </div>
 
         </div>
@@ -241,6 +268,63 @@ export default function Kitchen() {
           </>
         )}
       </div>
+
+      {/* Kitchen Report modal */}
+      {reportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" dir="rtl">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6 space-y-5">
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                <FileText className="w-5 h-5 text-green-700" />
+                הפקת דוח מטבח
+              </h2>
+              <button onClick={() => setReportModal(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-600">מתאריך</label>
+                <input
+                  type="date"
+                  value={reportFrom}
+                  onChange={e => setReportFrom(e.target.value)}
+                  className="w-full border border-input rounded-md px-3 py-2 text-sm bg-transparent focus:outline-none focus:ring-1 focus:ring-ring"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-600">עד תאריך</label>
+                <input
+                  type="date"
+                  value={reportTo}
+                  min={reportFrom}
+                  onChange={e => setReportTo(e.target.value)}
+                  className="w-full border border-input rounded-md px-3 py-2 text-sm bg-transparent focus:outline-none focus:ring-1 focus:ring-ring"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-1">
+              <Button variant="outline" size="sm" className="flex-1" onClick={() => setReportModal(false)}>
+                ביטול
+              </Button>
+              <Button
+                size="sm"
+                className="flex-1 bg-green-700 hover:bg-green-800 gap-1.5"
+                disabled={!reportFrom || !reportTo || reportTo < reportFrom}
+                onClick={() => {
+                  setReportModal(false);
+                  navigate(`/kitchen-report?from=${reportFrom}&to=${reportTo}`);
+                }}
+              >
+                <FileText className="w-4 h-4" />
+                הפק דוח
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
