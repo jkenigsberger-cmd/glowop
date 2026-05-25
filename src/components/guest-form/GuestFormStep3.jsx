@@ -72,7 +72,7 @@ export default function GuestFormStep3({ form, setForm, quoteData }) {
   return (
     <div className="space-y-4">
       <p className="text-sm text-slate-500">
-        אנא מלאו את הפירוט הסופי של הקבוצה. ניתן להתאים לעומת ההערכה המקורית.
+        כאן ניתן לעדכן את מספר המשתתפים ואת צרכי הלינה לפי המידע העדכני ביותר.
       </p>
 
       {/* Students */}
@@ -85,7 +85,7 @@ export default function GuestFormStep3({ form, setForm, quoteData }) {
             label="הערות לינה לתלמידים"
             value={form.student_sleeping_notes}
             onChange={v => set("student_sleeping_notes", v)}
-            placeholder="חלוקה לחדרים, בקשות נגישות, הפרדה בנים/בנות..."
+            placeholder="חלוקת חדרים, בקשות מיוחדות"
           />
         </div>
       </Section>
@@ -100,7 +100,7 @@ export default function GuestFormStep3({ form, setForm, quoteData }) {
             label="הערות לינה לצוות"
             value={form.staff_sleeping_notes}
             onChange={v => set("staff_sleeping_notes", v)}
-            placeholder="חלוקת חדרים, בקשות מיוחדות..."
+            placeholder="חלוקת חדרים, בקשות מיוחדות"
           />
         </div>
       </Section>

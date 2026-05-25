@@ -48,6 +48,8 @@ Deno.serve(async (req) => {
       contact_email:           fields.contact_email      || '',
       client_org:              fields.client_org         || '',
       group_type_label:        fields.group_type_label   || '',
+      estimated_arrival_time:  fields.estimated_arrival_time   || null,
+      estimated_departure_time: fields.estimated_departure_time || null,
       total_pax:               num(fields.total_pax),
       staff_count:             num(fields.staff_count),
       participant_count:       num(fields.participant_count),

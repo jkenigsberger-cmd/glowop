@@ -4,15 +4,25 @@ const DIET_OPTIONS = [
   { key: "vegetarian_count",     emoji: "🥬", label: "צמחוני" },
   { key: "vegan_count",          emoji: "🌱", label: "טבעוני" },
   { key: "glutenFree_count",     emoji: "🌾", label: "צליאק" },
-  { key: "mehadrinKosher_count", emoji: "✡️", label: "מהדרין" },
-  { key: "lifeThreatening_count",emoji: "⚠️", label: "מסכן חיים" },
+  { key: "lifeThreatening_count",emoji: "⚠️", label: "אלרגיה מסכנת חיים" },
   { key: "nutFree_count",        emoji: "🥜", label: "ללא אגוזים" },
   { key: "eggFree_count",        emoji: "🥚", label: "ללא ביצים" },
   { key: "lactoseFree_count",    emoji: "🥛", label: "ללא לקטוז" },
 ];
 
+const COFFEE_OPTIONS = [
+  { key: "coffee_full",     label: "פינת קפה מלאה" },
+  { key: "coffee_cookies",  label: "פינת קפה ועוגיות" },
+  { key: "coffee_pastry",   label: "פינת קפה ומאפה" },
+];
+
 export default function GuestFormStep1({ form, setForm }) {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const selectedCoffee = form.coffee_corner_option || null;
+  const toggleCoffee = (key) => {
+    set("coffee_corner_option", selectedCoffee === key ? null : key);
+  };
 
   return (
     <div className="space-y-5">
@@ -26,31 +36,47 @@ export default function GuestFormStep1({ form, setForm }) {
           <div key={key} className="flex items-center gap-2 border border-slate-200 rounded-xl px-3 py-2.5 bg-slate-50">
             <span className="text-xl flex-shrink-0">{emoji}</span>
             <div className="flex-1 min-w-0">
-              <div className="text-xs font-medium text-slate-700 truncate">{label}</div>
+              <div className="text-xs font-medium text-slate-700 break-words leading-tight">{label}</div>
             </div>
             <input
               type="number"
               min="0"
               value={form[key] || 0}
               onChange={e => set(key, Number(e.target.value))}
-              className="w-14 border border-slate-300 rounded-lg px-2 py-1 text-sm text-center focus:outline-none focus:ring-1 focus:ring-primary"
+              className="w-14 border border-slate-300 rounded-lg px-2 py-1 text-sm text-center focus:outline-none focus:ring-1 focus:ring-primary flex-shrink-0"
             />
           </div>
         ))}
       </div>
 
       {/* Coffee corner */}
-      <div className="flex items-center gap-3 border border-slate-200 rounded-xl px-4 py-3 bg-amber-50">
-        <input
-          type="checkbox"
-          id="coffee"
-          checked={form.upgraded_coffee}
-          onChange={e => set("upgraded_coffee", e.target.checked)}
-          className="w-4 h-4 accent-primary"
-        />
-        <label htmlFor="coffee" className="text-sm font-medium text-slate-700 cursor-pointer">
-          ☕ פינת קפה ועוגיות (תוספת בתשלום)
-        </label>
+      <div className="space-y-2">
+        <p className="text-sm font-medium text-slate-700">☕ פינת קפה (אופציונלי)</p>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          {COFFEE_OPTIONS.map(({ key, label }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => toggleCoffee(key)}
+              className={`py-2.5 px-3 rounded-xl border text-sm font-medium transition-all text-center ${
+                selectedCoffee === key
+                  ? "bg-amber-500 text-white border-amber-500"
+                  : "bg-white text-slate-600 border-slate-200 hover:border-amber-400"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {selectedCoffee && (
+          <button
+            type="button"
+            onClick={() => set("coffee_corner_option", null)}
+            className="text-xs text-slate-400 hover:text-slate-600 underline-offset-2 hover:underline"
+          >
+            ✕ הסר בחירה
+          </button>
+        )}
       </div>
 
       {/* Diet notes */}

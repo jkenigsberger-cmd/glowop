@@ -76,12 +76,13 @@ export default function GuestForm() {
   const [details, setDetails] = useState({
     group_name: "", group_type_label: "",
     contact_name: "", contact_phone: "", contact_email: "", client_org: "",
+    estimated_arrival_time: "", estimated_departure_time: "",
   });
   const [diet, setDiet] = useState({
     vegetarian_count: 0, vegan_count: 0, glutenFree_count: 0,
     mehadrinKosher_count: 0, lifeThreatening_count: 0, nutFree_count: 0,
     eggFree_count: 0, lactoseFree_count: 0,
-    upgraded_coffee: false, diet_notes: "",
+    upgraded_coffee: false, coffee_corner_option: null, diet_notes: "",
   });
   const [mealOptions, setMealOptions] = useState({ arrival_lunch: false, departure_lunch: false });
   const [meals, setMeals] = useState([]);
@@ -204,6 +205,8 @@ export default function GuestForm() {
         contact_email:   details.contact_email,
         client_org:      details.client_org,
         group_type_label: details.group_type_label,
+        estimated_arrival_time:   details.estimated_arrival_time   || null,
+        estimated_departure_time: details.estimated_departure_time || null,
         total_pax:       totalPax,
         participant_count: participantCount,
         staff_count:     staffCount,

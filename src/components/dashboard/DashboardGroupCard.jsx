@@ -1,10 +1,12 @@
 import { Link } from "react-router-dom";
-import { Users, ChevronLeft, CheckCircle2, Clock, UtensilsCrossed, CalendarDays } from "lucide-react";
+import { Users, ChevronLeft, CheckCircle2, Clock, UtensilsCrossed, CalendarDays, StickyNote } from "lucide-react";
 
 export default function DashboardGroupCard({ group, profile, mealsToday = 0, activitiesToday = 0, mode }) {
   // mode: "arriving" | "sleeping" | "departing"
   const hasDepartureLunch = profile && mode === "departing" &&
     (() => { try { const mp = JSON.parse(profile.meal_plan || "[]"); return mp.some(m => m.sandwich_instead === false && m.meal_type === "LUNCH"); } catch { return false; } })();
+
+  const internalNotes = group.internal_notes || profile?.general_notes || null;
 
   return (
     <Link
@@ -55,6 +57,13 @@ export default function DashboardGroupCard({ group, profile, mealsToday = 0, act
                 <Clock className="w-3 h-3" /> ממתין לדרישות לינה
               </span>
             )}
+          </div>
+        )}
+
+        {internalNotes && (
+          <div className="flex items-start gap-1 mt-1 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5">
+            <StickyNote className="w-3 h-3 text-amber-600 shrink-0 mt-0.5" />
+            <p className="text-[11px] text-amber-800 leading-snug">{internalNotes}</p>
           </div>
         )}
       </div>

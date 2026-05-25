@@ -27,6 +27,14 @@
       "type": "string",
       "description": "Free-text group classification e.g. \u05d1\u05d9\u05ea \u05e1\u05e4\u05e8, \u05ea\u05e0\u05d5\u05e2\u05ea \u05e0\u05d5\u05e2\u05e8"
     },
+    "estimated_arrival_time": {
+      "type": "string",
+      "description": "HH:MM \u2014 estimated arrival time on arrival day"
+    },
+    "estimated_departure_time": {
+      "type": "string",
+      "description": "HH:MM \u2014 estimated departure time on departure day"
+    },
     "total_pax": {
       "type": "number"
     },
@@ -65,7 +73,7 @@
     },
     "special_diets": {
       "type": "string",
-      "description": "JSON: {vegetarian_count, vegan_count, glutenFree_count, mehadrinKosher_count, lifeThreatening_count, nutFree_count, eggFree_count, lactoseFree_count, upgraded_coffee, diet_notes}"
+      "description": "JSON: {vegetarian_count, vegan_count, glutenFree_count, lifeThreatening_count, nutFree_count, eggFree_count, lactoseFree_count, upgraded_coffee, coffee_corner_option, diet_notes}"
     },
     "meal_plan": {
       "type": "string",

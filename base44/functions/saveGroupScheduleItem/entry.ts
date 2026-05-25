@@ -2,7 +2,8 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
 const VALID_SPACE_CODES = new Set([
   'bunker_1', 'bunker_2', 'bunker_4', 'bunker_5',
-  'bunker_6', 'bunker_7', 'bunker_8', 'ohel_moed', 'dining_hall'
+  'bunker_6', 'bunker_7', 'bunker_8', 'ohel_moed', 'dining_hall',
+  'outdoor_deck_lawn'
 ]);
 
 function timeToMinutes(t) {

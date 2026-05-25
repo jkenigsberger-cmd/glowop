@@ -80,6 +80,24 @@ export default function GuestFormStep0({ form, setForm, quoteData }) {
         />
       </Field>
 
+      {/* Estimated arrival/departure times */}
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="שעת הגעה משוערת">
+          <Input
+            type="time"
+            value={form.estimated_arrival_time || ""}
+            onChange={e => set("estimated_arrival_time", e.target.value)}
+          />
+        </Field>
+        <Field label="שעת עזיבה משוערת">
+          <Input
+            type="time"
+            value={form.estimated_departure_time || ""}
+            onChange={e => set("estimated_departure_time", e.target.value)}
+          />
+        </Field>
+      </div>
+
       {/* Collapsible extra */}
       <button
         type="button"

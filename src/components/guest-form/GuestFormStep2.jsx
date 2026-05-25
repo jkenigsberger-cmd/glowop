@@ -141,14 +141,19 @@ export default function GuestFormStep2({ quoteData, mealOptions, setMealOptions,
                         <span className="text-xs text-amber-600 mr-2">← סנדוויץ׳</span>
                       )}
                     </div>
-                    <label className="flex items-center gap-1.5 text-xs text-slate-500 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={m.sandwich_instead}
-                        onChange={() => toggleSandwich(m.date, m.meal_type)}
-                        className="accent-amber-500"
-                      />
-                      סנדוויץ׳ במקום
+                    <label className="flex flex-col items-end gap-0.5 cursor-pointer">
+                     <span className="flex items-center gap-1.5 text-xs text-slate-500">
+                       <input
+                         type="checkbox"
+                         checked={m.sandwich_instead}
+                         onChange={() => toggleSandwich(m.date, m.meal_type)}
+                         className="accent-amber-500"
+                       />
+                       סנדוויץ׳ במקום
+                     </span>
+                     <span className="text-[10px] text-slate-400 text-right leading-tight max-w-[110px]">
+                       יש לסמן רק אם מעוניינים בסנדוויצ'ים במקום הארוחה
+                     </span>
                     </label>
                   </div>
                 ))}
