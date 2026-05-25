@@ -78,6 +78,9 @@ export const PERMISSIONS = {
 
   // Reports / PDFs
   GENERATE_REPORTS:  ["SUPER_ADMIN", "ADMIN", "OPERATIONS", "HOUSEKEEPING_MANAGER"],
+
+  // Review alerts acknowledgement
+  ACKNOWLEDGE_ALERT: ["SUPER_ADMIN", "ADMIN", "OPERATIONS", "KITCHEN", "HOUSEKEEPING_MANAGER", "HOUSEKEEPING_STAFF"],
 };
 
 export function hasPermission(role, permission) {

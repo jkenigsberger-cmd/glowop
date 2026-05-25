@@ -6,6 +6,7 @@ import { he } from "date-fns/locale";
 import { ChevronLeft, ChevronRight, BedDouble } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import GroupAllocationCard from "@/components/housekeeping/GroupAllocationCard";
+import ReviewAlertsBanner from "@/components/alerts/ReviewAlertsBanner";
 
 const TODAY = new Date().toISOString().slice(0, 10);
 const DAYS_AHEAD = 7;
@@ -271,6 +272,9 @@ export default function Housekeeping() {
 
       {/* Content */}
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 space-y-8">
+        {/* Housekeeping review alerts */}
+        <ReviewAlertsBanner module="HOUSEKEEPING" />
+
         {!hasAnyActivity && (
           <div className="text-center py-20 text-muted-foreground">
             <BedDouble className="w-10 h-10 mx-auto mb-3 opacity-20" />

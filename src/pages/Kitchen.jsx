@@ -7,6 +7,7 @@ import { ChevronRight, ChevronLeft, UtensilsCrossed, CalendarDays, FileText, X }
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import KitchenMealCard from "@/components/kitchen/KitchenMealCard";
+import ReviewAlertsBanner from "@/components/alerts/ReviewAlertsBanner";
 
 const MEAL_ORDER = { BREAKFAST: 0, LUNCH: 1, DINNER: 2, OTHER: 3 };
 
@@ -188,6 +189,9 @@ export default function Kitchen() {
 
       {/* Content */}
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 space-y-8">
+
+        {/* Kitchen review alerts */}
+        <ReviewAlertsBanner module="KITCHEN" />
 
         {loadingMeals ? (
           <div className="flex justify-center py-16">

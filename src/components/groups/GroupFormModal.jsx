@@ -7,6 +7,12 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import DietaryFields, { EMPTY_DIETS, parseDiets, mergeDiets } from "@/components/shared/DietaryFields";
+import { upsertReviewAlert } from "@/lib/reviewAlerts";
+
+// Fields that trigger pax-related alerts when changed
+const PAX_FIELDS = ["total_pax", "participant_count", "staff_count", "boys_count", "girls_count"];
+// Fields that trigger date-related alerts when changed
+const DATE_FIELDS = ["arrival_date", "departure_date"];
 
 export default function GroupFormModal({ group, onClose, onSaved, initialProfileDiets = null }) {
   const isEdit = !!group;
@@ -96,6 +102,54 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
           is_sleeping_group: payload.group_type === "LODGING",
           ...(shouldUpdateDiets ? dietPayload : {}),
         });
+      }
+
+      // ── Review alerts (additive, never blocks save) ────────────────────────
+      try {
+        const groupIsConfirmed = group.status === "CONFIRMED" || group.status === "COMPLETED";
+        if (groupIsConfirmed || existingProfiles.length > 0) {
+          // A. Pax changes
+          const paxChanged = PAX_FIELDS.some(f => {
+            const oldVal = Number(group[f] ?? 0);
+            const newVal = Number(payload[f] ?? 0);
+            return oldVal !== newVal;
+          });
+          if (paxChanged) {
+            const oldPax = group.total_pax ?? "—";
+            const newPax = payload.total_pax ?? "—";
+            const msg = `מספר האנשים בקבוצה השתנה מ-${oldPax} ל-${newPax}. יש לבדוק דרישות לינה, שיבוץ לינה ומטבח.`;
+            const prev = Object.fromEntries(PAX_FIELDS.map(f => [f, group[f] ?? null]));
+            const next = Object.fromEntries(PAX_FIELDS.map(f => [f, payload[f] ?? null]));
+            await upsertReviewAlert(group.id, "SLEEPING_REQUIREMENTS", "GROUP_PAX_CHANGED", "שינוי בפרטי הקבוצה דורש בדיקה", msg, prev, next);
+            await upsertReviewAlert(group.id, "ALLOCATION",            "GROUP_PAX_CHANGED", "שינוי בפרטי הקבוצה דורש בדיקה", msg, prev, next);
+            await upsertReviewAlert(group.id, "KITCHEN",               "GROUP_PAX_CHANGED", "שינוי בפרטי הקבוצה דורש בדיקה", msg, prev, next);
+          }
+
+          // B. Date changes
+          const datesChanged = DATE_FIELDS.some(f => (group[f] || "") !== (payload[f] || ""));
+          if (datesChanged) {
+            const msg = `תאריכי הקבוצה השתנו (${group.arrival_date || "—"} — ${group.departure_date || "—"} ← ${payload.arrival_date || "—"} — ${payload.departure_date || "—"}). יש לבדוק זמינות, שיבוץ, ארוחות ומשק בית.`;
+            const prev = { arrival_date: group.arrival_date, departure_date: group.departure_date };
+            const next = { arrival_date: payload.arrival_date, departure_date: payload.departure_date };
+            await upsertReviewAlert(group.id, "ALLOCATION",   "GROUP_DATES_CHANGED", "שינוי תאריכים דורש בדיקה", msg, prev, next);
+            await upsertReviewAlert(group.id, "KITCHEN",      "GROUP_DATES_CHANGED", "שינוי תאריכים דורש בדיקה", msg, prev, next);
+            await upsertReviewAlert(group.id, "HOUSEKEEPING", "GROUP_DATES_CHANGED", "שינוי תאריכים דורש בדיקה", msg, prev, next);
+          }
+
+          // C. Diet changes — only compare if new diets have data and profile existed
+          if (hasAnyDiet && existingProfiles.length > 0) {
+            const prevDiets = parseDiets(existingProfiles[0].special_diets);
+            const prevJson = JSON.stringify(prevDiets || {});
+            const newJson  = JSON.stringify(diets);
+            if (prevJson !== newJson) {
+              const msg = "נתוני דיאטות/אלרגיות השתנו. יש לבדוק את תכנון המטבח.";
+              await upsertReviewAlert(group.id, "KITCHEN", "DIET_CHANGED", "שינוי דיאטות/אלרגיות דורש בדיקה", msg, prevDiets, diets);
+            }
+          }
+        }
+      } catch (alertErr) {
+        // Never block save — just warn
+        console.warn("[GroupFormModal] Alert creation failed:", alertErr?.message);
       }
     } else {
       const newGroup = await base44.entities.Group.create(payload);

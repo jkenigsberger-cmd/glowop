@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { BedDouble, Users, ChevronDown, ChevronUp, CheckCircle2, Clock, AlertCircle, Shield, Car } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import SleepingAllocationTab from "@/components/sleeping/SleepingAllocationTab";
+import ReviewAlertsBanner from "@/components/alerts/ReviewAlertsBanner";
 
 const TODAY = new Date().toISOString().slice(0, 10);
 
@@ -286,6 +287,9 @@ export default function Allocation() {
             </span>
           </div>
         </div>
+
+        {/* Allocation review alerts */}
+        <ReviewAlertsBanner module="ALLOCATION" />
 
         {/* Stats strip */}
         <div className="grid grid-cols-3 gap-3">

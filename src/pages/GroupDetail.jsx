@@ -20,6 +20,7 @@ import SleepingRequirementsTab from "@/components/sleeping/SleepingRequirementsT
 import ScheduleAndMealsTab from "@/components/schedule/ScheduleAndMealsTab";
 import GroupLifecycleActions from "@/components/groups/GroupLifecycleActions";
 import RoleGate from "@/components/RoleGate";
+import ReviewAlertsBanner from "@/components/alerts/ReviewAlertsBanner";
 
 export default function GroupDetail() {
   const { id } = useParams();
@@ -156,6 +157,11 @@ export default function GroupDetail() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Review alerts for this group */}
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-4">
+        <ReviewAlertsBanner groupId={id} />
       </div>
 
       {/* Tab navigation */}

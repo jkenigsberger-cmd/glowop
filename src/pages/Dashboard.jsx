@@ -9,6 +9,7 @@ import DashboardWarnings from "@/components/dashboard/DashboardWarnings";
 import DashboardMealsToday from "@/components/dashboard/DashboardMealsToday";
 import DashboardActivitiesToday from "@/components/dashboard/DashboardActivitiesToday";
 import DashboardQuickLinks from "@/components/dashboard/DashboardQuickLinks";
+import ReviewAlertsBanner from "@/components/alerts/ReviewAlertsBanner";
 import { Button } from "@/components/ui/button";
 import { FileText, ChevronRight, ChevronLeft } from "lucide-react";
 import { useRoleContext } from "@/lib/RoleContext";
@@ -319,6 +320,11 @@ export default function Dashboard() {
         {/* Operational warnings */}
         <Section title="התראות תפעוליות">
           <DashboardWarnings warnings={warnings} selectedDate={selectedDate} today={TODAY} />
+        </Section>
+
+        {/* Operational change review alerts */}
+        <Section title="קבוצות שדורשות בדיקה">
+          <ReviewAlertsBanner />
         </Section>
 
         {/* Arriving */}

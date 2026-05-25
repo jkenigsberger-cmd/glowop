@@ -9,6 +9,7 @@ import PeopleSummaryCard from "./PeopleSummaryCard";
 import StudentTentPlanningEditor from "./StudentTentPlanningEditor";
 import VipRequirementsEditor from "./VipRequirementsEditor";
 import RoleGate from "@/components/RoleGate";
+import { upsertReviewAlert } from "@/lib/reviewAlerts";
 
 const VIP_TOTAL_TENTS  = 10;
 const VIP_MAX_PER_TENT = 4; // allow up to 4 for operational override
@@ -193,6 +194,22 @@ export default function SleepingRequirementsTab({ groupId, profile }) {
       if (markComplete === true)       toast.success("דרישות הלינה סומנו כמוכנות למשק בית ✓");
       else if (markComplete === false) toast.success("דרישות הלינה הוחזרו לעריכה");
       else                             toast.success("דרישות הלינה נשמרו");
+
+      // ── Alert: sleeping requirements changed after allocations already exist ──
+      try {
+        const existingAllocs = await base44.entities.SleepingAllocation.filter({ group_id: groupId });
+        const activeAllocs   = (existingAllocs || []).filter(a => a.status !== "CANCELLED");
+        if (activeAllocs.length > 0) {
+          const hasConfirmed = activeAllocs.some(a => a.status === "CONFIRMED");
+          const msg = "דרישות הלינה השתנו לאחר שבוצע שיבוץ. יש לבדוק את השיבוץ מחדש.";
+          await upsertReviewAlert(groupId, "ALLOCATION", "SLEEPING_REQUIREMENTS_CHANGED", "דרישות לינה השתנו — דורש בדיקה", msg, null, null);
+          if (hasConfirmed) {
+            await upsertReviewAlert(groupId, "HOUSEKEEPING", "SLEEPING_REQUIREMENTS_CHANGED", "דרישות לינה השתנו — דורש בדיקה", msg, null, null);
+          }
+        }
+      } catch (alertErr) {
+        console.warn("[SleepingRequirementsTab] Alert creation failed:", alertErr?.message);
+      }
     } catch (err) {
       console.error("שגיאה בשמירת דרישות לינה:", err);
       toast.error(`שגיאה בשמירה: ${err?.message || "שגיאה לא ידועה"}`);

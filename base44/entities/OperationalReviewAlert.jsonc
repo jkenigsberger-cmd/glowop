@@ -1,0 +1,82 @@
+{
+  "name": "OperationalReviewAlert",
+  "type": "object",
+  "properties": {
+    "group_id": {
+      "type": "string",
+      "description": "FK to Group"
+    },
+    "module": {
+      "type": "string",
+      "enum": [
+        "GROUP",
+        "SLEEPING_REQUIREMENTS",
+        "ALLOCATION",
+        "KITCHEN",
+        "HOUSEKEEPING",
+        "ACTIVITIES",
+        "REPORTS"
+      ],
+      "description": "Which operational module needs review"
+    },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "INFO",
+        "WARNING",
+        "CRITICAL"
+      ],
+      "default": "WARNING"
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "GROUP_PAX_CHANGED",
+        "GROUP_DATES_CHANGED",
+        "DIET_CHANGED",
+        "SLEEPING_REQUIREMENTS_CHANGED",
+        "ALLOCATION_CHANGED",
+        "MEAL_CHANGED"
+      ],
+      "description": "What triggered this alert"
+    },
+    "title": {
+      "type": "string"
+    },
+    "message": {
+      "type": "string"
+    },
+    "previous_value_json": {
+      "type": "string",
+      "description": "JSON snapshot of previous values"
+    },
+    "new_value_json": {
+      "type": "string",
+      "description": "JSON snapshot of new values"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "OPEN",
+        "ACKNOWLEDGED"
+      ],
+      "default": "OPEN"
+    },
+    "acknowledged_at": {
+      "type": "string",
+      "description": "ISO datetime"
+    },
+    "acknowledged_by": {
+      "type": "string",
+      "description": "Email of user who acknowledged"
+    }
+  },
+  "required": [
+    "group_id",
+    "module",
+    "source",
+    "title",
+    "message",
+    "status"
+  ]
+}
