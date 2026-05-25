@@ -146,18 +146,9 @@ Deno.serve(async (req) => {
       );
     }
 
-    // ── 6. Stale-row check — same group already has an alt tent row ─────────
-    const groupAllocs = await base44.asServiceRole.entities.SleepingAllocation.filter({ group_id });
-    const staleRow = groupAllocs.find(a =>
-      a.status !== 'CANCELLED' &&
-      a.id !== allocation_id &&
-      (a.notes || '').includes(ALT_TENT_MARKER)
-    );
-    console.log('[saveAltTentAllocation] staleRow:', staleRow ? `id=${staleRow.id}` : 'none');
-
-    // ── 7. Build & persist ──────────────────────────────────────────────────
-    const cleanNotes   = (notes || '').replace(/__alt_tent__\s*/g, '').trim();
-    const savePayload  = {
+    // ── 6. Build & persist ─────────────────────────────────────────────────
+    const cleanNotes  = (notes || '').replace(/__alt_tent__\s*/g, '').trim();
+    const savePayload = {
       tent_id,
       neighborhood_id:               neighborhood.id,
       group_id,
@@ -173,15 +164,11 @@ Deno.serve(async (req) => {
 
     let savedId;
     if (allocation_id) {
+      // Editing an existing alt tent row
       await base44.asServiceRole.entities.SleepingAllocation.update(allocation_id, savePayload);
       savedId = allocation_id;
-      if (staleRow && staleRow.id !== allocation_id) {
-        await base44.asServiceRole.entities.SleepingAllocation.delete(staleRow.id);
-      }
-    } else if (staleRow) {
-      await base44.asServiceRole.entities.SleepingAllocation.update(staleRow.id, savePayload);
-      savedId = staleRow.id;
     } else {
+      // Creating a new alt tent row (multiple per group allowed)
       const created = await base44.asServiceRole.entities.SleepingAllocation.create(savePayload);
       savedId = created.id;
     }

@@ -83,7 +83,6 @@ export default function SleepingRequirementsTab({ groupId, profile }) {
     accessibility_sleeping_notes:"",
     housekeeping_sleeping_notes: "",
     sleeping_requirements_completed: false,
-    staff_alt_tent_pax:   null,
     staff_alt_tent_notes: "",
   });
 
@@ -112,7 +111,6 @@ export default function SleepingRequirementsTab({ groupId, profile }) {
       accessibility_sleeping_notes: profile.accessibility_sleeping_notes ?? "",
       housekeeping_sleeping_notes:  profile.housekeeping_sleeping_notes  ?? "",
       sleeping_requirements_completed: !!profile.sleeping_requirements_completed,
-      staff_alt_tent_pax:   profile.staff_alt_tent_pax   ?? null,
       staff_alt_tent_notes: profile.staff_alt_tent_notes ?? "",
     });
     setBoysDist( parseDist(profile.boys_tent_distribution_json));
@@ -123,6 +121,15 @@ export default function SleepingRequirementsTab({ groupId, profile }) {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   // ── derived ───────────────────────────────────────────────────────────────
+  // Compute alt tent pax live (used in PeopleSummaryCard and save)
+  const NON_STAFF_VIP_DERIVED = ["DRIVER", "SECURITY", "GUIDE", "OTHER"];
+  const liveVipStaffPeople = vipRows
+    .filter(r => !NON_STAFF_VIP_DERIVED.includes(r.purpose))
+    .reduce((s, r) => s + (Number(r.people_count) || 0), 0);
+  const liveAltTentPax = (profile?.staff_count != null)
+    ? Math.max(profile.staff_count - liveVipStaffPeople, 0)
+    : null;
+
   const studentOverMax = hasOverMaxRow(boysDist, STUDENT_CAPACITY) || hasOverMaxRow(girlsDist, STUDENT_CAPACITY);
 
   const vipExceedsMax  = vipRows.length > VIP_TOTAL_TENTS;
@@ -156,16 +163,22 @@ export default function SleepingRequirementsTab({ groupId, profile }) {
         saveForm.boys_beds_needed  = form.general_beds_needed ?? null;
         saveForm.girls_beds_needed = null;
       }
+      // Compute staff_alt_tent_pax automatically from vipRows vs staff_count
+      const NON_STAFF_VIP = ["DRIVER", "SECURITY", "GUIDE", "OTHER"];
+      const totalVipStaffPeople = vipRows
+        .filter(r => !NON_STAFF_VIP.includes(r.purpose))
+        .reduce((s, r) => s + (Number(r.people_count) || 0), 0);
+      const staffCount = profile.staff_count ?? null;
+      const computedAltPax = staffCount != null
+        ? Math.max(staffCount - totalVipStaffPeople, 0)
+        : null;
+
       const payload = {
         ...saveForm,
         boys_tent_distribution_json:  JSON.stringify(boysDist),
         girls_tent_distribution_json: JSON.stringify(girlsDist),
         vip_tent_requirements_json:   JSON.stringify(vipRows),
-        staff_alt_tent_pax:   (() => {
-          const raw = saveForm.staff_alt_tent_pax;
-          if (raw == null || raw === "" || isNaN(Number(raw))) return null;
-          return Math.max(0, Math.floor(Number(raw)));
-        })(),
+        staff_alt_tent_pax:   computedAltPax,
         staff_alt_tent_notes: saveForm.staff_alt_tent_notes ?? "",
       };
       if (markComplete !== null) payload.sleeping_requirements_completed = markComplete;
@@ -257,7 +270,7 @@ export default function SleepingRequirementsTab({ groupId, profile }) {
         vipRows={vipRows}
         boysDist={boysDist}
         girlsDist={girlsDist}
-        staffAltTentPax={form.staff_alt_tent_pax}
+        staffAltTentPax={liveAltTentPax}
         staffAltTentNotes={form.staff_alt_tent_notes}
       />
 
@@ -344,9 +357,8 @@ export default function SleepingRequirementsTab({ groupId, profile }) {
           driversTotal={(profile.drivers_men_count != null || profile.drivers_women_count != null)
             ? (profile.drivers_men_count ?? 0) + (profile.drivers_women_count ?? 0)
             : null}
-          altTentPax={form.staff_alt_tent_pax}
+          altTentPax={liveAltTentPax}
           altTentNotes={form.staff_alt_tent_notes}
-          onAltTentPaxChange={v => set("staff_alt_tent_pax", v)}
           onAltTentNotesChange={v => set("staff_alt_tent_notes", v)}
         />
         <TextArea
