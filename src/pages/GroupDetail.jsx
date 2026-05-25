@@ -159,9 +159,9 @@ export default function GroupDetail() {
         </div>
       </div>
 
-      {/* Review alerts for this group */}
+      {/* Review alerts for this group — grouped by source to avoid 3 duplicate cards */}
       <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-4">
-        <ReviewAlertsBanner groupId={id} />
+        <ReviewAlertsBanner groupId={id} grouped />
       </div>
 
       {/* Tab navigation */}

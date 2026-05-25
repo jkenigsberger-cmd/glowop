@@ -115,9 +115,11 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
             return oldVal !== newVal;
           });
           if (paxChanged) {
-            const oldPax = group.total_pax ?? "—";
-            const newPax = payload.total_pax ?? "—";
-            const msg = `מספר האנשים בקבוצה השתנה מ-${oldPax} ל-${newPax}. יש לבדוק דרישות לינה, שיבוץ לינה ומטבח.`;
+            const oldPax = Number(group.total_pax ?? 0);
+            const newPax = Number(payload.total_pax ?? 0);
+            const diff   = newPax - oldPax;
+            const diffTxt = diff > 0 ? `נוספו ${diff} אנשים.` : diff < 0 ? `ירדו ${Math.abs(diff)} אנשים.` : "";
+            const msg = `מספר האנשים בקבוצה השתנה מ-${oldPax} ל-${newPax}.${diffTxt ? " " + diffTxt : ""} יש לבדוק דרישות לינה, שיבוץ לינה ומטבח.`;
             const prev = Object.fromEntries(PAX_FIELDS.map(f => [f, group[f] ?? null]));
             const next = Object.fromEntries(PAX_FIELDS.map(f => [f, payload[f] ?? null]));
             await upsertReviewAlert(group.id, "SLEEPING_REQUIREMENTS", "GROUP_PAX_CHANGED", "שינוי בפרטי הקבוצה דורש בדיקה", msg, prev, next);

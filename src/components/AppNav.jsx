@@ -7,6 +7,14 @@ import {
 import { revokeAccess } from "@/components/PilotAccessGate";
 import { useRoleContext } from "@/lib/RoleContext";
 import { ROLE_NAV_LINKS, ROLE_LABELS } from "@/lib/roles";
+import { useAlertCounts } from "@/hooks/useAlertCounts";
+
+// Map nav link keys to alert modules
+const LINK_ALERT_MODULE = {
+  "kitchen":     "KITCHEN",
+  "allocation":  "ALLOCATION",
+  "housekeeping":"HOUSEKEEPING",
+};
 
 const ALL_LINKS = [
   { key: "dashboard",       to: "/dashboard",       label: "בית",              icon: LayoutDashboard },
@@ -38,7 +46,16 @@ function isActive(linkTo, pathname) {
   return linkTo === "/" ? pathname === "/" : pathname === linkTo || pathname.startsWith(linkTo + "/");
 }
 
-function NavTab({ to, label, icon: Icon, pathname, onClick }) {
+function AlertBadge({ count }) {
+  if (!count || count < 1) return null;
+  return (
+    <span className="absolute -top-1 -left-1 min-w-[16px] h-4 flex items-center justify-center bg-red-500 text-white text-[10px] font-bold rounded-full px-1 leading-none z-10 pointer-events-none">
+      {count > 9 ? "9+" : count}
+    </span>
+  );
+}
+
+function NavTab({ to, label, icon: Icon, pathname, onClick, alertCount }) {
   const active = isActive(to, pathname);
   return (
     <Link
@@ -50,7 +67,10 @@ function NavTab({ to, label, icon: Icon, pathname, onClick }) {
           : "text-slate-500 hover:text-slate-800 hover:bg-slate-100"
       }`}
     >
-      <Icon className="w-3.5 h-3.5 shrink-0" />
+      <span className="relative">
+        <Icon className="w-3.5 h-3.5 shrink-0" />
+        <AlertBadge count={alertCount} />
+      </span>
       {label}
       {active && (
         <span className="absolute bottom-0 right-2 left-2 h-0.5 bg-primary rounded-full" />
@@ -59,7 +79,7 @@ function NavTab({ to, label, icon: Icon, pathname, onClick }) {
   );
 }
 
-function DrawerNavLink({ to, label, icon: Icon, pathname, onClick }) {
+function DrawerNavLink({ to, label, icon: Icon, pathname, onClick, alertCount }) {
   const active = isActive(to, pathname);
   return (
     <Link
@@ -71,8 +91,14 @@ function DrawerNavLink({ to, label, icon: Icon, pathname, onClick }) {
           : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
       }`}
     >
-      <Icon className="w-4.5 h-4.5 shrink-0" />
-      {label}
+      <span className="relative">
+        <Icon className="w-4 h-4 shrink-0" />
+        <AlertBadge count={alertCount} />
+      </span>
+      <span className="flex-1">{label}</span>
+      {alertCount > 0 && (
+        <span className="text-[11px] font-bold text-red-500">{alertCount}</span>
+      )}
     </Link>
   );
 }
@@ -81,6 +107,7 @@ export default function AppNav() {
   const { pathname } = useLocation();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const { role, internalUser } = useRoleContext();
+  const alertCounts = useAlertCounts();
 
   const currentTitle = Object.entries(PAGE_TITLES).find(([path]) =>
     path === "/" ? pathname === "/" : pathname === path || pathname.startsWith(path + "/")
@@ -129,7 +156,10 @@ export default function AppNav() {
         {/* Nav tabs row */}
         <div className="max-w-6xl mx-auto px-4 sm:px-6 flex items-center gap-0.5 h-10 overflow-x-auto">
           {visibleLinks.map(link => (
-            <NavTab key={link.to} {...link} pathname={pathname} />
+            <NavTab
+              key={link.to} {...link} pathname={pathname}
+              alertCount={alertCounts[LINK_ALERT_MODULE[link.key]] || 0}
+            />
           ))}
 
           {/* Spacer */}
@@ -216,7 +246,10 @@ export default function AppNav() {
             {/* Nav links */}
             <div className="flex-1 overflow-y-auto p-3 space-y-0.5">
               {visibleLinks.map(link => (
-                <DrawerNavLink key={link.to} {...link} pathname={pathname} onClick={closeDrawer} />
+                <DrawerNavLink
+                  key={link.to} {...link} pathname={pathname} onClick={closeDrawer}
+                  alertCount={alertCounts[LINK_ALERT_MODULE[link.key]] || 0}
+                />
               ))}
             </div>
 
