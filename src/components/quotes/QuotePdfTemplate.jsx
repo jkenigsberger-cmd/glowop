@@ -11,8 +11,8 @@ const fmtDate = (d) => {
 };
 const parse = (str, fb = []) => { try { const r = JSON.parse(str); return Array.isArray(r) ? r : fb; } catch { return fb; } };
 
-const LOGO_URL   = "https://media.base44.com/images/public/69ea08de3791d203c52ea3cc/107796e98_quote-logo.png";
-const FOOTER_URL = "https://media.base44.com/images/public/69ea08de3791d203c52ea3cc/c500ec249_quote-footer-photo.jpg";
+const LOGO_URL_FALLBACK   = "https://media.base44.com/images/public/69ea08de3791d203c52ea3cc/107796e98_quote-logo.png";
+const FOOTER_URL_FALLBACK = "https://media.base44.com/images/public/69ea08de3791d203c52ea3cc/c500ec249_quote-footer-photo.jpg";
 
 // ── Safe resolvers ────────────────────────────────────────────────────────────
 function resolveData(quote, group) {
@@ -157,11 +157,11 @@ const pageStyle = {
 };
 
 // Centered logo + title used on Page 1 only
-function CoverHeader({ quoteNumber }) {
+function CoverHeader({ quoteNumber, logoUrl }) {
   return (
     <div style={{ textAlign: "center", marginBottom: 24, direction: "ltr" }}>
       <img
-        src={LOGO_URL}
+        src={logoUrl || LOGO_URL_FALLBACK}
         alt="בית הדור הבא"
         style={{ height: 160, width: "auto", marginBottom: 16, display: "block", margin: "0 auto 16px auto" }}
         onError={e => { e.target.style.display = "none"; }}
@@ -177,14 +177,14 @@ function CoverHeader({ quoteNumber }) {
 }
 
 // Compact header for pages 2 & 3
-function CompactHeader({ quoteNumber }) {
+function CompactHeader({ quoteNumber, logoUrl }) {
   return (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `2px solid ${BLUE}`, paddingBottom: 8, marginBottom: 16 }}>
       <div style={{ fontSize: 14, fontWeight: 700, color: BLUE }}>בית הדור הבא – חוות אהרונסון</div>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         {quoteNumber && <span style={{ fontSize: 10, color: "#888" }}>מס׳ הצעה: {quoteNumber}</span>}
         <img
-          src={LOGO_URL}
+          src={logoUrl || LOGO_URL_FALLBACK}
           alt=""
           style={{ height: 44, width: "auto" }}
           onError={e => { e.target.style.display = "none"; }}
@@ -220,10 +220,10 @@ function DetailTable({ rows }) {
 }
 
 // ── Page 1 ────────────────────────────────────────────────────────────────────
-function Page1({ d }) {
+function Page1({ d, logoUrl }) {
   return (
     <div style={{ ...pageStyle, pageBreakAfter: "always" }}>
-      <CoverHeader quoteNumber={d.quoteNumber} />
+      <CoverHeader quoteNumber={d.quoteNumber} logoUrl={logoUrl} />
 
       {/* Intro */}
       <div style={{ textAlign: "center", fontSize: 14, fontWeight: 700, color: BLUE, marginBottom: 6 }}>
@@ -272,7 +272,7 @@ function Page1({ d }) {
 const tdBase = { padding: "7px 10px", borderBottom: "1px solid #dde8f5", fontSize: 11, verticalAlign: "middle" };
 const thBase = { padding: "8px 10px", background: BLUE, color: "#fff", fontWeight: 700, fontSize: 11, textAlign: "right" };
 
-function Page2({ d }) {
+function Page2({ d, logoUrl }) {
   const deposit = d.advance || Math.round(d.totalPrice * 0.3);
   const bal     = d.balance || (d.totalPrice - deposit);
 
@@ -282,7 +282,7 @@ function Page2({ d }) {
 
   return (
     <div style={{ ...pageStyle, pageBreakAfter: "always" }}>
-      <CompactHeader quoteNumber={d.quoteNumber} />
+      <CompactHeader quoteNumber={d.quoteNumber} logoUrl={logoUrl} />
 
       {/* Activity details table */}
       <SectionHeading>פרטי פעילות</SectionHeading>
@@ -398,10 +398,10 @@ function SigLine({ label, wide }) {
   );
 }
 
-function Page3() {
+function Page3({ logoUrl, footerUrl }) {
   return (
     <div style={{ ...pageStyle }}>
-      <CompactHeader />
+      <CompactHeader logoUrl={logoUrl} />
 
       <SectionHeading>תנאי ההסכם</SectionHeading>
       <div style={{ marginTop: 10 }}>
@@ -451,7 +451,7 @@ function Page3() {
         <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>מחכים לכם בבית הדור הבא</div>
         <div style={{ display: "inline-block", width: "65%" }}>
           <img
-            src={FOOTER_URL}
+            src={footerUrl || FOOTER_URL_FALLBACK}
             alt="חוות אהרונסון"
             style={{ width: "100%", height: "auto", maxHeight: 220, objectFit: "cover", borderRadius: 6, display: "block" }}
             onError={e => { e.target.parentElement.style.display = "none"; }}
@@ -463,13 +463,13 @@ function Page3() {
 }
 
 // ── Main export ───────────────────────────────────────────────────────────────
-export default function QuotePdfTemplate({ quote, group }) {
+export default function QuotePdfTemplate({ quote, group, logoUrl, footerUrl }) {
   const d = resolveData(quote, group);
   return (
     <div id="quote-pdf-root" style={{ background: "#fff" }}>
-      <Page1 d={d} />
-      <Page2 d={d} />
-      <Page3 />
+      <Page1 d={d} logoUrl={logoUrl} />
+      <Page2 d={d} logoUrl={logoUrl} />
+      <Page3 logoUrl={logoUrl} footerUrl={footerUrl} />
     </div>
   );
 }
