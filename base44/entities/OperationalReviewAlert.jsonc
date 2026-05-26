@@ -36,7 +36,9 @@
         "DIET_CHANGED",
         "SLEEPING_REQUIREMENTS_CHANGED",
         "ALLOCATION_CHANGED",
-        "MEAL_CHANGED"
+        "MEAL_CHANGED",
+        "GUEST_FORM_SUBMITTED",
+        "MEAL_CONFLICT"
       ],
       "description": "What triggered this alert"
     },

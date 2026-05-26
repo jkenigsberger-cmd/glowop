@@ -112,9 +112,9 @@ Deno.serve(async (req) => {
         group_id,
         module:   'GROUP',
         severity: 'WARNING',
-        source:   'GROUP_PAX_CHANGED', // reusing closest available source enum value
+        source:   'GUEST_FORM_SUBMITTED',
         title:    'נתונים חדשים התקבלו מהטופס החיצוני',
-        message:  'התקבלו נתונים חדשים מהטופס החיצוני עבור הקבוצה. יש לבדוק לפני סנכרון.',
+        message:  'התקבלו נתונים חדשים מהטופס החיצוני עבור הקבוצה. יש לבדוק את הנתונים לפני סנכרון.',
         status:   'OPEN',
         new_value_json: JSON.stringify({ submission_id: submission.id, submitted_at: now }),
       });

@@ -112,9 +112,7 @@ export default function GroupDetail() {
     toast.success("הקישור הועתק ללוח");
   };
 
-  // A direct submission exists (linked to group, no quote_id) if group has submissions without quote_id
-  const directSubmission = submissions.find(s => !s.quote_id);
-  const hasDirectLink = !!directSubmission || (quotes.length === 0); // show button for groups with no quotes or already sent direct
+
 
   if (!group) return (
     <div className="flex items-center justify-center min-h-screen">
@@ -303,7 +301,7 @@ export default function GroupDetail() {
                   >
                     {copiedDirectLink
                       ? <><Check className="w-3 h-3" /> הועתק!</>
-                      : <><Link2 className="w-3 h-3" />{directSubmission ? "העתק קישור חיצוני" : "צור קישור חיצוני לקבוצה"}</>
+                      : <><Link2 className="w-3 h-3" /> העתק קישור חיצוני</>
                     }
                   </Button>
                 </RoleGate>

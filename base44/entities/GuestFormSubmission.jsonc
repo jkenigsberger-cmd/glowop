@@ -4,7 +4,7 @@
   "properties": {
     "quote_id": {
       "type": "string",
-      "description": "FK to Quote (primary link)"
+      "description": "FK to Quote (primary link) \u2014 null for direct group submissions"
     },
     "group_id": {
       "type": "string",
@@ -114,7 +114,6 @@
     }
   },
   "required": [
-    "quote_id",
     "group_id",
     "status"
   ]

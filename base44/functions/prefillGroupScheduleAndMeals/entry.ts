@@ -86,7 +86,7 @@ Deno.serve(async (req) => {
 
     // Load existing groupSync rows for upsert
     step = 'load_existing';
-    const [existingSchedule, existingMeals] = await Promise.all([
+    const [existingSchedule, existingGroupSyncMeals, allGroupMeals] = await Promise.all([
       base44.asServiceRole.entities.GroupScheduleItem.filter({
         operational_group_profile_id,
         source: 'groupSync',
@@ -94,6 +94,10 @@ Deno.serve(async (req) => {
       base44.asServiceRole.entities.MealReservation.filter({
         operational_group_profile_id,
         source: 'groupSync',
+      }),
+      // Load ALL active meals for this group to detect manual conflicts
+      base44.asServiceRole.entities.MealReservation.filter({
+        group_id,
       }),
     ]);
 
@@ -103,10 +107,20 @@ Deno.serve(async (req) => {
       scheduleByKey[key] = item;
     });
 
-    const mealByKey = {};
-    existingMeals.forEach(item => {
+    // groupSync meals — safe to update
+    const groupSyncMealByKey = {};
+    existingGroupSyncMeals.forEach(item => {
       const key = `${item.date}|${item.meal_type}`;
-      mealByKey[key] = item;
+      groupSyncMealByKey[key] = item;
+    });
+
+    // ALL active meals (any source) — used for duplicate/conflict detection
+    const allActiveMealByKey = {};
+    allGroupMeals.forEach(item => {
+      if (item.status !== 'CANCELLED') {
+        const key = `${item.date}|${item.meal_type}`;
+        allActiveMealByKey[key] = item;
+      }
     });
 
     let scheduleCreated = 0, scheduleUpdated = 0;
@@ -198,6 +212,8 @@ Deno.serve(async (req) => {
     const extraNotes = [arrivalLunchNote, departureLunchNote, submission.general_notes]
       .filter(Boolean).join(' | ');
 
+    const mealConflicts = [];
+
     for (const row of mealRows) {
       if (!row.date || !row.meal_type) continue;
       const mealTypeMap = { BREAKFAST: 'BREAKFAST', LUNCH: 'LUNCH', DINNER: 'DINNER' };
@@ -205,6 +221,17 @@ Deno.serve(async (req) => {
 
       const defaults = MEAL_DEFAULTS[meal_type] || MEAL_DEFAULTS.OTHER;
       const key = `${row.date}|${meal_type}`;
+
+      const existingGroupSync = groupSyncMealByKey[key];
+      const existingAny       = allActiveMealByKey[key];
+
+      // Case 1: manual meal already exists for this date/type — do NOT overwrite, create conflict alert
+      if (existingAny && !existingGroupSync) {
+        console.log(`[prefillGroupScheduleAndMeals] CONFLICT: manual meal exists for ${key}, skipping`);
+        mealConflicts.push({ date: row.date, meal_type, existing_source: existingAny.source });
+        warnings.push(`MEAL_CONFLICT:${key}`);
+        continue;
+      }
 
       const payload = {
         group_id,
@@ -221,12 +248,35 @@ Deno.serve(async (req) => {
         status: 'ACTIVE',
       };
 
-      if (mealByKey[key]) {
-        await base44.asServiceRole.entities.MealReservation.update(mealByKey[key].id, payload);
+      // Case 2: existing groupSync meal — safe to update
+      if (existingGroupSync) {
+        await base44.asServiceRole.entities.MealReservation.update(existingGroupSync.id, payload);
         mealsUpdated++;
       } else {
+        // Case 3: no existing meal — safe to create
         await base44.asServiceRole.entities.MealReservation.create(payload);
         mealsCreated++;
+      }
+    }
+
+    // Create a single KITCHEN conflict alert if any manual meals blocked sync
+    if (mealConflicts.length > 0) {
+      try {
+        const conflictList = mealConflicts
+          .map(c => `${c.date} — ${c.meal_type}`)
+          .join(', ');
+        await base44.asServiceRole.entities.OperationalReviewAlert.create({
+          group_id,
+          module:   'KITCHEN',
+          severity: 'WARNING',
+          source:   'MEAL_CONFLICT',
+          title:    'ארוחות קיימות — סנכרון לא הושלם',
+          message:  `ארוחה קיימת כבר בתאריכים הבאים. יש לבדוק לפני סנכרון: ${conflictList}`,
+          status:   'OPEN',
+          new_value_json: JSON.stringify({ conflicts: mealConflicts, submission_id: profile.guest_form_submission_id }),
+        });
+      } catch (alertErr) {
+        console.warn('[prefillGroupScheduleAndMeals] failed to create meal conflict alert:', alertErr?.message);
       }
     }
 
@@ -235,7 +285,8 @@ Deno.serve(async (req) => {
     return Response.json({
       success: true,
       partial: false,
-      warnings: [],
+      warnings,
+      meal_conflicts: mealConflicts,
       schedule: { created: scheduleCreated, updated: scheduleUpdated },
       meals: { created: mealsCreated, updated: mealsUpdated },
     });
