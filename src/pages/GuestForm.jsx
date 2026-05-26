@@ -203,10 +203,25 @@ export default function GuestForm() {
     const driversTotal     = driversMen + driversWomen;
     const totalPax         = participantCount + staffCount + driversTotal;
 
+    const resolvedGroupId = directGroupId || quoteData?.group_id;
+    console.log('[GuestForm submit]', {
+      directGroupId,
+      quoteId,
+      quoteDataGroupId: quoteData?.group_id,
+      resolvedGroupId,
+      isSleeping,
+    });
+
+    if (!resolvedGroupId) {
+      setValidationError("שגיאה: לא נמצא מזהה קבוצה. אנא פנו אלינו ישירות.");
+      setSubmitting(false);
+      return;
+    }
+
     try {
-      await callFunction("submitGuestForm", {
-        quote_id:        directGroupId ? undefined : quoteId,
-        group_id:        quoteData.group_id,
+      const payload = {
+        quote_id:        directGroupId ? null : quoteId,
+        group_id:        resolvedGroupId,
         contact_name:    details.contact_name,
         contact_phone:   details.contact_phone,
         contact_email:   details.contact_email,
@@ -214,31 +229,39 @@ export default function GuestForm() {
         group_type_label: details.group_type_label,
         estimated_arrival_time:   details.estimated_arrival_time   || null,
         estimated_departure_time: details.estimated_departure_time || null,
-        total_pax:       totalPax,
-        participant_count: participantCount,
-        staff_count:     staffCount,
-        boys_count:      boys,
-        girls_count:     girls,
-        staff_men_count: staffMen,
-        staff_women_count: staffWomen,
-        drivers_men_count: driversMen,
-        drivers_women_count: driversWomen,
+        total_pax:       totalPax || null,
+        participant_count: participantCount || null,
+        staff_count:     staffCount || null,
+        boys_count:      boys || null,
+        girls_count:     girls || null,
+        staff_men_count: staffMen || null,
+        staff_women_count: staffWomen || null,
+        drivers_men_count: driversMen || null,
+        drivers_women_count: driversWomen || null,
         is_sleeping_group: isSleeping,
         arrival_lunch:   mealOptions.arrival_lunch,
         departure_lunch: mealOptions.departure_lunch,
         special_diets:   JSON.stringify(diet),
         meal_plan:       JSON.stringify(meals),
         tent_distribution_notes: JSON.stringify({
-          student_sleeping_notes: participants.student_sleeping_notes,
-          staff_sleeping_notes:   participants.staff_sleeping_notes,
-          drivers_lodging_notes:  participants.drivers_lodging_notes,
+          student_sleeping_notes: participants.student_sleeping_notes || '',
+          staff_sleeping_notes:   participants.staff_sleeping_notes   || '',
+          drivers_lodging_notes:  participants.drivers_lodging_notes  || '',
         }),
         schedule_notes:  JSON.stringify(schedule),
-        general_notes:   generalNotes,
-      });
+        general_notes:   generalNotes || '',
+      };
+      console.log('[GuestForm payload keys]', Object.keys(payload));
+      await callFunction("submitGuestForm", payload);
       setSubmitted(true);
-    } catch {
-      setValidationError("שגיאה בשליחת הטופס. אנא נסו שוב או פנו אלינו ישירות.");
+    } catch (submitErr) {
+      // Extract backend Hebrew error if available
+      const backendMsg = submitErr?.response?.data?.error || submitErr?.message || '';
+      console.error('[GuestForm submit error]', backendMsg, submitErr);
+      const userMsg = backendMsg && backendMsg.length > 0 && backendMsg.length < 300
+        ? backendMsg
+        : "שגיאה בשליחת הטופס. אנא נסו שוב או פנו אלינו ישירות.";
+      setValidationError(userMsg);
     } finally {
       setSubmitting(false);
     }

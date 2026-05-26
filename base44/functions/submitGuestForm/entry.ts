@@ -71,12 +71,14 @@ Deno.serve(async (req) => {
       }
     }
 
-    const num = (v) => (v !== undefined && v !== '' ? Number(v) : undefined);
+    const num = (v) => (v !== undefined && v !== null && v !== '' ? Number(v) : null);
     const now = new Date().toISOString();
 
-    const submission = await base44.asServiceRole.entities.GuestFormSubmission.create({
-      quote_id:                isDirectGroup ? undefined : quote_id,
+    console.log('[submitGuestForm]', { group_id, isDirectGroup, quote_id: quote_id || null });
+
+    const submissionData = {
       group_id,
+      ...(isDirectGroup ? {} : { quote_id }),
       contact_name:            fields.contact_name              || '',
       contact_phone:           fields.contact_phone             || '',
       contact_email:           fields.contact_email             || '',
@@ -96,15 +98,18 @@ Deno.serve(async (req) => {
       is_sleeping_group:       !!fields.is_sleeping_group,
       arrival_lunch:           !!fields.arrival_lunch,
       departure_lunch:         !!fields.departure_lunch,
-      special_diets:           fields.special_diets             || '',
-      meal_plan:               fields.meal_plan                 || '',
-      tent_distribution_notes: fields.tent_distribution_notes   || '',
-      schedule_notes:          fields.schedule_notes            || '',
+      special_diets:           fields.special_diets             || '{}',
+      meal_plan:               fields.meal_plan                 || '[]',
+      tent_distribution_notes: fields.tent_distribution_notes   || '{}',
+      schedule_notes:          fields.schedule_notes            || '[]',
       general_notes:           fields.general_notes             || '',
       submitted_at: now,
       source:       'LINK',
       status:       'SUBMITTED',
-    });
+    };
+
+    console.log('[submitGuestForm] creating submission...');
+    const submission = await base44.asServiceRole.entities.GuestFormSubmission.create(submissionData);
 
     // ── Create review alert so admin sees the new submission ─────────────────
     try {
