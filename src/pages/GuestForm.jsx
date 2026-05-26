@@ -64,6 +64,7 @@ async function callFunction(name, payload) {
 export default function GuestForm() {
   const urlParams = new URLSearchParams(window.location.search);
   const quoteId = urlParams.get("quote") || urlParams.get("q");
+  const directGroupId = urlParams.get("group"); // direct group link (no quote)
 
   const [quoteData, setQuoteData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -97,19 +98,24 @@ export default function GuestForm() {
   const scheduleHasTimeErrors = schedule.some(r => r.start_time && r.end_time && r.start_time >= r.end_time);
 
   useEffect(() => {
-    if (!quoteId) {
+    if (!quoteId && !directGroupId) {
       setError("קישור לא תקין");
       setLoading(false);
       return;
     }
 
-    callFunction("getQuotePublicData", { quote_id: quoteId })
+    const fetchData = directGroupId
+      ? callFunction("getGroupPublicData", { group_id: directGroupId })
+      : callFunction("getQuotePublicData", { quote_id: quoteId });
+
+    fetchData
       .then(d => {
         if (!d || d?.error) {
           const msg = d?.error || "";
           if (msg.includes('not found') || msg.includes('Not found')) setError("הטופס לא נמצא — בדקו שהקישור תקין");
-          else if (msg.includes('not available') || msg.includes('not approved') || msg.includes('not available')) setError("הצעת המחיר אינה מאושרת — הטופס זמין רק לאחר אישור הצעה");
-          else setError("הצעת המחיר אינה זמינה");
+          else if (msg.includes('not available') || msg.includes('not approved')) setError("הצעת המחיר אינה מאושרת — הטופס זמין רק לאחר אישור הצעה");
+          else if (msg.includes('409') || msg.includes('כבר נשלח')) setError(msg);
+          else setError(d?.error || "הקישור אינו זמין — בדקו שהקישור תקין");
           return;
         }
 
@@ -141,11 +147,12 @@ export default function GuestForm() {
       .catch((e) => {
         const msg = e?.message || "";
         if (msg.includes('not found') || msg.includes('404')) setError("הטופס לא נמצא — בדקו שהקישור תקין");
-        else if (msg.includes('403') || msg.includes('not available')) setError("הצעת המחיר אינה מאושרת — הטופס זמין רק לאחר אישור הצעה");
-        else setError("הצעת המחיר אינה זמינה — בדקו שהקישור תקין");
+        else if (msg.includes('403') || msg.includes('not available')) setError("הקישור אינו פעיל עוד — פנו לצוות בית הדור הבא");
+        else if (msg.includes('409')) setError("השאלון כבר נשלח — פנו לצוות בית הדור הבא לשינויים");
+        else setError("הקישור אינו זמין — בדקו שהקישור תקין");
       })
       .finally(() => setLoading(false));
-  }, [quoteId]);
+  }, [quoteId, directGroupId]);
 
   const resolvedArrival   = getArrivalDate(quoteData);
   const resolvedDeparture = getDepartureDate(quoteData);
@@ -198,7 +205,7 @@ export default function GuestForm() {
 
     try {
       await callFunction("submitGuestForm", {
-        quote_id:        quoteId,
+        quote_id:        directGroupId ? undefined : quoteId,
         group_id:        quoteData.group_id,
         contact_name:    details.contact_name,
         contact_phone:   details.contact_phone,
@@ -269,6 +276,9 @@ export default function GuestForm() {
         <h1 className="text-lg font-bold text-slate-800">שאלון הכנה לקבוצה</h1>
         {quoteData?.quote_number && (
           <p className="text-xs text-slate-400 mt-0.5">הצעה מס׳ {quoteData.quote_number}</p>
+        )}
+        {quoteData?.is_direct_group && quoteData?.group_name && (
+          <p className="text-xs text-slate-400 mt-0.5">{quoteData.group_name}</p>
         )}
       </div>
 

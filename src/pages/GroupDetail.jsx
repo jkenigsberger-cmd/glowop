@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { ChevronRight, Calendar, Users, Phone, Mail, Pencil, Plus, FileText, ClipboardList, Copy, Check, ShieldCheck, Printer } from "lucide-react";
+import { ChevronRight, Calendar, Users, Phone, Mail, Pencil, Plus, FileText, ClipboardList, Copy, Check, ShieldCheck, Printer, Link2 } from "lucide-react";
 import QuotePdfButton from "@/components/quotes/QuotePdfButton";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -101,6 +101,20 @@ export default function GroupDetail() {
     setCopiedId(quoteId);
     setTimeout(() => setCopiedId(null), 2000);
   };
+
+  // Direct group link (no quote required)
+  const [copiedDirectLink, setCopiedDirectLink] = useState(false);
+  const copyDirectGroupLink = () => {
+    const url = `${window.location.origin}/guest-form?group=${id}`;
+    navigator.clipboard.writeText(url);
+    setCopiedDirectLink(true);
+    setTimeout(() => setCopiedDirectLink(false), 2000);
+    toast.success("הקישור הועתק ללוח");
+  };
+
+  // A direct submission exists (linked to group, no quote_id) if group has submissions without quote_id
+  const directSubmission = submissions.find(s => !s.quote_id);
+  const hasDirectLink = !!directSubmission || (quotes.length === 0); // show button for groups with no quotes or already sent direct
 
   if (!group) return (
     <div className="flex items-center justify-center min-h-screen">
@@ -277,17 +291,29 @@ export default function GroupDetail() {
         <section>
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold flex items-center gap-2"><ClipboardList className="w-4 h-4" /> טפסי קבלה</h2>
-            <RoleGate permission="EDIT_GROUP">
-              {quotes.length === 0 ? (
-                <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
-                  יש ליצור הצעת מחיר תחילה
-                </span>
-              ) : (
+            <div className="flex items-center gap-2 flex-wrap justify-end">
+              {/* Direct group link button — only when no approved quote exists */}
+              {quotes.filter(q => q.status === "APPROVED").length === 0 && (
+                <RoleGate permission="CREATE_GUEST_LINK">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={copyDirectGroupLink}
+                    className={`gap-1 transition-colors ${copiedDirectLink ? "border-green-400 text-green-600 bg-green-50" : "border-blue-300 text-blue-700 hover:bg-blue-50"}`}
+                  >
+                    {copiedDirectLink
+                      ? <><Check className="w-3 h-3" /> הועתק!</>
+                      : <><Link2 className="w-3 h-3" />{directSubmission ? "העתק קישור חיצוני" : "צור קישור חיצוני לקבוצה"}</>
+                    }
+                  </Button>
+                </RoleGate>
+              )}
+              <RoleGate permission="EDIT_GROUP">
                 <Button size="sm" variant="outline" onClick={() => { setEditSubmission(null); setShowSubmissionForm(true); }} className="gap-1">
                   <Plus className="w-3.5 h-3.5" /> טופס חדש
                 </Button>
-              )}
-            </RoleGate>
+              </RoleGate>
+            </div>
           </div>
           {submissions.length === 0 ? (
             <p className="text-sm text-muted-foreground py-4 text-center">אין טפסי קבלה עדיין.</p>
