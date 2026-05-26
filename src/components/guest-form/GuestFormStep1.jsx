@@ -8,6 +8,7 @@ const DIET_OPTIONS = [
   { key: "nutFree_count",        emoji: "🥜", label: "ללא אגוזים" },
   { key: "eggFree_count",        emoji: "🥚", label: "ללא ביצים" },
   { key: "lactoseFree_count",    emoji: "🥛", label: "ללא לקטוז" },
+  { key: "mehadrinKosher_count", emoji: "✡️", label: "מהדרין כשר" },
 ];
 
 const COFFEE_OPTIONS = [
