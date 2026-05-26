@@ -142,7 +142,8 @@ function resolveData(quote, group) {
 }
 
 // ── Shared styles ─────────────────────────────────────────────────────────────
-const BASE_FONT = "'Arial Hebrew', 'Segoe UI', Arial, sans-serif";
+const HEADING_FONT = '"Arial Hebrew", "Noto Sans Hebrew", "Heebo", "Rubik", Arial, sans-serif';
+const BODY_FONT = '"Arial Hebrew", "Noto Sans Hebrew", "Heebo", "Rubik", Arial, sans-serif';
 const BLUE = "#1a56a0";
 
 const pageStyle = {
@@ -150,27 +151,30 @@ const pageStyle = {
   minHeight: "297mm",
   padding: "14mm 16mm 20mm 16mm",
   boxSizing: "border-box",
-  fontFamily: BASE_FONT,
+  fontFamily: BODY_FONT,
+  fontSize: 12,
+  lineHeight: 1.6,
   direction: "rtl",
   backgroundColor: "#fff",
   position: "relative",
+  color: "#1a1a1a",
 };
 
 // Centered logo + title used on Page 1 only
 function CoverHeader({ quoteNumber, logoUrl }) {
   return (
-    <div style={{ textAlign: "center", marginBottom: 24, direction: "ltr" }}>
+    <div style={{ textAlign: "center", marginBottom: 32, direction: "ltr" }}>
       <img
         src={logoUrl || LOGO_URL_FALLBACK}
         alt="בית הדור הבא"
-        style={{ height: 160, width: "auto", marginBottom: 16, display: "block", margin: "0 auto 16px auto" }}
+        style={{ height: 160, width: "auto", marginBottom: 24, display: "block", margin: "0 auto 24px auto" }}
         onError={e => { e.target.style.display = "none"; }}
       />
-      <div style={{ fontSize: 26, fontWeight: 800, color: BLUE, marginBottom: 4, direction: "rtl" }}>
+      <div style={{ fontSize: 28, fontWeight: 700, fontFamily: HEADING_FONT, color: BLUE, marginBottom: 8, direction: "rtl", letterSpacing: "-0.5px" }}>
         בית הדור הבא – חוות אהרונסון
       </div>
       {quoteNumber && (
-        <div style={{ fontSize: 10, color: "#888", marginTop: 2, direction: "rtl" }}>מס׳ הצעה: {quoteNumber}</div>
+        <div style={{ fontSize: 11, color: "#666", marginTop: 4, direction: "rtl", fontFamily: BODY_FONT }}>מס׳ הצעה: {quoteNumber}</div>
       )}
     </div>
   );
@@ -179,14 +183,14 @@ function CoverHeader({ quoteNumber, logoUrl }) {
 // Compact header for pages 2 & 3
 function CompactHeader({ quoteNumber, logoUrl }) {
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `2px solid ${BLUE}`, paddingBottom: 8, marginBottom: 16 }}>
-      <div style={{ fontSize: 14, fontWeight: 700, color: BLUE }}>בית הדור הבא – חוות אהרונסון</div>
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        {quoteNumber && <span style={{ fontSize: 10, color: "#888" }}>מס׳ הצעה: {quoteNumber}</span>}
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `2px solid ${BLUE}`, paddingBottom: 10, marginBottom: 20 }}>
+      <div style={{ fontSize: 16, fontWeight: 700, fontFamily: HEADING_FONT, color: BLUE }}>בית הדור הבא – חוות אהרונסון</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        {quoteNumber && <span style={{ fontSize: 11, color: "#666", fontFamily: BODY_FONT }}>מס׳ הצעה: {quoteNumber}</span>}
         <img
           src={logoUrl || LOGO_URL_FALLBACK}
           alt=""
-          style={{ height: 44, width: "auto" }}
+          style={{ height: 48, width: "auto" }}
           onError={e => { e.target.style.display = "none"; }}
         />
       </div>
@@ -197,7 +201,7 @@ function CompactHeader({ quoteNumber, logoUrl }) {
 // Section heading matching reference (blue text + full-width bottom border)
 function SectionHeading({ children }) {
   return (
-    <div style={{ fontSize: 14, fontWeight: 700, color: BLUE, borderBottom: `2px solid ${BLUE}`, paddingBottom: 4, marginTop: 18, marginBottom: 0 }}>
+    <div style={{ fontSize: 15, fontWeight: 700, fontFamily: HEADING_FONT, color: BLUE, borderBottom: `2px solid ${BLUE}`, paddingBottom: 6, marginTop: 20, marginBottom: 10 }}>
       {children}
     </div>
   );
@@ -206,12 +210,12 @@ function SectionHeading({ children }) {
 // Table row for client/activity details — matches the bordered row style in the PDF
 function DetailTable({ rows }) {
   return (
-    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, lineHeight: 1.8 }}>
       <tbody>
         {rows.filter(r => r.value && r.value !== "—").map(({ label, value }, i) => (
           <tr key={i} style={{ borderBottom: "1px solid #dde8f5" }}>
-            <td style={{ padding: "7px 10px", fontWeight: 700, color: "#333", width: "35%", textAlign: "right" }}>{label}:</td>
-            <td style={{ padding: "7px 10px", color: "#111", textAlign: "right" }}>{value}</td>
+            <td style={{ padding: "9px 10px", fontWeight: 700, fontFamily: HEADING_FONT, color: "#333", width: "35%", textAlign: "right" }}>{label}:</td>
+            <td style={{ padding: "9px 10px", fontFamily: BODY_FONT, color: "#1a1a1a", textAlign: "right" }}>{value}</td>
           </tr>
         ))}
       </tbody>
@@ -226,33 +230,33 @@ function Page1({ d, logoUrl }) {
       <CoverHeader quoteNumber={d.quoteNumber} logoUrl={logoUrl} />
 
       {/* Intro */}
-      <div style={{ textAlign: "center", fontSize: 14, fontWeight: 700, color: BLUE, marginBottom: 6 }}>
+      <div style={{ textAlign: "center", fontSize: 15, fontWeight: 700, fontFamily: HEADING_FONT, color: BLUE, marginBottom: 10 }}>
         הצעת מחיר לסמינרים וימי עיון לצוותי חינוך
       </div>
-      <p style={{ fontSize: 11, color: "#333", lineHeight: 1.8, textAlign: "center", marginBottom: 18 }}>
+      <p style={{ fontSize: 12, fontFamily: BODY_FONT, color: "#2a2a2a", lineHeight: 1.8, textAlign: "center", marginBottom: 20 }}>
         בית הדור הבא מציע מרחב לחיבור, העמקה ודיאלוג. בהמשך לשיחתנו, להלן הצעתנו עבור פעילות לצוותי חינוך:
       </p>
 
       {/* Principles */}
       <SectionHeading>עקרונות החוויה בבית הדור הבא:</SectionHeading>
-      <div style={{ fontSize: 11, lineHeight: 2, color: "#2d2d2d", textAlign: "center", marginTop: 8, marginBottom: 8 }}>
+      <div style={{ fontSize: 12, fontFamily: BODY_FONT, lineHeight: 1.9, color: "#2a2a2a", textAlign: "center", marginTop: 10, marginBottom: 12 }}>
         {[
           "– חיבור בין עשייה להעמקה — שילוב בין פעילות מעשית לשיח משמעותי",
           "– מרחב לקול האישי — יצירת הזדמנויות לביטוי אישי ולהקשבה",
           "– רב-מימדיות — שילוב מגוון החושים ליצירת חוויה עמוקה ועוצמתית",
           "– חיבור לערכי הליבה — אהבת המדינה ואנשיה, זיקה ליהדות וערכים ליברליים",
-        ].map((t, i) => <div key={i}>{t}</div>)}
+        ].map((t, i) => <div key={i} style={{ marginBottom: 4 }}>{t}</div>)}
       </div>
 
       {/* Tracks */}
       <SectionHeading>יש לנו שלושה מסלולי תוכן אפשריים:</SectionHeading>
-      <div style={{ fontSize: 11, lineHeight: 2, color: "#2d2d2d", textAlign: "center", marginTop: 8, marginBottom: 8 }}>
-        <div><strong style={{ color: BLUE }}>שיבולת</strong> — תוכן מלא של הגוף המתארח, השתלבות בסדר היום של בית הדור הבא</div>
-        <div><strong style={{ color: BLUE }}>אלומה</strong> — תוכן של הגוף המתארח, עם סדנה מלאה אחת של בית הדור הבא ביום, והשתלבות בסדר היום של בית הדור הבא</div>
-        <div><strong style={{ color: BLUE }}>שדה</strong> — תוכן מלא ומותאם אישית של בית הדור הבא</div>
+      <div style={{ fontSize: 12, fontFamily: BODY_FONT, lineHeight: 1.9, color: "#2a2a2a", textAlign: "center", marginTop: 10, marginBottom: 12 }}>
+        <div style={{ marginBottom: 6 }}><strong style={{ fontFamily: HEADING_FONT, color: BLUE, fontSize: 13 }}>שיבולת</strong> — תוכן מלא של הגוף המתארח, השתלבות בסדר היום של בית הדור הבא</div>
+        <div style={{ marginBottom: 6 }}><strong style={{ fontFamily: HEADING_FONT, color: BLUE, fontSize: 13 }}>אלומה</strong> — תוכן של הגוף המתארח, עם סדנה מלאה אחת של בית הדור הבא ביום, והשתלבות בסדר היום של בית הדור הבא</div>
+        <div><strong style={{ fontFamily: HEADING_FONT, color: BLUE, fontSize: 13 }}>שדה</strong> — תוכן מלא ומותאם אישית של בית הדור הבא</div>
       </div>
 
-      <div style={{ fontSize: 12, fontWeight: 700, color: BLUE, textAlign: "center", marginBottom: 18 }}>עלויות פעילות:</div>
+      <div style={{ fontSize: 14, fontWeight: 700, fontFamily: HEADING_FONT, color: BLUE, textAlign: "center", marginBottom: 20 }}>עלויות פעילות:</div>
 
       {/* Client details */}
       <SectionHeading>פרטי לקוח</SectionHeading>
@@ -269,8 +273,8 @@ function Page1({ d, logoUrl }) {
 }
 
 // ── Page 2 ────────────────────────────────────────────────────────────────────
-const tdBase = { padding: "7px 10px", borderBottom: "1px solid #dde8f5", fontSize: 11, verticalAlign: "middle" };
-const thBase = { padding: "8px 10px", background: BLUE, color: "#fff", fontWeight: 700, fontSize: 11, textAlign: "right" };
+const tdBase = { padding: "9px 10px", borderBottom: "1px solid #dde8f5", fontSize: 12, lineHeight: 1.6, verticalAlign: "middle", fontFamily: BODY_FONT, color: "#1a1a1a" };
+const thBase = { padding: "10px 10px", background: BLUE, color: "#fff", fontWeight: 700, fontSize: 12, textAlign: "right", fontFamily: HEADING_FONT };
 
 function Page2({ d, logoUrl }) {
   const deposit = d.advance || Math.round(d.totalPrice * 0.3);
@@ -353,22 +357,22 @@ function Page2({ d, logoUrl }) {
       </table>
 
       {/* Payment terms */}
-      <div style={{ marginTop: 20 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: BLUE, marginBottom: 8 }}>תנאי תשלום</div>
-        <div style={{ fontSize: 12, lineHeight: 2 }}>
-          <div>מקדמה (30%): <strong>₪{fmt(deposit)}</strong></div>
+      <div style={{ marginTop: 24 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, fontFamily: HEADING_FONT, color: BLUE, marginBottom: 12 }}>תנאי תשלום</div>
+        <div style={{ fontSize: 12, fontFamily: BODY_FONT, lineHeight: 1.9 }}>
+          <div style={{ marginBottom: 6 }}>מקדמה (30%): <strong>₪{fmt(deposit)}</strong></div>
           <div>יתרה (70%): <strong>₪{fmt(bal)}</strong></div>
         </div>
       </div>
 
       {/* Meta + bank */}
-      <div style={{ marginTop: 16, fontSize: 11, color: "#555", lineHeight: 1.9 }}>
+      <div style={{ marginTop: 20, fontSize: 11, fontFamily: BODY_FONT, color: "#555", lineHeight: 1.9 }}>
         <div>גרסה: {d.version} | סטטוס: {d.status}</div>
-        <div style={{ marginTop: 8 }}>
-          <strong>ח.פ:</strong> קרן שמש הדור הבא (ע"ר) — 580786812
+        <div style={{ marginTop: 10 }}>
+          <strong style={{ fontFamily: HEADING_FONT }}>ח.פ:</strong> קרן שמש הדור הבא (ע"ר) — 580786812
         </div>
         <div>
-          <strong>פרטי חשבון הבנק:</strong> קרן שמש הדור הבא (ע"ר) בנק הפועלים- 12 סניף- 170 חשבון- 368365
+          <strong style={{ fontFamily: HEADING_FONT }}>פרטי חשבון הבנק:</strong> קרן שמש הדור הבא (ע"ר) בנק הפועלים- 12 סניף- 170 חשבון- 368365
         </div>
       </div>
     </div>
@@ -378,10 +382,10 @@ function Page2({ d, logoUrl }) {
 // ── Page 3 ────────────────────────────────────────────────────────────────────
 function TermBlock({ title, bullets }) {
   return (
-    <div style={{ marginBottom: 14 }}>
-      <div style={{ fontSize: 13, fontWeight: 700, color: BLUE, marginBottom: 6 }}>{title}</div>
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ fontSize: 13, fontWeight: 700, fontFamily: HEADING_FONT, color: BLUE, marginBottom: 8 }}>{title}</div>
       {bullets.map((b, i) => (
-        <div key={i} style={{ fontSize: 11, color: "#2d2d2d", lineHeight: 1.8, paddingRight: 4 }}>
+        <div key={i} style={{ fontSize: 12, fontFamily: BODY_FONT, color: "#2a2a2a", lineHeight: 1.7, paddingRight: 4, marginBottom: 4 }}>
           {bullets.length > 1 ? `• ${b}` : b}
         </div>
       ))}
@@ -391,8 +395,8 @@ function TermBlock({ title, bullets }) {
 
 function SigLine({ label, wide }) {
   return (
-    <div style={{ display: "inline-flex", alignItems: "flex-end", gap: 6, marginLeft: wide ? 0 : 24 }}>
-      <span style={{ fontSize: 11, fontWeight: 600, whiteSpace: "nowrap" }}>{label}:</span>
+    <div style={{ display: "inline-flex", alignItems: "flex-end", gap: 8, marginLeft: wide ? 0 : 24, marginBottom: 8 }}>
+      <span style={{ fontSize: 12, fontWeight: 600, fontFamily: BODY_FONT, whiteSpace: "nowrap" }}>{label}:</span>
       <span style={{ display: "inline-block", width: wide ? 180 : 120, borderBottom: "1px solid #555" }}>&nbsp;</span>
     </div>
   );
@@ -404,7 +408,7 @@ function Page3({ logoUrl, footerUrl }) {
       <CompactHeader logoUrl={logoUrl} />
 
       <SectionHeading>תנאי ההסכם</SectionHeading>
-      <div style={{ marginTop: 10 }}>
+      <div style={{ marginTop: 12 }}>
 
         <TermBlock title="כללי" bullets={[
           "הצעת המחיר תקפה למשך 14 יום מיום שליחתה בכתב.",
@@ -433,9 +437,9 @@ function Page3({ logoUrl, footerUrl }) {
       </div>
 
       {/* Signature block — inline style matching the reference */}
-      <div style={{ marginTop: 20 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: BLUE, marginBottom: 14 }}>אישור ההצעה וחתימה</div>
-        <div style={{ marginBottom: 18 }}>
+      <div style={{ marginTop: 24 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, fontFamily: HEADING_FONT, color: BLUE, marginBottom: 16 }}>אישור ההצעה וחתימה</div>
+        <div style={{ marginBottom: 20 }}>
           <SigLine label="שם מלא" />
           <SigLine label="תפקיד" />
           <SigLine label="חתימה" />
@@ -447,8 +451,8 @@ function Page3({ logoUrl, footerUrl }) {
       </div>
 
       {/* Footer text + photo */}
-      <div style={{ marginTop: 28, textAlign: "center" }}>
-        <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>מחכים לכם בבית הדור הבא</div>
+      <div style={{ marginTop: 32, textAlign: "center" }}>
+        <div style={{ fontSize: 14, fontWeight: 700, fontFamily: HEADING_FONT, color: BLUE, marginBottom: 14 }}>מחכים לכם בבית הדור הבא</div>
         <div style={{ display: "inline-block", width: "65%" }}>
           <img
             src={footerUrl || FOOTER_URL_FALLBACK}
