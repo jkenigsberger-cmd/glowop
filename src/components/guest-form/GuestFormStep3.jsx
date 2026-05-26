@@ -49,6 +49,7 @@ function Section({ title, emoji, children, defaultOpen = false }) {
 
 export default function GuestFormStep3({ form, setForm, quoteData }) {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const isDayUse = quoteData?.group_type === 'DAY_USE';
 
   const boys = Number(form.boys_count) || 0;
   const girls = Number(form.girls_count) || 0;
@@ -81,12 +82,14 @@ export default function GuestFormStep3({ form, setForm, quoteData }) {
           <CountInput label="בנים" value={form.boys_count} onChange={v => set("boys_count", v)} />
           <CountInput label="בנות" value={form.girls_count} onChange={v => set("girls_count", v)} />
           <div className="col-span-2 text-xs text-slate-400">סה״כ: <strong className="text-slate-600">{studentsTotal}</strong></div>
-          <NotesInput
-            label="הערות לינה לתלמידים"
-            value={form.student_sleeping_notes}
-            onChange={v => set("student_sleeping_notes", v)}
-            placeholder="חלוקת חדרים, בקשות מיוחדות"
-          />
+          {!isDayUse && (
+            <NotesInput
+              label="הערות לינה לתלמידים"
+              value={form.student_sleeping_notes}
+              onChange={v => set("student_sleeping_notes", v)}
+              placeholder="חלוקת חדרים, בקשות מיוחדות"
+            />
+          )}
         </div>
       </Section>
 
@@ -96,12 +99,14 @@ export default function GuestFormStep3({ form, setForm, quoteData }) {
           <CountInput label="גברים" value={form.staff_men_count} onChange={v => set("staff_men_count", v)} />
           <CountInput label="נשים" value={form.staff_women_count} onChange={v => set("staff_women_count", v)} />
           <div className="col-span-2 text-xs text-slate-400">סה״כ: <strong className="text-slate-600">{staffTotal}</strong></div>
-          <NotesInput
-            label="הערות לינה לצוות"
-            value={form.staff_sleeping_notes}
-            onChange={v => set("staff_sleeping_notes", v)}
-            placeholder="חלוקת חדרים, בקשות מיוחדות"
-          />
+          {!isDayUse && (
+            <NotesInput
+              label="הערות לינה לצוות"
+              value={form.staff_sleeping_notes}
+              onChange={v => set("staff_sleeping_notes", v)}
+              placeholder="חלוקת חדרים, בקשות מיוחדות"
+            />
+          )}
         </div>
       </Section>
 
@@ -111,12 +116,14 @@ export default function GuestFormStep3({ form, setForm, quoteData }) {
           <CountInput label="גברים" value={form.drivers_men_count} onChange={v => set("drivers_men_count", v)} />
           <CountInput label="נשים" value={form.drivers_women_count} onChange={v => set("drivers_women_count", v)} />
           <div className="col-span-2 text-xs text-slate-400">סה״כ: <strong className="text-slate-600">{driversTotal}</strong></div>
-          <NotesInput
-            label="הערות לינה לנהגים / אבטחה"
-            value={form.drivers_lodging_notes}
-            onChange={v => set("drivers_lodging_notes", v)}
-            placeholder="צרכי לינה, האם ישנים באתר..."
-          />
+          {!isDayUse && (
+            <NotesInput
+              label="הערות לינה לנהגים / אבטחה"
+              value={form.drivers_lodging_notes}
+              onChange={v => set("drivers_lodging_notes", v)}
+              placeholder="צרכי לינה, האם ישנים באתר..."
+            />
+          )}
         </div>
       </Section>
 

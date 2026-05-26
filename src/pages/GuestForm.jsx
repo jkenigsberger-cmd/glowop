@@ -9,13 +9,26 @@ import { Button } from "@/components/ui/button";
 import { differenceInCalendarDays, addDays, format, parseISO } from "date-fns";
 import { base44 } from "@/api/base44Client";
 
-function buildInitialMeals(arrival, departure) {
-  if (!arrival || !departure) return [];
+function buildInitialMeals(arrival, departure, isDayUse = false) {
+  if (!arrival) return [];
   try {
+    // DAY_USE (single-day): generate LUNCH + DINNER for arrival date only
+    if (isDayUse || !departure || arrival === departure) {
+      return [
+        { date: arrival, meal_type: "LUNCH",  sandwich_instead: false },
+        { date: arrival, meal_type: "DINNER", sandwich_instead: false },
+      ];
+    }
     const start = parseISO(arrival);
     const end = parseISO(departure);
     const nights = differenceInCalendarDays(end, start);
-    if (nights <= 0) return [];
+    if (nights <= 0) {
+      // Same-day lodging — still show meals for that day
+      return [
+        { date: arrival, meal_type: "LUNCH",  sandwich_instead: false },
+        { date: arrival, meal_type: "DINNER", sandwich_instead: false },
+      ];
+    }
     const result = [];
     for (let i = 0; i <= nights; i++) {
       const date = format(addDays(start, i), "yyyy-MM-dd");
@@ -25,8 +38,8 @@ function buildInitialMeals(arrival, departure) {
         result.push({ date, meal_type: "BREAKFAST", sandwich_instead: false });
       } else {
         result.push({ date, meal_type: "BREAKFAST", sandwich_instead: false });
-        result.push({ date, meal_type: "LUNCH", sandwich_instead: false });
-        result.push({ date, meal_type: "DINNER", sandwich_instead: false });
+        result.push({ date, meal_type: "LUNCH",     sandwich_instead: false });
+        result.push({ date, meal_type: "DINNER",    sandwich_instead: false });
       }
     }
     return result;
@@ -131,8 +144,9 @@ export default function GuestForm() {
 
         const arr = d.arrival_date || '';
         const dep = d.departure_date || '';
+        const isDayUse = d.group_type === 'DAY_USE';
         const nights = arr && dep ? differenceInCalendarDays(parseISO(dep), parseISO(arr)) : 0;
-        if (nights > 0) setMeals(buildInitialMeals(arr, dep));
+        if (isDayUse || nights > 0) setMeals(buildInitialMeals(arr, dep, isDayUse));
 
         const studentsTotal = getParticipantCount(d) || 0;
         const staffTotal    = getStaffCount(d) || 0;
@@ -156,9 +170,12 @@ export default function GuestForm() {
 
   const resolvedArrival   = getArrivalDate(quoteData);
   const resolvedDeparture = getDepartureDate(quoteData);
-  const isSleeping = resolvedArrival && resolvedDeparture
+  const isDayUseGroup = quoteData?.group_type === 'DAY_USE';
+  const isSleeping = !isDayUseGroup && resolvedArrival && resolvedDeparture
     ? differenceInCalendarDays(new Date(resolvedDeparture), new Date(resolvedArrival)) > 0
     : false;
+  // Meals step is shown for sleeping groups AND for DAY_USE groups
+  const hasMealsStep = isSleeping || isDayUseGroup || (resolvedArrival === resolvedDeparture && resolvedArrival !== '');
 
   const resolvedQuoteData = quoteData ? {
     ...quoteData,
@@ -172,7 +189,7 @@ export default function GuestForm() {
     girls_count:       getGirlsCount(quoteData),
   } : null;
 
-  const activeSteps = isSleeping ? ALL_STEPS : ALL_STEPS.filter(s => s.key !== "meals");
+  const activeSteps = hasMealsStep ? ALL_STEPS : ALL_STEPS.filter(s => s.key !== "meals");
   const currentStepKey = activeSteps[step]?.key;
   const isLast = step === activeSteps.length - 1;
 

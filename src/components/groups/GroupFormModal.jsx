@@ -76,6 +76,10 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
       if (payload[k] !== "" && payload[k] !== undefined) payload[k] = Number(payload[k]);
       else delete payload[k];
     });
+    // DAY_USE: normalize departure_date to arrival_date
+    if (payload.group_type === "DAY_USE") {
+      payload.departure_date = payload.arrival_date || payload.departure_date;
+    }
 
     const profilePaxFields = {
       total_pax: payload.total_pax || null,
@@ -107,6 +111,7 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
       // ── Review alerts (additive, never blocks save) ────────────────────────
       try {
         const groupIsConfirmed = group.status === "CONFIRMED" || group.status === "COMPLETED";
+        const isLodging = payload.group_type === "LODGING";
         if (groupIsConfirmed || existingProfiles.length > 0) {
           // A. Pax changes
           const paxChanged = PAX_FIELDS.some(f => {
@@ -119,23 +124,35 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
             const newPax = Number(payload.total_pax ?? 0);
             const diff   = newPax - oldPax;
             const diffTxt = diff > 0 ? `נוספו ${diff} אנשים.` : diff < 0 ? `ירדו ${Math.abs(diff)} אנשים.` : "";
-            const msg = `מספר האנשים בקבוצה השתנה מ-${oldPax} ל-${newPax}.${diffTxt ? " " + diffTxt : ""} יש לבדוק דרישות לינה, שיבוץ לינה ומטבח.`;
             const prev = Object.fromEntries(PAX_FIELDS.map(f => [f, group[f] ?? null]));
             const next = Object.fromEntries(PAX_FIELDS.map(f => [f, payload[f] ?? null]));
-            await upsertReviewAlert(group.id, "SLEEPING_REQUIREMENTS", "GROUP_PAX_CHANGED", "שינוי בפרטי הקבוצה דורש בדיקה", msg, prev, next);
-            await upsertReviewAlert(group.id, "ALLOCATION",            "GROUP_PAX_CHANGED", "שינוי בפרטי הקבוצה דורש בדיקה", msg, prev, next);
-            await upsertReviewAlert(group.id, "KITCHEN",               "GROUP_PAX_CHANGED", "שינוי בפרטי הקבוצה דורש בדיקה", msg, prev, next);
+            if (isLodging) {
+              const msg = `מספר האנשים בקבוצה השתנה מ-${oldPax} ל-${newPax}.${diffTxt ? " " + diffTxt : ""} יש לבדוק דרישות לינה, שיבוץ לינה ומטבח.`;
+              await upsertReviewAlert(group.id, "SLEEPING_REQUIREMENTS", "GROUP_PAX_CHANGED", "שינוי בפרטי הקבוצה דורש בדיקה", msg, prev, next);
+              await upsertReviewAlert(group.id, "ALLOCATION",            "GROUP_PAX_CHANGED", "שינוי בפרטי הקבוצה דורש בדיקה", msg, prev, next);
+              await upsertReviewAlert(group.id, "KITCHEN",               "GROUP_PAX_CHANGED", "שינוי בפרטי הקבוצה דורש בדיקה", msg, prev, next);
+            } else {
+              // DAY_USE — only kitchen alert for pax changes
+              const msg = `מספר האנשים בקבוצה השתנה מ-${oldPax} ל-${newPax}.${diffTxt ? " " + diffTxt : ""} יש לבדוק את תכנון המטבח.`;
+              await upsertReviewAlert(group.id, "KITCHEN", "GROUP_PAX_CHANGED", "שינוי בפרטי הקבוצה דורש בדיקה", msg, prev, next);
+            }
           }
 
           // B. Date changes
           const datesChanged = DATE_FIELDS.some(f => (group[f] || "") !== (payload[f] || ""));
           if (datesChanged) {
-            const msg = `תאריכי הקבוצה השתנו (${group.arrival_date || "—"} — ${group.departure_date || "—"} ← ${payload.arrival_date || "—"} — ${payload.departure_date || "—"}). יש לבדוק זמינות, שיבוץ, ארוחות ומשק בית.`;
             const prev = { arrival_date: group.arrival_date, departure_date: group.departure_date };
             const next = { arrival_date: payload.arrival_date, departure_date: payload.departure_date };
-            await upsertReviewAlert(group.id, "ALLOCATION",   "GROUP_DATES_CHANGED", "שינוי תאריכים דורש בדיקה", msg, prev, next);
-            await upsertReviewAlert(group.id, "KITCHEN",      "GROUP_DATES_CHANGED", "שינוי תאריכים דורש בדיקה", msg, prev, next);
-            await upsertReviewAlert(group.id, "HOUSEKEEPING", "GROUP_DATES_CHANGED", "שינוי תאריכים דורש בדיקה", msg, prev, next);
+            if (isLodging) {
+              const msg = `תאריכי הקבוצה השתנו (${group.arrival_date || "—"} — ${group.departure_date || "—"} ← ${payload.arrival_date || "—"} — ${payload.departure_date || "—"}). יש לבדוק זמינות, שיבוץ, ארוחות ומשק בית.`;
+              await upsertReviewAlert(group.id, "ALLOCATION",   "GROUP_DATES_CHANGED", "שינוי תאריכים דורש בדיקה", msg, prev, next);
+              await upsertReviewAlert(group.id, "KITCHEN",      "GROUP_DATES_CHANGED", "שינוי תאריכים דורש בדיקה", msg, prev, next);
+              await upsertReviewAlert(group.id, "HOUSEKEEPING", "GROUP_DATES_CHANGED", "שינוי תאריכים דורש בדיקה", msg, prev, next);
+            } else {
+              // DAY_USE — only kitchen alert for date changes
+              const msg = `תאריך יום הכיף השתנה (${group.arrival_date || "—"} ← ${payload.arrival_date || "—"}). יש לבדוק ארוחות ופעילויות.`;
+              await upsertReviewAlert(group.id, "KITCHEN", "GROUP_DATES_CHANGED", "שינוי תאריכים דורש בדיקה", msg, prev, next);
+            }
           }
 
           // C. Diet changes — only compare if new diets have data and profile existed
