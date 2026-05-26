@@ -46,7 +46,9 @@ export default function DashboardGroupCard({ group, profile, mealsToday = 0, act
           )}
         </div>
 
-        {profile && (
+        {group.group_type === 'DAY_USE' ? (
+          <span className="text-[10px] bg-amber-50 border border-amber-200 text-amber-700 rounded-full px-2 py-0.5">☀️ קבוצת יום</span>
+        ) : profile && (
           <div className="flex items-center gap-1">
             {profile.sleeping_requirements_completed ? (
               <span className="text-[10px] flex items-center gap-0.5 text-emerald-600">

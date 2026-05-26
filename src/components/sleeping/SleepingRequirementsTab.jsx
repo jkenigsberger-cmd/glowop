@@ -72,7 +72,7 @@ function SectionCard({ icon: Icon, title, color, children }) {
 }
 
 // ── main component ─────────────────────────────────────────────────────────
-export default function SleepingRequirementsTab({ groupId, profile }) {
+export default function SleepingRequirementsTab({ groupId, profile, group }) {
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
 
@@ -219,6 +219,21 @@ export default function SleepingRequirementsTab({ groupId, profile }) {
   };
 
   // ── guard ─────────────────────────────────────────────────────────────────
+  const isDayUse = group?.group_type === 'DAY_USE';
+
+  if (isDayUse) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 gap-4 text-center" dir="rtl">
+        <div className="text-5xl">☀️</div>
+        <div className="space-y-2">
+          <p className="text-lg font-bold text-slate-700">קבוצת יום — אין צורך בדרישות לינה</p>
+          <p className="text-sm text-slate-500">קבוצה זו מוגדרת כקבוצת יום / יום כיף.</p>
+          <p className="text-sm text-slate-400">הקבוצה אינה לנה באתר ולכן אין צורך בשיבוץ אוהלים או בדרישות לינה.</p>
+        </div>
+      </div>
+    );
+  }
+
   if (!profile) {
     return (
       <div className="text-center py-12 text-slate-400 text-sm">

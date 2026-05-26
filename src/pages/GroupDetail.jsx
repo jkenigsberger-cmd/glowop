@@ -138,7 +138,11 @@ export default function GroupDetail() {
                 <div className="flex flex-wrap items-center gap-2">
                   <h1 className="text-2xl font-bold">{group.group_name}</h1>
                   <GroupStatusBadge status={group.status} />
-                  <span className="text-xs bg-muted px-2 py-0.5 rounded text-muted-foreground">{GROUP_TYPE_LABEL[group.group_type]}</span>
+                  {group.group_type === 'DAY_USE' ? (
+                    <span className="text-xs bg-amber-100 text-amber-800 border border-amber-300 px-2 py-0.5 rounded-full font-semibold">☀️ קבוצת יום</span>
+                  ) : (
+                    <span className="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full font-medium">🛏️ לינה</span>
+                  )}
                 </div>
                 <div className="flex flex-wrap items-center gap-3 mt-2 text-sm text-muted-foreground">
                   {group.arrival_date && (
@@ -201,7 +205,7 @@ export default function GroupDetail() {
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 space-y-6">
 
-        {activeTab === "sleeping" && <SleepingRequirementsTab groupId={id} profile={operationalProfile} />}
+        {activeTab === "sleeping" && <SleepingRequirementsTab groupId={id} profile={operationalProfile} group={group} />}
         {activeTab === "schedule" && (
           <ScheduleAndMealsTab
             groupId={id}
