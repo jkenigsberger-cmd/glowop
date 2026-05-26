@@ -1,0 +1,65 @@
+{
+  "name": "CleaningWorkShift",
+  "type": "object",
+  "properties": {
+    "date": {
+      "type": "string",
+      "description": "YYYY-MM-DD"
+    },
+    "shift_type": {
+      "type": "string",
+      "enum": [
+        "MORNING",
+        "EVENING",
+        "OTHER"
+      ],
+      "default": "MORNING"
+    },
+    "label": {
+      "type": "string",
+      "description": "Optional label e.g. \u05e6\u05d5\u05d5\u05ea \u05e8\u05d0\u05e9\u05d5\u05df"
+    },
+    "workers_count": {
+      "type": "number",
+      "description": "Number of workers in this shift entry (1-15)"
+    },
+    "start_time": {
+      "type": "string",
+      "description": "HH:MM"
+    },
+    "end_time": {
+      "type": "string",
+      "description": "HH:MM"
+    },
+    "minutes_per_worker": {
+      "type": "number",
+      "description": "Calculated: duration in minutes"
+    },
+    "total_worker_minutes": {
+      "type": "number",
+      "description": "Calculated: minutes_per_worker * workers_count"
+    },
+    "notes": {
+      "type": "string"
+    },
+    "created_by": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "ACTIVE",
+        "CANCELLED"
+      ],
+      "default": "ACTIVE"
+    }
+  },
+  "required": [
+    "date",
+    "shift_type",
+    "workers_count",
+    "start_time",
+    "end_time",
+    "status"
+  ]
+}

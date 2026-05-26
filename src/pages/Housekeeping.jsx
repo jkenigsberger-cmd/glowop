@@ -3,7 +3,8 @@ import { base44 } from "@/api/base44Client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
 import { he } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, BedDouble } from "lucide-react";
+import { ChevronLeft, ChevronRight, BedDouble, Clock } from "lucide-react";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import GroupAllocationCard from "@/components/housekeeping/GroupAllocationCard";
 import ReviewAlertsBanner from "@/components/alerts/ReviewAlertsBanner";
@@ -225,6 +226,11 @@ export default function Housekeeping() {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <Link to="/cleaning-hours">
+                <Button variant="outline" size="sm" className="gap-1.5 text-xs">
+                  <Clock className="w-3.5 h-3.5" /> שעות עובדות ניקיון
+                </Button>
+              </Link>
               <Button variant="outline" size="icon"
                 onClick={() => setStartDate(d => { const nd = new Date(d); nd.setDate(nd.getDate() - 1); return nd.toISOString().slice(0, 10); })}>
                 <ChevronRight className="w-4 h-4" />
