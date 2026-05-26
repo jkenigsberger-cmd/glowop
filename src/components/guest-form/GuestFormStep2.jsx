@@ -81,37 +81,32 @@ export default function GuestFormStep2({ quoteData, mealOptions, setMealOptions,
 
       {/* Lunch toggle */}
       <div className="space-y-2">
-        <p className="text-sm font-medium text-slate-700">ארוחת צהריים נוספת</p>
-        <div className="grid grid-cols-3 gap-2">
+        <p className="text-sm font-medium text-slate-700">ארוחות צהריים נוספות</p>
+        <div className="grid grid-cols-2 gap-2">
           {[
             { key: "arrival_lunch",   label: "🍽️ צהריים ביום הגעה" },
             { key: "departure_lunch", label: "🍽️ צהריים ביום עזיבה" },
-            { key: "none",            label: "✖️ ללא צהריים נוסף" },
-          ].map(({ key, label }) => {
-            const isNone = key === "none";
-            const active = isNone
-              ? (!mealOptions.arrival_lunch && !mealOptions.departure_lunch)
-              : mealOptions[key];
-            return (
-              <button
-                key={key}
-                type="button"
-                onClick={() => isNone
-                  ? setMealOptions({ arrival_lunch: false, departure_lunch: false })
-                  : toggleLunch(key)
-                }
-                className={`py-2 px-2 rounded-xl border text-xs font-medium transition-all text-center ${
-                  active
-                    ? "bg-primary text-white border-primary"
-                    : "bg-white text-slate-600 border-slate-200 hover:border-primary"
-                }`}
-              >
-                {label}
-              </button>
-            );
-          })}
+          ].map(({ key, label }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => toggleLunch(key)}
+              className={`py-2 px-2 rounded-xl border text-xs font-medium transition-all text-center ${
+                mealOptions[key]
+                  ? "bg-primary text-white border-primary"
+                  : "bg-white text-slate-600 border-slate-200 hover:border-primary"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
       </div>
+
+      {/* Sandwich helper text */}
+      <p className="text-[10px] text-slate-400 text-right px-2">
+        יש לסמן רק אם מעוניינים בסנדוויצ'ים במקום הארוחה
+      </p>
 
       {/* Meal grid */}
       <div className="space-y-3">
@@ -157,11 +152,6 @@ export default function GuestFormStep2({ quoteData, mealOptions, setMealOptions,
           );
         })}
       </div>
-
-      {/* Sandwich helper text — single explanation */}
-      <p className="text-[10px] text-slate-400 text-right px-2">
-        יש לסמן רק אם מעוניינים בסנדוויצ'ים במקום הארוחה
-      </p>
 
       {/* Summary */}
       {meals.length > 0 && (
