@@ -107,19 +107,48 @@ Deno.serve(async (req) => {
       scheduleByKey[key] = item;
     });
 
-    // groupSync meals — safe to update
+    // ── Step 0: Clean up any pre-existing duplicates for this group ─────────
+    // Group all active meals by date|meal_type; if >1 exists, cancel extras.
+    const activeMealsAll = allGroupMeals.filter(m => m.status !== 'CANCELLED');
+    const mealsByKey = {};
+    for (const m of activeMealsAll) {
+      const key = `${m.date}|${m.meal_type}`;
+      if (!mealsByKey[key]) mealsByKey[key] = [];
+      mealsByKey[key].push(m);
+    }
+    for (const [key, rows] of Object.entries(mealsByKey)) {
+      if (rows.length <= 1) continue;
+      // Keep: prefer manual source, then oldest (smallest created_date / id)
+      const sorted = [...rows].sort((a, b) => {
+        if (a.source === 'manual' && b.source !== 'manual') return -1;
+        if (b.source === 'manual' && a.source !== 'manual') return 1;
+        return (a.created_date || a.id) < (b.created_date || b.id) ? -1 : 1;
+      });
+      const [keep, ...dupes] = sorted;
+      console.log(`[prefillGroupScheduleAndMeals] dedup ${key}: keeping ${keep.id} (${keep.source}), cancelling ${dupes.map(d=>d.id)}`);
+      for (const dupe of dupes) {
+        await base44.asServiceRole.entities.MealReservation.update(dupe.id, {
+          status: 'CANCELLED',
+          notes: (dupe.notes ? dupe.notes + '\n' : '') + 'כפילות מוזגה לפי טופס חיצוני',
+        });
+      }
+    }
+
+    // Rebuild active meal map after cleanup — use the canonical (kept) row per key
+    const allActiveMealByKey = {};
+    for (const [key, rows] of Object.entries(mealsByKey)) {
+      // canonical is always rows[0] after sort (dupes were cancelled above)
+      const canonical = rows[0];
+      allActiveMealByKey[key] = canonical;
+    }
+
+    // groupSync meals keyed by date|meal_type — used to detect existing sync rows
+    // NOTE: key only on group_id scope, not profile_id, to catch cross-profile dupes
     const groupSyncMealByKey = {};
     existingGroupSyncMeals.forEach(item => {
-      const key = `${item.date}|${item.meal_type}`;
-      groupSyncMealByKey[key] = item;
-    });
-
-    // ALL active meals (any source) — used for duplicate/conflict detection
-    const allActiveMealByKey = {};
-    allGroupMeals.forEach(item => {
       if (item.status !== 'CANCELLED') {
         const key = `${item.date}|${item.meal_type}`;
-        allActiveMealByKey[key] = item;
+        groupSyncMealByKey[key] = item;
       }
     });
 
@@ -225,58 +254,89 @@ Deno.serve(async (req) => {
       const existingGroupSync = groupSyncMealByKey[key];
       const existingAny       = allActiveMealByKey[key];
 
-      // Case 1: manual meal already exists for this date/type — do NOT overwrite, create conflict alert
-      if (existingAny && !existingGroupSync) {
-        console.log(`[prefillGroupScheduleAndMeals] CONFLICT: manual meal exists for ${key}, skipping`);
-        mealConflicts.push({ date: row.date, meal_type, existing_source: existingAny.source });
-        warnings.push(`MEAL_CONFLICT:${key}`);
-        continue;
-      }
+      // Canonical existing row: prefer the one we know about (any source)
+      const existingRow = existingAny || existingGroupSync;
 
-      const payload = {
-        group_id,
-        operational_group_profile_id,
-        date: row.date,
-        meal_type,
-        start_time: defaults.start_time,
-        end_time:   defaults.end_time,
-        pax: profile.total_pax || submission.total_pax || 0,
-        special_diets_summary: dietSummaryJson,
-        sandwich_option: row.sandwich_instead || false,
-        notes: [dietSummaryText, extraNotes].filter(Boolean).join('\n') || null,
-        source: 'groupSync',
-        status: 'ACTIVE',
-      };
+      const newPax = profile.total_pax || submission.total_pax || 0;
+      const newSandwich = row.sandwich_instead || false;
+      const newNotes = [dietSummaryText, extraNotes].filter(Boolean).join('\n') || null;
 
-      // Case 2: existing groupSync meal — safe to update
-      if (existingGroupSync) {
-        await base44.asServiceRole.entities.MealReservation.update(existingGroupSync.id, payload);
+      if (existingRow) {
+        // ── UPDATE existing row (regardless of source) ──────────────────────
+        const oldPax      = existingRow.pax;
+        const oldSandwich = existingRow.sandwich_option;
+        const wasChanged  = oldPax !== newPax || oldSandwich !== newSandwich;
+
+        // Merge notes: preserve existing manual notes + add GuestForm data
+        let mergedNotes = newNotes;
+        if (existingRow.notes && existingRow.source === 'manual') {
+          mergedNotes = [
+            `הערות קודמות:\n${existingRow.notes}`,
+            newNotes ? `נתוני לקוח מהטופס:\n${newNotes}` : null,
+          ].filter(Boolean).join('\n\n');
+        }
+
+        await base44.asServiceRole.entities.MealReservation.update(existingRow.id, {
+          pax:                   newPax,
+          special_diets_summary: dietSummaryJson,
+          sandwich_option:       newSandwich,
+          notes:                 mergedNotes,
+          // Preserve source + operational_group_profile_id of existing row
+          operational_group_profile_id: existingRow.operational_group_profile_id || operational_group_profile_id,
+          status: 'ACTIVE',
+        });
         mealsUpdated++;
+
+        if (wasChanged) {
+          mealConflicts.push({
+            date: row.date,
+            meal_type,
+            existing_source: existingRow.source,
+            old_pax: oldPax,
+            new_pax: newPax,
+            old_sandwich: oldSandwich,
+            new_sandwich: newSandwich,
+          });
+          warnings.push(`MEAL_UPDATED:${key}`);
+        }
       } else {
-        // Case 3: no existing meal — safe to create
-        await base44.asServiceRole.entities.MealReservation.create(payload);
+        // ── CREATE new meal ──────────────────────────────────────────────────
+        await base44.asServiceRole.entities.MealReservation.create({
+          group_id,
+          operational_group_profile_id,
+          date: row.date,
+          meal_type,
+          start_time: defaults.start_time,
+          end_time:   defaults.end_time,
+          pax:                   newPax,
+          special_diets_summary: dietSummaryJson,
+          sandwich_option:       newSandwich,
+          notes:                 newNotes,
+          source: 'groupSync',
+          status: 'ACTIVE',
+        });
         mealsCreated++;
       }
     }
 
-    // Create a single KITCHEN conflict alert if any manual meals blocked sync
+    // Create a single KITCHEN alert if GuestForm changed/updated any existing meals
     if (mealConflicts.length > 0) {
       try {
-        const conflictList = mealConflicts
-          .map(c => `${c.date} — ${c.meal_type}`)
+        const changedList = mealConflicts
+          .map(c => `${c.date} — ${c.meal_type} (${c.old_pax}→${c.new_pax} נפשות)`)
           .join(', ');
         await base44.asServiceRole.entities.OperationalReviewAlert.create({
           group_id,
           module:   'KITCHEN',
           severity: 'WARNING',
-          source:   'MEAL_CONFLICT',
-          title:    'ארוחות קיימות — סנכרון לא הושלם',
-          message:  `ארוחה קיימת כבר בתאריכים הבאים. יש לבדוק לפני סנכרון: ${conflictList}`,
+          source:   'MEAL_CHANGED',
+          title:    'ארוחות עודכנו לפי טופס חיצוני',
+          message:  `נתוני הארוחות עודכנו לפי הטופס החיצוני של הלקוח. יש לבדוק את השינויים במטבח: ${changedList}`,
           status:   'OPEN',
           new_value_json: JSON.stringify({ conflicts: mealConflicts, submission_id: profile.guest_form_submission_id }),
         });
       } catch (alertErr) {
-        console.warn('[prefillGroupScheduleAndMeals] failed to create meal conflict alert:', alertErr?.message);
+        console.warn('[prefillGroupScheduleAndMeals] failed to create meal changed alert:', alertErr?.message);
       }
     }
 
