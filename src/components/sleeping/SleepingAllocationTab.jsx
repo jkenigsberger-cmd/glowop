@@ -2,10 +2,9 @@ import { useState, useMemo } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, Lightbulb, CheckCircle2, Shield, Pencil } from "lucide-react";
+import { AlertTriangle, Lightbulb, CheckCircle2, Shield } from "lucide-react";
 import { toast } from "sonner";
 import RoleGate from "@/components/RoleGate";
-import { upsertReviewAlert } from "@/lib/reviewAlerts";
 
 import SleepingRequirementsSummary from "./SleepingRequirementsSummary";
 import StudentNeighborhoodPanel from "./StudentNeighborhoodPanel";
@@ -47,9 +46,6 @@ export default function SleepingAllocationTab({ groupId }) {
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
   const [showSuggestion, setShowSuggestion] = useState(false);
-  // Edit-confirmed mode: unlocks all confirmed allocations for editing
-  const [editConfirmedMode, setEditConfirmedMode] = useState(false);
-  const [showEditWarning, setShowEditWarning] = useState(false);
 
   // ── Data fetching ──────────────────────────────────────────────────────────
   const { data: profiles = [] } = useQuery({
@@ -226,7 +222,7 @@ export default function SleepingAllocationTab({ groupId }) {
     }
   };
 
-  const handleConfirmAllocations = async (isReconfirmAfterEdit = false) => {
+  const handleConfirmAllocations = async () => {
     const draftIds = myAllocations.filter(a => a.status === "DRAFT").map(a => a.id);
     console.log("[SleepingAllocationTab] Confirm allocation draftIds:", draftIds);
     console.log("[SleepingAllocationTab] Confirm allocation groupId:", groupId);
@@ -253,32 +249,6 @@ export default function SleepingAllocationTab({ groupId }) {
         queryClient.invalidateQueries({ queryKey: ["nhoodReservations", groupId] });
         queryClient.invalidateQueries({ queryKey: ["allNhoodReservations"] });
         queryClient.invalidateQueries({ queryKey: ["operationalProfile", groupId] });
-
-        // If re-confirming after an edit, fire housekeeping alert
-        if (isReconfirmAfterEdit) {
-          setEditConfirmedMode(false);
-          try {
-            await upsertReviewAlert(
-              groupId,
-              "HOUSEKEEPING",
-              "ALLOCATION_CHANGED",
-              "שיבוץ לינה השתנה",
-              "שיבוץ הלינה של הקבוצה השתנה לאחר אישור. יש לבדוק הכנות משק בית.",
-              null, null
-            );
-            await upsertReviewAlert(
-              groupId,
-              "ALLOCATION",
-              "ALLOCATION_CHANGED",
-              "שיבוץ לינה השתנה",
-              "שיבוץ הלינה עודכן לאחר אישור.",
-              null, null
-            );
-          } catch (alertErr) {
-            console.warn("[SleepingAllocationTab] Alert after re-confirm failed:", alertErr?.message);
-          }
-          toast.success("השיבוץ עודכן בהצלחה ✓");
-        }
       } else {
         // Show all Hebrew errors from backend
         const errMsg = res.data?.error || null;
@@ -291,23 +261,6 @@ export default function SleepingAllocationTab({ groupId }) {
       console.error("[SleepingAllocationTab] Confirm allocation exception:", err);
       const msg = err?.response?.data?.error || err?.message || "שגיאה באישור השיבוץ — נסה שוב";
       toast.error(msg);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  // Release a single confirmed tent allocation (sets status → CANCELLED)
-  const handleReleaseSingleAlloc = async (allocId) => {
-    const alloc = myAllocations.find(a => a.id === allocId);
-    if (!alloc) return;
-    const tentLabel = alloc.tent_id;
-    setSaving(true);
-    try {
-      await base44.entities.SleepingAllocation.update(allocId, { status: "CANCELLED" });
-      toast.success("האוהל שוחרר");
-      invalidate();
-    } catch (err) {
-      toast.error(err?.message || "שגיאה בשחרור האוהל");
     } finally {
       setSaving(false);
     }
@@ -411,8 +364,6 @@ export default function SleepingAllocationTab({ groupId }) {
             defaultGenderGroup={defaultGenderGroup}
             profile={profile}
             existingGroupAllocs={myAllocations}
-            editConfirmedMode={editConfirmedMode}
-            onReleaseAlloc={handleReleaseSingleAlloc}
             />
           );
         })}
@@ -441,7 +392,6 @@ export default function SleepingAllocationTab({ groupId }) {
             profile={{ ...profile, arrival_date: arrivalDate, departure_date: departureDate }}
             groupId={groupId}
             onInvalidate={invalidate}
-            editConfirmedMode={editConfirmedMode}
           />
         </section>
       )}
@@ -476,87 +426,13 @@ export default function SleepingAllocationTab({ groupId }) {
         const hasNhoodOnly    = myActiveNhoodRes.length > 0 && activeAllocs.length === 0;
 
         // A: All specific tents confirmed
-        if (confirmedAllocs.length > 0 && draftAllocs.length === 0 && !editConfirmedMode) {
+        if (confirmedAllocs.length > 0 && draftAllocs.length === 0) {
           return (
-            <div className="space-y-2">
-              <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-300 rounded-xl px-4 py-3">
-                <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-emerald-800">שיבוץ לפי אוהלים — מאושר</p>
-                  <p className="text-xs text-emerald-600">{totalAssigned} משתתפים · {tentCount} אוהלים · {confirmedAllocs.length} שורות מאושרות</p>
-                </div>
-                <RoleGate permission="CONFIRM_ALLOCATION">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setShowEditWarning(true)}
-                    className="gap-1 border-amber-300 text-amber-700 hover:bg-amber-50 shrink-0"
-                  >
-                    <Pencil className="w-3.5 h-3.5" /> ערוך שיבוץ מאושר
-                  </Button>
-                </RoleGate>
-              </div>
-
-              {/* Edit-confirmed warning dialog */}
-              {showEditWarning && (
-                <div className="border border-amber-400 bg-amber-50 rounded-xl px-4 py-4 space-y-3">
-                  <div className="flex items-start gap-2">
-                    <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-sm font-semibold text-amber-800">שינוי שיבוץ מאושר</p>
-                      <p className="text-xs text-amber-700 mt-1">שינוי שיבוץ מאושר עשוי להשפיע על משק בית. יש לוודא שהשינויים נבדקו.</p>
-                    </div>
-                  </div>
-                  <div className="flex gap-2 justify-end">
-                    <Button size="sm" variant="outline" onClick={() => setShowEditWarning(false)} className="text-xs">ביטול</Button>
-                    <Button size="sm" onClick={() => { setShowEditWarning(false); setEditConfirmedMode(true); }} className="text-xs bg-amber-600 hover:bg-amber-700 gap-1">
-                      <Pencil className="w-3.5 h-3.5" /> המשך לעריכה
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        }
-
-        // A2: Edit confirmed mode active
-        if (editConfirmedMode) {
-          return (
-            <div className="border border-amber-400 bg-amber-50 rounded-xl px-4 py-4 space-y-3">
-              <div className="flex items-start gap-2">
-                <Pencil className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-amber-800">מצב עריכת שיבוץ מאושר</p>
-                  <p className="text-xs text-amber-700 mt-0.5">
-                    ניתן לשחרר אוהלים, לשנות כמות משתתפים ולהוסיף אוהלים. לאחר השינויים יש לאשר מחדש.
-                  </p>
-                  {draftAllocs.length > 0 && (
-                    <p className="text-xs text-emerald-700 mt-1">{draftAllocs.length} שורות טיוטה חדשות ממתינות לאישור</p>
-                  )}
-                </div>
-              </div>
-              <div className="flex gap-2 flex-wrap">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setEditConfirmedMode(false)}
-                  className="text-xs gap-1"
-                >
-                  ביטול עריכה
-                </Button>
-                {draftAllocs.length > 0 && (
-                  <RoleGate permission="CONFIRM_ALLOCATION">
-                    <Button
-                      size="sm"
-                      onClick={() => handleConfirmAllocations(true)}
-                      disabled={saving}
-                      className="text-xs gap-1 bg-emerald-700 hover:bg-emerald-800"
-                    >
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      {saving ? "מאשר..." : "אשר שיבוץ מעודכן"}
-                    </Button>
-                  </RoleGate>
-                )}
+            <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-300 rounded-xl px-4 py-3">
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-emerald-800">שיבוץ לפי אוהלים — מאושר</p>
+                <p className="text-xs text-emerald-600">{totalAssigned} משתתפים · {tentCount} אוהלים · {confirmedAllocs.length} שורות מאושרות</p>
               </div>
             </div>
           );
