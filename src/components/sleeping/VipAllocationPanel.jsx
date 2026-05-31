@@ -2,8 +2,9 @@ import { useState, useMemo } from "react";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ShieldCheck, AlertTriangle, X, Shield, Car, User, Star, BookOpen, BedDouble } from "lucide-react";
+import { ShieldCheck, AlertTriangle, X, Shield, Car, User, Star, BookOpen, BedDouble, Pencil } from "lucide-react";
 import { toast } from "sonner";
+import VipPaxEditDialog from "./VipPaxEditDialog";
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -310,9 +311,8 @@ function VipReqCard({ req, index, assignedTentCode, assignedStatus, isSelected, 
     <button
       type="button"
       onClick={onClick}
-      disabled={isConfirmed}
-      title={isConfirmed ? "מאושר — לא ניתן לערוך" : undefined}
-      className={`relative rounded-2xl border-2 ${borderCls} ${bgCls} ${shadow} px-3.5 py-3.5 flex flex-col items-center gap-1.5 min-w-[88px] max-w-[100px] cursor-pointer transition-all hover:scale-105 active:scale-100 disabled:cursor-default disabled:hover:scale-100`}
+      disabled={false}
+      className={`relative rounded-2xl border-2 ${borderCls} ${bgCls} ${shadow} px-3.5 py-3.5 flex flex-col items-center gap-1.5 min-w-[88px] max-w-[100px] cursor-pointer transition-all hover:scale-105 active:scale-100`}
     >
       {/* index top-right */}
       <span className="absolute top-2 right-2 text-[9px] font-bold text-slate-400/80">#{index + 1}</span>
@@ -355,6 +355,11 @@ function VipReqCard({ req, index, assignedTentCode, assignedStatus, isSelected, 
           {isSelected ? "← בחר אוהל" : "לא שויך"}
         </span>
       )}
+      {isConfirmed && (
+        <span className="text-[9px] text-emerald-600 flex items-center gap-0.5 opacity-80">
+          <Pencil className="w-2 h-2" /> ערוך כמות
+        </span>
+      )}
     </button>
   );
 }
@@ -367,6 +372,7 @@ function VipTentCard({ tent, isOccupiedByOther, myAllocForTent, isSelecting, isS
   const gc          = myAllocForTent ? getGenderCfg(myAllocForTent.gender_group) : null;
 
   const isClickable = isSelecting && !isOccupiedByOther && !isConfirmed;
+  const isEditableConfirmed = isConfirmed && !isSelecting;
 
   let borderCls = "border-slate-200";
   let bgCls     = "bg-white";
@@ -386,16 +392,24 @@ function VipTentCard({ tent, isOccupiedByOther, myAllocForTent, isSelecting, isS
   return (
     <button
       type="button"
-      disabled={isOccupiedByOther || isConfirmed || (!isSelecting && !isAssigned)}
+      disabled={isOccupiedByOther || (!isSelecting && !isAssigned && !isConfirmed)}
       onClick={onClick}
-      className={`rounded-xl border-2 ${borderCls} ${bgCls} ${shadow} ${opacity} px-2.5 py-3 flex flex-col items-center gap-1 min-w-[60px] transition-all
-        ${isClickable || (isAssigned && !isConfirmed) ? "cursor-pointer hover:scale-105 active:scale-100" : "cursor-default"}`}
+      className={`rounded-xl border-2 ${borderCls} ${bgCls} ${shadow} ${opacity} px-2.5 py-3 flex flex-col items-center gap-1 min-w-[60px] transition-all relative
+        ${isClickable || (isAssigned && !isConfirmed) || isEditableConfirmed ? "cursor-pointer hover:scale-105 active:scale-100" : "cursor-default"}`}
     >
+      {isEditableConfirmed && (
+        <span className="absolute top-1 left-1">
+          <Pencil className="w-2.5 h-2.5 text-emerald-500 opacity-70" />
+        </span>
+      )}
       <span className="font-bold text-sm text-slate-700">{tent.code}</span>
       <span className="text-[10px] text-slate-400">{tent.capacity}🛏</span>
 
       {isConfirmed && gc && (
-        <span className={`text-[9px] font-bold ${gc.text}`}>✓ {gc.label}</span>
+        <>
+          <span className={`text-[9px] font-bold ${gc.text}`}>✓ {gc.label}</span>
+          <span className={`text-xs font-bold ${gc.text}`}>{myAllocForTent.pax ?? myAllocForTent.allocated_pax ?? "?"}/{tent.capacity}</span>
+        </>
       )}
       {isAssigned && !isConfirmed && gc && (
         <span className={`text-[9px] font-bold ${gc.text}`}>~{gc.label}</span>
@@ -426,6 +440,8 @@ export default function VipAllocationPanel({
   const [selectedReqIndex, setSelectedReqIndex] = useState(null);
   // dialogTarget: { reqIndex, tent } — open the assignment dialog
   const [dialogTarget, setDialogTarget] = useState(null);
+  // paxEditTarget: { allocation, tent } — open the confirmed pax-edit dialog
+  const [paxEditTarget, setPaxEditTarget] = useState(null);
   const [confirming, setConfirming]     = useState(false);
   const [serverErrors, setServerErrors] = useState([]);
 
@@ -451,7 +467,7 @@ export default function VipAllocationPanel({
     return map;
   }, [vipTents]);
 
-  // tentId → { tentId, tentCode, status, gender_group } for tent card display
+  // tentId → { tentId, tentCode, status, gender_group, allocated_pax } for tent card display
   const tentEffectiveAlloc = useMemo(() => {
     const map = {};
     Object.entries(persistedReqToAlloc).forEach(([, alloc]) => {
@@ -460,6 +476,7 @@ export default function VipAllocationPanel({
         tentCode: tentCodeById[alloc.tent_id] || "?",
         status: alloc.status,
         gender_group: alloc.gender_group,
+        allocated_pax: alloc.allocated_pax,
       };
     });
     return map;
@@ -469,11 +486,22 @@ export default function VipAllocationPanel({
   const hasDraftAllocs = myActiveVipAllocs.some(a => a.status === "DRAFT");
   const hasConflicts   = myActiveVipAllocs.some(a => a.status === "DRAFT" && conflictMap[a.tent_id]);
 
+  // VIP totals: requested (from vipRows) vs allocated (from active allocs)
+  const totalRequestedVipPax = vipRows.reduce((s, r) => s + (Number(r.people_count) || 0), 0);
+  const totalAllocatedVipPax = myActiveVipAllocs.reduce((s, a) => s + (Number(a.allocated_pax) || 0), 0);
+  const totalRemainingVipPax = totalRequestedVipPax - totalAllocatedVipPax;
+
   // ── Handlers ──────────────────────────────────────────────────────────────
 
   const handleReqClick = (index) => {
     const alloc = persistedReqToAlloc[index];
-    if (alloc?.status === "CONFIRMED") return;
+
+    // Confirmed — open pax-edit dialog
+    if (alloc?.status === "CONFIRMED") {
+      const tent = vipTents.find(t => t.id === alloc.tent_id);
+      if (tent) setPaxEditTarget({ allocation: alloc, tent });
+      return;
+    }
 
     if (selectedReqIndex === index) {
       setSelectedReqIndex(null); // deselect
@@ -501,7 +529,10 @@ export default function VipAllocationPanel({
       )?.[0];
       if (assignedReqIndex !== undefined) {
         const alloc = persistedReqToAlloc[Number(assignedReqIndex)];
-        if (alloc?.status !== "CONFIRMED") {
+        if (alloc?.status === "CONFIRMED") {
+          // Confirmed tent clicked → open pax-edit dialog
+          setPaxEditTarget({ allocation: alloc, tent });
+        } else {
           setDialogTarget({ reqIndex: Number(assignedReqIndex), tent });
         }
       }
@@ -571,6 +602,28 @@ export default function VipAllocationPanel({
           {" "}לחץ על דרישה ← בחר אוהל ← אשר בחלון
         </div>
       )}
+
+      {/* VIP Totals banner */}
+      <div className={`rounded-xl border px-4 py-2.5 flex flex-wrap items-center gap-4 text-sm ${
+        totalRemainingVipPax < 0
+          ? "bg-red-50 border-red-300"
+          : totalRemainingVipPax === 0
+            ? "bg-emerald-50 border-emerald-300"
+            : "bg-amber-50 border-amber-200"
+      }`}>
+        <span className="text-xs text-slate-500 font-semibold">סה״כ VIP:</span>
+        <span className="text-xs">נדרש: <strong>{totalRequestedVipPax}</strong></span>
+        <span className="text-xs">שובצו: <strong className={totalAllocatedVipPax > 0 ? "text-primary" : ""}>{totalAllocatedVipPax}</strong></span>
+        {totalRemainingVipPax > 0 && (
+          <span className="text-xs font-semibold text-amber-700">נותרו לשיבוץ: {totalRemainingVipPax} אנשי VIP</span>
+        )}
+        {totalRemainingVipPax === 0 && totalRequestedVipPax > 0 && (
+          <span className="text-xs font-semibold text-emerald-700">✓ כל אנשי ה-VIP שובצו</span>
+        )}
+        {totalRemainingVipPax < 0 && (
+          <span className="text-xs font-semibold text-red-700">⚠ שובצו יותר אנשים ממה שנדרש!</span>
+        )}
+      </div>
 
       {/* Two-column layout */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -682,6 +735,19 @@ export default function VipAllocationPanel({
           onSaved={handleDialogSaved}
           onReleased={handleDialogReleased}
           onClose={() => setDialogTarget(null)}
+        />
+      )}
+
+      {/* Confirmed VIP Pax Edit Dialog */}
+      {paxEditTarget && (
+        <VipPaxEditDialog
+          allocation={paxEditTarget.allocation}
+          tent={paxEditTarget.tent}
+          totalRequestedVipPax={totalRequestedVipPax}
+          totalAllocatedVipPax={totalAllocatedVipPax}
+          groupId={groupId}
+          onSaved={() => { setPaxEditTarget(null); onInvalidate(); }}
+          onClose={() => setPaxEditTarget(null)}
         />
       )}
     </div>
