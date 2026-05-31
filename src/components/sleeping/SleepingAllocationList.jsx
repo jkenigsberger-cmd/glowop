@@ -1,10 +1,10 @@
-import { Trash2 } from "lucide-react";
+import { Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const GENDER_LABEL = { BOYS: "בנים 👦", GIRLS: "בנות 👧", MEN: "גברים 👨", WOMEN: "נשים 👩" };
 const TYPE_LABEL   = { STUDENT: "חניכים", STAFF: "צוות" };
 
-export default function SleepingAllocationList({ allocations, tents, neighborhoods, conflictTentIds, onDelete }) {
+export default function SleepingAllocationList({ allocations, tents, neighborhoods, conflictTentIds, onDelete, editConfirmedMode = false, onReleaseConfirmed }) {
   const tentMap = {};
   tents.forEach(t => { tentMap[t.id] = t; });
   const neighborhoodMap = {};
@@ -54,6 +54,20 @@ export default function SleepingAllocationList({ allocations, tents, neighborhoo
                 <Button size="icon" variant="ghost" className="h-7 w-7 text-slate-400 hover:text-red-500"
                   onClick={() => onDelete(a.id)}>
                   <Trash2 className="w-3.5 h-3.5" />
+                </Button>
+              )}
+              {a.status === 'CONFIRMED' && editConfirmedMode && onReleaseConfirmed && (
+                <Button
+                  size="icon" variant="ghost"
+                  className="h-7 w-7 text-slate-400 hover:text-red-500"
+                  title="שחרר אוהל"
+                  onClick={() => {
+                    if (window.confirm(`לשחרר את אוהל ${tents.find(t => t.id === a.tent_id)?.code || a.tent_id}?`)) {
+                      onReleaseConfirmed(a.id);
+                    }
+                  }}
+                >
+                  <X className="w-3.5 h-3.5" />
                 </Button>
               )}
             </div>

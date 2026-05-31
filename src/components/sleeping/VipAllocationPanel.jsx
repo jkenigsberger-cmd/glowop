@@ -285,7 +285,7 @@ function AssignmentDialog({ req, reqIndex, tent, existingAlloc, profile, groupId
 
 // ── VIP Requirement Card (compact square) ─────────────────────────────────────
 
-function VipReqCard({ req, index, assignedTentCode, assignedStatus, isSelected, onClick }) {
+function VipReqCard({ req, index, assignedTentCode, assignedStatus, isSelected, onClick, editConfirmedMode = false }) {
   const gc = getGenderCfg(req.gender_group);
   const pc = getPurposeCfg(req.purpose);
   const { Icon } = pc;
@@ -310,8 +310,8 @@ function VipReqCard({ req, index, assignedTentCode, assignedStatus, isSelected, 
     <button
       type="button"
       onClick={onClick}
-      disabled={isConfirmed}
-      title={isConfirmed ? "מאושר — לא ניתן לערוך" : undefined}
+      disabled={isConfirmed && !editConfirmedMode}
+      title={isConfirmed && !editConfirmedMode ? "מאושר — לא ניתן לערוך" : isConfirmed && editConfirmedMode ? "מאושר — ניתן לערוך במצב עריכה" : undefined}
       className={`relative rounded-2xl border-2 ${borderCls} ${bgCls} ${shadow} px-3.5 py-3.5 flex flex-col items-center gap-1.5 min-w-[88px] max-w-[100px] cursor-pointer transition-all hover:scale-105 active:scale-100 disabled:cursor-default disabled:hover:scale-100`}
     >
       {/* index top-right */}
@@ -361,12 +361,12 @@ function VipReqCard({ req, index, assignedTentCode, assignedStatus, isSelected, 
 
 // ── VIP Tent Card ─────────────────────────────────────────────────────────────
 
-function VipTentCard({ tent, isOccupiedByOther, myAllocForTent, isSelecting, isSelectedByAnotherReq, onClick }) {
+function VipTentCard({ tent, isOccupiedByOther, myAllocForTent, isSelecting, isSelectedByAnotherReq, onClick, editConfirmedMode = false }) {
   const isAssigned  = !!myAllocForTent;
   const isConfirmed = myAllocForTent?.status === "CONFIRMED";
   const gc          = myAllocForTent ? getGenderCfg(myAllocForTent.gender_group) : null;
 
-  const isClickable = isSelecting && !isOccupiedByOther && !isConfirmed;
+  const isClickable = isSelecting && !isOccupiedByOther && (!isConfirmed || editConfirmedMode);
 
   let borderCls = "border-slate-200";
   let bgCls     = "bg-white";
@@ -386,10 +386,10 @@ function VipTentCard({ tent, isOccupiedByOther, myAllocForTent, isSelecting, isS
   return (
     <button
       type="button"
-      disabled={isOccupiedByOther || isConfirmed || (!isSelecting && !isAssigned)}
+      disabled={isOccupiedByOther || (isConfirmed && !editConfirmedMode) || (!isSelecting && !isAssigned)}
       onClick={onClick}
       className={`rounded-xl border-2 ${borderCls} ${bgCls} ${shadow} ${opacity} px-2.5 py-3 flex flex-col items-center gap-1 min-w-[60px] transition-all
-        ${isClickable || (isAssigned && !isConfirmed) ? "cursor-pointer hover:scale-105 active:scale-100" : "cursor-default"}`}
+        ${isClickable || (isAssigned && (!isConfirmed || editConfirmedMode)) ? "cursor-pointer hover:scale-105 active:scale-100" : "cursor-default"}`}
     >
       <span className="font-bold text-sm text-slate-700">{tent.code}</span>
       <span className="text-[10px] text-slate-400">{tent.capacity}🛏</span>
@@ -422,6 +422,7 @@ export default function VipAllocationPanel({
   profile,
   groupId,
   onInvalidate,
+  editConfirmedMode = false,
 }) {
   const [selectedReqIndex, setSelectedReqIndex] = useState(null);
   // dialogTarget: { reqIndex, tent } — open the assignment dialog
@@ -473,7 +474,7 @@ export default function VipAllocationPanel({
 
   const handleReqClick = (index) => {
     const alloc = persistedReqToAlloc[index];
-    if (alloc?.status === "CONFIRMED") return;
+    if (alloc?.status === "CONFIRMED" && !editConfirmedMode) return;
 
     if (selectedReqIndex === index) {
       setSelectedReqIndex(null); // deselect
@@ -501,7 +502,8 @@ export default function VipAllocationPanel({
       )?.[0];
       if (assignedReqIndex !== undefined) {
         const alloc = persistedReqToAlloc[Number(assignedReqIndex)];
-        if (alloc?.status !== "CONFIRMED") {
+        // Allow editing confirmed allocs in editConfirmedMode
+        if (alloc?.status !== "CONFIRMED" || editConfirmedMode) {
           setDialogTarget({ reqIndex: Number(assignedReqIndex), tent });
         }
       }
@@ -591,6 +593,7 @@ export default function VipAllocationPanel({
                   assignedStatus={alloc?.status || null}
                   isSelected={selectedReqIndex === i}
                   onClick={() => handleReqClick(i)}
+                  editConfirmedMode={editConfirmedMode}
                 />
               );
             })}
@@ -624,6 +627,7 @@ export default function VipAllocationPanel({
                   myAllocForTent={myAllocForTent}
                   isSelecting={selectedReqIndex !== null}
                   onClick={() => handleTentClick(tent)}
+                  editConfirmedMode={editConfirmedMode}
                 />
               );
             })}
