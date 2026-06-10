@@ -1,47 +1,45 @@
 /**
- * Displays sleeping requirements and neighbourhood-based allocation progress.
- * For students: uses boys_beds_needed / girls_beds_needed from profile.
- * For VIP/staff: uses SleepingAllocation records.
+ * Displays sleeping requirements and allocation progress.
+ * Counts allocated pax directly from SleepingAllocation records (by gender_group),
+ * so BOYS tents inside MIXED neighborhoods correctly count toward boys, not a third "mixed" category.
  */
 export default function SleepingRequirementsSummary({ profile, allocations, nhoodReservations = [], allTents = [], neighborhoods = [] }) {
   if (!profile) return null;
 
   const hasGenderSplit = (Number(profile.boys_beds_needed) + Number(profile.girls_beds_needed)) > 0;
-  const boysNeeded   = Number(profile.boys_beds_needed)  || 0;
-  const girlsNeeded  = Number(profile.girls_beds_needed) || 0;
+  const boysNeeded    = Number(profile.boys_beds_needed)  || 0;
+  const girlsNeeded   = Number(profile.girls_beds_needed) || 0;
   const generalNeeded = !hasGenderSplit
-    ? (Number(profile.boys_beds_needed) || Number(profile.participant_count) || Number(profile.total_pax) || 0)
+    ? (Number(profile.participant_count) || Number(profile.total_pax) || 0)
     : 0;
 
-  const activeAllocs = allocations.filter(a => a.status !== "CANCELLED");
-  const activeNhoods = nhoodReservations.filter(r => r.status === "ACTIVE");
+  // Count from actual allocation records — gender_group on each SleepingAllocation is the source of truth
+  const activeStudentAllocs = (allocations || []).filter(
+    a => a.status !== "CANCELLED" && a.allocation_type === "STUDENT"
+  );
 
-  function bedsInReservations(resList) {
-    let beds = 0;
-    resList.forEach(r => {
-      const tentCount = r.planned_tents || 0;
-      const tentsInHood = allTents.filter(t => t.neighborhood_id === r.neighborhood_id && t.working_status === "WORKING");
-      const sorted = [...tentsInHood].sort((a, b) => (b.capacity || 0) - (a.capacity || 0));
-      sorted.slice(0, tentCount).forEach(t => { beds += t.capacity || 0; });
-    });
-    return beds;
-  }
+  const allocatedBoys    = activeStudentAllocs.filter(a => a.gender_group === "BOYS")
+    .reduce((s, a) => s + (a.allocated_pax || 0), 0);
+  const allocatedGirls   = activeStudentAllocs.filter(a => a.gender_group === "GIRLS")
+    .reduce((s, a) => s + (a.allocated_pax || 0), 0);
+  const allocatedMixed   = activeStudentAllocs.filter(a => a.gender_group === "MIXED")
+    .reduce((s, a) => s + (a.allocated_pax || 0), 0);
+  const allocatedGeneral = hasGenderSplit ? 0 : (allocatedBoys + allocatedGirls + allocatedMixed);
 
-  const boysNhoods    = activeNhoods.filter(r => r.gender_group === "BOYS");
-  const girlsNhoods   = activeNhoods.filter(r => r.gender_group === "GIRLS");
-  const generalNhoods = activeNhoods.filter(r => r.gender_group === "MIXED");
+  // For gender-split: boys/girls allocated = their own + any MIXED allocs (legacy) split proportionally
+  // Simpler and more correct: just show MIXED allocs as informational if they exist alongside boys/girls
+  const remBoys    = boysNeeded  - allocatedBoys;
+  const remGirls   = girlsNeeded - allocatedGirls;
+  const totalNeeded     = boysNeeded + girlsNeeded;
+  const totalAllocated  = allocatedBoys + allocatedGirls + (hasGenderSplit ? allocatedMixed : 0);
+  const remTotal   = totalNeeded - totalAllocated;
+  const remGeneral = generalNeeded - allocatedGeneral;
 
-  const allocatedBoysBeds    = bedsInReservations(boysNhoods);
-  const allocatedGirlsBeds   = bedsInReservations(girlsNhoods);
-  const allocatedGeneralBeds = bedsInReservations(generalNhoods);
-
-  const remBoys    = boysNeeded  - allocatedBoysBeds;
-  const remGirls   = girlsNeeded - allocatedGirlsBeds;
-  const remGeneral = generalNeeded - allocatedGeneralBeds;
+  const activeNhoods = (nhoodReservations || []).filter(r => r.status === "ACTIVE");
 
   const Counter = ({ label, required, allocated, remaining }) => {
-    const isComplete  = remaining === 0;
-    const isOver      = remaining < 0;
+    const isComplete = remaining === 0;
+    const isOver     = remaining < 0;
     const containerColor = isComplete
       ? "bg-green-50 border-green-200"
       : isOver
@@ -80,19 +78,25 @@ export default function SleepingRequirementsSummary({ profile, allocations, nhoo
   return (
     <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
       <h3 className="text-sm font-semibold text-slate-700">דרישות לינה — נותרו לשיבוץ</h3>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        {hasGenderSplit ? (
-          <>
-            <Counter label="בנים" required={boysNeeded}   allocated={allocatedBoysBeds}    remaining={remBoys}    />
-            <Counter label="בנות" required={girlsNeeded}  allocated={allocatedGirlsBeds}   remaining={remGirls}   />
-            {allocatedGeneralBeds > 0 && (
-              <Counter label="מעורב" required={boysNeeded + girlsNeeded} allocated={allocatedBoysBeds + allocatedGirlsBeds + allocatedGeneralBeds} remaining={(boysNeeded + girlsNeeded) - (allocatedBoysBeds + allocatedGirlsBeds + allocatedGeneralBeds)} />
-            )}
-          </>
-        ) : (
-          <Counter label="משתתפים" required={generalNeeded} allocated={allocatedGeneralBeds} remaining={remGeneral} />
-        )}
-      </div>
+
+      {hasGenderSplit ? (
+        <div className="grid grid-cols-3 gap-2">
+          <Counter label="בנים"  required={boysNeeded}  allocated={allocatedBoys}   remaining={remBoys}  />
+          <Counter label="בנות"  required={girlsNeeded} allocated={allocatedGirls}  remaining={remGirls} />
+          <Counter label="סה״כ"  required={totalNeeded} allocated={totalAllocated}  remaining={remTotal} />
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <Counter label="משתתפים" required={generalNeeded} allocated={allocatedGeneral} remaining={remGeneral} />
+        </div>
+      )}
+
+      {/* Mixed allocs info note — only shown if MIXED-tagged allocs exist alongside a gender-split group */}
+      {hasGenderSplit && allocatedMixed > 0 && (
+        <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+          ⚠️ {allocatedMixed} אנשים שובצו עם תגית "מעורב" — מומלץ לשבץ מחדש עם בנים/בנות לצורך ספירה מדויקת
+        </div>
+      )}
 
       {/* Neighbourhood summary */}
       {activeNhoods.length > 0 && (
@@ -104,7 +108,8 @@ export default function SleepingRequirementsSummary({ profile, allocations, nhoo
               <span key={r.id}>
                 {i > 0 && ", "}
                 <span className="text-slate-700 font-medium">{nName}</span>
-                {" "}({r.planned_tents || "?"} אוהלים · {r.gender_group})
+                {" "}({r.planned_tents || "?"} אוהלים
+                {r.gender_group !== "MIXED" ? ` · ${r.gender_group === "BOYS" ? "בנים" : "בנות"}` : " · מעורב"})
               </span>
             );
           })}

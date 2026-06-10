@@ -10,10 +10,17 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertTriangle, CheckCircle2, Save, Unlock } from "lucide-react";
 import { toast } from "sonner";
 
 const GENDER_LABEL = { BOYS: "בנים 👦", GIRLS: "בנות 👧", MEN: "גברים 👨", WOMEN: "נשים 👩" };
+
+// For MIXED neighborhoods, each tent must be assigned to BOYS or GIRLS
+const STUDENT_GENDER_OPTIONS = [
+  { value: "BOYS",  label: "בנים" },
+  { value: "GIRLS", label: "בנות" },
+];
 
 /**
  * Props:
@@ -55,6 +62,8 @@ export default function TentDistributionEditor({
   const [paxMap, setPaxMap] = useState({});
   // notesMap: tentId → notes string
   const [notesMap, setNotesMap] = useState({});
+  // genderMap: tentId → "BOYS" | "GIRLS" (used when reservation is MIXED)
+  const [genderMap, setGenderMap] = useState({});
   const [saving, setSaving] = useState(false);
   const [releasingTentId, setReleasingTentId] = useState(null);
   const [overrideMismatch, setOverrideMismatch] = useState(false);
@@ -69,17 +78,23 @@ export default function TentDistributionEditor({
     [existingAllocs, neighborhood]
   );
 
-  // Initialise paxMap from existing allocations when opening
+  const isMixedReservation = reservation?.gender_group === "MIXED";
+
+  // Initialise paxMap / notesMap / genderMap from existing allocations when opening
   useEffect(() => {
     if (!open) return;
     const pm = {};
     const nm = {};
+    const gm = {};
     myNeighborhoodAllocs.forEach(a => {
       pm[a.tent_id] = String(a.allocated_pax ?? 0);
       nm[a.tent_id] = a.notes || "";
+      // Preserve existing gender; default to BOYS for new entries in mixed
+      gm[a.tent_id] = (a.gender_group === "BOYS" || a.gender_group === "GIRLS") ? a.gender_group : "BOYS";
     });
     setPaxMap(pm);
     setNotesMap(nm);
+    setGenderMap(gm);
     setOverrideMismatch(false);
   }, [open, myNeighborhoodAllocs.length]);
 
@@ -151,6 +166,10 @@ export default function TentDistributionEditor({
         const notes = notesMap[tent.id] || "";
 
         if (pax > 0) {
+          // For MIXED neighborhoods: use per-tent gender selection; otherwise use reservation gender
+          const tentGender = isMixedReservation
+            ? (genderMap[tent.id] || "BOYS")
+            : (reservation?.gender_group || "MIXED");
           const payload = {
             group_id: groupId,
             operational_group_profile_id: profileId,
@@ -160,7 +179,7 @@ export default function TentDistributionEditor({
             departure_date: departureDate,
             allocated_pax: pax,
             allocation_type: "STUDENT",
-            gender_group: reservation?.gender_group || "MIXED",
+            gender_group: tentGender,
             status: "DRAFT",
             notes,
           };
@@ -250,9 +269,15 @@ export default function TentDistributionEditor({
 
         <div className="space-y-2 my-2">
           {/* Column headers */}
-          <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-2 text-[10px] font-semibold text-slate-400 uppercase px-1">
+          {isMixedReservation && (
+            <div className="flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-1">
+              שכונה מעורבת — יש לבחור בנים/בנות לכל אוהל
+            </div>
+          )}
+          <div className={`grid gap-2 text-[10px] font-semibold text-slate-400 uppercase px-1 ${isMixedReservation ? "grid-cols-[1fr_auto_auto_auto_auto_auto]" : "grid-cols-[1fr_auto_auto_auto_auto]"}`}>
             <span>אוהל</span>
             <span className="w-14 text-center">קיבולת</span>
+            {isMixedReservation && <span className="w-20 text-center">מגדר</span>}
             <span className="w-20 text-center">מספר אנשים</span>
             <span className="w-28">הערות</span>
             <span className="w-16"></span>
@@ -273,7 +298,7 @@ export default function TentDistributionEditor({
               : "bg-white border-slate-200";
 
             return (
-              <div key={tent.id} className={`grid grid-cols-[1fr_auto_auto_auto_auto] gap-2 items-center border rounded-lg px-3 py-2 ${rowBg}`}>
+              <div key={tent.id} className={`grid gap-2 items-center border rounded-lg px-3 py-2 ${isMixedReservation ? "grid-cols-[1fr_auto_auto_auto_auto_auto]" : "grid-cols-[1fr_auto_auto_auto_auto]"} ${rowBg}`}>
                 <div className="flex items-center gap-1.5 min-w-0">
                   <span className="font-semibold text-sm text-slate-800">{tent.code}</span>
                   {isOverBooked && (
@@ -281,12 +306,35 @@ export default function TentDistributionEditor({
                   )}
                 </div>
                 <span className="w-14 text-center text-xs text-slate-500">{tent.capacity || "—"}</span>
+                {isMixedReservation && (
+                  <Select
+                    value={genderMap[tent.id] || "BOYS"}
+                    onValueChange={v => setGenderMap(g => ({ ...g, [tent.id]: v }))}
+                    disabled={Number(paxMap[tent.id]) === 0}
+                  >
+                    <SelectTrigger className="w-20 h-7 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {STUDENT_GENDER_OPTIONS.map(o => (
+                        <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
                 <Input
                   type="number"
                   min="0"
                   max={tent.capacity || 999}
                   value={paxMap[tent.id] ?? "0"}
-                  onChange={e => setPaxMap(p => ({ ...p, [tent.id]: e.target.value }))}
+                  onChange={e => {
+                    const val = e.target.value;
+                    setPaxMap(p => ({ ...p, [tent.id]: val }));
+                    // Auto-enable gender selector when pax > 0
+                    if (isMixedReservation && Number(val) > 0 && !genderMap[tent.id]) {
+                      setGenderMap(g => ({ ...g, [tent.id]: "BOYS" }));
+                    }
+                  }}
                   className="w-20 h-7 text-xs text-center"
                   disabled={isOverBooked && !hasExistingAlloc}
                 />
