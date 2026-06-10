@@ -904,6 +904,7 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
                 onSave={handleSaveMealItem}
                 onCancel={handleCancelMealItem}
                 saving={saving}
+                profileDiets={profile?.special_diets || null}
               />
             ))}
           </div>
@@ -922,6 +923,7 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
                   onSave={handleSaveMealItem}
                   onCancel={() => {}}
                   saving={saving}
+                  profileDiets={profile?.special_diets || null}
                 />
               ))}
             </div>

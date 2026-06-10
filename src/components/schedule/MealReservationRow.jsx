@@ -59,12 +59,13 @@ function DietBadges({ raw }) {
   );
 }
 
-export default function MealReservationRow({ item, onSave, onCancel, saving }) {
+export default function MealReservationRow({ item, onSave, onCancel, saving, profileDiets = null }) {
   const [editing, setEditing] = useState(false);
   const [expanded, setExpanded] = useState(false);
 
-  // Parse diets from special_diets_summary into editable form state
-  const parsedDietsInit = parseDiets(item.special_diets_summary) || {};
+  // Prefer current profile diet over stale MealReservation.special_diets_summary
+  const effectiveDietsRaw = profileDiets || item.special_diets_summary;
+  const parsedDietsInit = parseDiets(effectiveDietsRaw) || {};
   const initDiets = {};
   DIET_LABELS.forEach(l => { initDiets[l.key] = parsedDietsInit[l.key] ?? 0; });
   initDiets.diet_notes = parsedDietsInit.diet_notes || "";
@@ -95,7 +96,7 @@ export default function MealReservationRow({ item, onSave, onCancel, saving }) {
 
   const handleCancel = () => {
     setForm({ ...item });
-    const pd = parseDiets(item.special_diets_summary) || {};
+    const pd = parseDiets(effectiveDietsRaw) || {};
     const reset = {};
     DIET_LABELS.forEach(l => { reset[l.key] = pd[l.key] ?? 0; });
     reset.diet_notes = pd.diet_notes || "";
@@ -103,16 +104,12 @@ export default function MealReservationRow({ item, onSave, onCancel, saving }) {
     setEditing(false);
   };
 
-  const hasDiets = (() => {
-    const d = parseDiets(item.special_diets_summary);
-    if (!d) return false;
-    return DIET_LABELS.some(l => Number(d[l.key]) > 0) || !!d.diet_notes;
-  })();
-
-  const hasLifeThreat = (() => {
-    const d = parseDiets(item.special_diets_summary);
-    return d && Number(d.lifeThreatening_count) > 0;
-  })();
+  // Use current profile diets for display (prefer over stale snapshot)
+  const effectiveDiets = parseDiets(effectiveDietsRaw);
+  const hasDiets = effectiveDiets
+    ? (DIET_LABELS.some(l => Number(effectiveDiets[l.key]) > 0) || !!effectiveDiets.diet_notes)
+    : false;
+  const hasLifeThreat = effectiveDiets && Number(effectiveDiets.lifeThreatening_count) > 0;
 
   if (editing) {
     return (
@@ -234,7 +231,7 @@ export default function MealReservationRow({ item, onSave, onCancel, saving }) {
           )}
           {hasDiets && expanded && (
             <>
-              <DietBadges raw={item.special_diets_summary} />
+              <DietBadges raw={effectiveDietsRaw} />
               <button
                 type="button"
                 onClick={() => setExpanded(false)}

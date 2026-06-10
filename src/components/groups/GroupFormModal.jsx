@@ -282,9 +282,10 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
     }
 
     setSaving(false);
-    // Invalidate kitchen-related queries so Kitchen page and KitchenReport reflect new diet immediately
+    // Invalidate kitchen and group-detail profile queries so all views refresh immediately
     queryClient.invalidateQueries({ queryKey: ["profiles_kitchen"] });
     queryClient.invalidateQueries({ queryKey: ["profiles_kitchenReport"] });
+    queryClient.invalidateQueries({ queryKey: ["operationalProfile"] });
     onSaved();
   };
 
