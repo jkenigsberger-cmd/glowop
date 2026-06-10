@@ -120,7 +120,7 @@ export default function GroupDetail() {
     </div>
   );
 
-  const GROUP_TYPE_LABEL = { LODGING: "לינה", DAY_USE: "יום כיף" };
+  const GROUP_TYPE_LABEL = { LODGING: "לינה", DAY_USE: "יום סמינר" };
 
   return (
     <div className="min-h-screen bg-background" dir="rtl">
@@ -139,7 +139,7 @@ export default function GroupDetail() {
                   <h1 className="text-2xl font-bold">{group.group_name}</h1>
                   <GroupStatusBadge status={group.status} />
                   {group.group_type === 'DAY_USE' ? (
-                    <span className="text-xs bg-amber-100 text-amber-800 border border-amber-300 px-2 py-0.5 rounded-full font-semibold">☀️ קבוצת יום</span>
+                    <span className="text-xs bg-amber-100 text-amber-800 border border-amber-300 px-2 py-0.5 rounded-full font-semibold">🎓 יום סמינר</span>
                   ) : (
                     <span className="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full font-medium">🛏️ לינה</span>
                   )}

@@ -103,7 +103,7 @@ function resolveData(quote, group) {
   // Activity type label from first student lodging line
   const activityTypeLabel = studentLines.length > 0
     ? (STUDENT_RATES[studentLines[0].rate_type]?.label || studentLines[0].rate_type)
-    : (group?.group_type === "DAY_USE" ? "יום כיף" : "לינה");
+    : (group?.group_type === "DAY_USE" ? "יום סמינר" : "לינה");
 
   // Audience
   const audienceLabel = (quote?.participant_count ?? group?.participant_count)
