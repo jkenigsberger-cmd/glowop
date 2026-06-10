@@ -41,13 +41,6 @@ Deno.serve(async (req) => {
     if (quote.status !== 'APPROVED') return Response.json({ error: 'ניתן לסנכרן רק הצעה מאושרת' }, { status: 400 });
     if (String(quote.group_id) !== String(group_id)) return Response.json({ error: 'הצעה זו אינה מקושרת לקבוצה זו' }, { status: 400 });
 
-    // ── Guard: block sync if this quote originally created the group ───────
-    if (profile && profile.quote_id && String(profile.quote_id) === String(quote_id)) {
-      return Response.json({
-        error: 'הצעה זו יצרה את הקבוצה במקור. אין צורך בסנכרון חוזר.',
-      }, { status: 400 });
-    }
-
     // ── Derive pax fields from Quote ───────────────────────────────────────
     const totalPax        = Number(quote.estimated_pax  || 0) || null;
     const staffCount      = Number(quote.staff_count    || 0) || null;
@@ -58,12 +51,13 @@ Deno.serve(async (req) => {
     const girlsCount = group.girls_count ?? null;
 
     // ── Validate boys + girls = participant_count for LODGING ──────────────
-    // Only applies when participantCount is changing and group is LODGING
-    if (group.group_type === 'LODGING' && participantCount != null) {
-      const genderSum = (boysCount ?? 0) + (girlsCount ?? 0);
-      if (genderSum !== participantCount) {
+    const targetType = quote.arrival_date && !quote.departure_date ? 'DAY_USE' : (group.group_type || 'LODGING');
+    // We keep group_type from quote.departure_date heuristic only if quote has it;
+    // more reliably: if group is LODGING we validate the gender split
+    if (group.group_type === 'LODGING' && participantCount != null && boysCount != null && girlsCount != null) {
+      if ((boysCount + girlsCount) !== participantCount) {
         return Response.json({
-          error: `ההצעה משנה את כמות החניכים, אך אין בה חלוקת בנים/בנות תואמת.\nחניכים (מהצעה): ${participantCount}\nבנים + בנות (קיים): ${genderSum}\nיש לעדכן את חלוקת בנים/בנות בעריכת הקבוצה לפני הסנכרון.`,
+          error: `חלוקת בנים/בנות לא תואמת לספר החניכים החדש.\nחניכים (מהצעה): ${participantCount}\nבנים + בנות (קיים): ${boysCount + girlsCount}\nיש לעדכן את חלוקת בנים/בנות בעריכת הקבוצה לפני הסנכרון.`,
         }, { status: 400 });
       }
     }

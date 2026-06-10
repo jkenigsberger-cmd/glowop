@@ -285,7 +285,7 @@ export default function GroupDetail() {
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <QuoteStatusActions quote={q} group={group} onUpdated={refetch} />
-                    <QuoteSyncButton quote={q} group={group} profile={operationalProfile} onSynced={refetch} />
+                    <QuoteSyncButton quote={q} group={group} onSynced={refetch} />
                   </div>
                 </div>
               ))}
