@@ -10,7 +10,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { AlertTriangle, CheckCircle2, Save } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Save, Unlock } from "lucide-react";
 import { toast } from "sonner";
 
 const GENDER_LABEL = { BOYS: "בנים 👦", GIRLS: "בנות 👧", MEN: "גברים 👨", WOMEN: "נשים 👩" };
@@ -56,6 +56,7 @@ export default function TentDistributionEditor({
   // notesMap: tentId → notes string
   const [notesMap, setNotesMap] = useState({});
   const [saving, setSaving] = useState(false);
+  const [releasingTentId, setReleasingTentId] = useState(null);
   const [overrideMismatch, setOverrideMismatch] = useState(false);
 
   // Active student allocs for this group in this neighborhood
@@ -195,6 +196,29 @@ export default function TentDistributionEditor({
     }
   };
 
+  const handleReleaseTent = async (tent) => {
+    const existing = myNeighborhoodAllocs.find(a => a.tent_id === tent.id);
+    if (!existing) return;
+    if (!window.confirm(`לשחרר את אוהל ${tent.code}?`)) return;
+    setReleasingTentId(tent.id);
+    try {
+      if (existing.status === "DRAFT") {
+        await base44.entities.SleepingAllocation.delete(existing.id);
+      } else {
+        await base44.entities.SleepingAllocation.update(existing.id, { status: "CANCELLED" });
+      }
+      setPaxMap(p => ({ ...p, [tent.id]: "0" }));
+      queryClient.invalidateQueries({ queryKey: ["sleepingAllocations", groupId] });
+      queryClient.invalidateQueries({ queryKey: ["allConfirmedAllocations"] });
+      toast.success(`אוהל ${tent.code} שוחרר`);
+      onSaved?.();
+    } catch (err) {
+      toast.error(err?.message || "שגיאה בשחרור — נסה שוב");
+    } finally {
+      setReleasingTentId(null);
+    }
+  };
+
   // Natural numeric sort by tent code
   const getTentNumber = (tent) => {
     const raw = String(tent.code || tent.name || "");
@@ -226,17 +250,20 @@ export default function TentDistributionEditor({
 
         <div className="space-y-2 my-2">
           {/* Column headers */}
-          <div className="grid grid-cols-[1fr_auto_auto_auto] gap-2 text-[10px] font-semibold text-slate-400 uppercase px-1">
+          <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-2 text-[10px] font-semibold text-slate-400 uppercase px-1">
             <span>אוהל</span>
             <span className="w-14 text-center">קיבולת</span>
             <span className="w-20 text-center">מספר אנשים</span>
             <span className="w-28">הערות</span>
+            <span className="w-16"></span>
           </div>
 
           {sortedTents.map(tent => {
             const pax = Number(paxMap[tent.id]) || 0;
             const isOverBooked = overbookedTentIds.has(tent.id);
             const isOverCap = pax > (tent.capacity || 0);
+            const hasExistingAlloc = !!myNeighborhoodAllocs.find(a => a.tent_id === tent.id);
+            const isReleasingThis = releasingTentId === tent.id;
             const rowBg = isOverBooked
               ? "bg-red-50 border-red-200"
               : isOverCap
@@ -246,7 +273,7 @@ export default function TentDistributionEditor({
               : "bg-white border-slate-200";
 
             return (
-              <div key={tent.id} className={`grid grid-cols-[1fr_auto_auto_auto] gap-2 items-center border rounded-lg px-3 py-2 ${rowBg}`}>
+              <div key={tent.id} className={`grid grid-cols-[1fr_auto_auto_auto_auto] gap-2 items-center border rounded-lg px-3 py-2 ${rowBg}`}>
                 <div className="flex items-center gap-1.5 min-w-0">
                   <span className="font-semibold text-sm text-slate-800">{tent.code}</span>
                   {isOverBooked && (
@@ -261,7 +288,7 @@ export default function TentDistributionEditor({
                   value={paxMap[tent.id] ?? "0"}
                   onChange={e => setPaxMap(p => ({ ...p, [tent.id]: e.target.value }))}
                   className="w-20 h-7 text-xs text-center"
-                  disabled={isOverBooked && !myNeighborhoodAllocs.find(a => a.tent_id === tent.id)}
+                  disabled={isOverBooked && !hasExistingAlloc}
                 />
                 <Input
                   value={notesMap[tent.id] ?? ""}
@@ -269,6 +296,21 @@ export default function TentDistributionEditor({
                   placeholder="הערות..."
                   className="w-28 h-7 text-xs"
                 />
+                <div className="w-16 flex justify-center">
+                  {hasExistingAlloc && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={isReleasingThis || saving}
+                      onClick={() => handleReleaseTent(tent)}
+                      className="h-7 text-xs gap-1 border-red-200 text-red-600 hover:bg-red-50 px-2"
+                    >
+                      <Unlock className="w-3 h-3" />
+                      {isReleasingThis ? "..." : "שחרר"}
+                    </Button>
+                  )}
+                </div>
               </div>
             );
           })}

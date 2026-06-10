@@ -2,7 +2,7 @@ import { useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { BedDouble, AlertTriangle } from "lucide-react";
+import { BedDouble, AlertTriangle, Unlock } from "lucide-react";
 import { toast } from "sonner";
 import { upsertReviewAlert } from "@/lib/reviewAlerts";
 
@@ -24,6 +24,7 @@ export default function VipPaxEditDialog({
   const [pax, setPax] = useState(allocation?.allocated_pax ?? 1);
   const [notes, setNotes] = useState((allocation?.notes || "").replace(/__vip_req_\d+__\s*/g, "").trim());
   const [saving, setSaving] = useState(false);
+  const [releasing, setReleasing] = useState(false);
   const [error, setError] = useState(null);
 
   // Live overbooking check: current total minus this allocation's current pax + new pax
@@ -162,16 +163,41 @@ export default function VipPaxEditDialog({
           )}
 
           {/* Actions */}
-          <div className="flex gap-2 pt-1">
-            <Button type="button" size="sm" variant="outline" onClick={onClose} disabled={saving} className="flex-1">
+          <div className="flex gap-2 pt-1 flex-wrap">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={releasing || saving}
+              onClick={async () => {
+                if (!window.confirm(`לשחרר את אוהל ${tent?.code}?`)) return;
+                setReleasing(true);
+                setError(null);
+                try {
+                  await base44.entities.SleepingAllocation.update(allocation.id, { status: "CANCELLED" });
+                  toast.success(`אוהל ${tent?.code} שוחרר`);
+                  onSaved();
+                } catch (err) {
+                  setError(err?.message || "שגיאה בשחרור — נסה שוב");
+                } finally {
+                  setReleasing(false);
+                }
+              }}
+              className="gap-1 text-red-600 border-red-200 hover:bg-red-50"
+            >
+              <Unlock className="w-3.5 h-3.5" />
+              {releasing ? "משחרר..." : "שחרר אוהל"}
+            </Button>
+            <div className="flex-1" />
+            <Button type="button" size="sm" variant="outline" onClick={onClose} disabled={saving || releasing}>
               ביטול
             </Button>
             <Button
               type="button"
               size="sm"
               onClick={handleSave}
-              disabled={saving || isOverbooking}
-              className="flex-1 bg-primary hover:bg-primary/90"
+              disabled={saving || releasing || isOverbooking}
+              className="bg-primary hover:bg-primary/90"
             >
               {saving ? "שומר..." : "שמור שינוי"}
             </Button>
