@@ -226,8 +226,8 @@ export default function SleepingRequirementsTab({ groupId, profile, group }) {
       <div className="flex flex-col items-center justify-center py-16 gap-4 text-center" dir="rtl">
         <div className="text-5xl">☀️</div>
         <div className="space-y-2">
-          <p className="text-lg font-bold text-slate-700">יום סמינר — אין צורך בדרישות לינה</p>
-          <p className="text-sm text-slate-500">קבוצה זו מוגדרת כיום סמינר.</p>
+          <p className="text-lg font-bold text-slate-700">פעילות יום — אין צורך בדרישות לינה</p>
+          <p className="text-sm text-slate-500">קבוצה זו מוגדרת כפעילות יום.</p>
           <p className="text-sm text-slate-400">הקבוצה אינה לנה באתר ולכן אין צורך בשיבוץ אוהלים או בדרישות לינה.</p>
         </div>
       </div>

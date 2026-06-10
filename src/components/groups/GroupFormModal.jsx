@@ -273,7 +273,7 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="LODGING">לינה</SelectItem>
-                    <SelectItem value="DAY_USE">יום סמינר</SelectItem>
+                    <SelectItem value="DAY_USE">פעילות יום</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

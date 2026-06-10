@@ -27,7 +27,7 @@ function fmtDate(dateStr) {
 const MEAL_LABELS = { BREAKFAST: "ארוחת בוקר", LUNCH: "ארוחת צהריים", DINNER: "ארוחת ערב", OTHER: "אחר" };
 const GENDER_LABELS = { BOYS: "בנים", GIRLS: "בנות", MEN: "גברים", WOMEN: "נשים", MIXED: "מעורב" };
 const ALLOC_TYPE_LABELS = { STUDENT: "חניכים", STAFF: "צוות" };
-const GROUP_TYPE_LABELS = { LODGING: "לינה", DAY_USE: "יום כיף" };
+const GROUP_TYPE_LABELS = { LODGING: "לינה", DAY_USE: "פעילות יום" };
 
 const DIET_LABELS = [
   { key: "vegetarian_count",     label: "צמחונים",              critical: false },
