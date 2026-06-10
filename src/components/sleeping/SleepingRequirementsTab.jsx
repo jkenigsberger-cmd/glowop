@@ -3,7 +3,8 @@ import { base44 } from "@/api/base44Client";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Save, CheckCircle2, Clock, AlertTriangle, Users, Star, ShieldAlert } from "lucide-react";
+import { Save, CheckCircle2, Clock, AlertTriangle, Users, Star, ShieldAlert, Pencil } from "lucide-react";
+import GroupFormModal from "@/components/groups/GroupFormModal";
 import { toast } from "sonner";
 import PeopleSummaryCard from "./PeopleSummaryCard";
 import StudentTentPlanningEditor from "./StudentTentPlanningEditor";
@@ -75,10 +76,9 @@ function SectionCard({ icon: Icon, title, color, children }) {
 export default function SleepingRequirementsTab({ groupId, profile, group }) {
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
+  const [showGroupEdit, setShowGroupEdit] = useState(false);
 
   const [form, setForm] = useState({
-    boys_beds_needed:    null,
-    girls_beds_needed:   null,
     student_sleeping_notes:      "",
     staff_sleeping_notes:        "",
     accessibility_sleeping_notes:"",
@@ -96,17 +96,7 @@ export default function SleepingRequirementsTab({ groupId, profile, group }) {
 
   useEffect(() => {
     if (!profile) return;
-    const genderSplit = (Number(profile.boys_count) + Number(profile.girls_count)) > 0;
     setForm({
-      boys_beds_needed:    genderSplit
-        ? (profile.boys_beds_needed  ?? profile.boys_count  ?? null)
-        : null,
-      girls_beds_needed:   genderSplit
-        ? (profile.girls_beds_needed ?? profile.girls_count ?? null)
-        : null,
-      general_beds_needed: !genderSplit
-        ? (profile.boys_beds_needed ?? profile.participant_count ?? profile.total_pax ?? null)
-        : null,
       student_sleeping_notes:       profile.student_sleeping_notes       ?? "",
       staff_sleeping_notes:         profile.staff_sleeping_notes         ?? "",
       accessibility_sleeping_notes: profile.accessibility_sleeping_notes ?? "",
@@ -140,9 +130,14 @@ export default function SleepingRequirementsTab({ groupId, profile, group }) {
   // Hard blocks for "סמן כמוכן"
   const hardBlocked = studentOverMax || vipExceedsMax || vipOverPaxRow || vipMissingData;
 
+  // Derive read-only bed counts from profile (source of truth = GroupFormModal)
+  const boysBedsNeeded  = profile?.boys_beds_needed  ?? profile?.boys_count  ?? null;
+  const girlsBedsNeeded = profile?.girls_beds_needed ?? profile?.girls_count ?? null;
+  const generalBedsNeeded = profile?.boys_beds_needed ?? profile?.participant_count ?? profile?.total_pax ?? null;
+
   // Soft warnings (student distribution mismatch)
-  const boysDistMismatch  = hasGenderSplit && form.boys_beds_needed  != null && distTotal(boysDist)  !== form.boys_beds_needed;
-  const girlsDistMismatch = hasGenderSplit && form.girls_beds_needed != null && distTotal(girlsDist) !== form.girls_beds_needed;
+  const boysDistMismatch  = hasGenderSplit && boysBedsNeeded  != null && distTotal(boysDist)  !== boysBedsNeeded;
+  const girlsDistMismatch = hasGenderSplit && girlsBedsNeeded != null && distTotal(girlsDist) !== girlsBedsNeeded;
   const hasSoftWarnings   = boysDistMismatch || girlsDistMismatch;
 
   // ── save ──────────────────────────────────────────────────────────────────
@@ -158,12 +153,6 @@ export default function SleepingRequirementsTab({ groupId, profile, group }) {
 
     setSaving(true);
     try {
-      // When no gender split: store general_beds_needed in boys_beds_needed for backward compat
-      const saveForm = { ...form };
-      if (!hasGenderSplit) {
-        saveForm.boys_beds_needed  = form.general_beds_needed ?? null;
-        saveForm.girls_beds_needed = null;
-      }
       // Compute staff_alt_tent_pax automatically from vipRows vs staff_count
       const NON_STAFF_VIP = ["DRIVER", "SECURITY", "GUIDE", "OTHER"];
       const totalVipStaffPeople = vipRows
@@ -174,13 +163,18 @@ export default function SleepingRequirementsTab({ groupId, profile, group }) {
         ? Math.max(staffCount - totalVipStaffPeople, 0)
         : null;
 
+      // NOTE: boys_beds_needed / girls_beds_needed / general_beds_needed are intentionally
+      // excluded — these are derived from GroupFormModal and must not be overwritten here.
       const payload = {
-        ...saveForm,
+        student_sleeping_notes:       form.student_sleeping_notes,
+        staff_sleeping_notes:         form.staff_sleeping_notes,
+        accessibility_sleeping_notes: form.accessibility_sleeping_notes,
+        housekeeping_sleeping_notes:  form.housekeeping_sleeping_notes,
+        staff_alt_tent_notes:         form.staff_alt_tent_notes ?? "",
         boys_tent_distribution_json:  JSON.stringify(boysDist),
         girls_tent_distribution_json: JSON.stringify(girlsDist),
         vip_tent_requirements_json:   JSON.stringify(vipRows),
-        staff_alt_tent_pax:   computedAltPax,
-        staff_alt_tent_notes: saveForm.staff_alt_tent_notes ?? "",
+        staff_alt_tent_pax:           computedAltPax,
       };
       if (markComplete !== null) payload.sleeping_requirements_completed = markComplete;
 
@@ -317,33 +311,43 @@ export default function SleepingRequirementsTab({ groupId, profile, group }) {
 
         {hasGenderSplit ? (
           <div className="grid grid-cols-2 gap-3">
-            <NumberInput
-              label="מיטות נדרשות — בנים"
-              hint={`מהשאלון: ${profile.boys_count ?? "—"}`}
-              value={form.boys_beds_needed}
-              onChange={v => set("boys_beds_needed", v)}
-            />
-            <NumberInput
-              label="מיטות נדרשות — בנות"
-              hint={`מהשאלון: ${profile.girls_count ?? "—"}`}
-              value={form.girls_beds_needed}
-              onChange={v => set("girls_beds_needed", v)}
-            />
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-slate-600">מיטות נדרשות — בנים</label>
+              <p className="text-[11px] text-slate-400">מהשאלון: {profile.boys_count ?? "—"}</p>
+              <div className="h-8 flex items-center px-3 rounded-md border border-slate-200 bg-slate-50 text-sm font-semibold text-slate-700">
+                {boysBedsNeeded ?? "—"}
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-slate-600">מיטות נדרשות — בנות</label>
+              <p className="text-[11px] text-slate-400">מהשאלון: {profile.girls_count ?? "—"}</p>
+              <div className="h-8 flex items-center px-3 rounded-md border border-slate-200 bg-slate-50 text-sm font-semibold text-slate-700">
+                {girlsBedsNeeded ?? "—"}
+              </div>
+            </div>
           </div>
         ) : (
-          <NumberInput
-            label="מיטות נדרשות — משתתפים (שיבוץ כללי)"
-            hint={`מהשאלון: ${profile.participant_count ?? profile.total_pax ?? "—"}`}
-            value={form.general_beds_needed}
-            onChange={v => set("general_beds_needed", v)}
-          />
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-slate-600">מיטות נדרשות — משתתפים (שיבוץ כללי)</label>
+            <p className="text-[11px] text-slate-400">מהשאלון: {profile.participant_count ?? profile.total_pax ?? "—"}</p>
+            <div className="h-8 flex items-center px-3 rounded-md border border-slate-200 bg-slate-50 text-sm font-semibold text-slate-700">
+              {generalBedsNeeded ?? "—"}
+            </div>
+          </div>
         )}
+
+        <div className="flex items-center gap-2 pt-1">
+          <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={() => setShowGroupEdit(true)}>
+            <Pencil className="w-3.5 h-3.5" /> ערוך פרטי קבוצה
+          </Button>
+          <span className="text-[11px] text-slate-400">לשינוי מספרי משתתפים / בנים / בנות</span>
+        </div>
 
         {hasGenderSplit ? (
           <>
             <StudentTentPlanningEditor
               title="חלוקת אוהלים — בנים"
-              required={form.boys_beds_needed}
+              required={boysBedsNeeded}
               rows={boysDist}
               onChange={setBoysDist}
               maxPerTent={STUDENT_CAPACITY}
@@ -351,7 +355,7 @@ export default function SleepingRequirementsTab({ groupId, profile, group }) {
             />
             <StudentTentPlanningEditor
               title="חלוקת אוהלים — בנות"
-              required={form.girls_beds_needed}
+              required={girlsBedsNeeded}
               rows={girlsDist}
               onChange={setGirlsDist}
               maxPerTent={STUDENT_CAPACITY}
@@ -364,7 +368,7 @@ export default function SleepingRequirementsTab({ groupId, profile, group }) {
         ) : (
           <StudentTentPlanningEditor
             title="חלוקת אוהלים — כללי / שיבוץ כללי"
-            required={form.general_beds_needed}
+            required={generalBedsNeeded}
             rows={boysDist}
             onChange={setBoysDist}
             maxPerTent={STUDENT_CAPACITY}
@@ -426,6 +430,17 @@ export default function SleepingRequirementsTab({ groupId, profile, group }) {
           </Button>
         </div>
       </RoleGate>
+
+      {showGroupEdit && group && (
+        <GroupFormModal
+          group={group}
+          onClose={() => setShowGroupEdit(false)}
+          onSaved={() => {
+            setShowGroupEdit(false);
+            queryClient.invalidateQueries({ queryKey: ["operationalProfile", groupId] });
+          }}
+        />
+      )}
     </div>
   );
 }
