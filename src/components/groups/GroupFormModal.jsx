@@ -34,6 +34,7 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
   // Dietary data — pre-loaded from profile.special_diets when editing
   const [diets, setDiets] = useState(() => mergeDiets(parseDiets(initialProfileDiets)));
   const [saving, setSaving] = useState(false);
+  const [allocationBlockError, setAllocationBlockError] = useState(null);
 
   // ── Derived values ────────────────────────────────────────────────────────
   const totalPax   = Number(form.total_pax   || 0);
@@ -66,6 +67,28 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
   // ── Submit ────────────────────────────────────────────────────────────────
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setAllocationBlockError(null);
+
+    // ── Guard: block date/type changes if active sleeping allocations exist ──
+    if (isEdit) {
+      const datesChanged = (form.arrival_date !== (group.arrival_date || "")) ||
+                           (form.departure_date !== (group.departure_date || ""));
+      const typeChangedToDay = group.group_type === "LODGING" && form.group_type === "DAY_USE";
+
+      if (datesChanged || typeChangedToDay) {
+        const activeAllocs = await base44.entities.SleepingAllocation.filter({
+          group_id: group.id,
+          status: { $in: ["DRAFT", "CONFIRMED"] },
+        });
+        if (activeAllocs.length > 0) {
+          setAllocationBlockError(
+            "לא ניתן לשנות תאריכים או להפוך ליום סמינר כאשר קיימים שיבוצי לינה פעילים.\nיש לשחרר או לבטל את השיבוצים הקיימים ואז לבצע את השינוי."
+          );
+          return;
+        }
+      }
+    }
+
     setSaving(true);
     const payload = {
       ...form,
@@ -352,6 +375,13 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
           </div>
 
         </form>
+
+        {/* Allocation block error */}
+        {allocationBlockError && (
+          <div className="px-4 sm:px-6 py-3 border-t border-red-200 bg-red-50 text-xs text-red-700 whitespace-pre-line text-right shrink-0">
+            ⛔ {allocationBlockError}
+          </div>
+        )}
 
         {/* Sticky footer */}
         <div className="px-4 sm:px-6 py-4 border-t border-border shrink-0 flex gap-2 justify-end bg-card">
