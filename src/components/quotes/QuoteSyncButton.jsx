@@ -47,15 +47,29 @@ function buildDiff(quote, group) {
   return diffs;
 }
 
-export default function QuoteSyncButton({ quote, group, onSynced }) {
+export default function QuoteSyncButton({ quote, group, profile, onSynced }) {
   const [open, setOpen] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [blockError, setBlockError] = useState(null);
 
   if (!quote || quote.status !== "APPROVED" || !group) return null;
 
+  // Hide if this quote originally created the group (OGP.quote_id === quote.id)
+  if (profile?.quote_id && profile.quote_id === quote.id) return null;
+
   const diffs = buildDiff(quote, group);
   if (diffs.length === 0) return null;
+
+  // Warn if pax changes but boys+girls no longer matches new participant_count
+  const totalPaxNew = Number(quote.estimated_pax || 0) || null;
+  const staffCountNew = Number(quote.staff_count || 0) || null;
+  const participantCountNew = totalPaxNew != null && staffCountNew != null
+    ? Math.max(0, totalPaxNew - staffCountNew) : null;
+  const boysCount  = group.boys_count  ?? 0;
+  const girlsCount = group.girls_count ?? 0;
+  const paxChanges = participantCountNew != null && participantCountNew !== group.participant_count;
+  const genderMismatch = paxChanges && group.group_type === "LODGING"
+    && participantCountNew != null && (boysCount + girlsCount) !== participantCountNew;
 
   const handleSync = async () => {
     setSyncing(true);
@@ -109,6 +123,13 @@ export default function QuoteSyncButton({ quote, group, onSynced }) {
                 ))}
               </div>
 
+              {genderMismatch && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-700 whitespace-pre-line">
+                  ⚠️ ההצעה משנה את כמות החניכים, אך אין בה חלוקת בנים/בנות תואמת.
+{`יש לעדכן את חלוקת בנים/בנות בעריכת הקבוצה לפני הסנכרון.`}
+                </div>
+              )}
+
               {blockError && (
                 <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-xs text-red-700 whitespace-pre-line">
                   ⛔ {blockError}
@@ -123,7 +144,7 @@ export default function QuoteSyncButton({ quote, group, onSynced }) {
                 <Button variant="outline" size="sm" onClick={() => setOpen(false)}>ביטול</Button>
                 <Button
                   size="sm"
-                  disabled={syncing}
+                  disabled={syncing || genderMismatch}
                   onClick={handleSync}
                   className="bg-amber-600 hover:bg-amber-700 text-white"
                 >
