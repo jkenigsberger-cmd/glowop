@@ -124,26 +124,17 @@ Deno.serve(async (req) => {
     dbg.arrival_date   = arrival_date;
     dbg.departure_date = departure_date;
 
-    // ── 5. Conflict check — other groups ────────────────────────────────────
+    // ── 5. Conflict check — any group including same group ──────────────────
+    // Exception: skip the allocation row being updated (allocation_id).
     const allForTent = await base44.asServiceRole.entities.SleepingAllocation.filter({ tent_id });
     const conflicting = allForTent.filter(a =>
       a.status !== 'CANCELLED' &&
       a.id !== allocation_id &&
-      a.group_id !== group_id &&
       datesOverlap(arrival_date, departure_date, a.arrival_date, a.departure_date)
     );
 
     if (conflicting.length > 0) {
-      const conflict = conflicting[0];
-      let conflictGroupName = conflict.group_id;
-      try {
-        const cgs = await base44.asServiceRole.entities.Group.filter({ id: conflict.group_id });
-        conflictGroupName = cgs[0]?.group_name || conflict.group_id;
-      } catch (_) { /* non-fatal */ }
-      return fail('TENT_CONFLICT',
-        `האוהל כבר משובץ לקבוצה אחרת (${conflictGroupName}) בתאריכים ${conflict.arrival_date} — ${conflict.departure_date}`,
-        dbg
-      );
+      return fail('TENT_CONFLICT', 'האוהל כבר משובץ בתאריכים אלו', dbg);
     }
 
     // ── 6. Build & persist ─────────────────────────────────────────────────

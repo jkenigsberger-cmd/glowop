@@ -560,19 +560,24 @@ export default function AltTentAllocationPanel({
   const remainingPax  = Math.max(altTentPax - allocatedPax, 0);
   const allDone       = altTentPax > 0 && remainingPax === 0;
 
-  // Tents occupied by other groups (DRAFT or CONFIRMED) on overlapping dates — tent-level only
+  // Tents occupied on overlapping dates — ALL groups including same group.
+  // Exception: existing alt-tent allocs for THIS group are shown in the panel with שחרר button,
+  // so exclude them from the blocked set (they are already excluded from availableTents via myAltTentIds).
+  const myAltAllocIds = useMemo(() => new Set(altAllocs.map(a => a.id)), [altAllocs]);
+
   const occupiedTentIds = useMemo(() => {
     const ids = new Set();
     if (!arrivalDate || !departureDate) return ids;
     (allActiveAllocations || []).forEach(a => {
-      if (a.group_id === groupId) return;
       if (a.status === "CANCELLED") return;
+      // Skip this group's own existing alt-tent rows (handled separately in panel)
+      if (myAltAllocIds.has(a.id)) return;
       if (a.arrival_date && a.departure_date && a.arrival_date < departureDate && a.departure_date > arrivalDate) {
         ids.add(a.tent_id);
       }
     });
     return ids;
-  }, [allActiveAllocations, groupId, arrivalDate, departureDate]);
+  }, [allActiveAllocations, groupId, arrivalDate, departureDate, myAltAllocIds]);
 
   // Tent IDs already used by this group's alt allocs (excluded from picker — managed inside modal)
   const myAltTentIds = useMemo(() => new Set(altAllocs.map(a => a.tent_id)), [altAllocs]);
