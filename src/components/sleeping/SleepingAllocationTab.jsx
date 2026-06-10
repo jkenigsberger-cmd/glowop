@@ -2,9 +2,13 @@ import { useState, useMemo } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, Lightbulb, CheckCircle2, Shield } from "lucide-react";
+import { AlertTriangle, Lightbulb, CheckCircle2, Shield, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import RoleGate from "@/components/RoleGate";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 import SleepingRequirementsSummary from "./SleepingRequirementsSummary";
 import StudentNeighborhoodPanel from "./StudentNeighborhoodPanel";
@@ -46,6 +50,7 @@ export default function SleepingAllocationTab({ groupId }) {
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
   const [showSuggestion, setShowSuggestion] = useState(false);
+  const [showReleaseAllDialog, setShowReleaseAllDialog] = useState(false);
 
   // ── Data fetching ──────────────────────────────────────────────────────────
   const { data: profiles = [] } = useQuery({
@@ -182,6 +187,34 @@ export default function SleepingAllocationTab({ groupId }) {
     queryClient.invalidateQueries({ queryKey: ["allNhoodReservations"] });
   };
 
+  const handleReleaseAll = async () => {
+    setSaving(true);
+    try {
+      const activeAllocs = myAllocations.filter(a => a.status !== "CANCELLED");
+      const activeNhoodRes = myNhoodReservations.filter(r => r.status === "ACTIVE");
+
+      await Promise.all([
+        ...activeAllocs.map(a =>
+          a.status === "DRAFT"
+            ? base44.entities.SleepingAllocation.delete(a.id)
+            : base44.entities.SleepingAllocation.update(a.id, { status: "CANCELLED" })
+        ),
+        ...activeNhoodRes.map(r =>
+          base44.entities.NeighborhoodReservation.update(r.id, { status: "CANCELLED" })
+        ),
+      ]);
+
+      toast.success("כל שיבוצי הלינה שוחררו ✓");
+      invalidate();
+    } catch (err) {
+      console.error("[SleepingAllocationTab] handleReleaseAll error:", err);
+      toast.error(err?.message || "שגיאה בשחרור השיבוץ — נסה שוב");
+    } finally {
+      setSaving(false);
+      setShowReleaseAllDialog(false);
+    }
+  };
+
   const handleReserveNeighborhood = async (payload) => {
     setSaving(true);
     try {
@@ -296,8 +329,61 @@ export default function SleepingAllocationTab({ groupId }) {
     : [];
   const vipRows              = parseDist(profile.vip_tent_requirements_json);
 
+  const hasActiveAllocations = myAllocations.some(a => a.status !== "CANCELLED") ||
+    myNhoodReservations.some(r => r.status === "ACTIVE");
+
   return (
     <div className="space-y-6" dir="rtl">
+
+      {/* Release all button */}
+      <RoleGate permission="MANAGE_ALLOCATION">
+        {hasActiveAllocations && (
+          <div className="flex justify-end">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400"
+              onClick={() => setShowReleaseAllDialog(true)}
+              disabled={saving}
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              שחרר את כל השיבוץ
+            </Button>
+          </div>
+        )}
+      </RoleGate>
+
+      {/* Release all confirmation dialog */}
+      <AlertDialog open={showReleaseAllDialog} onOpenChange={setShowReleaseAllDialog}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>שחרור כל שיבוצי הלינה</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 text-sm text-slate-600">
+                <p>פעולה זו תשחרר את כל שיבוצי הלינה של הקבוצה:</p>
+                <ul className="list-disc pr-5 space-y-1">
+                  <li>אוהלי תלמידים</li>
+                  <li>אוהלי VIP</li>
+                  <li>אוהל חילופי</li>
+                  <li>הזמנות שכונה קשורות</li>
+                </ul>
+                <p className="text-slate-500 text-xs">הפעולה לא משנה ארוחות, פעילויות או פרטי קבוצה.</p>
+                <p className="font-semibold text-red-600">להמשיך?</p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-row-reverse gap-2">
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={handleReleaseAll}
+              disabled={saving}
+            >
+              {saving ? "משחרר..." : "כן, שחרר הכל"}
+            </AlertDialogAction>
+            <AlertDialogCancel>ביטול</AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Requirements summary */}
       <SleepingRequirementsSummary
