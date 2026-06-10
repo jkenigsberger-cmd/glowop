@@ -3,7 +3,7 @@ import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
-  AlertTriangle, BedDouble, X, Home, CheckCircle2, Plus, Users, Pencil, Trash2
+  AlertTriangle, BedDouble, X, Home, CheckCircle2, Plus, Users, Pencil, Trash2, Unlock
 } from "lucide-react";
 import { toast } from "sonner";
 import RoleGate from "@/components/RoleGate";
@@ -177,9 +177,8 @@ function GenderPicker({ value, onChange }) {
 // ─────────────────────────────────────────────────────────────────────────────
 function AltTentAllocationModal({
   profile, groupId, allTents, neighborhoods,
-  existingAltAllocs,         // already-saved alt tent rows for this group
-  availableTents,            // tents not occupied by other groups
-  occupiedNeighborhoodIds,   // neighborhoods locked by other groups
+  existingAltAllocs,   // already-saved alt tent rows for this group
+  availableTents,      // tents not occupied by other groups (DRAFT + CONFIRMED from others)
   arrivalDate, departureDate,
   onSaved, onClose,
 }) {
@@ -540,12 +539,13 @@ export default function AltTentAllocationPanel({
   allTents,
   neighborhoods,
   myAllocations,
-  allConfirmedAllocations,
+  allActiveAllocations,   // DRAFT + CONFIRMED from all groups — for tent-level conflict detection
   arrivalDate,
   departureDate,
   onInvalidate,
 }) {
   const [modalOpen, setModalOpen] = useState(false);
+  const [releasingId, setReleasingId] = useState(null);
 
   const altTentPax   = profile.staff_alt_tent_pax ?? 0;
   const altTentNotes = profile.staff_alt_tent_notes || "";
@@ -560,25 +560,11 @@ export default function AltTentAllocationPanel({
   const remainingPax  = Math.max(altTentPax - allocatedPax, 0);
   const allDone       = altTentPax > 0 && remainingPax === 0;
 
-  // Neighborhoods locked by other groups (date-overlapping neighborhood reservations)
-  const occupiedNeighborhoodIds = useMemo(() => {
-    const ids = new Set();
-    if (!arrivalDate || !departureDate) return ids;
-    allConfirmedAllocations.forEach(a => {
-      if (a.group_id === groupId) return;
-      if (a.status === "CANCELLED") return;
-      if (a.arrival_date && a.departure_date && a.arrival_date < departureDate && a.departure_date > arrivalDate) {
-        ids.add(a.neighborhood_id);
-      }
-    });
-    return ids;
-  }, [allConfirmedAllocations, groupId, arrivalDate, departureDate]);
-
-  // Tents occupied by other groups (tent-level conflict)
+  // Tents occupied by other groups (DRAFT or CONFIRMED) on overlapping dates — tent-level only
   const occupiedTentIds = useMemo(() => {
     const ids = new Set();
     if (!arrivalDate || !departureDate) return ids;
-    allConfirmedAllocations.forEach(a => {
+    (allActiveAllocations || []).forEach(a => {
       if (a.group_id === groupId) return;
       if (a.status === "CANCELLED") return;
       if (a.arrival_date && a.departure_date && a.arrival_date < departureDate && a.departure_date > arrivalDate) {
@@ -586,7 +572,7 @@ export default function AltTentAllocationPanel({
       }
     });
     return ids;
-  }, [allConfirmedAllocations, groupId, arrivalDate, departureDate]);
+  }, [allActiveAllocations, groupId, arrivalDate, departureDate]);
 
   // Tent IDs already used by this group's alt allocs (excluded from picker — managed inside modal)
   const myAltTentIds = useMemo(() => new Set(altAllocs.map(a => a.tent_id)), [altAllocs]);
@@ -602,6 +588,23 @@ export default function AltTentAllocationPanel({
       return true;
     });
   }, [allTents, occupiedTentIds, myAltTentIds, arrivalDate, departureDate]);
+
+  const handleRelease = async (alloc) => {
+    setReleasingId(alloc.id);
+    try {
+      if (alloc.status === "DRAFT") {
+        await base44.entities.SleepingAllocation.delete(alloc.id);
+      } else {
+        await base44.entities.SleepingAllocation.update(alloc.id, { status: "CANCELLED" });
+      }
+      toast.success("האוהל החילופי שוחרר");
+      onInvalidate();
+    } catch (err) {
+      toast.error(err?.message || "שגיאה בשחרור האוהל");
+    } finally {
+      setReleasingId(null);
+    }
+  };
 
   return (
     <section className="space-y-3">
@@ -655,6 +658,7 @@ export default function AltTentAllocationPanel({
             const tent      = allTents.find(t => t.id === alloc.tent_id);
             const hoodName  = tent ? (neighborhoods.find(n => n.id === tent.neighborhood_id)?.name || "") : "";
             const isConfirmed = alloc.status === "CONFIRMED";
+            const isReleasing = releasingId === alloc.id;
             return (
               <div key={alloc.id} className={`rounded-xl border-2 px-4 py-2.5 flex items-center gap-3 ${
                 isConfirmed ? "border-emerald-400 bg-emerald-50" : "border-amber-300 bg-amber-50"
@@ -671,6 +675,18 @@ export default function AltTentAllocationPanel({
                       : <span className="text-amber-600">טיוטה</span>}
                   </p>
                 </div>
+                <RoleGate permission="MANAGE_ALLOCATION">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={isReleasing}
+                    onClick={() => handleRelease(alloc)}
+                    className="gap-1 shrink-0 border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300"
+                  >
+                    <Unlock className="w-3.5 h-3.5" />
+                    {isReleasing ? "משחרר..." : "שחרר"}
+                  </Button>
+                </RoleGate>
               </div>
             );
           })}
@@ -686,7 +702,6 @@ export default function AltTentAllocationPanel({
           neighborhoods={neighborhoods}
           existingAltAllocs={altAllocs}
           availableTents={availableTents}
-          occupiedNeighborhoodIds={occupiedNeighborhoodIds}
           arrivalDate={arrivalDate}
           departureDate={departureDate}
           onSaved={() => { setModalOpen(false); onInvalidate(); }}

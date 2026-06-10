@@ -84,6 +84,18 @@ export default function SleepingAllocationTab({ groupId }) {
     queryFn: () => base44.entities.SleepingAllocation.filter({ status: "CONFIRMED" }),
   });
 
+  // All ACTIVE (DRAFT + CONFIRMED) allocations — used for alt tent tent-level conflict detection
+  const { data: allActiveAllocations = [] } = useQuery({
+    queryKey: ["allActiveAllocations"],
+    queryFn: async () => {
+      const [draft, confirmed] = await Promise.all([
+        base44.entities.SleepingAllocation.filter({ status: "DRAFT" }),
+        base44.entities.SleepingAllocation.filter({ status: "CONFIRMED" }),
+      ]);
+      return [...draft, ...confirmed];
+    },
+  });
+
   const { data: myNhoodReservations = [] } = useQuery({
     queryKey: ["nhoodReservations", groupId],
     queryFn: () => base44.entities.NeighborhoodReservation.filter({ group_id: groupId }),
@@ -164,6 +176,7 @@ export default function SleepingAllocationTab({ groupId }) {
     queryClient.invalidateQueries({ queryKey: ["sleepingAllocations", groupId] });
     queryClient.invalidateQueries({ queryKey: ["sleepingAllocations"] });       // housekeeping broad key
     queryClient.invalidateQueries({ queryKey: ["allConfirmedAllocations"] });
+    queryClient.invalidateQueries({ queryKey: ["allActiveAllocations"] });
     queryClient.invalidateQueries({ queryKey: ["allAllocations"] });            // dashboard/housekeeping
     queryClient.invalidateQueries({ queryKey: ["nhoodReservations", groupId] });
     queryClient.invalidateQueries({ queryKey: ["allNhoodReservations"] });
@@ -410,7 +423,7 @@ export default function SleepingAllocationTab({ groupId }) {
         allTents={allTents}
         neighborhoods={neighborhoods}
         myAllocations={myAllocations}
-        allConfirmedAllocations={allConfirmedAllocations}
+        allActiveAllocations={allActiveAllocations}
         arrivalDate={arrivalDate}
         departureDate={departureDate}
         onInvalidate={invalidate}
