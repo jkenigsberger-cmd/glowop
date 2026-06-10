@@ -94,6 +94,31 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
     const dietPayload = hasAnyDiet ? { special_diets: JSON.stringify(diets) } : {};
 
     if (isEdit) {
+      // If status is changing to CANCELLED or ARCHIVED, delegate to lifecycle function
+      // so all operational resources are properly released — never update status directly.
+      const statusChangingToLifecycle =
+        payload.status !== group.status &&
+        (payload.status === "CANCELLED" || payload.status === "ARCHIVED");
+
+      if (statusChangingToLifecycle) {
+        const action = payload.status === "CANCELLED" ? "cancel" : "freeze";
+        const res = await base44.functions.invoke("updateGroupLifecycle", {
+          group_id: group.id,
+          action,
+          reason: payload.internal_notes || "",
+        });
+        if (!res.data?.success) {
+          setSaving(false);
+          return;
+        }
+        // Still save the non-status fields (name, contact, notes, etc.)
+        const { status: _s, ...payloadWithoutStatus } = payload;
+        await base44.entities.Group.update(group.id, payloadWithoutStatus);
+        setSaving(false);
+        onSaved();
+        return;
+      }
+
       await base44.entities.Group.update(group.id, payload);
       // Keep OperationalGroupProfile in sync with group pax edits + dietary
       const existingProfiles = await base44.entities.OperationalGroupProfile.filter({ group_id: group.id });

@@ -16,8 +16,8 @@ Deno.serve(async (req) => {
   if (!group_id || !action) {
     return Response.json({ error: 'group_id and action are required' }, { status: 400 });
   }
-  if (!['complete', 'freeze', 'reactivate'].includes(action)) {
-    return Response.json({ error: 'Invalid action. Use: complete | freeze | reactivate' }, { status: 400 });
+  if (!['complete', 'freeze', 'cancel', 'reactivate'].includes(action)) {
+    return Response.json({ error: 'Invalid action. Use: complete | freeze | cancel | reactivate' }, { status: 400 });
   }
 
   // Fetch the group
@@ -35,7 +35,7 @@ Deno.serve(async (req) => {
   const now = new Date().toISOString();
   const summary = { sleepingAllocations: 0, mealReservations: 0, scheduleItems: 0, neighborhoodReservations: 0, operationalHolds: 0 };
 
-  if (action === 'complete' || action === 'freeze') {
+  if (action === 'complete' || action === 'freeze' || action === 'cancel') {
     // Cancel SleepingAllocations
     const allocations = await base44.asServiceRole.entities.SleepingAllocation.filter({ group_id });
     const activeAllocs = allocations.filter(a => a.status !== 'CANCELLED');
@@ -81,6 +81,10 @@ Deno.serve(async (req) => {
       await base44.asServiceRole.entities.Group.update(group_id, {
         status: 'COMPLETED',
         completed_at: now,
+      });
+    } else if (action === 'cancel') {
+      await base44.asServiceRole.entities.Group.update(group_id, {
+        status: 'CANCELLED',
       });
     } else {
       await base44.asServiceRole.entities.Group.update(group_id, {
