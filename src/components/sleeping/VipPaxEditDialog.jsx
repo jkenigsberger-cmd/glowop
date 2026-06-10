@@ -19,7 +19,8 @@ export default function VipPaxEditDialog({
   onSaved,
   onClose,
 }) {
-  const maxPax = Math.min(tent?.capacity || 4, 4);
+  const VIP_OPERATIONAL_MAX_PAX = 4;
+  const maxPax = VIP_OPERATIONAL_MAX_PAX;
   const [pax, setPax] = useState(allocation?.allocated_pax ?? 1);
   const [notes, setNotes] = useState((allocation?.notes || "").replace(/__vip_req_\d+__\s*/g, "").trim());
   const [saving, setSaving] = useState(false);
