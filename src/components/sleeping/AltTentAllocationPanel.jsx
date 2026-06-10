@@ -225,17 +225,18 @@ function AltTentAllocationModal({
     return map;
   }, [availableTents, allTents, selections]);
 
-  // Neighborhoods with available tents (non-VIP, not locked by others, sorted by sort_order)
+  // Neighborhoods with available tents (non-VIP, sorted by sort_order)
+  // Per new rule: neighborhood is NOT blocked just because another group uses it.
+  // Only tent-level conflicts are blocked (handled via occupiedTentIds above).
   const availableNeighborhoods = useMemo(() => {
     return neighborhoods
       .filter(n => {
         if (n.is_vip) return false;
-        if (occupiedNeighborhoodIds.has(n.id)) return false;
         const tentsInHood = availableByHood[n.id] || [];
         return tentsInHood.length > 0;
       })
       .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
-  }, [neighborhoods, occupiedNeighborhoodIds, availableByHood]);
+  }, [neighborhoods, availableByHood]);
 
   // Tents in the selected neighborhood
   const selectedHoodTents = useMemo(() => {
@@ -287,7 +288,7 @@ function AltTentAllocationModal({
       if (!sel.pax || sel.pax < 1) errs.push(`יש לבחור מספר אנשים לאוהל ${tent.code}`);
       if (sel.pax > tent.capacity) errs.push(`מספר האנשים גדול מקיבולת אוהל ${tent.code}`);
     });
-    if (allocatedPax > required) errs.push(`שובצו יותר אנשים מהנדרש (${allocatedPax} > ${required})`);
+    if (required > 0 && allocatedPax > required) errs.push(`שובצו יותר אנשים מהנדרש (${allocatedPax} > ${required})`);
     if (errs.length) { setErrors(errs); return; }
 
     setSaving(true);
@@ -517,7 +518,7 @@ function AltTentAllocationModal({
               type="button"
               size="sm"
               onClick={handleSave}
-              disabled={saving || (selectionEntries.length === 0 && required > 0)}
+              disabled={saving}
               className="bg-amber-600 hover:bg-amber-700 gap-1.5 min-w-[160px]"
             >
               <BedDouble className="w-4 h-4" />
@@ -602,8 +603,6 @@ export default function AltTentAllocationPanel({
     });
   }, [allTents, occupiedTentIds, myAltTentIds, arrivalDate, departureDate]);
 
-  if (altTentPax <= 0) return null;
-
   return (
     <section className="space-y-3">
       <h3 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
@@ -613,15 +612,21 @@ export default function AltTentAllocationPanel({
 
       {/* Status bar */}
       <div className={`rounded-xl border px-4 py-3 flex items-center justify-between gap-3 flex-wrap ${
-        allDone ? "bg-emerald-50 border-emerald-300" : "bg-amber-50 border-amber-300"
+        allDone ? "bg-emerald-50 border-emerald-300" : altTentPax > 0 ? "bg-amber-50 border-amber-300" : "bg-slate-50 border-slate-200"
       }`}>
         <div className="space-y-0.5">
-          <p className={`text-sm font-semibold ${allDone ? "text-emerald-800" : "text-amber-800"}`}>
-            {allDone ? "כל אנשי הצוות שובצו לאוהל חילופי ✓" : `נותרו לשיבוץ: ${remainingPax} אנשים`}
-          </p>
-          <p className="text-xs text-slate-500">
-            סה״כ נדרש: {altTentPax} · שובץ: {allocatedPax} · נותרו: {remainingPax}
-          </p>
+          {altTentPax > 0 ? (
+            <>
+              <p className={`text-sm font-semibold ${allDone ? "text-emerald-800" : "text-amber-800"}`}>
+                {allDone ? "כל אנשי הצוות שובצו לאוהל חילופי ✓" : `נותרו לשיבוץ: ${remainingPax} אנשים`}
+              </p>
+              <p className="text-xs text-slate-500">
+                סה״כ נדרש: {altTentPax} · שובץ: {allocatedPax} · נותרו: {remainingPax}
+              </p>
+            </>
+          ) : (
+            <p className="text-sm text-slate-500">לא הוגדרו דרישות אוהל חילופי — ניתן לשבץ ידנית במידת הצורך</p>
+          )}
           {altTentNotes && <p className="text-xs text-amber-700">הערות: {altTentNotes}</p>}
         </div>
         <RoleGate permission="MANAGE_ALLOCATION">
@@ -632,7 +637,9 @@ export default function AltTentAllocationPanel({
             className={`gap-1 shrink-0 ${
               allDone
                 ? "border-emerald-300 text-emerald-700 hover:bg-emerald-50"
-                : "border-amber-400 text-amber-700 hover:bg-amber-100"
+                : altTentPax > 0
+                  ? "border-amber-400 text-amber-700 hover:bg-amber-100"
+                  : "border-slate-300 text-slate-600 hover:bg-slate-50"
             }`}
           >
             <Pencil className="w-3.5 h-3.5" />

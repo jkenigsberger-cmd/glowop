@@ -163,7 +163,7 @@ function AssignmentDialog({ req, reqIndex, tent, existingAlloc, profile, groupId
             <div className="rounded-lg border-2 border-primary/30 bg-primary/5 px-3 py-2 flex flex-col items-center gap-0.5 min-w-[60px]">
               <BedDouble className="w-5 h-5 text-primary/60" />
               <span className="text-lg font-bold text-primary">{tent.code}</span>
-              <span className="text-[10px] text-slate-400">{tent.capacity} 🛏️</span>
+              <span className="text-[10px] text-slate-400">עד 4 🛏️</span>
               {tent.is_accessible && <span className="text-[10px]">♿</span>}
             </div>
           </div>
@@ -286,7 +286,7 @@ function AssignmentDialog({ req, reqIndex, tent, existingAlloc, profile, groupId
 
 // ── VIP Requirement Card (compact square) ─────────────────────────────────────
 
-function VipReqCard({ req, index, assignedTentCode, assignedStatus, isSelected, onClick }) {
+function VipReqCard({ req, index, assignedTentCode, assignedStatus, assignedActualPax, isSelected, onClick }) {
   const gc = getGenderCfg(req.gender_group);
   const pc = getPurposeCfg(req.purpose);
   const { Icon } = pc;
@@ -355,6 +355,10 @@ function VipReqCard({ req, index, assignedTentCode, assignedStatus, isSelected, 
           {isSelected ? "← בחר אוהל" : "לא שויך"}
         </span>
       )}
+      {/* Show actual allocated pax if different from requested */}
+      {isAssigned && assignedActualPax != null && assignedActualPax !== req.people_count && (
+        <span className="text-[9px] text-slate-500 leading-none">(נבחרו בפועל: {assignedActualPax})</span>
+      )}
       {isConfirmed && (
         <span className="text-[9px] text-emerald-600 flex items-center gap-0.5 opacity-80">
           <Pencil className="w-2 h-2" /> ערוך כמות
@@ -403,7 +407,7 @@ function VipTentCard({ tent, isOccupiedByOther, myAllocForTent, isSelecting, isS
         </span>
       )}
       <span className="font-bold text-sm text-slate-700">{tent.code}</span>
-      <span className="text-[10px] text-slate-400">{tent.capacity}🛏</span>
+      <span className="text-[10px] text-slate-400">עד 4🛏</span>
 
       {isConfirmed && gc && (
         <>
@@ -642,6 +646,7 @@ export default function VipAllocationPanel({
                   index={i}
                   assignedTentCode={tentCode}
                   assignedStatus={alloc?.status || null}
+                  assignedActualPax={alloc?.allocated_pax ?? null}
                   isSelected={selectedReqIndex === i}
                   onClick={() => handleReqClick(i)}
                 />
