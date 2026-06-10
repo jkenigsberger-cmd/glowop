@@ -80,11 +80,11 @@ function deduplicateNotes(notesText) {
     .map(([note, count]) => ({ note, count }));
 }
 
-/** Get the effective diets object for a meal, matching Kitchen page logic */
+/** Get the effective diets object for a meal — profile is source of truth */
 function getMealDiets(meal, profileMap) {
   return (
-    safeJson(meal.special_diets_summary, null) ||
     safeJson(profileMap[meal.group_id]?.special_diets, null) ||
+    safeJson(meal.special_diets_summary, null) ||
     {}
   );
 }

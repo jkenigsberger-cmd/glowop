@@ -75,8 +75,9 @@ function TentCard({ allocation, tent, neighborhood }) {
   );
 }
 
-function MealCard({ meal }) {
-  const diets = safeJson(meal.special_diets_summary, {});
+function MealCard({ meal, profileDiets }) {
+  // Use current profile diet as source of truth; fall back to meal snapshot for legacy data
+  const diets = profileDiets || safeJson(meal.special_diets_summary, {});
   const hasDiets = DIET_LABELS.some(d => Number(diets[d.key]) > 0) || diets.diet_notes;
   const lifeThreat = Number(diets.lifeThreatening_count) || 0;
 
@@ -737,7 +738,7 @@ export default function OperationalSummaryPrint() {
                   <div className="sub-section">
                     <div className="sub-title">🍽 ארוחות</div>
                     {mealsForDay.map(m => (
-                      <MealCard key={m.id} meal={m} />
+                      <MealCard key={m.id} meal={m} profileDiets={globalDiets && Object.keys(globalDiets).length > 0 ? globalDiets : null} />
                     ))}
                   </div>
                 )}

@@ -23,10 +23,10 @@ function parseDiets(raw) {
 }
 
 export default function KitchenDietaryBadge({ meal, profile }) {
-  // Priority: meal-specific > profile
+  // Priority: current profile diet > stale meal snapshot
   const diets =
-    parseDiets(meal?.special_diets_summary) ||
     parseDiets(profile?.special_diets) ||
+    parseDiets(meal?.special_diets_summary) ||
     null;
 
   if (!diets) return null;

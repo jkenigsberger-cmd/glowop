@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -16,6 +17,7 @@ const DATE_FIELDS = ["arrival_date", "departure_date"];
 
 export default function GroupFormModal({ group, onClose, onSaved, initialProfileDiets = null }) {
   const isEdit = !!group;
+  const queryClient = useQueryClient();
   const [form, setForm] = useState({
     group_name:    group?.group_name    || "",
     group_type:    group?.group_type    || "LODGING",
@@ -280,6 +282,9 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
     }
 
     setSaving(false);
+    // Invalidate kitchen-related queries so Kitchen page and KitchenReport reflect new diet immediately
+    queryClient.invalidateQueries({ queryKey: ["profiles_kitchen"] });
+    queryClient.invalidateQueries({ queryKey: ["profiles_kitchenReport"] });
     onSaved();
   };
 

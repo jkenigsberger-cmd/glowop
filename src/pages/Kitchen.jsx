@@ -223,11 +223,9 @@ export default function Kitchen() {
                 <p className="text-2xl font-bold text-red-600">
                   {dayMeals.reduce((s, m) => {
                     try {
-                      const d = m.special_diets_summary
-                        ? JSON.parse(m.special_diets_summary)
-                        : profileMap[m.group_id]?.special_diets
-                          ? JSON.parse(profileMap[m.group_id].special_diets)
-                          : null;
+                      // Prefer current profile diet over stale meal snapshot
+                      const raw = profileMap[m.group_id]?.special_diets || m.special_diets_summary;
+                      const d = raw ? JSON.parse(raw) : null;
                       return s + (Number(d?.lifeThreatening_count) || 0);
                     } catch { return s; }
                   }, 0)}
