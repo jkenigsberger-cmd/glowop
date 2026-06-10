@@ -12,6 +12,7 @@ import GroupFormModal from "@/components/groups/GroupFormModal";
 import QuoteStatusBadge from "@/components/quotes/QuoteStatusBadge";
 import QuoteFormModal from "@/components/quotes/QuoteFormModal";
 import QuoteStatusActions from "@/components/quotes/QuoteStatusActions";
+import QuoteSyncButton from "@/components/quotes/QuoteSyncButton";
 import GuestFormSubmissionModal from "@/components/groups/GuestFormSubmissionModal";
 import SubmissionReviewModal from "@/components/groups/SubmissionReviewModal";
 import OperationalProfileDisplay from "@/components/groups/OperationalProfileDisplay";
@@ -282,7 +283,10 @@ export default function GroupDetail() {
                       </RoleGate>
                     </div>
                   </div>
-                  <QuoteStatusActions quote={q} group={group} onUpdated={refetch} />
+                  <div className="flex flex-wrap items-center gap-2">
+                    <QuoteStatusActions quote={q} group={group} onUpdated={refetch} />
+                    <QuoteSyncButton quote={q} group={group} onSynced={refetch} />
+                  </div>
                 </div>
               ))}
             </div>
