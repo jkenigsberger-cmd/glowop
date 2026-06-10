@@ -127,7 +127,7 @@ export default function ApprovedGroups() {
                 </span>
               )}
               <span className="text-xs text-muted-foreground">
-                {group.group_type === "LODGING" ? "לינה" : "יום כיף"}
+                {group.group_type === "LODGING" ? "לינה" : "יום סמינר"}
               </span>
             </div>
 

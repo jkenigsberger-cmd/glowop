@@ -150,7 +150,7 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
               await upsertReviewAlert(group.id, "HOUSEKEEPING", "GROUP_DATES_CHANGED", "שינוי תאריכים דורש בדיקה", msg, prev, next);
             } else {
               // DAY_USE — only kitchen alert for date changes
-              const msg = `תאריך יום הכיף השתנה (${group.arrival_date || "—"} ← ${payload.arrival_date || "—"}). יש לבדוק ארוחות ופעילויות.`;
+              const msg = `תאריך יום הסמינר השתנה (${group.arrival_date || "—"} ← ${payload.arrival_date || "—"}). יש לבדוק ארוחות ופעילויות.`;
               await upsertReviewAlert(group.id, "KITCHEN", "GROUP_DATES_CHANGED", "שינוי תאריכים דורש בדיקה", msg, prev, next);
             }
           }
@@ -225,7 +225,7 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="LODGING">לינה</SelectItem>
-                    <SelectItem value="DAY_USE">יום כיף</SelectItem>
+                    <SelectItem value="DAY_USE">יום סמינר</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

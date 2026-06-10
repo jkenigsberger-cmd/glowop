@@ -680,7 +680,7 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
                       <Label className="text-xs text-slate-500">סוג</Label>
                       <Select value={groupForm.group_type} onValueChange={v => setGroupField("group_type", v)}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent><SelectItem value="LODGING">לינה</SelectItem><SelectItem value="DAY_USE">יום כיף</SelectItem></SelectContent>
+                        <SelectContent><SelectItem value="LODGING">לינה</SelectItem><SelectItem value="DAY_USE">יום סמינר</SelectItem></SelectContent>
                       </Select>
                     </div>
                     <div className="space-y-1">
