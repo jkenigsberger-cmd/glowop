@@ -146,11 +146,22 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
       // Keep OperationalGroupProfile in sync with group pax edits + dietary
       const existingProfiles = await base44.entities.OperationalGroupProfile.filter({ group_id: group.id });
       if (existingProfiles.length > 0) {
+        const prof = existingProfiles[0];
         // Do not overwrite richer GuestForm dietary data with empty manual values
-        const existingDiets = parseDiets(existingProfiles[0].special_diets);
+        const existingDiets = parseDiets(prof.special_diets);
         const shouldUpdateDiets = hasAnyDiet || !existingDiets;
-        await base44.entities.OperationalGroupProfile.update(existingProfiles[0].id, {
+
+        // Sync beds_needed from new boys/girls counts only when a gender split exists
+        const newBoys  = payload.boys_count  ?? null;
+        const newGirls = payload.girls_count ?? null;
+        const hasGenderSplit = (Number(newBoys || 0) + Number(newGirls || 0)) > 0;
+        const bedsUpdate = hasGenderSplit
+          ? { boys_beds_needed: newBoys, girls_beds_needed: newGirls }
+          : {};
+
+        await base44.entities.OperationalGroupProfile.update(prof.id, {
           ...profilePaxFields,
+          ...bedsUpdate,
           is_sleeping_group: payload.group_type === "LODGING",
           ...(shouldUpdateDiets ? dietPayload : {}),
         });
@@ -179,6 +190,16 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
               await upsertReviewAlert(group.id, "SLEEPING_REQUIREMENTS", "GROUP_PAX_CHANGED", "שינוי בפרטי הקבוצה דורש בדיקה", msg, prev, next);
               await upsertReviewAlert(group.id, "ALLOCATION",            "GROUP_PAX_CHANGED", "שינוי בפרטי הקבוצה דורש בדיקה", msg, prev, next);
               await upsertReviewAlert(group.id, "KITCHEN",               "GROUP_PAX_CHANGED", "שינוי בפרטי הקבוצה דורש בדיקה", msg, prev, next);
+
+              // Extra alert if active sleeping allocations already exist
+              const activeAllocs = await base44.entities.SleepingAllocation.filter({
+                group_id: group.id,
+                status: { $in: ["DRAFT", "CONFIRMED"] },
+              });
+              if (activeAllocs.length > 0) {
+                const allocMsg = "כמות המשתתפים / חלוקת בנים-בנות השתנתה לאחר שכבר קיים שיבוץ לינה.\nיש לבדוק ולעדכן את השיבוץ.";
+                await upsertReviewAlert(group.id, "ALLOCATION", "ALLOCATION_CHANGED", "שינוי בפרטי הקבוצה — שיבוץ הלינה דורש עדכון", allocMsg, prev, next);
+              }
             } else {
               // DAY_USE — only kitchen alert for pax changes
               const msg = `מספר האנשים בקבוצה השתנה מ-${oldPax} ל-${newPax}.${diffTxt ? " " + diffTxt : ""} יש לבדוק את תכנון המטבח.`;
