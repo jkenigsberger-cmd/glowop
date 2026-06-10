@@ -6,7 +6,14 @@
 export default function SleepingRequirementsSummary({ profile, allocations, nhoodReservations = [], allTents = [], neighborhoods = [] }) {
   if (!profile) return null;
 
-  const hasGenderSplit = (Number(profile.boys_beds_needed) + Number(profile.girls_beds_needed)) > 0;
+  // Detect inconsistency: boys_beds_needed + girls_beds_needed must equal participant_count for LODGING groups
+  const profParticipants = Number(profile.participant_count) || 0;
+  const profBoys  = Number(profile.boys_beds_needed) || 0;
+  const profGirls = Number(profile.girls_beds_needed) || 0;
+  const hasGenderData = profBoys + profGirls > 0;
+  const isInconsistent = profile.is_sleeping_group && hasGenderData && profParticipants > 0 && (profBoys + profGirls) !== profParticipants;
+
+  const hasGenderSplit = hasGenderData;
   const boysNeeded    = Number(profile.boys_beds_needed)  || 0;
   const girlsNeeded   = Number(profile.girls_beds_needed) || 0;
   const generalNeeded = !hasGenderSplit
@@ -37,8 +44,8 @@ export default function SleepingRequirementsSummary({ profile, allocations, nhoo
 
   const activeNhoods = (nhoodReservations || []).filter(r => r.status === "ACTIVE");
 
-  const Counter = ({ label, required, allocated, remaining }) => {
-    const isComplete = remaining === 0;
+  const Counter = ({ label, required, allocated, remaining, blockComplete = false }) => {
+    const isComplete = remaining === 0 && !blockComplete;
     const isOver     = remaining < 0;
     const containerColor = isComplete
       ? "bg-green-50 border-green-200"
@@ -79,15 +86,21 @@ export default function SleepingRequirementsSummary({ profile, allocations, nhoo
     <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
       <h3 className="text-sm font-semibold text-slate-700">דרישות לינה — נותרו לשיבוץ</h3>
 
+      {isInconsistent && (
+        <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 whitespace-pre-line">
+          ⛔ קיימת אי התאמה בין מספר החניכים לבין חלוקת בנים/בנות.{"\n"}יש לערוך את הקבוצה ולתקן את החלוקה לפני המשך שיבוץ הלינה.
+        </div>
+      )}
+
       {hasGenderSplit ? (
         <div className="grid grid-cols-3 gap-2">
-          <Counter label="בנים"  required={boysNeeded}  allocated={allocatedBoys}   remaining={remBoys}  />
-          <Counter label="בנות"  required={girlsNeeded} allocated={allocatedGirls}  remaining={remGirls} />
-          <Counter label="סה״כ"  required={totalNeeded} allocated={totalAllocated}  remaining={remTotal} />
+          <Counter label="בנים"  required={boysNeeded}  allocated={allocatedBoys}   remaining={remBoys}  blockComplete={isInconsistent} />
+          <Counter label="בנות"  required={girlsNeeded} allocated={allocatedGirls}  remaining={remGirls} blockComplete={isInconsistent} />
+          <Counter label="סה״כ"  required={totalNeeded} allocated={totalAllocated}  remaining={remTotal} blockComplete={isInconsistent} />
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <Counter label="משתתפים" required={generalNeeded} allocated={allocatedGeneral} remaining={remGeneral} />
+          <Counter label="משתתפים" required={generalNeeded} allocated={allocatedGeneral} remaining={remGeneral} blockComplete={false} />
         </div>
       )}
 

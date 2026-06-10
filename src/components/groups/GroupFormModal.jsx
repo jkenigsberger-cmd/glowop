@@ -35,6 +35,7 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
   const [diets, setDiets] = useState(() => mergeDiets(parseDiets(initialProfileDiets)));
   const [saving, setSaving] = useState(false);
   const [allocationBlockError, setAllocationBlockError] = useState(null);
+  const [genderConsistencyError, setGenderConsistencyError] = useState(null);
 
   // ── Derived values ────────────────────────────────────────────────────────
   const totalPax   = Number(form.total_pax   || 0);
@@ -68,6 +69,23 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
   const handleSubmit = async (e) => {
     e.preventDefault();
     setAllocationBlockError(null);
+    setGenderConsistencyError(null);
+
+    // ── Guard: LODGING groups must have boys + girls === participant_count ──
+    if (form.group_type === "LODGING" && totalPax > 0) {
+      const genderSum = boysCount + girlsCount;
+      if (genderSum !== participantCount) {
+        const diff = participantCount - genderSum;
+        const diffAbs = Math.abs(diff);
+        const diffLine = diff > 0
+          ? `חסרים ${diffAbs} חניכים בחלוקה.`
+          : `יש ${diffAbs} חניכים יותר מדי בחלוקה.`;
+        setGenderConsistencyError(
+          `חלוקת בנים/בנות לא תואמת למספר החניכים.\nסה״כ חניכים: ${participantCount}\nבנים + בנות: ${genderSum}\n${diffLine}`
+        );
+        return;
+      }
+    }
 
     // ── Guard: block date/type changes if active sleeping allocations exist ──
     if (isEdit) {
@@ -151,12 +169,9 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
         const existingDiets = parseDiets(prof.special_diets);
         const shouldUpdateDiets = hasAnyDiet || !existingDiets;
 
-        // Sync beds_needed from new boys/girls counts only when a gender split exists
-        const newBoys  = payload.boys_count  ?? null;
-        const newGirls = payload.girls_count ?? null;
-        const hasGenderSplit = (Number(newBoys || 0) + Number(newGirls || 0)) > 0;
-        const bedsUpdate = hasGenderSplit
-          ? { boys_beds_needed: newBoys, girls_beds_needed: newGirls }
+        // Always sync beds_needed from the validated boys/girls counts
+        const bedsUpdate = payload.group_type === "LODGING"
+          ? { boys_beds_needed: payload.boys_count ?? null, girls_beds_needed: payload.girls_count ?? null }
           : {};
 
         await base44.entities.OperationalGroupProfile.update(prof.id, {
@@ -363,7 +378,12 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
             </div>
           </div>
 
-          {genderExceedsPax && (
+          {genderConsistencyError && (
+            <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 whitespace-pre-line">
+              ⛔ {genderConsistencyError}
+            </div>
+          )}
+          {!genderConsistencyError && genderExceedsPax && (
             <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
               ⚠️ סה"כ בנים + בנות ({boysCount + girlsCount}) עולה על מספר החניכים ({participantCount})
             </div>
