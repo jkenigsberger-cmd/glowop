@@ -39,13 +39,43 @@ export default function SleepingRequirementsSummary({ profile, allocations, nhoo
   const remGirls   = girlsNeeded - allocatedGirlsBeds;
   const remGeneral = generalNeeded - allocatedGeneralBeds;
 
-  const Counter = ({ label, required, allocated, remaining, color }) => (
-    <div className={`rounded-xl border px-3 py-2.5 flex flex-col items-center gap-0.5 ${color}`}>
-      <span className="text-[10px] text-slate-500 font-medium text-center">{label}</span>
-      <span className="text-xl font-bold leading-none">{remaining < 0 ? `+${Math.abs(remaining)}` : remaining}</span>
-      <span className="text-[10px] text-slate-400">{allocated} / {required} מיטות</span>
-    </div>
-  );
+  const Counter = ({ label, required, allocated, remaining }) => {
+    const isComplete  = remaining === 0;
+    const isOver      = remaining < 0;
+    const containerColor = isComplete
+      ? "bg-green-50 border-green-200"
+      : isOver
+      ? "bg-red-50 border-red-200"
+      : "bg-amber-50 border-amber-200";
+    const mainColor = isComplete ? "text-green-700" : isOver ? "text-red-700" : "text-amber-700";
+
+    return (
+      <div className={`rounded-xl border px-3 py-3 flex flex-col gap-1.5 ${containerColor}`} dir="rtl">
+        <span className="text-xs font-bold text-slate-700">{label}</span>
+        <div className="flex justify-between text-xs text-slate-500">
+          <span>נדרש</span><span className="font-semibold text-slate-700">{required}</span>
+        </div>
+        <div className="flex justify-between text-xs text-slate-500">
+          <span>שובץ</span><span className="font-semibold text-slate-700">{allocated}</span>
+        </div>
+        <div className={`flex justify-between text-xs font-bold mt-0.5 ${mainColor}`}>
+          {isComplete ? (
+            <span className="w-full text-center">✓ הכל שובץ</span>
+          ) : isOver ? (
+            <>
+              <span>חריגה</span>
+              <span>+{Math.abs(remaining)}</span>
+            </>
+          ) : (
+            <>
+              <span>נותרו</span>
+              <span>{remaining}</span>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
@@ -53,29 +83,14 @@ export default function SleepingRequirementsSummary({ profile, allocations, nhoo
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         {hasGenderSplit ? (
           <>
-            <Counter
-              label="בנים נותרו"
-              required={boysNeeded}
-              allocated={allocatedBoysBeds}
-              remaining={remBoys}
-              color={remBoys === 0 ? "bg-green-50 border-green-200 text-green-700" : remBoys < 0 ? "bg-red-50 border-red-200 text-red-700" : "bg-emerald-50 border-emerald-200 text-emerald-700"}
-            />
-            <Counter
-              label="בנות נותרו"
-              required={girlsNeeded}
-              allocated={allocatedGirlsBeds}
-              remaining={remGirls}
-              color={remGirls === 0 ? "bg-green-50 border-green-200 text-green-700" : remGirls < 0 ? "bg-red-50 border-red-200 text-red-700" : "bg-orange-50 border-orange-200 text-orange-700"}
-            />
+            <Counter label="בנים" required={boysNeeded}   allocated={allocatedBoysBeds}    remaining={remBoys}    />
+            <Counter label="בנות" required={girlsNeeded}  allocated={allocatedGirlsBeds}   remaining={remGirls}   />
+            {allocatedGeneralBeds > 0 && (
+              <Counter label="מעורב" required={boysNeeded + girlsNeeded} allocated={allocatedBoysBeds + allocatedGirlsBeds + allocatedGeneralBeds} remaining={(boysNeeded + girlsNeeded) - (allocatedBoysBeds + allocatedGirlsBeds + allocatedGeneralBeds)} />
+            )}
           </>
         ) : (
-          <Counter
-            label="משתתפים נותרו"
-            required={generalNeeded}
-            allocated={allocatedGeneralBeds}
-            remaining={remGeneral}
-            color={remGeneral === 0 ? "bg-green-50 border-green-200 text-green-700" : remGeneral < 0 ? "bg-red-50 border-red-200 text-red-700" : "bg-blue-50 border-blue-200 text-blue-700"}
-          />
+          <Counter label="משתתפים" required={generalNeeded} allocated={allocatedGeneralBeds} remaining={remGeneral} />
         )}
       </div>
 
