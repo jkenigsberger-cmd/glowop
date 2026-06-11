@@ -3,8 +3,136 @@
  * Handles guest form submissions for both:
  *  - Quote-based groups: requires quote_id, validates APPROVED status
  *  - Direct groups:      quote_id is null/absent, validates group exists and is not cancelled
+ *
+ * After saving the submission, for DAY_USE groups this function also syncs
+ * kitchen MealReservation records (meals + coffee corner).
  */
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
+
+// ── Kitchen sync helpers ─────────────────────────────────────────────────────
+
+// Maps dayUseMeals keys → MealReservation meal_type enum values
+const MEAL_KEY_TO_TYPE = {
+  breakfast: 'BREAKFAST',
+  lunch:     'LUNCH',
+  dinner:    'DINNER',
+};
+
+// Default durations in minutes per meal type
+const MEAL_DURATION = { BREAKFAST: 60, LUNCH: 90, DINNER: 90, COFFEE_CORNER: 60 };
+
+function addMinutes(hhmm, minutes) {
+  const [h, m] = hhmm.split(':').map(Number);
+  const total = h * 60 + m + minutes;
+  const hh = String(Math.floor(total / 60) % 24).padStart(2, '0');
+  const mm = String(total % 60).padStart(2, '0');
+  return `${hh}:${mm}`;
+}
+
+// Default start times for DAY_USE meals (no time provided by guest)
+const DEFAULT_TIMES = {
+  BREAKFAST:    '08:00',
+  LUNCH:        '13:00',
+  DINNER:       '18:00',
+  COFFEE_CORNER:'10:00',
+};
+
+async function syncDayUseKitchen({ base44, group_id, profile_id, activity_date, total_pax, dayUseMeals, coffeeCorner }) {
+  // Fetch existing kitchen records for this group created from the external form
+  const existing = await base44.asServiceRole.entities.MealReservation.filter({ group_id });
+  const fromForm = existing.filter(r => r.source === 'guestForm');
+
+  // Helper: find existing record for a meal type
+  const findExisting = (meal_type) => fromForm.find(r => r.meal_type === meal_type && r.status !== 'CANCELLED');
+
+  // ── 1. Sync the three standard meals ────────────────────────────────────────
+  for (const [key, meal_type] of Object.entries(MEAL_KEY_TO_TYPE)) {
+    const selected = dayUseMeals?.[key] === 'כן';
+    const existingRecord = findExisting(meal_type);
+
+    if (selected) {
+      const start_time = DEFAULT_TIMES[meal_type];
+      const end_time   = addMinutes(start_time, MEAL_DURATION[meal_type]);
+      if (existingRecord) {
+        // Update pax (and date/times in case they changed)
+        await base44.asServiceRole.entities.MealReservation.update(existingRecord.id, {
+          pax:        total_pax,
+          date:       activity_date,
+          start_time,
+          end_time,
+          status:     'ACTIVE',
+        });
+      } else {
+        // Create new record
+        await base44.asServiceRole.entities.MealReservation.create({
+          group_id,
+          operational_group_profile_id: profile_id || '',
+          date:       activity_date,
+          meal_type,
+          start_time,
+          end_time,
+          pax:        total_pax,
+          source:     'guestForm',
+          status:     'ACTIVE',
+        });
+      }
+    } else {
+      // Not selected — cancel any existing record from the form
+      if (existingRecord) {
+        await base44.asServiceRole.entities.MealReservation.update(existingRecord.id, { status: 'CANCELLED' });
+      }
+    }
+  }
+
+  // ── 2. Remove/cancel any sandwich records created by external form ───────────
+  const sandwichRecords = fromForm.filter(r =>
+    r.meal_type === 'SANDWICH' ||
+    (r.notes && r.notes.includes('כריכים'))
+  );
+  for (const r of sandwichRecords) {
+    if (r.status !== 'CANCELLED') {
+      await base44.asServiceRole.entities.MealReservation.update(r.id, { status: 'CANCELLED' });
+    }
+  }
+
+  // ── 3. Sync coffee corner ────────────────────────────────────────────────────
+  const coffeeSelected = coffeeCorner?.answer === 'כן';
+  const existingCoffee = findExisting('COFFEE_CORNER');
+
+  if (coffeeSelected) {
+    const start_time = DEFAULT_TIMES.COFFEE_CORNER;
+    const end_time   = addMinutes(start_time, MEAL_DURATION.COFFEE_CORNER);
+    if (existingCoffee) {
+      await base44.asServiceRole.entities.MealReservation.update(existingCoffee.id, {
+        pax:                total_pax,
+        date:               activity_date,
+        start_time,
+        end_time,
+        coffee_service_type: 'קפה ועוגיות',
+        status:             'ACTIVE',
+      });
+    } else {
+      await base44.asServiceRole.entities.MealReservation.create({
+        group_id,
+        operational_group_profile_id: profile_id || '',
+        date:               activity_date,
+        meal_type:          'COFFEE_CORNER',
+        start_time,
+        end_time,
+        pax:                total_pax,
+        coffee_service_type: 'קפה ועוגיות',
+        source:             'guestForm',
+        status:             'ACTIVE',
+      });
+    }
+  } else {
+    if (existingCoffee) {
+      await base44.asServiceRole.entities.MealReservation.update(existingCoffee.id, { status: 'CANCELLED' });
+    }
+  }
+}
+
+// ── Main handler ─────────────────────────────────────────────────────────────
 
 Deno.serve(async (req) => {
   try {
@@ -111,6 +239,45 @@ Deno.serve(async (req) => {
     console.log('[submitGuestForm] creating submission...');
     const submission = await base44.asServiceRole.entities.GuestFormSubmission.create(submissionData);
 
+    // ── DAY_USE kitchen sync ─────────────────────────────────────────────────
+    // Fetch group to check type and get activity date
+    let groupForSync = null;
+    try {
+      const groups = await base44.asServiceRole.entities.Group.filter({ id: group_id });
+      groupForSync = groups[0] || null;
+    } catch { /* non-fatal */ }
+
+    if (groupForSync?.group_type === 'DAY_USE') {
+      const activity_date = groupForSync.arrival_date;
+      const total_pax     = num(fields.total_pax) || 0;
+
+      // Parse DAY_USE meal selections
+      let dayUseMeals = {};
+      try { dayUseMeals = JSON.parse(fields.meal_plan || '{}'); } catch { dayUseMeals = {}; }
+
+      // Parse coffee corner
+      let coffeeCorner = null;
+      try { coffeeCorner = fields.day_use_coffee_corner ? JSON.parse(fields.day_use_coffee_corner) : null; } catch { coffeeCorner = null; }
+
+      // Find operational group profile id (best-effort)
+      let profile_id = '';
+      try {
+        const profiles = await base44.asServiceRole.entities.OperationalGroupProfile.filter({ group_id });
+        profile_id = profiles[0]?.id || '';
+      } catch { /* non-fatal */ }
+
+      if (activity_date && total_pax > 0) {
+        try {
+          await syncDayUseKitchen({ base44, group_id, profile_id, activity_date, total_pax, dayUseMeals, coffeeCorner });
+          console.log('[submitGuestForm] DAY_USE kitchen sync complete');
+        } catch (syncErr) {
+          console.warn('[submitGuestForm] kitchen sync failed (non-fatal):', syncErr?.message);
+        }
+      } else {
+        console.warn('[submitGuestForm] skipping kitchen sync — missing activity_date or total_pax', { activity_date, total_pax });
+      }
+    }
+
     // ── Create review alert so admin sees the new submission ─────────────────
     try {
       await base44.asServiceRole.entities.OperationalReviewAlert.create({
@@ -124,7 +291,6 @@ Deno.serve(async (req) => {
         new_value_json: JSON.stringify({ submission_id: submission.id, submitted_at: now }),
       });
     } catch (alertErr) {
-      // Non-fatal — log but don't fail the submission
       console.warn('[submitGuestForm] failed to create review alert:', alertErr?.message);
     }
 

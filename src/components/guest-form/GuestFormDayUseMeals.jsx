@@ -45,13 +45,7 @@ export default function GuestFormDayUseMeals({ meals, setMeals, coffeeCorner, se
   const date = quoteData?.arrival_date || "";
 
   const update = (key, val) => {
-    setMeals(prev => {
-      const next = { ...prev, [key]: val };
-      // Mutual exclusion: lunch ↔ sandwiches
-      if (key === "lunch" && val === "כן") next.sandwiches = "לא";
-      if (key === "sandwiches" && val === "כן") next.lunch = "לא";
-      return next;
-    });
+    setMeals(prev => ({ ...prev, [key]: val }));
   };
 
   const coffeeAnswer = coffeeCorner?.answer ?? null;
@@ -85,15 +79,7 @@ export default function GuestFormDayUseMeals({ meals, setMeals, coffeeCorner, se
             />
           </div>
         ))}
-        {/* Sandwiches — mutually exclusive with lunch */}
-        <div className="px-4 py-3">
-          <MealRow
-            label="כריכים במקום ארוחת צהריים"
-            emoji="🥪"
-            value={meals.sandwiches ?? null}
-            onChange={val => update("sandwiches", val)}
-          />
-        </div>
+
       </div>
 
       {/* Coffee table — simple yes/no, appears exactly once */}
