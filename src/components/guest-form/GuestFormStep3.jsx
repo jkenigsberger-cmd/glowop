@@ -94,38 +94,53 @@ export default function GuestFormStep3({ form, setForm, quoteData }) {
       </Section>
 
       {/* Staff */}
-      <Section title="צוות / מלווים" emoji="👩‍🏫">
+      <Section title="צוות / מלווים" emoji="👩‍🏫" defaultOpen={!isDayUse}>
         <div className="grid grid-cols-2 gap-3">
+          {!isDayUse && (
+            <div className="col-span-2 bg-blue-50 border border-blue-200 rounded-xl px-3 py-2.5 text-xs text-blue-800 space-y-1">
+              <p className="font-semibold">⚠️ חשוב לקריאה לפני מילוי</p>
+              <p>יש לכלול כאן את כל מי שישן במקום ואינו חלק מקבוצת החניכים/המשתתפים.</p>
+              <p className="text-blue-600">לדוגמה: מורים, מדריכים, נהגים, מלווים, צוות הפקה או כל אדם נוסף שישן באתר.</p>
+            </div>
+          )}
           <CountInput label="גברים" value={form.staff_men_count} onChange={v => set("staff_men_count", v)} />
           <CountInput label="נשים" value={form.staff_women_count} onChange={v => set("staff_women_count", v)} />
           <div className="col-span-2 text-xs text-slate-400">סה״כ: <strong className="text-slate-600">{staffTotal}</strong></div>
           {!isDayUse && (
-            <NotesInput
-              label="הערות לינה לצוות"
-              value={form.staff_sleeping_notes}
-              onChange={v => set("staff_sleeping_notes", v)}
-              placeholder="חלוקת חדרים, בקשות מיוחדות"
-            />
+            <>
+              <NotesInput
+                label="פירוט צוות / מלווים שישנים במקום"
+                value={form.staff_detail_notes || ""}
+                onChange={v => set("staff_detail_notes", v)}
+                placeholder={"לדוגמה:\n2 מורים\n3 מדריכים\n1 נהג\n1 מלווה רפואי"}
+              />
+              <NotesInput
+                label="הנחיות מיוחדות ללינת צוות / מלווים"
+                value={form.staff_sleeping_notes}
+                onChange={v => set("staff_sleeping_notes", v)}
+                placeholder="לדוגמה: מדריכים ומורים לא יכולים לישון ביחד, נהגים צריכים לישון בנפרד, צוות גברים ונשים בנפרד, או כל בקשה אחרת שחשובה לשיבוץ הלינה."
+              />
+            </>
           )}
         </div>
       </Section>
 
-      {/* Drivers / Security */}
-      <Section title="נהגים / אבטחה / אחרים" emoji="🚌">
-        <div className="grid grid-cols-2 gap-3">
-          <CountInput label="גברים" value={form.drivers_men_count} onChange={v => set("drivers_men_count", v)} />
-          <CountInput label="נשים" value={form.drivers_women_count} onChange={v => set("drivers_women_count", v)} />
-          <div className="col-span-2 text-xs text-slate-400">סה״כ: <strong className="text-slate-600">{driversTotal}</strong></div>
-          {!isDayUse && (
+      {/* Drivers / Security — only for LODGING */}
+      {!isDayUse && (
+        <Section title="נהגים / אבטחה / אחרים" emoji="🚌">
+          <div className="grid grid-cols-2 gap-3">
+            <CountInput label="גברים" value={form.drivers_men_count} onChange={v => set("drivers_men_count", v)} />
+            <CountInput label="נשים" value={form.drivers_women_count} onChange={v => set("drivers_women_count", v)} />
+            <div className="col-span-2 text-xs text-slate-400">סה״כ: <strong className="text-slate-600">{driversTotal}</strong></div>
             <NotesInput
               label="הערות לינה לנהגים / אבטחה"
               value={form.drivers_lodging_notes}
               onChange={v => set("drivers_lodging_notes", v)}
               placeholder="צרכי לינה, האם ישנים באתר..."
             />
-          )}
-        </div>
-      </Section>
+          </div>
+        </Section>
+      )}
 
       {/* Live total + warning */}
       <div className={`rounded-xl px-4 py-3 text-sm border ${

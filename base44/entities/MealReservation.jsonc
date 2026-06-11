@@ -20,6 +20,7 @@
         "BREAKFAST",
         "LUNCH",
         "DINNER",
+        "COFFEE_CORNER",
         "OTHER"
       ]
     },
@@ -42,6 +43,14 @@
       "type": "boolean",
       "default": false
     },
+    "coffee_service_type": {
+      "type": "string",
+      "description": "For COFFEE_CORNER: e.g. \u05e7\u05e4\u05d4 \u05d5\u05e2\u05d5\u05d2\u05d9\u05d5\u05ea, \u05d0\u05d7\u05e8"
+    },
+    "activity_space_id": {
+      "type": "string",
+      "description": "FK to ActivitySpace \u2014 optional, for coffee corner location"
+    },
     "notes": {
       "type": "string"
     },
@@ -49,9 +58,10 @@
       "type": "string",
       "enum": [
         "groupSync",
-        "manual"
+        "manual",
+        "guestForm"
       ],
-      "description": "groupSync = prefilled from GuestForm; manual = added by admin"
+      "description": "groupSync = prefilled from GuestForm; manual = added by admin; guestForm = submitted via external form"
     },
     "status": {
       "type": "string",

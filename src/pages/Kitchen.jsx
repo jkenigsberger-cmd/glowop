@@ -7,9 +7,11 @@ import { ChevronRight, ChevronLeft, UtensilsCrossed, CalendarDays, FileText, X }
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import KitchenMealCard from "@/components/kitchen/KitchenMealCard";
+import KitchenCoffeeCard from "@/components/kitchen/KitchenCoffeeCard";
 import ReviewAlertsBanner from "@/components/alerts/ReviewAlertsBanner";
+import { Coffee } from "lucide-react";
 
-const MEAL_ORDER = { BREAKFAST: 0, LUNCH: 1, DINNER: 2, OTHER: 3 };
+const MEAL_ORDER = { BREAKFAST: 0, LUNCH: 1, DINNER: 2, COFFEE_CORNER: 3, OTHER: 4 };
 
 const TODAY = new Date().toISOString().slice(0, 10);
 
@@ -50,15 +52,21 @@ export default function Kitchen() {
     return m;
   }, [profiles]);
 
-  // Meals for selected date, sorted by meal type then time
+  // Meals for selected date — split regular meals from coffee corner
   const dayMeals = useMemo(() => {
     return allMeals
-      .filter(m => m.date === selectedDate)
+      .filter(m => m.date === selectedDate && m.meal_type !== "COFFEE_CORNER")
       .sort((a, b) => {
         const typeCmp = (MEAL_ORDER[a.meal_type] ?? 99) - (MEAL_ORDER[b.meal_type] ?? 99);
         if (typeCmp !== 0) return typeCmp;
         return (a.start_time || "").localeCompare(b.start_time || "");
       });
+  }, [allMeals, selectedDate]);
+
+  const dayCoffeeCorners = useMemo(() => {
+    return allMeals
+      .filter(m => m.date === selectedDate && m.meal_type === "COFFEE_CORNER")
+      .sort((a, b) => (a.start_time || "").localeCompare(b.start_time || ""));
   }, [allMeals, selectedDate]);
 
   // Group meals by meal type
@@ -197,7 +205,7 @@ export default function Kitchen() {
           <div className="flex justify-center py-16">
             <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
           </div>
-        ) : dayMeals.length === 0 ? (
+        ) : dayMeals.length === 0 && dayCoffeeCorners.length === 0 ? (
           <div className="text-center py-16 space-y-2">
             <CalendarDays className="w-10 h-10 text-muted-foreground mx-auto opacity-40" />
             <p className="text-slate-500 font-medium">אין ארוחות מתוכננות ליום זה</p>
@@ -211,6 +219,15 @@ export default function Kitchen() {
                 <p className="text-2xl font-bold text-primary">{dayMeals.length}</p>
                 <p className="text-xs text-muted-foreground">ארוחות</p>
               </div>
+              {dayCoffeeCorners.length > 0 && (
+                <>
+                  <div className="h-8 w-px bg-border" />
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-amber-600">{dayCoffeeCorners.length}</p>
+                    <p className="text-xs text-amber-600">פינות קפה</p>
+                  </div>
+                </>
+              )}
               <div className="h-8 w-px bg-border" />
               <div className="text-center">
                 <p className="text-2xl font-bold">
@@ -233,6 +250,28 @@ export default function Kitchen() {
                 <p className="text-xs text-red-600 font-medium">אלרגיות מסכנות חיים</p>
               </div>
             </div>
+
+            {/* Coffee Corner — separate section */}
+            {dayCoffeeCorners.length > 0 && (
+              <section className="space-y-3">
+                <div className="flex items-center justify-between rounded-xl border px-4 py-2.5 bg-amber-100 text-amber-800 border-amber-200">
+                  <div className="flex items-center gap-2 font-bold text-base">
+                    <Coffee className="w-5 h-5" />
+                    פינת קפה
+                  </div>
+                  <div className="flex items-center gap-3 text-sm font-medium">
+                    <span>{dayCoffeeCorners.length} קבוצות</span>
+                    <span className="opacity-60">·</span>
+                    <span>{dayCoffeeCorners.reduce((s, m) => s + (Number(m.pax) || 0), 0)} אנשים</span>
+                  </div>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {dayCoffeeCorners.map(meal => (
+                    <KitchenCoffeeCard key={meal.id} meal={meal} group={groupMap[meal.group_id]} />
+                  ))}
+                </div>
+              </section>
+            )}
 
             {/* Meals grouped by type */}
             {Object.entries(mealsByType).map(([mealType, mealsInGroup]) => {

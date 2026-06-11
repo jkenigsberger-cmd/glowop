@@ -66,23 +66,29 @@ function DietSection({ raw }) {
 function LodgingSection({ raw }) {
   const d = safeJson(raw, {});
   const notes = [
-    { label: "הערות לינה לחניכים",             value: d.student_sleeping_notes },
-    { label: "הערות לינה לצוות",                value: d.staff_sleeping_notes },
-    { label: "הערות לינה לנהגים / אבטחה",      value: d.drivers_lodging_notes },
+    { label: "הערות לינה לחניכים",                           value: d.student_sleeping_notes },
+    { label: "פירוט צוות / מלווים שישנים במקום",             value: d.staff_detail_notes, highlight: true },
+    { label: "הנחיות מיוחדות ללינת צוות / מלווים",          value: d.staff_sleeping_notes, highlight: true },
+    { label: "הערות לינה לנהגים / אבטחה",                   value: d.drivers_lodging_notes },
   ];
   const hasAny = notes.some(n => n.value?.trim());
   if (!hasAny) return <EmptyState text="אין הערות לינה" />;
 
   return (
     <div className="space-y-2">
-      {notes.map(({ label, value }) => (
-        <div key={label} className="space-y-0.5">
-          <p className="text-xs text-slate-400 font-medium">{label}</p>
-          <p className={`text-sm px-3 py-2 rounded-lg border ${value?.trim() ? "bg-slate-50 border-slate-200 text-slate-700" : "text-slate-300 italic"}`}>
-            {value?.trim() || "אין הערות"}
-          </p>
-        </div>
-      ))}
+      {notes.map(({ label, value, highlight }) => {
+        if (!value?.trim()) return null;
+        return (
+          <div key={label} className="space-y-0.5">
+            <p className="text-xs text-slate-400 font-medium">{label}</p>
+            <p className={`text-sm px-3 py-2 rounded-lg border whitespace-pre-wrap ${
+              highlight ? "bg-amber-50 border-amber-200 text-slate-700" : "bg-slate-50 border-slate-200 text-slate-700"
+            }`}>
+              {value.trim()}
+            </p>
+          </div>
+        );
+      })}
     </div>
   );
 }

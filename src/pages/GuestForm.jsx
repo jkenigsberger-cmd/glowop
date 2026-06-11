@@ -4,6 +4,7 @@ import GuestFormStep1 from "@/components/guest-form/GuestFormStep1";
 import GuestFormStep2 from "@/components/guest-form/GuestFormStep2";
 import GuestFormStep3 from "@/components/guest-form/GuestFormStep3";
 import GuestFormStep4 from "@/components/guest-form/GuestFormStep4";
+import GuestFormDayUseMeals from "@/components/guest-form/GuestFormDayUseMeals";
 import GuestFormProgress from "@/components/guest-form/GuestFormProgress";
 import { Button } from "@/components/ui/button";
 import { differenceInCalendarDays, addDays, format, parseISO } from "date-fns";
@@ -69,6 +70,13 @@ const ALL_STEPS = [
   { key: "schedule",     label: "לוח פעילויות" },
 ];
 
+const DAY_USE_STEPS = [
+  { key: "details",  label: "פרטי קבוצה" },
+  { key: "diet",     label: "העדפות מזון" },
+  { key: "daymeals", label: "ארוחות ופינת קפה" },
+  { key: "schedule", label: "לוח פעילויות" },
+];
+
 async function callFunction(name, payload) {
   const res = await base44.functions.invoke(name, payload);
   return res.data;
@@ -102,11 +110,14 @@ export default function GuestForm() {
   const [meals, setMeals] = useState([]);
   const [participants, setParticipants] = useState({
     boys_count: "", girls_count: "", student_sleeping_notes: "",
-    staff_men_count: "", staff_women_count: "", staff_sleeping_notes: "",
+    staff_men_count: "", staff_women_count: "", staff_sleeping_notes: "", staff_detail_notes: "",
     drivers_men_count: "", drivers_women_count: "", drivers_lodging_notes: "",
   });
   const [schedule, setSchedule] = useState([]);
   const [generalNotes, setGeneralNotes] = useState("");
+  // DAY_USE specific meal state
+  const [dayUseMeals, setDayUseMeals] = useState({ breakfast: null, lunch: null, dinner: null });
+  const [dayUseCoffeeCorner, setDayUseCoffeeCorner] = useState(null);
 
   const scheduleHasTimeErrors = schedule.some(r => r.start_time && r.end_time && r.start_time >= r.end_time);
 
@@ -189,7 +200,9 @@ export default function GuestForm() {
     girls_count:       getGirlsCount(quoteData),
   } : null;
 
-  const activeSteps = hasMealsStep ? ALL_STEPS : ALL_STEPS.filter(s => s.key !== "meals");
+  const activeSteps = isDayUseGroup
+    ? DAY_USE_STEPS
+    : (hasMealsStep ? ALL_STEPS : ALL_STEPS.filter(s => s.key !== "meals"));
   const currentStepKey = activeSteps[step]?.key;
   const isLast = step === activeSteps.length - 1;
 
@@ -249,24 +262,29 @@ export default function GuestForm() {
         total_pax:       totalPax || null,
         participant_count: participantCount || null,
         staff_count:     staffCount || null,
-        boys_count:      boys || null,
-        girls_count:     girls || null,
+        boys_count:      isDayUseGroup ? null : (boys || null),
+        girls_count:     isDayUseGroup ? null : (girls || null),
         staff_men_count: staffMen || null,
         staff_women_count: staffWomen || null,
-        drivers_men_count: driversMen || null,
-        drivers_women_count: driversWomen || null,
+        drivers_men_count: isDayUseGroup ? null : (driversMen || null),
+        drivers_women_count: isDayUseGroup ? null : (driversWomen || null),
         is_sleeping_group: isSleeping,
         arrival_lunch:   mealOptions.arrival_lunch,
         departure_lunch: mealOptions.departure_lunch,
         special_diets:   JSON.stringify(diet),
-        meal_plan:       JSON.stringify(meals),
+        meal_plan:       isDayUseGroup ? JSON.stringify(dayUseMeals) : JSON.stringify(meals),
         tent_distribution_notes: JSON.stringify({
           student_sleeping_notes: participants.student_sleeping_notes || '',
           staff_sleeping_notes:   participants.staff_sleeping_notes   || '',
+          staff_detail_notes:     participants.staff_detail_notes     || '',
           drivers_lodging_notes:  participants.drivers_lodging_notes  || '',
         }),
         schedule_notes:  JSON.stringify(schedule),
         general_notes:   generalNotes || '',
+        // Coffee corner request (DAY_USE uses dayUseCoffeeCorner, LODGING uses diet.coffee_corner_detail)
+        day_use_coffee_corner: isDayUseGroup
+          ? JSON.stringify(dayUseCoffeeCorner)
+          : (diet.coffee_corner_option ? JSON.stringify({ answer: "כן", ...diet.coffee_corner_detail }) : null),
       };
       console.log('[GuestForm payload keys]', Object.keys(payload));
       await callFunction("submitGuestForm", payload);
@@ -341,6 +359,15 @@ export default function GuestForm() {
                 quoteData={resolvedQuoteData}
                 mealOptions={mealOptions} setMealOptions={setMealOptions}
                 meals={meals} setMeals={setMeals}
+              />
+            )}
+            {currentStepKey === "daymeals" && (
+              <GuestFormDayUseMeals
+                meals={dayUseMeals}
+                setMeals={setDayUseMeals}
+                coffeeCorner={dayUseCoffeeCorner}
+                setCoffeeCorner={setDayUseCoffeeCorner}
+                quoteData={resolvedQuoteData}
               />
             )}
             {currentStepKey === "participants" && (

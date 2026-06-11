@@ -1,4 +1,5 @@
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 
 const DIET_OPTIONS = [
   { key: "vegetarian_count",     emoji: "🥬", label: "צמחוני" },
@@ -10,18 +11,24 @@ const DIET_OPTIONS = [
   { key: "lactoseFree_count",    emoji: "🥛", label: "ללא לקטוז" },
 ];
 
-const COFFEE_OPTIONS = [
-  { key: "coffee_full",     label: "פינת קפה מלאה" },
-  { key: "coffee_cookies",  label: "פינת קפה ועוגיות" },
-  { key: "coffee_pastry",   label: "פינת קפה ומאפה" },
+const COFFEE_SERVICE_OPTIONS = [
+  { value: "קפה ועוגיות",  label: "קפה ועוגיות" },
+  { value: "אחר",           label: "אחר" },
 ];
 
 export default function GuestFormStep1({ form, setForm }) {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const setCoffeeDetail = (k, v) => setForm(f => ({ ...f, coffee_corner_detail: { ...(f.coffee_corner_detail || {}), [k]: v } }));
 
-  const selectedCoffee = form.coffee_corner_option || null;
-  const toggleCoffee = (key) => {
-    set("coffee_corner_option", selectedCoffee === key ? null : key);
+  const coffeeWanted = form.coffee_corner_option === true;
+  const toggleCoffee = () => {
+    if (coffeeWanted) {
+      set("coffee_corner_option", false);
+    } else {
+      set("coffee_corner_option", true);
+      // default service type
+      if (!form.coffee_corner_detail?.service_type) setCoffeeDetail("service_type", "קפה ועוגיות");
+    }
   };
 
   return (
@@ -50,32 +57,52 @@ export default function GuestFormStep1({ form, setForm }) {
       </div>
 
       {/* Coffee corner */}
-      <div className="space-y-2">
-        <p className="text-sm font-medium text-slate-700">☕ פינת קפה (אופציונלי)</p>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-          {COFFEE_OPTIONS.map(({ key, label }) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => toggleCoffee(key)}
-              className={`py-2.5 px-3 rounded-xl border text-sm font-medium transition-all text-center ${
-                selectedCoffee === key
-                  ? "bg-amber-500 text-white border-amber-500"
-                  : "bg-white text-slate-600 border-slate-200 hover:border-amber-400"
-              }`}
-            >
-              {label}
-            </button>
-          ))}
+      <div className="space-y-3 border border-amber-200 rounded-xl p-4 bg-amber-50/40">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-medium text-slate-700">☕ פינת קפה (אופציונלי)</p>
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={!!coffeeWanted}
+              onChange={toggleCoffee}
+              className="w-4 h-4 accent-amber-500"
+            />
+            <span className="text-sm text-slate-600">{coffeeWanted ? "כן, נרצה" : "לא רלוונטי"}</span>
+          </label>
         </div>
-        {selectedCoffee && (
-          <button
-            type="button"
-            onClick={() => set("coffee_corner_option", null)}
-            className="text-xs text-slate-400 hover:text-slate-600 underline-offset-2 hover:underline"
-          >
-            ✕ הסר בחירה
-          </button>
+
+        {coffeeWanted && (
+          <div className="space-y-3 pt-1">
+            <div className="space-y-1">
+              <Label className="text-xs text-slate-500">סוג פינת קפה</Label>
+              <select
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary"
+                value={form.coffee_corner_detail?.service_type || "קפה ועוגיות"}
+                onChange={e => setCoffeeDetail("service_type", e.target.value)}
+              >
+                {COFFEE_SERVICE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs text-slate-500">שעה מועדפת</Label>
+                <Input type="time" value={form.coffee_corner_detail?.time || ""} onChange={e => setCoffeeDetail("time", e.target.value)} className="text-sm" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-slate-500">מספר אנשים</Label>
+                <Input type="number" min="0" value={form.coffee_corner_detail?.pax || ""} onChange={e => setCoffeeDetail("pax", e.target.value)} className="text-sm" />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs text-slate-500">מיקום / הערות</Label>
+              <textarea
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm min-h-[48px] focus:outline-none focus:ring-1 focus:ring-primary bg-white resize-none"
+                placeholder="לדוגמה: מתחם חוץ, כיתה מס׳ 3..."
+                value={form.coffee_corner_detail?.notes || ""}
+                onChange={e => setCoffeeDetail("notes", e.target.value)}
+              />
+            </div>
+          </div>
         )}
       </div>
 

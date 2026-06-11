@@ -386,6 +386,33 @@ export default function SleepingRequirementsTab({ groupId, profile, group }) {
 
       {/* VIP / Staff */}
       <SectionCard icon={Star} title="דרישות לינה — צוות / VIP (אוהלי 80–89)" color="bg-purple-50/50 border-purple-200">
+        {/* Show staff sleeping info submitted by client */}
+        {(() => {
+          const tentNotes = profile?.tent_distribution_notes;
+          if (!tentNotes) return null;
+          let parsed = {};
+          try { parsed = JSON.parse(tentNotes); } catch { return null; }
+          const detail = parsed.staff_detail_notes?.trim();
+          const instructions = parsed.staff_sleeping_notes?.trim();
+          if (!detail && !instructions) return null;
+          return (
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 space-y-2 text-xs">
+              <p className="font-semibold text-blue-800">📋 מידע שנמסר ע״י הלקוח (מהשאלון)</p>
+              {detail && (
+                <div>
+                  <p className="text-blue-600 font-medium mb-0.5">פירוט צוות שישן במקום:</p>
+                  <p className="text-slate-700 whitespace-pre-wrap bg-white rounded-lg border border-blue-100 px-3 py-2">{detail}</p>
+                </div>
+              )}
+              {instructions && (
+                <div>
+                  <p className="text-blue-600 font-medium mb-0.5">הנחיות מיוחדות ללינה:</p>
+                  <p className="text-slate-700 whitespace-pre-wrap bg-white rounded-lg border border-blue-100 px-3 py-2">{instructions}</p>
+                </div>
+              )}
+            </div>
+          );
+        })()}
         <VipRequirementsEditor
           rows={vipRows}
           onChange={setVipRows}
