@@ -527,8 +527,6 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
     departure_date:  quote?.departure_date  || group?.departure_date || "",
     estimated_pax:   quote?.estimated_pax   ?? group?.total_pax     ?? "",
     staff_count:     quote?.staff_count     ?? group?.staff_count   ?? "",
-    // B. participant_count is now separately tracked (editable)
-    participant_count: quote?.participant_count ?? "",
     discount_percent: quote?.discount_percent ?? 0,
     payment_terms:   quote?.payment_terms   || "",
     valid_until:     quote?.valid_until     || "",
@@ -568,24 +566,12 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
   const [checkingAvailability, setCheckingAvailability] = useState(false);
 
   // ── Live calcs (must be before useCallback that references them) ─────────────
-  const estimatedPax = Number(form.estimated_pax || 0);
-  const staffCount   = Number(form.staff_count   || 0);
-  // B. participantCount: if user edited participant_count use it, else derive
-  const participantCount = form.participant_count !== ""
-    ? Math.max(0, Number(form.participant_count))
-    : Math.max(0, estimatedPax - staffCount);
+  const estimatedPax     = Number(form.estimated_pax || 0);
+  const staffCount       = Number(form.staff_count   || 0);
+  // A. participantCount is always calculated — never editable
+  const participantCount = Math.max(0, estimatedPax - staffCount);
   const nights = calcNights(form.arrival_date, form.departure_date);
-  // B. Handlers for editable student/staff with total_pax sync
-  const handleParticipantChange = (val) => {
-    const students = Math.max(0, Number(val || 0));
-    const total    = students + staffCount;
-    setForm(f => ({ ...f, participant_count: students, estimated_pax: total }));
-  };
-  const handleStaffChange = (val) => {
-    const staff = Math.max(0, Number(val || 0));
-    const total = participantCount + staff;
-    setForm(f => ({ ...f, staff_count: staff, estimated_pax: total }));
-  };
+  const staffExceedsTotal = staffCount > estimatedPax && estimatedPax > 0;
 
   // ── Capacity check ───────────────────────────────────────────────────────────
   const checkAvailability = useCallback(async () => {
@@ -631,8 +617,8 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
   const suggestedRateType = suggestLodgingRateType(form.arrival_date, groupType);
   const coffeeTotal      = coffeeEnabled && staffCount > 0 ? staffCount * COFFEE_CORNER_RATE : 0;
 
-  const studentLodgingTotal = studentLodging.reduce((s, r) => s + calcStudentLodging(r), 0);
-  const adultLodgingTotal   = adultLodging.reduce((s, r) => s + calcAdultLodging(r), 0);
+  const studentLodgingTotal = isDayUse ? 0 : studentLodging.reduce((s, r) => s + calcStudentLodging(r), 0);
+  const adultLodgingTotal   = isDayUse ? 0 : adultLodging.reduce((s, r) => s + calcAdultLodging(r), 0);
   const workshopTotal       = workshops.reduce((s, r) => s + calcWorkshop(r), 0);
   const lectureTotal        = lectures.reduce((s, r) => s + calcLecture(r), 0);
   const addonTotal          = addons.reduce((s, r) => s + calcAddon(r), 0);
@@ -666,8 +652,8 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
     }
     const quotePayload = {
       ...form, group_id: resolvedGroupId,
-      student_lodging_lines: JSON.stringify(studentLodging),
-      adult_lodging_lines:   JSON.stringify(adultLodging),
+      student_lodging_lines: isDayUse ? JSON.stringify([]) : JSON.stringify(studentLodging),
+      adult_lodging_lines:   isDayUse ? JSON.stringify([]) : JSON.stringify(adultLodging),
       workshop_lines:        JSON.stringify(workshops),
       lecture_lines:         JSON.stringify(lectures),
       addon_lines:           JSON.stringify(addons),
@@ -827,42 +813,46 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
                   </div>
                 </div>
 
-                {/* Headcounts — B. student count is now editable; total auto-syncs */}
+                {/* Headcounts — A. total + staff editable, students calculated */}
                 <div className="border-t border-slate-100 pt-3 grid grid-cols-3 gap-3">
                   <div className="space-y-1">
-                    <Label className="text-xs text-slate-500">חניכים / תלמידים</Label>
-                    <Input
-                      type="number" min="0"
-                      value={participantCount}
-                      onChange={e => handleParticipantChange(e.target.value)}
-                    />
+                    <Label className="text-xs text-slate-500">סה״כ משתתפים</Label>
+                    <Input type="number" min="0" value={form.estimated_pax} onChange={e => set("estimated_pax", e.target.value)} />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs text-slate-500">צוות</Label>
-                    <Input
-                      type="number" min="0"
-                      value={form.staff_count}
-                      onChange={e => handleStaffChange(e.target.value)}
-                    />
+                    <Label className="text-xs text-slate-500">צוות / מלווים</Label>
+                    <Input type="number" min="0" value={form.staff_count} onChange={e => set("staff_count", e.target.value)} />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs text-slate-500">סה״כ (מחושב)</Label>
-                    <div className="h-9 flex items-center px-3 rounded-md border bg-primary/5 text-sm font-semibold text-primary">{estimatedPax}</div>
+                    <Label className="text-xs text-slate-500">חניכים / תלמידים (מחושב)</Label>
+                    <div className="h-9 flex items-center px-3 rounded-md border bg-primary/5 text-sm font-semibold text-primary">{participantCount}</div>
                   </div>
                 </div>
+                {staffExceedsTotal && (
+                  <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+                    ⚠️ מספר הצוות ({staffCount}) גדול מסה״כ המשתתפים ({estimatedPax})
+                  </div>
+                )}
               </SectionCard>
 
-              {/* Pricing sections */}
-              <SectionCard icon={CalendarDays} title="לינה — תלמידים"
-                subtitle={suggestedRateType === "weekend_lodging" ? "סוף שבוע" : groupType === "DAY_USE" ? "יום פעילות" : "אמצע שבוע"}>
-                <StudentLodgingSection lines={studentLodging} setLines={setStudentLodging}
-                  suggestedRateType={suggestedRateType} groupType={groupType}
-                  defaultPax={participantCount} defaultNights={nights} />
-              </SectionCard>
-
-              <SectionCard icon={Users} title="לינה — מבוגרים" subtitle="מחיר לאוהל ללילה" defaultOpen={adultLodging.length > 0}>
-                <AdultLodgingSection lines={adultLodging} setLines={setAdultLodging} defaultNights={nights} adultsCount={staffCount} />
-              </SectionCard>
+              {/* Pricing sections — lodging hidden for DAY_USE */}
+              {isDayUse ? (
+                <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-sm text-blue-700">
+                  פעילות יום אינה כוללת לינה, ולכן רכיבי לינה לא יתווספו להצעה.
+                </div>
+              ) : (
+                <>
+                  <SectionCard icon={CalendarDays} title="לינה — תלמידים"
+                    subtitle={suggestedRateType === "weekend_lodging" ? "סוף שבוע" : "אמצע שבוע"}>
+                    <StudentLodgingSection lines={studentLodging} setLines={setStudentLodging}
+                      suggestedRateType={suggestedRateType} groupType={groupType}
+                      defaultPax={participantCount} defaultNights={nights} />
+                  </SectionCard>
+                  <SectionCard icon={Users} title="לינה — מבוגרים" subtitle="מחיר לאוהל ללילה" defaultOpen={adultLodging.length > 0}>
+                    <AdultLodgingSection lines={adultLodging} setLines={setAdultLodging} defaultNights={nights} adultsCount={staffCount} />
+                  </SectionCard>
+                </>
+              )}
 
               <SectionCard icon={BookOpen} title="סדנאות" defaultOpen={workshops.length > 0}>
                 <WorkshopSection lines={workshops} setLines={setWorkshops} />
