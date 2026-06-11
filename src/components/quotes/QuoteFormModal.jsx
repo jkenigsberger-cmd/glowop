@@ -567,12 +567,31 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
   const [availabilityResult, setAvailabilityResult] = useState(null);
   const [checkingAvailability, setCheckingAvailability] = useState(false);
 
+  // ── Live calcs (must be before useCallback that references them) ─────────────
+  const estimatedPax = Number(form.estimated_pax || 0);
+  const staffCount   = Number(form.staff_count   || 0);
+  // B. participantCount: if user edited participant_count use it, else derive
+  const participantCount = form.participant_count !== ""
+    ? Math.max(0, Number(form.participant_count))
+    : Math.max(0, estimatedPax - staffCount);
+  const nights = calcNights(form.arrival_date, form.departure_date);
+  // B. Handlers for editable student/staff with total_pax sync
+  const handleParticipantChange = (val) => {
+    const students = Math.max(0, Number(val || 0));
+    const total    = students + staffCount;
+    setForm(f => ({ ...f, participant_count: students, estimated_pax: total }));
+  };
+  const handleStaffChange = (val) => {
+    const staff = Math.max(0, Number(val || 0));
+    const total = participantCount + staff;
+    setForm(f => ({ ...f, staff_count: staff, estimated_pax: total }));
+  };
+
   // ── Capacity check ───────────────────────────────────────────────────────────
   const checkAvailability = useCallback(async () => {
     const pax = Number(form.estimated_pax);
     if (!form.arrival_date || !pax || !groupType) return;
     setCheckingAvailability(true);
-    const hasMealLines = parse(quote?.student_lodging_lines, []).length > 0 || parse(form.meal_plan, []).length > 0;
     // includes_meals: true for LODGING groups (they always have meals)
     const includesMeals = groupType === "LODGING";
     try {
@@ -608,26 +627,6 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
     set("valid_until", autoExpiry);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.arrival_date]);
-
-  // ── Live calcs ──────────────────────────────────────────────────────────────
-  const estimatedPax = Number(form.estimated_pax || 0);
-  const staffCount   = Number(form.staff_count   || 0);
-  // B. participantCount: if user edited participant_count use it, else derive
-  const participantCount = form.participant_count !== ""
-    ? Math.max(0, Number(form.participant_count))
-    : Math.max(0, estimatedPax - staffCount);
-  const nights = calcNights(form.arrival_date, form.departure_date);
-  // B. Handlers for editable student/staff with total_pax sync
-  const handleParticipantChange = (val) => {
-    const students = Math.max(0, Number(val || 0));
-    const total    = students + staffCount;
-    setForm(f => ({ ...f, participant_count: students, estimated_pax: total }));
-  };
-  const handleStaffChange = (val) => {
-    const staff = Math.max(0, Number(val || 0));
-    const total = participantCount + staff;
-    setForm(f => ({ ...f, staff_count: staff, estimated_pax: total }));
-  };
 
   const suggestedRateType = suggestLodgingRateType(form.arrival_date, groupType);
   const coffeeTotal      = coffeeEnabled && staffCount > 0 ? staffCount * COFFEE_CORNER_RATE : 0;
