@@ -116,7 +116,7 @@ export default function GuestForm() {
   const [schedule, setSchedule] = useState([]);
   const [generalNotes, setGeneralNotes] = useState("");
   // DAY_USE specific meal state
-  const [dayUseMeals, setDayUseMeals] = useState({ breakfast: null, lunch: null, dinner: null });
+  const [dayUseMeals, setDayUseMeals] = useState({ breakfast: null, lunch: null, dinner: null, sandwiches: null });
   const [dayUseCoffeeCorner, setDayUseCoffeeCorner] = useState(null);
 
   const scheduleHasTimeErrors = schedule.some(r => r.start_time && r.end_time && r.start_time >= r.end_time);
