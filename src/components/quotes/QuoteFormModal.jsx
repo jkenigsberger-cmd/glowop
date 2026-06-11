@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -485,27 +485,41 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
   const isNewGroupFlow = !group;
   const navigate = useNavigate();
 
+  // New-group flow: group shell fields
+  // org_name = organization/client/group name (שם קבוצה / ארגון)
+  // contact_name/phone/email = contact person (שם איש קשר) — separate
   const [groupForm, setGroupForm] = useState({
-    group_name: "", group_type: "LODGING",
+    org_name: "",        // organization name — mirrors quote client_name
+    group_type: "LODGING",
     contact_name: "", contact_phone: "", contact_email: "", client_tax_id: "",
   });
 
-  // groupType is reactive: for new-group flow it comes from groupForm state
   const groupType = isNewGroupFlow ? groupForm.group_type : (group?.group_type || "LODGING");
   const isDayUse = groupType === "DAY_USE";
   const setGroupField = (k, v) => setGroupForm(f => ({ ...f, [k]: v }));
 
+  // When org_name changes, keep quote client_name in sync
+  const handleOrgNameChange = (v) => {
+    setGroupField("org_name", v);
+    setForm(f => ({ ...f, client_name: v }));
+  };
+
+  // Contact person fields mirror into quote client_phone/email but NOT client_name
   const handleGroupContactChange = (k, v) => {
     setGroupField(k, v);
-    const mirrorMap = { contact_name: "client_name", contact_phone: "client_phone", contact_email: "client_email", client_tax_id: "client_tax_id" };
+    const mirrorMap = { contact_phone: "client_phone", contact_email: "client_email", client_tax_id: "client_tax_id" };
     if (mirrorMap[k]) setForm(f => ({ ...f, [mirrorMap[k]]: v }));
   };
+
+  // C. Track whether user manually overrode expiration date
+  const expiryAutoGenRef = useRef(!quote?.valid_until); // true = was auto-generated or empty
 
   const [form, setForm] = useState({
     quote_number:    quote?.quote_number    || "",
     version:         quote?.version         || 1,
     status:          quote?.status          || "DRAFT",
-    client_name:     quote?.client_name     || group?.contact_name  || "",
+    // A. Organization/client name comes from group name, NOT contact person
+    client_name:     quote?.client_name     || group?.group_name    || "",
     client_phone:    quote?.client_phone    || group?.contact_phone || "",
     client_email:    quote?.client_email    || group?.contact_email || "",
     client_tax_id:   quote?.client_tax_id   || "",
@@ -513,6 +527,8 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
     departure_date:  quote?.departure_date  || group?.departure_date || "",
     estimated_pax:   quote?.estimated_pax   ?? group?.total_pax     ?? "",
     staff_count:     quote?.staff_count     ?? group?.staff_count   ?? "",
+    // B. participant_count is now separately tracked (editable)
+    participant_count: quote?.participant_count ?? "",
     discount_percent: quote?.discount_percent ?? 0,
     payment_terms:   quote?.payment_terms   || "",
     valid_until:     quote?.valid_until     || "",
@@ -561,28 +577,58 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
     const includesMeals = groupType === "LODGING";
     try {
       const res = await base44.functions.invoke("checkSiteAvailability", {
-        arrival_date:   form.arrival_date,
-        departure_date: form.departure_date || form.arrival_date,
-        total_pax:      pax,
-        group_type:     groupType,
-        includes_meals: includesMeals,
-        exclude_quote_id: quote?.id || undefined,
+        arrival_date:      form.arrival_date,
+        departure_date:    form.departure_date || form.arrival_date,
+        total_pax:         pax,
+        participant_count: participantCount || undefined,
+        staff_count:       Number(form.staff_count) || undefined,
+        group_type:        groupType,
+        includes_meals:    includesMeals,
+        exclude_quote_id:  quote?.id || undefined,
+        exclude_group_id:  group?.id || undefined,
+        adult_lodging_lines: JSON.stringify(adultLodging),
       });
       setAvailabilityResult(res.data);
     } catch { /* fail silently */ }
     setCheckingAvailability(false);
-  }, [form.arrival_date, form.departure_date, form.estimated_pax, groupType, quote?.id]);
+  }, [form.arrival_date, form.departure_date, form.estimated_pax, participantCount, form.staff_count, groupType, quote?.id, group?.id, adultLodging]);
 
   useEffect(() => {
     const timer = setTimeout(checkAvailability, 700);
     return () => clearTimeout(timer);
   }, [checkAvailability]);
 
+  // C. Auto-set expiration = arrival + 14 days when arrival changes
+  useEffect(() => {
+    if (!form.arrival_date) return;
+    if (!expiryAutoGenRef.current) return; // user manually set it, don't override
+    const d = new Date(form.arrival_date);
+    d.setDate(d.getDate() + 14);
+    const autoExpiry = d.toISOString().slice(0, 10);
+    set("valid_until", autoExpiry);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.arrival_date]);
+
   // ── Live calcs ──────────────────────────────────────────────────────────────
-  const estimatedPax     = Number(form.estimated_pax || 0);
-  const staffCount       = Number(form.staff_count   || 0);
-  const participantCount = Math.max(0, estimatedPax - staffCount);
-  const nights           = calcNights(form.arrival_date, form.departure_date);
+  const estimatedPax = Number(form.estimated_pax || 0);
+  const staffCount   = Number(form.staff_count   || 0);
+  // B. participantCount: if user edited participant_count use it, else derive
+  const participantCount = form.participant_count !== ""
+    ? Math.max(0, Number(form.participant_count))
+    : Math.max(0, estimatedPax - staffCount);
+  const nights = calcNights(form.arrival_date, form.departure_date);
+  // B. Handlers for editable student/staff with total_pax sync
+  const handleParticipantChange = (val) => {
+    const students = Math.max(0, Number(val || 0));
+    const total    = students + staffCount;
+    setForm(f => ({ ...f, participant_count: students, estimated_pax: total }));
+  };
+  const handleStaffChange = (val) => {
+    const staff = Math.max(0, Number(val || 0));
+    const total = participantCount + staff;
+    setForm(f => ({ ...f, staff_count: staff, estimated_pax: total }));
+  };
+
   const suggestedRateType = suggestLodgingRateType(form.arrival_date, groupType);
   const coffeeTotal      = coffeeEnabled && staffCount > 0 ? staffCount * COFFEE_CORNER_RATE : 0;
 
@@ -606,12 +652,16 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
       const totalPax = Number(form.estimated_pax || 0);
       const staffPax = Number(form.staff_count   || 0);
       const newGroup = await base44.entities.Group.create({
-        group_name: groupForm.group_name, group_type: groupForm.group_type,
+        // A. org_name → group_name; contact_name is the contact person
+        group_name: groupForm.org_name || form.client_name,
+        group_type: groupForm.group_type,
         arrival_date: form.arrival_date || undefined, departure_date: form.departure_date || undefined,
         total_pax: totalPax || undefined, staff_count: staffPax || undefined,
         participant_count: Math.max(0, totalPax - staffPax) || undefined,
-        contact_name: groupForm.contact_name || undefined, contact_phone: groupForm.contact_phone || undefined,
-        contact_email: groupForm.contact_email || undefined, status: "DRAFT",
+        contact_name: groupForm.contact_name || undefined,
+        contact_phone: groupForm.contact_phone || undefined,
+        contact_email: groupForm.contact_email || undefined,
+        status: "DRAFT",
       });
       resolvedGroupId = newGroup.id;
     }
@@ -625,8 +675,10 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
       adjustment_lines:      JSON.stringify(adjustments),
       subtotal, discount_amount: discountAmount, total_price,
       advance_payment: advance, balance_payment: balance,
-      version: Number(form.version), estimated_pax: estimatedPax || undefined,
-      staff_count: staffCount || undefined, participant_count: participantCount || undefined,
+      version: Number(form.version),
+      estimated_pax: estimatedPax || undefined,
+      staff_count: staffCount || undefined,
+      participant_count: participantCount || undefined,
       coffee_corner_pax: coffeeEnabled ? staffCount : 0,
       discount_percent: Number(form.discount_percent || 0),
     };
@@ -674,7 +726,7 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
                   <div className="grid grid-cols-2 gap-3">
                     <div className="col-span-2 space-y-1">
                       <Label className="text-xs text-slate-500">שם קבוצה / ארגון *</Label>
-                      <Input required value={groupForm.group_name} onChange={e => setGroupField("group_name", e.target.value)} placeholder="שם בית הספר / הארגון" />
+                      <Input required value={groupForm.org_name} onChange={e => handleOrgNameChange(e.target.value)} placeholder="שם בית הספר / הארגון" />
                     </div>
                     <div className="space-y-1">
                       <Label className="text-xs text-slate-500">סוג</Label>
@@ -689,7 +741,8 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
                     </div>
                     <div className="space-y-1">
                       <Label className="text-xs text-slate-500">שם איש קשר</Label>
-                      <Input value={groupForm.contact_name} onChange={e => handleGroupContactChange("contact_name", e.target.value)} />
+                      {/* contact_name is separate from org_name — not mirrored to client_name */}
+                      <Input value={groupForm.contact_name} onChange={e => setGroupField("contact_name", e.target.value)} />
                     </div>
                     <div className="space-y-1">
                       <Label className="text-xs text-slate-500">טלפון</Label>
@@ -725,18 +778,18 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
                     <>
                       <div className="space-y-1">
                         <Label className="text-xs text-slate-500">תאריך פעילות</Label>
-                        <Input type="date" value={form.arrival_date} onChange={e => { set("arrival_date", e.target.value); set("departure_date", e.target.value); }} />
+                        <Input type="date" value={form.arrival_date} onChange={e => { expiryAutoGenRef.current = true; set("arrival_date", e.target.value); set("departure_date", e.target.value); }} />
                       </div>
                       <div className="space-y-1">
                         <Label className="text-xs text-slate-500">בתוקף עד</Label>
-                        <Input type="date" value={form.valid_until} onChange={e => set("valid_until", e.target.value)} />
+                        <Input type="date" value={form.valid_until} onChange={e => { expiryAutoGenRef.current = false; set("valid_until", e.target.value); }} />
                       </div>
                     </>
                   ) : (
                     <>
                       <div className="space-y-1">
                         <Label className="text-xs text-slate-500">תאריך הגעה</Label>
-                        <Input type="date" value={form.arrival_date} onChange={e => set("arrival_date", e.target.value)} />
+                        <Input type="date" value={form.arrival_date} onChange={e => { expiryAutoGenRef.current = true; set("arrival_date", e.target.value); }} />
                       </div>
                       <div className="space-y-1">
                         <Label className="text-xs text-slate-500">תאריך עזיבה</Label>
@@ -749,7 +802,7 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
                       </div>
                       <div className="space-y-1">
                         <Label className="text-xs text-slate-500">בתוקף עד</Label>
-                        <Input type="date" value={form.valid_until} onChange={e => set("valid_until", e.target.value)} />
+                        <Input type="date" value={form.valid_until} onChange={e => { expiryAutoGenRef.current = false; set("valid_until", e.target.value); }} />
                       </div>
                     </>
                   )}
@@ -775,19 +828,27 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
                   </div>
                 </div>
 
-                {/* Headcounts */}
+                {/* Headcounts — B. student count is now editable; total auto-syncs */}
                 <div className="border-t border-slate-100 pt-3 grid grid-cols-3 gap-3">
                   <div className="space-y-1">
-                    <Label className="text-xs text-slate-500">סה״כ משתתפים</Label>
-                    <Input type="number" min="0" value={form.estimated_pax} onChange={e => set("estimated_pax", e.target.value)} />
+                    <Label className="text-xs text-slate-500">חניכים / תלמידים</Label>
+                    <Input
+                      type="number" min="0"
+                      value={participantCount}
+                      onChange={e => handleParticipantChange(e.target.value)}
+                    />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs text-slate-500">צוות</Label>
-                    <Input type="number" min="0" value={form.staff_count} onChange={e => set("staff_count", e.target.value)} />
+                    <Input
+                      type="number" min="0"
+                      value={form.staff_count}
+                      onChange={e => handleStaffChange(e.target.value)}
+                    />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs text-slate-500">חניכים (מחושב)</Label>
-                    <div className="h-9 flex items-center px-3 rounded-md border bg-primary/5 text-sm font-semibold text-primary">{participantCount}</div>
+                    <Label className="text-xs text-slate-500">סה״כ (מחושב)</Label>
+                    <div className="h-9 flex items-center px-3 rounded-md border bg-primary/5 text-sm font-semibold text-primary">{estimatedPax}</div>
                   </div>
                 </div>
               </SectionCard>
