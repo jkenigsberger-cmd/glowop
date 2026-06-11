@@ -17,7 +17,7 @@ function isConflicting(item, allDayItems) {
   );
 }
 
-const SPACE_TYPE_LABELS = { BUNKER: "בונקר", OHEL_MOED: "אוהל מועד", DINING_HALL: "חדר אוכל" };
+const SPACE_TYPE_LABELS = { BUNKER: "בונקר", OHEL_MOED: "אוהל מועד", DINING_HALL: "חדר אוכל", FIREPLACE: "בולדר" };
 
 export default function SpaceDailyView({ spaces, itemsBySpace, date }) {
   const hasAnyBooking = spaces.some((s) => (itemsBySpace[s.id] || []).length > 0);

@@ -3,7 +3,10 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 const VALID_SPACE_CODES = new Set([
   'bunker_1', 'bunker_2', 'bunker_4', 'bunker_5',
   'bunker_6', 'bunker_7', 'bunker_8', 'ohel_moed', 'dining_hall',
-  'outdoor_deck_lawn'
+  'outdoor_deck_lawn',
+  // בולדרים
+  'boulder_1', 'boulder_2', 'boulder_3', 'boulder_4',
+  'boulder_5', 'boulder_6', 'boulder_8',
 ]);
 
 function timeToMinutes(t) {
@@ -91,8 +94,6 @@ Deno.serve(async (req) => {
 
       const newStart = timeToMinutes(start_time);
       const newEnd   = timeToMinutes(end_time);
-      const bufStart = newStart - 15;
-      const bufEnd   = newEnd   + 15;
 
       const existingItems = await base44.asServiceRole.entities.GroupScheduleItem.filter({
         activity_space_id: resolvedSpaceId,
@@ -104,7 +105,8 @@ Deno.serve(async (req) => {
         if (id && item.id === id) return false;
         const eStart = timeToMinutes(item.start_time);
         const eEnd   = timeToMinutes(item.end_time);
-        return bufStart < eEnd && bufEnd > eStart;
+        // Real overlap only — back-to-back (A ends exactly when B starts) is allowed
+        return newStart < eEnd && newEnd > eStart;
       });
 
       if (conflicts.length > 0) {
@@ -147,8 +149,6 @@ Deno.serve(async (req) => {
     if (resolvedSpaceId && status !== 'CANCELLED') {
       const newStart = timeToMinutes(start_time);
       const newEnd   = timeToMinutes(end_time);
-      const bufStart = newStart - 15;
-      const bufEnd   = newEnd   + 15;
 
       const afterItems = await base44.asServiceRole.entities.GroupScheduleItem.filter({
         activity_space_id: resolvedSpaceId,
@@ -160,7 +160,8 @@ Deno.serve(async (req) => {
         if (item.id === result.id) return false;
         const eStart = timeToMinutes(item.start_time);
         const eEnd   = timeToMinutes(item.end_time);
-        return bufStart < eEnd && bufEnd > eStart;
+        // Real overlap only
+        return newStart < eEnd && newEnd > eStart;
       });
 
       if (postConflicts.length > 0) {

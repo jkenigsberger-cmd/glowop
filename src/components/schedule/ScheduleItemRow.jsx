@@ -156,6 +156,7 @@ export default function ScheduleItemRow({ item, activitySpaces, quoteActivities 
   }
 
   const space = activitySpaces.find(s => s.id === item.activity_space_id);
+  const isSplit = !!item.split_group_id;
 
   return (
     <div className={`bg-card border rounded-xl px-4 py-3 flex items-start gap-3 ${item.status === "CANCELLED" ? "opacity-50" : "border-border"}`}>
@@ -164,6 +165,11 @@ export default function ScheduleItemRow({ item, activitySpaces, quoteActivities 
           <span className="text-sm font-medium">{item.activity_name}</span>
           {item.source === "manual" && (
             <span className="text-xs bg-blue-50 text-blue-600 border border-blue-200 rounded px-1.5 py-0.5">ידני</span>
+          )}
+          {isSplit && (
+            <span className="text-xs bg-purple-50 text-purple-600 border border-purple-200 rounded px-1.5 py-0.5">
+              {item.split_index}/{item.split_total} מרחבים
+            </span>
           )}
           {item.status === "CANCELLED" && (
             <span className="text-xs bg-red-50 text-red-600 border border-red-200 rounded px-1.5 py-0.5">בוטל</span>

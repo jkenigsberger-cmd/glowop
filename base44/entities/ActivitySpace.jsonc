@@ -4,7 +4,7 @@
   "properties": {
     "code": {
       "type": "string",
-      "description": "Canonical code e.g. bunker_1, ohel_moed, dining_hall"
+      "description": "Canonical code e.g. bunker_1, ohel_moed, boulder_1"
     },
     "name": {
       "type": "string",
@@ -15,7 +15,8 @@
       "enum": [
         "BUNKER",
         "OHEL_MOED",
-        "DINING_HALL"
+        "DINING_HALL",
+        "FIREPLACE"
       ],
       "default": "BUNKER"
     },

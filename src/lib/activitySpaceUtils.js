@@ -12,7 +12,13 @@ export function getActivitySpaceDisplayName(space) {
  * "דק ודשא" and unnumbered spaces sort last.
  */
 export function getActivitySpaceSortOrder(space) {
+  const code = space?.code || "";
   const name = space?.name || "";
+  // בולדרים sort after rooms but before outdoor/unnumbered
+  if (code.startsWith("boulder_")) {
+    const m = code.match(/(\d+)/);
+    return 1000 + (m ? parseInt(m[1], 10) : 99);
+  }
   // Try to extract the first number from the name, e.g. "חדר 9", "חדרים 2-3"
   const match = name.match(/(\d+)/);
   if (match) return parseInt(match[1], 10);
