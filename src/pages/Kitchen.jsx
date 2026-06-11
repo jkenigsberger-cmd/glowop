@@ -257,7 +257,7 @@ export default function Kitchen() {
                 <div className="flex items-center justify-between rounded-xl border px-4 py-2.5 bg-amber-100 text-amber-800 border-amber-200">
                   <div className="flex items-center gap-2 font-bold text-base">
                     <Coffee className="w-5 h-5" />
-                    פינת קפה
+                    פינת קפה ועוגיות
                   </div>
                   <div className="flex items-center gap-3 text-sm font-medium">
                     <span>{dayCoffeeCorners.length} קבוצות</span>
@@ -275,11 +275,12 @@ export default function Kitchen() {
 
             {/* Meals grouped by type */}
             {Object.entries(mealsByType).map(([mealType, mealsInGroup]) => {
-              const MEAL_TYPE_HEB = { BREAKFAST: "ארוחת בוקר", LUNCH: "ארוחת צהריים", DINNER: "ארוחת ערב", OTHER: "אחר" };
+              const MEAL_TYPE_HEB = { BREAKFAST: "ארוחת בוקר", LUNCH: "ארוחת צהריים", DINNER: "ארוחת ערב", SANDWICH: "כריכים", OTHER: "אחר" };
               const MEAL_TYPE_COLORS = {
                 BREAKFAST: "bg-amber-100 text-amber-800 border-amber-200",
                 LUNCH:     "bg-green-100 text-green-800 border-green-200",
                 DINNER:    "bg-blue-100 text-blue-800 border-blue-200",
+                SANDWICH:  "bg-orange-100 text-orange-800 border-orange-200",
                 OTHER:     "bg-slate-100 text-slate-700 border-slate-200",
               };
               const totalPaxForType = mealsInGroup.reduce((s, m) => s + (Number(m.pax) || 0), 0);

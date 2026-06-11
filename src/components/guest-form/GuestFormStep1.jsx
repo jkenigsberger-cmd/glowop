@@ -16,7 +16,7 @@ const COFFEE_SERVICE_OPTIONS = [
   { value: "אחר",           label: "אחר" },
 ];
 
-export default function GuestFormStep1({ form, setForm }) {
+export default function GuestFormStep1({ form, setForm, isDayUse = false }) {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const setCoffeeDetail = (k, v) => setForm(f => ({ ...f, coffee_corner_detail: { ...(f.coffee_corner_detail || {}), [k]: v } }));
 
@@ -56,7 +56,8 @@ export default function GuestFormStep1({ form, setForm }) {
         ))}
       </div>
 
-      {/* Coffee corner */}
+      {/* Coffee corner — hidden for DAY_USE (handled in meals step) */}
+      {!isDayUse && (
       <div className="space-y-3 border border-amber-200 rounded-xl p-4 bg-amber-50/40">
         <div className="flex items-center justify-between">
           <p className="text-sm font-medium text-slate-700">☕ פינת קפה (אופציונלי)</p>
@@ -105,6 +106,7 @@ export default function GuestFormStep1({ form, setForm }) {
           </div>
         )}
       </div>
+      )}
 
       {/* Diet notes */}
       <div className="space-y-1">

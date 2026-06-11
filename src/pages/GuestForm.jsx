@@ -352,7 +352,7 @@ export default function GuestForm() {
               <GuestFormStep0 form={details} setForm={setDetails} quoteData={resolvedQuoteData} />
             )}
             {currentStepKey === "diet" && (
-              <GuestFormStep1 form={diet} setForm={setDiet} />
+              <GuestFormStep1 form={diet} setForm={setDiet} isDayUse={isDayUseGroup} />
             )}
             {currentStepKey === "meals" && (
               <GuestFormStep2
