@@ -85,13 +85,15 @@ function resolveData(quote, group) {
     }
   });
 
-  // New addon lines
+  // New addon lines — split by category for grouped rendering
+  const operatorAddonIds = new Set(["karmelim", "agad"]);
   newAddonLines.forEach(r => {
     const item = ADDON_CATALOG_PDF[r.addon_id];
     const qty = Number(r.quantity || 0);
     const unitPrice = Number(r.unit_price || 0);
     const total = qty * unitPrice;
-    lineItems.push({ name: item?.label || r.addon_id, qty, unitPrice, total, vatAmount: null });
+    const isOperator = operatorAddonIds.has(r.addon_id);
+    lineItems.push({ name: item?.label || r.addon_id, qty, unitPrice, total, vatAmount: null, isOperator });
   });
 
   studentLines.forEach(r => {
@@ -351,25 +353,41 @@ function Page1({ d, logoUrl }) {
           </tr>
         </thead>
         <tbody>
-          {d.lineItems.map((item, i) => {
-            const isNegative = item.isAdjustment && item.total < 0;
-            const isSurcharge = item.isSurcharge;
-            return (
-              <tr key={i} style={{ background: i % 2 === 0 ? "#fff" : "#f5f8ff" }}>
-                <td style={{ ...tdBase }}>{item.name}</td>
-                <td style={{ ...tdBase, textAlign: "center" }}>{item.qty}</td>
-                <td style={{ ...tdBase, textAlign: "center" }}>₪{fmt(item.unitPrice)}</td>
-                <td style={{ ...tdBase, textAlign: "left", fontWeight: 600, color: isNegative ? "#c00" : isSurcharge ? "#1a7a4a" : "#111" }}>
-                  {item.vatAmount
-                    ? `₪${fmt(item.unitPrice)} + ₪${fmt(item.vatAmount)} מע״מ`
-                    : isNegative
-                      ? `-₪${fmt(Math.abs(item.total))}`
-                      : `₪${fmt(item.total)}`
-                  }
-                </td>
-              </tr>
-            );
-          })}
+          {(() => {
+            const rows = [];
+            let prevWasOperator = false;
+            let shownOperatorHeader = false;
+            d.lineItems.forEach((item, i) => {
+              const isNegative = item.isAdjustment && item.total < 0;
+              const isSurcharge = item.isSurcharge;
+              const isOperator = !!item.isOperator;
+              // Insert section header row before first operator item
+              if (isOperator && !shownOperatorHeader) {
+                shownOperatorHeader = true;
+                rows.push(
+                  <tr key={`op-header`} style={{ background: "#f0f7f0" }}>
+                    <td colSpan={4} style={{ ...tdBase, fontWeight: 700, color: "#1a7a4a", fontSize: 11, paddingTop: 8, paddingBottom: 4 }}>כרמלים / אגד</td>
+                  </tr>
+                );
+              }
+              rows.push(
+                <tr key={i} style={{ background: isOperator ? "#f7fcf7" : (i % 2 === 0 ? "#fff" : "#f5f8ff") }}>
+                  <td style={{ ...tdBase }}>{item.name}</td>
+                  <td style={{ ...tdBase, textAlign: "center" }}>{item.qty}</td>
+                  <td style={{ ...tdBase, textAlign: "center" }}>₪{fmt(item.unitPrice)}</td>
+                  <td style={{ ...tdBase, textAlign: "left", fontWeight: 600, color: isNegative ? "#c00" : isSurcharge ? "#1a7a4a" : "#111" }}>
+                    {item.vatAmount
+                      ? `₪${fmt(item.unitPrice)} + ₪${fmt(item.vatAmount)} מע״מ`
+                      : isNegative
+                        ? `-₪${fmt(Math.abs(item.total))}`
+                        : `₪${fmt(item.total)}`
+                    }
+                  </td>
+                </tr>
+              );
+            });
+            return rows;
+          })()}
 
           {d.discountAmt > 0 && (
             <tr style={{ background: "#f0f4fb" }}>

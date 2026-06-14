@@ -175,24 +175,21 @@ function getCatalogLayout(quoteType) {
     return {
       primaryPackageIds: ["chavila_1", "chavila_4", "chavila_5"],
       extraPackageIds:   ["chavila_2", "chavila_3", "chavila_6"],
-      primaryAddonGroups: ["כרמלים/ גלואו", "אגד/ סוכנים אחרים"],
-      extraAddonGroups:   ["ארוחות", "תוכן"],
+      addonGroups:       ["ארוחות", "תוכן"],
     };
   }
   if (quoteType === "day_use") {
     return {
       primaryPackageIds: ["chavila_2", "chavila_3", "chavila_6"],
       extraPackageIds:   ["chavila_1", "chavila_4", "chavila_5"],
-      primaryAddonGroups: ["תוכן", "ארוחות"],
-      extraAddonGroups:   ["כרמלים/ גלואו", "אגד/ סוכנים אחרים"],
+      addonGroups:       ["תוכן", "ארוחות"],
     };
   }
   // custom — show all
   return {
     primaryPackageIds: ["chavila_1", "chavila_2", "chavila_3", "chavila_4", "chavila_5", "chavila_6"],
     extraPackageIds:   [],
-    primaryAddonGroups: ["ארוחות", "כרמלים/ גלואו", "אגד/ סוכנים אחרים", "תוכן"],
-    extraAddonGroups:   [],
+    addonGroups:       ["ארוחות", "תוכן"],
   };
 }
 
@@ -319,37 +316,38 @@ function AddonLineRow({ line, index, onUpdate, onRemove, defaultPax }) {
   );
 }
 
-// ── Add addon dropdown ────────────────────────────────────────────────────────
+// ── Add operator dropdown (כרמלים / אגד) ────────────────────────────────────
+function AddOperatorDropdown({ onAdd }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative">
+      <Button type="button" variant="outline" size="sm"
+        className="gap-1.5 text-xs h-7 border-dashed"
+        onClick={() => setOpen(o => !o)}>
+        <Plus className="w-3 h-3" />
+        הוסף כרמלים / אגד
+        <ChevronDown className="w-3 h-3" />
+      </Button>
+      {open && (
+        <div className="absolute z-50 top-full mt-1 right-0 bg-white border border-slate-200 rounded-xl shadow-lg py-1 min-w-[220px]" dir="rtl">
+          {OPERATOR_ADDON_CATALOG.map(item => (
+            <button key={item.id} type="button"
+              className="w-full text-right px-3 py-2 text-xs hover:bg-slate-50 text-slate-700"
+              onClick={() => { onAdd(item); setOpen(false); }}>
+              <div className="font-medium">{item.label}</div>
+              <div className="text-slate-400 text-[10px]">₪{item.rate} לאדם</div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Add addon dropdown (ארוחות + תוכן only) ──────────────────────────────────
 function AddAddonDropdown({ onAdd, quoteType }) {
   const [open, setOpen] = useState(false);
   const layout = getCatalogLayout(quoteType);
-
-  const renderGroups = (groupLabels, isExtra) => groupLabels.map(label => {
-    const items = ALL_ADDON_BY_GROUP[label] || [];
-    if (!items.length) return null;
-    return (
-      <div key={label}>
-        {isExtra && groupLabels[0] === label && (
-          <div className="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wide border-t border-slate-100">
-            אפשרויות נוספות
-          </div>
-        )}
-        <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wide border-t border-slate-100 first:border-t-0">
-          {label}
-        </div>
-        {items.map(item => (
-          <button key={item.id} type="button"
-            className="w-full text-right px-3 py-2 text-xs hover:bg-slate-50 text-slate-700"
-            onClick={() => { onAdd(item); setOpen(false); }}>
-            <div className="font-medium">{item.label}</div>
-            <div className="text-slate-400 text-[10px]">
-              {item.rate ? `₪${item.rate} לאדם` : item.fixed_price ? `₪${item.fixed_price} ליחידה` : ""}
-            </div>
-          </button>
-        ))}
-      </div>
-    );
-  });
 
   return (
     <div className="relative">
@@ -362,8 +360,27 @@ function AddAddonDropdown({ onAdd, quoteType }) {
       </Button>
       {open && (
         <div className="absolute z-50 top-full mt-1 right-0 bg-white border border-slate-200 rounded-xl shadow-lg py-1 min-w-[240px]" dir="rtl">
-          {renderGroups(layout.primaryAddonGroups, false)}
-          {layout.extraAddonGroups.length > 0 && renderGroups(layout.extraAddonGroups, true)}
+          {layout.addonGroups.map(label => {
+            const items = ALL_ADDON_BY_GROUP[label] || [];
+            if (!items.length) return null;
+            return (
+              <div key={label}>
+                <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wide border-t border-slate-100 first:border-t-0">
+                  {label}
+                </div>
+                {items.map(item => (
+                  <button key={item.id} type="button"
+                    className="w-full text-right px-3 py-2 text-xs hover:bg-slate-50 text-slate-700"
+                    onClick={() => { onAdd(item); setOpen(false); }}>
+                    <div className="font-medium">{item.label}</div>
+                    <div className="text-slate-400 text-[10px]">
+                      {item.rate ? `₪${item.rate} לאדם` : item.fixed_price ? `₪${item.fixed_price} ליחידה` : ""}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
@@ -475,6 +492,7 @@ export default function PackageLinesSection({
       {/* Action buttons */}
       <div className="flex items-center gap-2 flex-wrap">
         <AddPackageDropdown onAdd={handleAddPackage} quoteType={quoteType} />
+        <AddOperatorDropdown onAdd={handleAddAddon} />
         <AddAddonDropdown onAdd={handleAddAddon} quoteType={quoteType} />
       </div>
     </div>
