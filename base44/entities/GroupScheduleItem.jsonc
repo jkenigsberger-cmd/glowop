@@ -56,6 +56,15 @@
     "pax": {
       "type": "number"
     },
+    "pax_sync_mode": {
+      "type": "string",
+      "enum": [
+        "AUTO",
+        "MANUAL"
+      ],
+      "default": "AUTO",
+      "description": "AUTO = pax follows group total_pax automatically. MANUAL = admin set a custom pax, do not overwrite."
+    },
     "notes": {
       "type": "string"
     },

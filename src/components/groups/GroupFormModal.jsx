@@ -163,6 +163,41 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
       }
 
       await base44.entities.Group.update(group.id, payload);
+
+      // ── Sync AUTO pax on activities + coffee corner ───────────────────────
+      const newTotalPax = Number(payload.total_pax || 0);
+      const paxChanged = Number(group.total_pax ?? 0) !== newTotalPax;
+      if (paxChanged && newTotalPax > 0) {
+        try {
+          // Activities: update ACTIVE + AUTO records (skip split rows — they may have intentional distributions)
+          const activeActivities = await base44.entities.GroupScheduleItem.filter({ group_id: group.id, status: "ACTIVE" });
+          await Promise.all(
+            activeActivities
+              .filter(a => {
+                // Backward compat: treat as AUTO if pax_sync_mode is AUTO or undefined AND not a split row
+                const mode = a.pax_sync_mode;
+                const isAuto = mode === "AUTO" || mode == null;
+                const isSplit = !!a.split_group_id;
+                return isAuto && !isSplit;
+              })
+              .map(a => base44.entities.GroupScheduleItem.update(a.id, { pax: newTotalPax }))
+          );
+          // Coffee corner: update ACTIVE + AUTO records
+          const activeCoffee = await base44.entities.CoffeeCornerRequest.filter({ group_id: group.id, status: "ACTIVE" });
+          await Promise.all(
+            activeCoffee
+              .filter(r => {
+                const mode = r.pax_sync_mode;
+                return mode === "AUTO" || mode == null;
+              })
+              .map(r => base44.entities.CoffeeCornerRequest.update(r.id, { pax: newTotalPax }))
+          );
+        } catch (syncErr) {
+          // Non-fatal — never block save
+          console.warn("[GroupFormModal] pax auto-sync failed:", syncErr?.message);
+        }
+      }
+
       // Keep OperationalGroupProfile in sync with group pax edits + dietary
       const existingProfiles = await base44.entities.OperationalGroupProfile.filter({ group_id: group.id });
       if (existingProfiles.length > 0) {

@@ -40,6 +40,26 @@ export default function ScheduleItemRow({ item, activitySpaces, quoteActivities 
     setEditing(false);
   };
 
+  const handlePaxChange = (val) => {
+    set("pax", val);
+    // If admin explicitly types a pax different from group total — mark MANUAL
+    const groupTotal = groupDateRange?.groupTotalPax;
+    if (groupTotal != null && Number(val) !== groupTotal) {
+      set("pax_sync_mode", "MANUAL");
+    }
+  };
+
+  const handleSyncModeToggle = (checked) => {
+    if (checked) {
+      set("pax_sync_mode", "AUTO");
+      if (groupDateRange?.groupTotalPax != null) {
+        set("pax", groupDateRange.groupTotalPax);
+      }
+    } else {
+      set("pax_sync_mode", "MANUAL");
+    }
+  };
+
   const handleCancel = () => {
     setForm({ ...item });
     setEditing(false);
@@ -131,7 +151,16 @@ export default function ScheduleItemRow({ item, activitySpaces, quoteActivities 
           </div>
           <div className="space-y-1">
             <label className="text-xs text-slate-500">משתתפים</label>
-            <Input type="number" min="0" value={form.pax || ""} onChange={e => set("pax", e.target.value)} placeholder="0" />
+            <Input type="number" min="0" value={form.pax || ""} onChange={e => handlePaxChange(e.target.value)} placeholder="0" />
+            <label className="flex items-center gap-1.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.pax_sync_mode !== "MANUAL"}
+                onChange={e => handleSyncModeToggle(e.target.checked)}
+                className="w-3.5 h-3.5 accent-blue-600"
+              />
+              <span className="text-[10px] text-slate-500">עדכן כמות לפי סה״כ משתתפים בקבוצה</span>
+            </label>
           </div>
           <div className="space-y-1">
             <label className="text-xs text-slate-500">הערות</label>
