@@ -74,15 +74,22 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
     setAllocationBlockError(null);
     setGenderConsistencyError(null);
 
-    // ── Guard: only block when BOTH boys AND girls are entered and exceed participant_count ──
-    // Boys/girls split is optional — can be left empty and filled in later under דרישות לינה.
+    // ── Guard: for LODGING groups with participant_count > 0, boys+girls must equal participant_count
+    // One gender can be 0 (e.g. all boys or all girls), but both empty or a mismatch is not allowed.
     if (form.group_type === "LODGING" && participantCount > 0) {
       const genderSum = boysCount + girlsCount;
-      // Only validate when at least one side is non-zero (partial entry)
-      if (genderSum > 0 && genderSum > participantCount) {
+      if (genderSum === 0) {
         setGenderConsistencyError(
-          `סה״כ בנים + בנות (${genderSum}) עולה על מספר החניכים (${participantCount}).\nיש להפחית את הספירה.`
+          `כדי לעדכן דרישות לינה יש להזין חלוקת בנים / בנות שתואמת למספר החניכים.\nסה״כ חניכים: ${participantCount}`
         );
+        return;
+      }
+      if (genderSum !== participantCount) {
+        const diff = participantCount - genderSum;
+        const msg = diff > 0
+          ? `כדי לעדכן דרישות לינה יש להזין חלוקת בנים / בנות שתואמת למספר החניכים.\nסה״כ חניכים: ${participantCount}\nבנים + בנות: ${genderSum}\nחסרים ${diff} חניכים בחלוקה.`
+          : `כדי לעדכן דרישות לינה יש להזין חלוקת בנים / בנות שתואמת למספר החניכים.\nסה״כ חניכים: ${participantCount}\nבנים + בנות: ${genderSum}\nיש ${Math.abs(diff)} חניכים יותר מדי בחלוקה.`;
+        setGenderConsistencyError(msg);
         return;
       }
     }
@@ -399,11 +406,20 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
               ⛔ {genderConsistencyError}
             </div>
           )}
-          {!genderConsistencyError && (boysCount + girlsCount === 0) && form.group_type === "LODGING" && participantCount > 0 && (
-            <div className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded px-3 py-2">
-              ℹ️ ניתן להשלים חלוקת בנים / בנות בהמשך בדרישות הלינה
-            </div>
-          )}
+          {!genderConsistencyError && form.group_type === "LODGING" && participantCount > 0 && (() => {
+            const genderSum = boysCount + girlsCount;
+            if (genderSum === 0) return (
+              <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+                ⚠️ יש להזין חלוקת בנים / בנות כדי לשמור קבוצת לינה ({participantCount} חניכים)
+              </div>
+            );
+            if (genderSum === participantCount) return (
+              <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-3 py-2">
+                ✓ חלוקת בנים / בנות תואמת ({boysCount} + {girlsCount} = {participantCount})
+              </div>
+            );
+            return null;
+          })()}
 
           {/* Contact */}
           <div className="grid grid-cols-2 gap-3">

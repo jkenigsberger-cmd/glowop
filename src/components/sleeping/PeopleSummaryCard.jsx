@@ -66,6 +66,15 @@ export default function PeopleSummaryCard({ profile, vipRows = [], boysDist = []
   const boysAssigned  = boysDist.reduce((s, r) => s + (r.tent_count || 0) * (r.people_per_tent || 0), 0);
   const girlsAssigned = girlsDist.reduce((s, r) => s + (r.tent_count || 0) * (r.people_per_tent || 0), 0);
 
+  // Gender split mismatch detection
+  const participantCount = Number(profile.participant_count) || 0;
+  const boysCount        = Number(profile.boys_count)  || 0;
+  const girlsCount       = Number(profile.girls_count) || 0;
+  const genderSum        = boysCount + girlsCount;
+  const hasGenderData    = genderSum > 0;
+  const genderSplitMismatch = profile.is_sleeping_group && participantCount > 0 && hasGenderData && genderSum !== participantCount;
+  const genderSplitMissing  = profile.is_sleeping_group && participantCount > 0 && !hasGenderData;
+
   return (
     <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
       <div className="flex items-center justify-between mb-1">
@@ -82,7 +91,7 @@ export default function PeopleSummaryCard({ profile, vipRows = [], boysDist = []
         {/* Students */}
         <SummaryGroup color="bg-emerald-50" borderColor="border-emerald-200" title="חניכים / תלמידים">
           <StatRow label='סה״כ חניכים' value={profile.participant_count} />
-          {(profile.boys_count != null || profile.girls_count != null) ? (
+          {hasGenderData ? (
             <div className="flex gap-2 mt-1">
               <div className="flex-1 bg-emerald-100 border border-emerald-300 rounded-lg px-2 py-1.5 text-center">
                 <p className="text-[10px] text-emerald-700 font-semibold">בנים</p>
@@ -96,10 +105,31 @@ export default function PeopleSummaryCard({ profile, vipRows = [], boysDist = []
           ) : (
             <p className="text-[11px] text-slate-400 mt-1">חלוקת בנים/בנות לא הוגדרה עדיין</p>
           )}
-          {profile.boys_count != null && (
+
+          {/* Gender split mismatch warning — shown instead of completion badge */}
+          {genderSplitMismatch && (() => {
+            const missing = participantCount - genderSum;
+            return (
+              <div className="mt-2 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-700 space-y-0.5">
+                <p className="font-semibold">⚠️ חלוקת בנים/בנות לא תואמת למספר החניכים</p>
+                <p>סה״כ חניכים: <strong>{participantCount}</strong></p>
+                <p>בנים + בנות: <strong>{genderSum}</strong></p>
+                <p className="font-bold">{missing > 0 ? `חסרים ${missing} חניכים בחלוקה.` : `יש ${Math.abs(missing)} חניכים יותר מדי בחלוקה.`}</p>
+              </div>
+            );
+          })()}
+
+          {genderSplitMissing && (
+            <div className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+              ⚠️ יש להזין חלוקת בנים / בנות כדי להשלים את דרישות הלינה
+            </div>
+          )}
+
+          {/* Per-gender countdowns — only shown when no mismatch */}
+          {!genderSplitMismatch && profile.boys_count != null && (
             <CountdownBadge total={profile.boys_count} assigned={boysAssigned} color="bg-emerald-50 border-emerald-200 text-emerald-700" />
           )}
-          {profile.girls_count != null && (
+          {!genderSplitMismatch && profile.girls_count != null && (
             <CountdownBadge total={profile.girls_count} assigned={girlsAssigned} color="bg-orange-50 border-orange-200 text-orange-700" />
           )}
         </SummaryGroup>

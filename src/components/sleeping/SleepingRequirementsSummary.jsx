@@ -6,17 +6,21 @@
 export default function SleepingRequirementsSummary({ profile, allocations, nhoodReservations = [], allTents = [], neighborhoods = [] }) {
   if (!profile) return null;
 
-  // Detect inconsistency: boys_beds_needed + girls_beds_needed must equal participant_count for LODGING groups
+  // Detect inconsistency: boys_count + girls_count must equal participant_count for LODGING groups
   const profParticipants = Number(profile.participant_count) || 0;
-  const profBoys  = Number(profile.boys_beds_needed) || 0;
-  const profGirls = Number(profile.girls_beds_needed) || 0;
+  // Use boys_count/girls_count as the authoritative gender split (set from GroupFormModal)
+  const profBoys  = Number(profile.boys_count)  || 0;
+  const profGirls = Number(profile.girls_count) || 0;
   const hasGenderData = profBoys + profGirls > 0;
-  const isInconsistent = profile.is_sleeping_group && hasGenderData && profParticipants > 0 && (profBoys + profGirls) !== profParticipants;
+  const genderSum = profBoys + profGirls;
+  const isInconsistent = profile.is_sleeping_group && hasGenderData && profParticipants > 0 && genderSum !== profParticipants;
 
-  const hasGenderSplit = hasGenderData;
-  const boysNeeded    = Number(profile.boys_beds_needed)  || 0;
-  const girlsNeeded   = Number(profile.girls_beds_needed) || 0;
-  const generalNeeded = !hasGenderSplit
+  // Only show gender split counters when split is defined AND consistent
+  const hasGenderSplit = hasGenderData && !isInconsistent;
+  // beds_needed falls back to boys_count/girls_count if not explicitly set
+  const boysNeeded    = Number(profile.boys_beds_needed  ?? profile.boys_count)  || 0;
+  const girlsNeeded   = Number(profile.girls_beds_needed ?? profile.girls_count) || 0;
+  const generalNeeded = !hasGenderData
     ? (Number(profile.participant_count) || Number(profile.total_pax) || 0)
     : 0;
 
@@ -86,11 +90,18 @@ export default function SleepingRequirementsSummary({ profile, allocations, nhoo
     <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
       <h3 className="text-sm font-semibold text-slate-700">דרישות לינה — נותרו לשיבוץ</h3>
 
-      {isInconsistent && (
-        <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 whitespace-pre-line">
-          ⛔ קיימת אי התאמה בין מספר החניכים לבין חלוקת בנים/בנות.{"\n"}יש לערוך את הקבוצה ולתקן את החלוקה לפני המשך שיבוץ הלינה.
-        </div>
-      )}
+      {isInconsistent && (() => {
+        const missing = profParticipants - genderSum;
+        return (
+          <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 space-y-0.5">
+            <p className="font-semibold">⛔ חלוקת בנים/בנות לא תואמת למספר החניכים</p>
+            <p>סה״כ חניכים: <strong>{profParticipants}</strong></p>
+            <p>בנים + בנות: <strong>{genderSum}</strong></p>
+            <p className="font-bold">{missing > 0 ? `חסרים ${missing} חניכים בחלוקה.` : `יש ${Math.abs(missing)} חניכים יותר מדי בחלוקה.`}</p>
+            <p className="text-red-600 pt-0.5">יש לערוך את הקבוצה ולתקן את החלוקה לפני המשך שיבוץ הלינה.</p>
+          </div>
+        );
+      })()}
 
       {hasGenderSplit ? (
         <div className="grid grid-cols-3 gap-2">

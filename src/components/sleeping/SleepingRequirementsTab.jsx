@@ -91,8 +91,12 @@ export default function SleepingRequirementsTab({ groupId, profile, group }) {
   const [girlsDist,   setGirlsDist] = useState([]);
   const [vipRows,     setVipRows]   = useState([]);
 
-  // Gender split is available only when boys+girls sum > 0
-  const hasGenderSplit = (Number(profile?.boys_count) + Number(profile?.girls_count)) > 0;
+  // Gender split is available only when boys+girls sum > 0 AND matches participant_count
+  const boysCountVal  = Number(profile?.boys_count)  || 0;
+  const girlsCountVal = Number(profile?.girls_count) || 0;
+  const participantCountVal = Number(profile?.participant_count) || 0;
+  const genderSumVal = boysCountVal + girlsCountVal;
+  const hasGenderSplit = genderSumVal > 0 && (participantCountVal === 0 || genderSumVal === participantCountVal);
 
   useEffect(() => {
     if (!profile) return;
