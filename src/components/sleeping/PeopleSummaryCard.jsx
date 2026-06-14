@@ -38,30 +38,29 @@ function SummaryGroup({ color, borderColor, title, children }) {
   );
 }
 
+/**
+ * PeopleSummaryCard
+ *
+ * Staff/VIP counting rule (E, F, G):
+ * All person type labels (צוות, מדריך, נהג, מורה, VIP, אבטחה, DRIVER, GUIDE, OTHER…)
+ * count toward the SINGLE staff_count total.
+ * person_type is an operational label only — it does NOT create a separate required bucket.
+ * אוהל חילופי pax also counts toward the same staff total.
+ */
 export default function PeopleSummaryCard({ profile, vipRows = [], boysDist = [], girlsDist = [], staffAltTentPax, staffAltTentNotes }) {
-  const staffTotal   = profile.staff_count        ?? null;
-  const staffBoys    = profile.staff_men_count     ?? null;  // "בנים" in staff = men
-  const staffGirls   = profile.staff_women_count   ?? null;  // "בנות" in staff = women
+  const staffTotal = profile.staff_count ?? null;
+  const staffBoys  = profile.staff_men_count   ?? null;
+  const staffGirls = profile.staff_women_count ?? null;
   const staffGenderKnown = staffBoys != null || staffGirls != null;
 
-  const driversBoys  = profile.drivers_men_count   ?? null;
-  const driversGirls = profile.drivers_women_count ?? null;
-  const driversTotal = (driversBoys != null || driversGirls != null)
-    ? (driversBoys ?? 0) + (driversGirls ?? 0)
-    : null;
-  const driversGenderKnown = driversBoys != null || driversGirls != null;
+  // ALL vip rows count toward staff total — no distinction by person type
+  const vipPeopleAssigned = vipRows.reduce((s, r) => s + (Number(r.people_count) || 0), 0);
 
-  const NON_STAFF = ["DRIVER", "SECURITY", "GUIDE", "OTHER"];
+  // Alt tent also counts toward staff total
+  const altTentAssigned = Number(staffAltTentPax) || 0;
 
-  // VIP countdown: staff-only rows vs staff_count
-  const vipPeopleAssigned = vipRows
-    .filter(r => !NON_STAFF.includes(r.purpose))
-    .reduce((s, r) => s + (Number(r.people_count) || 0), 0);
-
-  // Drivers/security countdown: non-staff VIP rows vs driversTotal
-  const vipDriversAssigned = vipRows
-    .filter(r => NON_STAFF.includes(r.purpose))
-    .reduce((s, r) => s + (Number(r.people_count) || 0), 0);
+  // Total staff assigned = VIP rows + alt tent
+  const totalStaffAssigned = vipPeopleAssigned + altTentAssigned;
 
   // Student countdown
   const boysAssigned  = boysDist.reduce((s, r) => s + (r.tent_count || 0) * (r.people_per_tent || 0), 0);
@@ -78,87 +77,66 @@ export default function PeopleSummaryCard({ profile, vipRows = [], boysDist = []
         )}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
 
-        {/* Students — green for boys, orange for girls */}
+        {/* Students */}
         <SummaryGroup color="bg-emerald-50" borderColor="border-emerald-200" title="חניכים / תלמידים">
           <StatRow label='סה״כ חניכים' value={profile.participant_count} />
-          <div className="flex gap-2 mt-1">
-            <div className="flex-1 bg-emerald-100 border border-emerald-300 rounded-lg px-2 py-1.5 text-center">
-              <p className="text-[10px] text-emerald-700 font-semibold">בנים</p>
-              <p className="text-base font-bold text-emerald-800">{profile.boys_count ?? "—"}</p>
+          {(profile.boys_count != null || profile.girls_count != null) ? (
+            <div className="flex gap-2 mt-1">
+              <div className="flex-1 bg-emerald-100 border border-emerald-300 rounded-lg px-2 py-1.5 text-center">
+                <p className="text-[10px] text-emerald-700 font-semibold">בנים</p>
+                <p className="text-base font-bold text-emerald-800">{profile.boys_count ?? "—"}</p>
+              </div>
+              <div className="flex-1 bg-orange-100 border border-orange-300 rounded-lg px-2 py-1.5 text-center">
+                <p className="text-[10px] text-orange-700 font-semibold">בנות</p>
+                <p className="text-base font-bold text-orange-800">{profile.girls_count ?? "—"}</p>
+              </div>
             </div>
-            <div className="flex-1 bg-orange-100 border border-orange-300 rounded-lg px-2 py-1.5 text-center">
-              <p className="text-[10px] text-orange-700 font-semibold">בנות</p>
-              <p className="text-base font-bold text-orange-800">{profile.girls_count ?? "—"}</p>
-            </div>
-          </div>
-          <CountdownBadge
-            total={profile.boys_count}
-            assigned={boysAssigned}
-            color="bg-emerald-50 border-emerald-200 text-emerald-700"
-          />
-          <CountdownBadge
-            total={profile.girls_count}
-            assigned={girlsAssigned}
-            color="bg-orange-50 border-orange-200 text-orange-700"
-          />
+          ) : (
+            <p className="text-[11px] text-slate-400 mt-1">חלוקת בנים/בנות לא הוגדרה עדיין</p>
+          )}
+          {profile.boys_count != null && (
+            <CountdownBadge total={profile.boys_count} assigned={boysAssigned} color="bg-emerald-50 border-emerald-200 text-emerald-700" />
+          )}
+          {profile.girls_count != null && (
+            <CountdownBadge total={profile.girls_count} assigned={girlsAssigned} color="bg-orange-50 border-orange-200 text-orange-700" />
+          )}
         </SummaryGroup>
 
-        {/* Staff / VIP — with countdown */}
+        {/* Staff / VIP — ALL person types count together toward staff_count */}
         <SummaryGroup color="bg-violet-50" borderColor="border-violet-200" title="צוות / מורים / VIP">
           <StatRow label='סה״כ צוות / מלווים' value={staffTotal} />
           {staffGenderKnown ? (
             <div className="flex gap-2 mt-1">
               <div className="flex-1 bg-emerald-100 border border-emerald-300 rounded-lg px-2 py-1.5 text-center">
-                <p className="text-[10px] text-emerald-700 font-semibold">בנים</p>
+                <p className="text-[10px] text-emerald-700 font-semibold">גברים</p>
                 <p className="text-base font-bold text-emerald-800">{staffBoys ?? "—"}</p>
               </div>
               <div className="flex-1 bg-orange-100 border border-orange-300 rounded-lg px-2 py-1.5 text-center">
-                <p className="text-[10px] text-orange-700 font-semibold">בנות</p>
+                <p className="text-[10px] text-orange-700 font-semibold">נשים</p>
                 <p className="text-base font-bold text-orange-800">{staffGirls ?? "—"}</p>
               </div>
             </div>
           ) : staffTotal != null ? (
             <p className="text-[11px] text-slate-400 pr-1 mt-1">מגדר לא הוגדר</p>
           ) : null}
+
+          {/* Single countdown: all VIP rows + alt tent together */}
           <CountdownBadge
             total={staffTotal}
-            assigned={vipPeopleAssigned}
+            assigned={totalStaffAssigned}
             color="bg-violet-50 border-violet-200 text-violet-700"
           />
-          <p className="text-[10px] text-violet-500 pt-0.5">→ אוהלי VIP (80–89)</p>
-          {staffAltTentPax > 0 && (
-            <div className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs space-y-0.5">
-              <p className="font-semibold text-amber-800">צוות לאוהל חילופי: {staffAltTentPax} אנשים</p>
-              {staffAltTentNotes && <p className="text-amber-700">הערות: {staffAltTentNotes}</p>}
-            </div>
-          )}
-        </SummaryGroup>
 
-        {/* Drivers / Security — pink */}
-        <SummaryGroup color="bg-pink-50" borderColor="border-pink-200" title="נהגים / אבטחה / נוספים">
-          <StatRow label='סה״כ נהגים / אבטחה' value={driversTotal} />
-          {driversGenderKnown ? (
-            <div className="flex gap-2 mt-1">
-              <div className="flex-1 bg-emerald-100 border border-emerald-300 rounded-lg px-2 py-1.5 text-center">
-                <p className="text-[10px] text-emerald-700 font-semibold">בנים</p>
-                <p className="text-base font-bold text-emerald-800">{driversBoys ?? "—"}</p>
-              </div>
-              <div className="flex-1 bg-orange-100 border border-orange-300 rounded-lg px-2 py-1.5 text-center">
-                <p className="text-[10px] text-orange-700 font-semibold">בנות</p>
-                <p className="text-base font-bold text-orange-800">{driversGirls ?? "—"}</p>
-              </div>
-            </div>
-          ) : driversTotal != null ? (
-            <p className="text-[11px] text-slate-400 pr-1 mt-1">מגדר לא הוגדר</p>
-          ) : null}
-          <CountdownBadge
-            total={driversTotal}
-            assigned={vipDriversAssigned}
-            color="bg-pink-50 border-pink-200 text-pink-700"
-          />
-          <p className="text-[10px] text-pink-500 pt-0.5">→ שורות VIP מסומנות *</p>
+          <div className="text-[10px] text-violet-500 pt-0.5 space-y-0.5">
+            <p>→ אוהלי VIP (80–89): {vipPeopleAssigned} אנשים</p>
+            {altTentAssigned > 0 && <p>→ אוהל חילופי: {altTentAssigned} אנשים</p>}
+          </div>
+
+          {altTentAssigned > 0 && staffAltTentNotes && (
+            <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">הערות חילופי: {staffAltTentNotes}</p>
+          )}
         </SummaryGroup>
 
       </div>

@@ -111,6 +111,13 @@ export default function SleepingRequirementsSummary({ profile, allocations, nhoo
         </div>
       )}
 
+      {/* Gender split not defined notice */}
+      {!hasGenderSplit && profile.is_sleeping_group && (
+        <div className="text-xs text-slate-500 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">
+          ℹ️ חלוקת בנים/בנות טרם הוגדרה — ניתן להשלים בעריכת הקבוצה.
+        </div>
+      )}
+
       {/* Neighbourhood summary */}
       {activeNhoods.length > 0 && (
         <div className="text-xs text-slate-500 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">

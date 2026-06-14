@@ -112,11 +112,8 @@ export default function SleepingRequirementsTab({ groupId, profile, group }) {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   // ── derived ───────────────────────────────────────────────────────────────
-  // Compute alt tent pax live (used in PeopleSummaryCard and save)
-  const NON_STAFF_VIP_DERIVED = ["DRIVER", "SECURITY", "GUIDE", "OTHER"];
-  const liveVipStaffPeople = vipRows
-    .filter(r => !NON_STAFF_VIP_DERIVED.includes(r.purpose))
-    .reduce((s, r) => s + (Number(r.people_count) || 0), 0);
+  // Alt tent pax = staff_count minus ALL vip rows (all person types count toward staff total)
+  const liveVipStaffPeople = vipRows.reduce((s, r) => s + (Number(r.people_count) || 0), 0);
   const liveAltTentPax = (profile?.staff_count != null)
     ? Math.max(profile.staff_count - liveVipStaffPeople, 0)
     : null;
@@ -154,10 +151,8 @@ export default function SleepingRequirementsTab({ groupId, profile, group }) {
     setSaving(true);
     try {
       // Compute staff_alt_tent_pax automatically from vipRows vs staff_count
-      const NON_STAFF_VIP = ["DRIVER", "SECURITY", "GUIDE", "OTHER"];
-      const totalVipStaffPeople = vipRows
-        .filter(r => !NON_STAFF_VIP.includes(r.purpose))
-        .reduce((s, r) => s + (Number(r.people_count) || 0), 0);
+      // All vip rows count toward staff total — no distinction by person type
+      const totalVipStaffPeople = vipRows.reduce((s, r) => s + (Number(r.people_count) || 0), 0);
       const staffCount = profile.staff_count ?? null;
       const computedAltPax = staffCount != null
         ? Math.max(staffCount - totalVipStaffPeople, 0)

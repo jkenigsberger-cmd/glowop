@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import DietaryFields, { EMPTY_DIETS, parseDiets, mergeDiets } from "@/components/shared/DietaryFields";
 import { upsertReviewAlert } from "@/lib/reviewAlerts";
+import { syncExistingOperationalPaxForGroup } from "@/lib/syncOperationalPax";
 
 // Fields that trigger pax-related alerts when changed
 const PAX_FIELDS = ["total_pax", "participant_count", "staff_count", "boys_count", "girls_count"];
@@ -73,17 +74,14 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
     setAllocationBlockError(null);
     setGenderConsistencyError(null);
 
-    // ── Guard: LODGING groups must have boys + girls === participant_count ──
-    if (form.group_type === "LODGING" && totalPax > 0) {
+    // ── Guard: only block when BOTH boys AND girls are entered and exceed participant_count ──
+    // Boys/girls split is optional — can be left empty and filled in later under דרישות לינה.
+    if (form.group_type === "LODGING" && participantCount > 0) {
       const genderSum = boysCount + girlsCount;
-      if (genderSum !== participantCount) {
-        const diff = participantCount - genderSum;
-        const diffAbs = Math.abs(diff);
-        const diffLine = diff > 0
-          ? `חסרים ${diffAbs} חניכים בחלוקה.`
-          : `יש ${diffAbs} חניכים יותר מדי בחלוקה.`;
+      // Only validate when at least one side is non-zero (partial entry)
+      if (genderSum > 0 && genderSum > participantCount) {
         setGenderConsistencyError(
-          `חלוקת בנים/בנות לא תואמת למספר החניכים.\nסה״כ חניכים: ${participantCount}\nבנים + בנות: ${genderSum}\n${diffLine}`
+          `סה״כ בנים + בנות (${genderSum}) עולה על מספר החניכים (${participantCount}).\nיש להפחית את הספירה.`
         );
         return;
       }
@@ -163,6 +161,18 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
       }
 
       await base44.entities.Group.update(group.id, payload);
+
+      // Sync existing operational pax if total_pax changed
+      const oldTotalPax = Number(group.total_pax ?? 0);
+      const newTotalPax = Number(payload.total_pax ?? 0);
+      if (newTotalPax > 0 && newTotalPax !== oldTotalPax) {
+        try {
+          await syncExistingOperationalPaxForGroup(group.id, newTotalPax);
+        } catch (syncErr) {
+          console.warn("[GroupFormModal] pax sync failed (non-blocking):", syncErr?.message);
+        }
+      }
+
       // Keep OperationalGroupProfile in sync with group pax edits + dietary
       const existingProfiles = await base44.entities.OperationalGroupProfile.filter({ group_id: group.id });
       if (existingProfiles.length > 0) {
@@ -372,15 +382,15 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
             </div>
           )}
 
-          {/* Gender split */}
+          {/* Gender split — optional */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <Label>בנים</Label>
-              <Input type="number" min="0" max={participantCount} value={form.boys_count} onChange={e => handleBoysChange(e.target.value)} />
+              <Label>בנים <span className="text-slate-400 font-normal text-[11px]">(אופציונלי)</span></Label>
+              <Input type="number" min="0" value={form.boys_count} onChange={e => handleBoysChange(e.target.value)} />
             </div>
             <div className="space-y-1">
-              <Label>בנות</Label>
-              <Input type="number" min="0" max={participantCount} value={form.girls_count} onChange={e => handleGirlsChange(e.target.value)} />
+              <Label>בנות <span className="text-slate-400 font-normal text-[11px]">(אופציונלי)</span></Label>
+              <Input type="number" min="0" value={form.girls_count} onChange={e => handleGirlsChange(e.target.value)} />
             </div>
           </div>
 
@@ -389,9 +399,9 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
               ⛔ {genderConsistencyError}
             </div>
           )}
-          {!genderConsistencyError && genderExceedsPax && (
-            <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
-              ⚠️ סה"כ בנים + בנות ({boysCount + girlsCount}) עולה על מספר החניכים ({participantCount})
+          {!genderConsistencyError && (boysCount + girlsCount === 0) && form.group_type === "LODGING" && participantCount > 0 && (
+            <div className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded px-3 py-2">
+              ℹ️ ניתן להשלים חלוקת בנים / בנות בהמשך בדרישות הלינה
             </div>
           )}
 

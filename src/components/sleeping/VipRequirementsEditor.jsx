@@ -49,36 +49,18 @@ function SingleCountdown({ total, assigned, label, colorClass }) {
   );
 }
 
-function CountdownBar({ staffTotal, driversTotal, rows }) {
-  const hasStaff   = staffTotal != null;
-  const hasDrivers = driversTotal != null;
-  if (!hasStaff && !hasDrivers) return null;
-
-  const staffAssigned   = rows
-    .filter(r => !NON_STAFF_PURPOSES.includes(r.purpose))
-    .reduce((s, r) => s + (Number(r.people_count) || 0), 0);
-  const driversAssigned = rows
-    .filter(r => NON_STAFF_PURPOSES.includes(r.purpose))
-    .reduce((s, r) => s + (Number(r.people_count) || 0), 0);
-
+function CountdownBar({ staffTotal, rows }) {
+  // All person types count toward a single staff total
+  if (staffTotal == null) return null;
+  const totalAssigned = rows.reduce((s, r) => s + (Number(r.people_count) || 0), 0);
   return (
     <div className="flex gap-2 flex-wrap">
-      {hasStaff && (
-        <SingleCountdown
-          total={staffTotal}
-          assigned={staffAssigned}
-          label="צוות / VIP"
-          colorClass="bg-violet-50 border-violet-200 text-violet-700"
-        />
-      )}
-      {hasDrivers && (
-        <SingleCountdown
-          total={driversTotal}
-          assigned={driversAssigned}
-          label="* נהגים / אבטחה"
-          colorClass="bg-pink-50 border-pink-200 text-pink-700"
-        />
-      )}
+      <SingleCountdown
+        total={staffTotal}
+        assigned={totalAssigned}
+        label="סה״כ צוות / מלווים (כולל נהגים, מדריכים, מורים)"
+        colorClass="bg-violet-50 border-violet-200 text-violet-700"
+      />
     </div>
   );
 }
@@ -127,7 +109,7 @@ export default function VipRequirementsEditor({ rows, onChange, staffTotal, driv
   return (
     <div className="space-y-3">
       {/* Countdown — shown above rows */}
-      <CountdownBar staffTotal={staffTotal} driversTotal={driversTotal} rows={rows} />
+      <CountdownBar staffTotal={staffTotal} rows={rows} />
 
       <div className="flex items-center justify-between flex-wrap gap-2">
         <p className="text-xs text-slate-500">כל שורה = אוהל VIP אחד נדרש (לא מוקצה פיזית)</p>
@@ -239,9 +221,9 @@ export default function VipRequirementsEditor({ rows, onChange, staffTotal, driv
                       {row.gender_group === "MEN" ? "בנים" : "בנות"}
                     </span>
                   )}
-                  {NON_STAFF_PURPOSES.includes(row.purpose) && (
-                    <span className="inline-flex text-[10px] font-semibold px-2 py-0.5 rounded border bg-pink-100 border-pink-300 text-pink-700">
-                      * {PURPOSE_OPTIONS.find(p => p.value === row.purpose)?.label || row.purpose}
+                  {row.purpose && row.purpose !== "STAFF" && (
+                    <span className="inline-flex text-[10px] font-semibold px-2 py-0.5 rounded border bg-slate-100 border-slate-300 text-slate-600">
+                      {PURPOSE_OPTIONS.find(p => p.value === row.purpose)?.label || row.purpose}
                     </span>
                   )}
                 </div>
@@ -264,10 +246,8 @@ export default function VipRequirementsEditor({ rows, onChange, staffTotal, driv
 
       {/* ── Alternative tent section — auto-calculated ────────────────────── */}
       {(() => {
-        const NON_STAFF_PURPOSES_LOCAL = ["DRIVER", "SECURITY", "GUIDE", "OTHER"];
-        const totalVipPeople = rows
-          .filter(r => !NON_STAFF_PURPOSES_LOCAL.includes(r.purpose))
-          .reduce((s, r) => s + (Number(r.people_count) || 0), 0);
+        // All VIP rows count toward staff total — no exclusion by purpose
+        const totalVipPeople = rows.reduce((s, r) => s + (Number(r.people_count) || 0), 0);
         const calcAltPax = staffTotal != null
           ? Math.max(staffTotal - totalVipPeople, 0)
           : null;
