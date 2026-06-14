@@ -634,8 +634,8 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
   const suggestedRateType = suggestLodgingRateType(form.arrival_date, groupType);
   const coffeeTotal      = coffeeEnabled && staffCount > 0 ? staffCount * COFFEE_CORNER_RATE : 0;
 
-  const studentLodgingTotal = isDayUse ? 0 : studentLodging.reduce((s, r) => s + calcStudentLodging(r), 0);
-  const adultLodgingTotal   = isDayUse ? 0 : adultLodging.reduce((s, r) => s + calcAdultLodging(r), 0);
+  const studentLodgingTotal = quoteType === "day_use" ? 0 : studentLodging.reduce((s, r) => s + calcStudentLodging(r), 0);
+  const adultLodgingTotal   = quoteType === "day_use" ? 0 : adultLodging.reduce((s, r) => s + calcAdultLodging(r), 0);
   const workshopTotal       = workshops.reduce((s, r) => s + calcWorkshop(r), 0);
   const lectureTotal        = lectures.reduce((s, r) => s + calcLecture(r), 0);
   const addonTotal          = addons.reduce((s, r) => s + calcAddon(r), 0);
@@ -736,13 +736,7 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
                       <Label className="text-xs text-slate-500">שם קבוצה / ארגון *</Label>
                       <Input required value={groupForm.org_name} onChange={e => handleOrgNameChange(e.target.value)} placeholder="שם בית הספר / הארגון" />
                     </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs text-slate-500">סוג</Label>
-                      <Select value={groupForm.group_type} onValueChange={v => setGroupField("group_type", v)}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent><SelectItem value="LODGING">לינה</SelectItem><SelectItem value="DAY_USE">פעילות יום</SelectItem></SelectContent>
-                      </Select>
-                    </div>
+                    {/* group_type is kept in state but driven by the quoteType pill selector below */}
                     <div className="space-y-1">
                       <Label className="text-xs text-slate-500">ח.פ / ע.מ</Label>
                       <Input value={groupForm.client_tax_id} onChange={e => handleGroupContactChange("client_tax_id", e.target.value)} placeholder="מספר חברה / עוסק" />
@@ -776,7 +770,19 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
                     <button
                       key={opt.id}
                       type="button"
-                      onClick={() => setQuoteType(opt.id)}
+                      onClick={() => {
+                        setQuoteType(opt.id);
+                        // Sync internal group_type so downstream logic stays consistent
+                        if (opt.id === "lodging") {
+                          setGroupField("group_type", "LODGING");
+                          // Clear departure=arrival override if switching back to lodging
+                        } else if (opt.id === "day_use") {
+                          setGroupField("group_type", "DAY_USE");
+                          // Mirror arrival → departure for day-use
+                          if (form.arrival_date) set("departure_date", form.arrival_date);
+                        }
+                        // custom: leave existing group_type unchanged
+                      }}
                       className={`px-4 py-1.5 rounded-full text-xs font-medium border transition-all ${
                         quoteType === opt.id
                           ? "bg-primary text-white border-primary"
@@ -807,7 +813,7 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
                       <SelectContent>{["DRAFT","SENT","APPROVED","REJECTED","EXPIRED"].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
-                  {groupType === "DAY_USE" ? (
+                  {quoteType === "day_use" ? (
                     <>
                       <div className="space-y-1">
                         <Label className="text-xs text-slate-500">תאריך פעילות</Label>
@@ -988,7 +994,7 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
           {/* ── Sidebar — right on desktop, bottom section on mobile ── */}
           <div className="w-full sm:w-72 sm:flex-shrink-0 bg-slate-50 sm:border-r border-t sm:border-t-0 border-slate-200 sm:overflow-y-auto px-4 py-5 space-y-4">
 
-            <CalendarCard arrival={form.arrival_date} departure={form.departure_date} nights={nights} isDayUse={groupType === "DAY_USE"} />
+            <CalendarCard arrival={form.arrival_date} departure={form.departure_date} nights={nights} isDayUse={quoteType === "day_use"} />
 
             <CapacityWarningBanner availabilityResult={availabilityResult} loading={checkingAvailability} />
 
