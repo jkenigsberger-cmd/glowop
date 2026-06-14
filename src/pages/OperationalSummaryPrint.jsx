@@ -42,35 +42,40 @@ const DIET_LABELS = [
 
 // ── sub-components ─────────────────────────────────────────────────────────
 
-function TentCard({ allocation, tent, neighborhood }) {
-  const tentCode = tent?.code || allocation.tent_id;
-  const isVip = tent?.tent_type === "VIP";
-  const isAccessible = tent?.is_accessible;
-  const baseCapacity = tent?.capacity || 0;
-  
-  // For VIP or accessible tents, display operational capacity (allowing 4-bed override)
-  const displayCapacity = (isVip || isAccessible)
-    ? Math.max(baseCapacity, allocation.allocated_pax || 0, 4)
-    : baseCapacity;
+function getPax(allocation) {
+  if (allocation.allocated_pax != null) return allocation.allocated_pax;
+  if (allocation.pax != null) return allocation.pax;
+  if (allocation.beds_reserved != null) return allocation.beds_reserved;
+  return null;
+}
 
-  const cleanedNotes = cleanOperationalNote(allocation.notes);
+function TentCard({ allocation, tent }) {
+  const tentCode = tent?.code || "—";
+  const isVip = tent?.tent_type === "VIP";
+  const pax = getPax(allocation);
 
   return (
-    <div className="tent-card">
-      <div className="tent-header">
+    <div className={`tent-card ${isVip ? "tent-card-vip" : ""}`}>
+      <div className={`tent-header ${isVip ? "vip" : ""}`}>
         {isVip ? "VIP " : "אוהל "}{tentCode}
       </div>
       <div className="tent-body">
-        {neighborhood && <div className="tent-meta">{neighborhood.name}</div>}
-        <div className="tent-pax">{allocation.allocated_pax}{displayCapacity > 0 ? `/${displayCapacity}` : ""}</div>
-        <div className="tent-tags">
-          <span className="tag">{GENDER_LABELS[allocation.gender_group] || allocation.gender_group}</span>
-          <span className={`tag ${isVip ? "tag-vip" : ""}`}>
-            {isVip ? "VIP" : ALLOC_TYPE_LABELS[allocation.allocation_type] || allocation.allocation_type}
-          </span>
-        </div>
-        {cleanedNotes && <div className="tent-notes">{cleanedNotes}</div>}
+        <div className="tent-pax">{pax != null ? pax : "—"}</div>
+        <div className="tent-pax-label">אנשים</div>
       </div>
+    </div>
+  );
+}
+
+function CoffeeCard({ req }) {
+  return (
+    <div className="coffee-card">
+      <div className="coffee-date">{req.date?.split("-").reverse().join("/")}</div>
+      <div className="coffee-time" dir="ltr">{req.start_time}–{req.end_time}</div>
+      <div className="coffee-type">סוג: {req.coffee_corner_type || "פינת קפה רגילה"}</div>
+      {req.location_name_snapshot && <div className="coffee-location">📍 {req.location_name_snapshot}</div>}
+      <div className="coffee-pax">👥 כמות: {req.pax}</div>
+      {req.notes && <div className="coffee-notes">{req.notes}</div>}
     </div>
   );
 }
@@ -174,6 +179,12 @@ export default function OperationalSummaryPrint() {
     queryFn: () => base44.entities.ActivitySpace.list(),
   });
 
+  const { data: coffeeRequests = [] } = useQuery({
+    queryKey: ["coffeeCornerRequests", id],
+    queryFn: () => base44.entities.CoffeeCornerRequest.filter({ group_id: id, status: "ACTIVE" }),
+    enabled: !!id,
+  });
+
   const group = groupArr[0];
   const profile = profiles[0];
 
@@ -232,7 +243,12 @@ export default function OperationalSummaryPrint() {
       .sort((a, b) => (a.start_time || "").localeCompare(b.start_time || ""));
   }
 
-  // group allocs by neighborhood
+  function getCoffeeForDay(dateStr) {
+    return [...coffeeRequests.filter(r => r.date === dateStr)]
+      .sort((a, b) => (a.start_time || "").localeCompare(b.start_time || ""));
+  }
+
+  // group allocs by neighborhood, sorted by neighborhood sort_order then tent code
   function groupAllocsByNeighborhood(allocs) {
     const map = {};
     allocs.forEach(a => {
@@ -240,8 +256,37 @@ export default function OperationalSummaryPrint() {
       if (!map[nid]) map[nid] = [];
       map[nid].push(a);
     });
+    // Sort tents within each neighborhood naturally by tent code
+    Object.values(map).forEach(arr => {
+      arr.sort((a, b) => {
+        const ca = tentById[a.tent_id]?.code || "";
+        const cb = tentById[b.tent_id]?.code || "";
+        return ca.localeCompare(cb, "he", { numeric: true });
+      });
+    });
     return map;
   }
+
+  // Sort neighborhoods by sort_order
+  function sortedNeighborhoodEntries(map) {
+    return Object.entries(map).sort(([nidA], [nidB]) => {
+      const sA = neighborhoodById[nidA]?.sort_order ?? 999;
+      const sB = neighborhoodById[nidB]?.sort_order ?? 999;
+      return sA - sB;
+    });
+  }
+
+  // All confirmed student allocations for the name-assignment page
+  const studentAllocations = confirmedAllocations
+    .filter(a => a.allocation_type === "STUDENT")
+    .sort((a, b) => {
+      const sA = neighborhoodById[a.neighborhood_id]?.sort_order ?? 999;
+      const sB = neighborhoodById[b.neighborhood_id]?.sort_order ?? 999;
+      if (sA !== sB) return sA - sB;
+      const ca = tentById[a.tent_id]?.code || "";
+      const cb = tentById[b.tent_id]?.code || "";
+      return ca.localeCompare(cb, "he", { numeric: true });
+    });
 
   return (
     <>
@@ -382,15 +427,17 @@ export default function OperationalSummaryPrint() {
 
         /* ── Neighborhood ────────────────────────────────────────────── */
         .neighborhood-block {
-          margin-bottom: 10px;
+          margin-bottom: 12px;
         }
         .neighborhood-label {
-          font-size: 11px;
+          font-size: 12px;
           font-weight: 700;
-          color: #94a3b8;
+          color: #334155;
           margin-bottom: 6px;
-          padding-right: 4px;
-          border-right: 3px solid #cbd5e1;
+          padding: 3px 8px;
+          background: #f1f5f9;
+          border-radius: 4px;
+          display: inline-block;
         }
         .tents-row {
           display: flex;
@@ -409,60 +456,150 @@ export default function OperationalSummaryPrint() {
           border: 1px solid #94a3b8;
           border-radius: 8px;
           overflow: hidden;
-          width: 100px;
+          width: 90px;
           page-break-inside: avoid;
+          text-align: center;
+        }
+        .tent-card-vip {
+          border-color: #a78bfa;
         }
         .tent-header {
           background: #334155;
           color: white;
           text-align: center;
           padding: 4px 6px;
-          font-size: 12px;
+          font-size: 11px;
           font-weight: 700;
         }
         .tent-header.vip {
           background: #7c3aed;
         }
         .tent-body {
-          padding: 6px 8px;
+          padding: 6px 4px 5px;
           background: white;
-          text-align: center;
-        }
-        .tent-meta {
-          font-size: 10px;
-          color: #94a3b8;
-          margin-bottom: 2px;
         }
         .tent-pax {
-          font-size: 15px;
+          font-size: 16px;
           font-weight: 700;
           color: #1e293b;
-          margin-bottom: 4px;
         }
-        .tent-tags {
-          display: flex;
-          flex-direction: column;
-          gap: 2px;
-          align-items: center;
-        }
-        .tag {
-          font-size: 10px;
-          background: #f1f5f9;
-          border: 1px solid #e2e8f0;
-          border-radius: 4px;
-          padding: 1px 6px;
-          color: #475569;
-        }
-        .tag-vip {
-          background: #ede9fe;
-          border-color: #a78bfa;
-          color: #6d28d9;
-          font-weight: 700;
-        }
-        .tent-notes {
+        .tent-pax-label {
           font-size: 10px;
           color: #94a3b8;
-          margin-top: 4px;
+        }
+
+        /* ── Coffee Card ─────────────────────────────────────────────── */
+        .coffee-card {
+          background: #fffbeb;
+          border: 1px solid #fde68a;
+          border-right: 4px solid #d97706;
+          border-radius: 0 8px 8px 0;
+          padding: 8px 12px;
+          margin-bottom: 6px;
+          page-break-inside: avoid;
+        }
+        .coffee-date {
+          font-size: 12px;
+          font-weight: 700;
+          color: #92400e;
+          margin-bottom: 2px;
+        }
+        .coffee-time {
+          font-size: 12px;
+          color: #78350f;
+          font-weight: 600;
+          direction: ltr;
+          display: inline-block;
+          margin-bottom: 2px;
+        }
+        .coffee-type {
+          font-size: 12px;
+          color: #92400e;
+          font-weight: 600;
+        }
+        .coffee-location {
+          font-size: 12px;
+          color: #475569;
+        }
+        .coffee-pax {
+          font-size: 12px;
+          color: #475569;
+        }
+        .coffee-notes {
+          font-size: 11px;
+          color: #94a3b8;
+          margin-top: 3px;
+        }
+
+        /* ── Name Assignment Page ────────────────────────────────────── */
+        .name-assignment-page {
+          page-break-before: always;
+          margin-top: 32px;
+        }
+        .name-page-title {
+          font-size: 18px;
+          font-weight: 700;
+          color: #1e40af;
+          border-bottom: 2px solid #1e40af;
+          padding-bottom: 8px;
+          margin-bottom: 6px;
+        }
+        .name-page-subtitle {
+          font-size: 12px;
+          color: #64748b;
+          margin-bottom: 16px;
+        }
+        .name-cards-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 12px;
+        }
+        .name-card {
+          border: 1px solid #cbd5e1;
+          border-radius: 8px;
+          overflow: hidden;
+          page-break-inside: avoid;
+          break-inside: avoid;
+        }
+        .name-card-header {
+          background: #334155;
+          color: white;
+          padding: 5px 10px;
+          font-size: 12px;
+          font-weight: 700;
+          display: flex;
+          justify-content: space-between;
+        }
+        .name-card-subcount {
+          font-size: 11px;
+          font-weight: 400;
+          opacity: 0.8;
+        }
+        .name-card-body {
+          padding: 6px 10px 8px;
+          background: white;
+        }
+        .name-line {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          border-bottom: 1px solid #e2e8f0;
+          padding: 4px 0;
+          font-size: 12px;
+          color: #64748b;
+          min-height: 22px;
+        }
+        .name-line:last-child { border-bottom: none; }
+        .name-line-num {
+          min-width: 18px;
+          font-size: 11px;
+          color: #94a3b8;
+          text-align: left;
+        }
+        .name-line-blank {
+          flex: 1;
+          border-bottom: 1px solid #cbd5e1;
+          margin-bottom: 1px;
         }
 
         /* ── Meal Card ───────────────────────────────────────────────── */
@@ -605,7 +742,9 @@ export default function OperationalSummaryPrint() {
           .print-controls { display: none !important; }
           .print-page { padding: 10px 14px; }
           .day-section { page-break-inside: avoid; }
-          .tent-card, .meal-card, .activity-card { page-break-inside: avoid; }
+          .tent-card, .meal-card, .activity-card, .coffee-card { page-break-inside: avoid; }
+          .name-card { break-inside: avoid; page-break-inside: avoid; }
+          .name-assignment-page { page-break-before: always; }
           @page { size: A4; margin: 15mm 12mm; }
         }
 
@@ -614,7 +753,7 @@ export default function OperationalSummaryPrint() {
           .print-controls { flex-direction: column; }
           .btn-print, .btn-back { width: 100%; justify-content: center; padding: 12px 16px; font-size: 15px; }
           .tents-row { gap: 6px; }
-          .tent-card { width: 88px; }
+          .tent-card { width: 80px; }
           .doc-title { font-size: 18px; }
           .doc-group-name { font-size: 15px; }
           .day-header { font-size: 13px; }
@@ -622,6 +761,7 @@ export default function OperationalSummaryPrint() {
           .meal-card { padding: 8px 10px; }
           .activity-card { padding: 8px 10px; }
           .doc-meta { gap: 8px; font-size: 11px; }
+          .name-cards-grid { grid-template-columns: 1fr; }
         }
       `}</style>
 
@@ -696,6 +836,7 @@ export default function OperationalSummaryPrint() {
           }
 
           const allocsByNeighborhood = groupAllocsByNeighborhood(allocsForDay);
+          const coffeeForDay = getCoffeeForDay(dateStr);
 
           return (
             <div key={dateStr} className="day-section">
@@ -709,20 +850,20 @@ export default function OperationalSummaryPrint() {
                     {allocsForDay.length === 0 ? (
                       <div className="no-sleeping">שיבוץ לינה טרם אושר</div>
                     ) : (
-                      Object.entries(allocsByNeighborhood).map(([nid, allocs]) => {
+                      sortedNeighborhoodEntries(allocsByNeighborhood).map(([nid, allocs]) => {
                         const neighborhood = neighborhoodById[nid];
+                        const isVipNeighborhood = neighborhood?.is_vip;
                         return (
                           <div key={nid} className="neighborhood-block">
-                            {neighborhood && (
-                              <div className="neighborhood-label">{neighborhood.name}</div>
-                            )}
+                            <div className="neighborhood-label">
+                              {isVipNeighborhood ? "אוהלי VIP" : (neighborhood?.name || "שכונה")}
+                            </div>
                             <div className="tents-row">
                               {allocs.map(a => (
                                 <TentCard
                                   key={a.id}
                                   allocation={a}
                                   tent={tentById[a.tent_id]}
-                                  neighborhood={neighborhood}
                                 />
                               ))}
                             </div>
@@ -734,11 +875,21 @@ export default function OperationalSummaryPrint() {
                 )}
 
                 {/* Meals */}
-                {mealsForDay.length > 0 && (
+                {mealsForDay.filter(m => m.meal_type !== "COFFEE_CORNER").length > 0 && (
                   <div className="sub-section">
                     <div className="sub-title">🍽 ארוחות</div>
-                    {mealsForDay.map(m => (
+                    {mealsForDay.filter(m => m.meal_type !== "COFFEE_CORNER").map(m => (
                       <MealCard key={m.id} meal={m} profileDiets={globalDiets && Object.keys(globalDiets).length > 0 ? globalDiets : null} />
+                    ))}
+                  </div>
+                )}
+
+                {/* Coffee Corner */}
+                {coffeeForDay.length > 0 && (
+                  <div className="sub-section">
+                    <div className="sub-title">☕ פינת קפה</div>
+                    {coffeeForDay.map(req => (
+                      <CoffeeCard key={req.id} req={req} />
                     ))}
                   </div>
                 )}
@@ -758,7 +909,7 @@ export default function OperationalSummaryPrint() {
                 )}
 
                 {/* Empty day fallback */}
-                {allocsForDay.length === 0 && mealsForDay.length === 0 && activitiesForDay.length === 0 && (
+                {allocsForDay.length === 0 && mealsForDay.filter(m => m.meal_type !== "COFFEE_CORNER").length === 0 && coffeeForDay.length === 0 && activitiesForDay.length === 0 && (
                   <div className="sub-section">
                     <div style={{ fontSize: 12, color: "#94a3b8", fontStyle: "italic" }}>אין פעילויות מתוכננות ליום זה</div>
                   </div>
@@ -767,6 +918,41 @@ export default function OperationalSummaryPrint() {
             </div>
           );
         })}
+
+        {/* ── Student Name Assignment Page ───────────────────────────────── */}
+        {studentAllocations.length > 0 && (
+          <div className="name-assignment-page">
+            <div className="name-page-title">טופס חלוקת חניכים לאוהלים</div>
+            <div className="name-page-subtitle">
+              ניתן להדפיס ולמלא את שמות החניכים לפי האוהלים שהוקצו לקבוצה.
+            </div>
+            <div className="name-cards-grid">
+              {studentAllocations.map(a => {
+                const tent = tentById[a.tent_id];
+                const neighborhood = neighborhoodById[a.neighborhood_id];
+                const tentCode = tent?.code || "—";
+                const pax = getPax(a);
+                const lineCount = pax != null ? Math.max(1, pax) : 1;
+                return (
+                  <div key={a.id} className="name-card">
+                    <div className="name-card-header">
+                      <span>{neighborhood?.name || "שכונה"} | אוהל {tentCode}</span>
+                      {pax != null && <span className="name-card-subcount">{pax} חניכים</span>}
+                    </div>
+                    <div className="name-card-body">
+                      {Array.from({ length: lineCount }).map((_, i) => (
+                        <div key={i} className="name-line">
+                          <span className="name-line-num">{i + 1}.</span>
+                          <span className="name-line-blank" />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
       </div>
     </>
