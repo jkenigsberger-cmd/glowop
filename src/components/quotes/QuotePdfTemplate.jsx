@@ -1,7 +1,6 @@
 /**
- * QuotePdfTemplate — matches the reference PDF as closely as possible.
- * Logo centered + large on Page 1. Table-style client/activity rows.
- * Printable A4 RTL Hebrew via window.print().
+ * QuotePdfTemplate — single A4 page for quote content + separate terms page.
+ * Printable RTL Hebrew via window.print().
  */
 
 const fmt = (n) => Math.round(Number(n) || 0).toLocaleString("he-IL");
@@ -11,7 +10,7 @@ const fmtDate = (d) => {
 };
 const parse = (str, fb = []) => { try { const r = JSON.parse(str); return Array.isArray(r) ? r : fb; } catch { return fb; } };
 
-// New catalog imports (inline to keep PDF self-contained)
+// New catalog inline (PDF is self-contained)
 const PACKAGE_CATALOG_PDF = {
   chavila_1: { name: "חבילה 1", description: "לינה - תלמידים ותלמידות - 17:00 עד 11:00 למחרת" },
   chavila_2: { name: "חבילה 2", description: "יום סיור, ארוחה ושיחה על המכינות" },
@@ -44,13 +43,16 @@ function resolveData(quote, group) {
   const workshopLines  = parse(quote?.workshop_lines);
   const lectureLines   = parse(quote?.lecture_lines);
   const addonLines     = parse(quote?.addon_lines);
-  const adjustLines    = parse(quote?.adjustment_lines);
+  const adjustLines    = parse(quote?.adjustment_lines).filter(r => Number(r.amount || 0) !== 0);
+  const surchargeLines = parse(quote?.surcharge_lines).filter(r => Number(r.amount || 0) !== 0);
   const coffeeCornerPax = Number(quote?.coffee_corner_pax || 0);
-  // New catalog lines
   const packageLines   = parse(quote?.package_lines);
   const newAddonLines  = parse(quote?.new_addon_lines);
 
-  const isDayUse  = (group?.group_type === "DAY_USE") || (studentLines.length > 0 && studentLines[0].rate_type === "day_activity");
+  const isDayUse = (quote?.quote_type === "day_use") ||
+    (group?.group_type === "DAY_USE") ||
+    (studentLines.length > 0 && studentLines[0].rate_type === "day_activity");
+
   const arrival   = quote?.arrival_date   || snap?.startDate   || group?.arrival_date   || "";
   const departure = isDayUse ? arrival : (quote?.departure_date || snap?.endDate || group?.departure_date || "");
   const nights    = isDayUse ? 0 : (arrival && departure)
@@ -69,23 +71,21 @@ function resolveData(quote, group) {
 
   const lineItems = [];
 
-  // ── New catalog package lines ─────────────────────────────────────────────
+  // New catalog package lines
   packageLines.forEach(r => {
     const pkg = PACKAGE_CATALOG_PDF[r.package_id];
     if (!pkg) return;
     const qty = Number(r.quantity || 0);
     const unitPrice = Number(r.unit_price || 0);
     let total = qty * unitPrice;
-    // Shirley add-on for חבילה 3
     if (r.shirley_addon) total += 5000;
     lineItems.push({ name: pkg.name, description: pkg.description, qty, unitPrice, total, vatAmount: null });
-    // Add Shirley as separate line for clarity
     if (r.shirley_addon) {
       lineItems.push({ name: "תוספת הרצאה של שירלי", qty: 1, unitPrice: 5000, total: 5000, vatAmount: null });
     }
   });
 
-  // ── New addon lines ───────────────────────────────────────────────────────
+  // New addon lines
   newAddonLines.forEach(r => {
     const item = ADDON_CATALOG_PDF[r.addon_id];
     const qty = Number(r.quantity || 0);
@@ -95,13 +95,11 @@ function resolveData(quote, group) {
   });
 
   studentLines.forEach(r => {
-
     const rateInfo = STUDENT_RATES[r.rate_type];
     const isDay = r.rate_type === "day_activity";
     const unitRate = rateInfo?.rate ?? Number(r.rate ?? 0);
     const qty = isDay ? Number(r.pax) : Number(r.pax) * Number(r.nights);
     const total = qty * unitRate;
-    // Label matches reference: "לינה אמצע שבוע - אירוח"
     const label = (rateInfo?.label || r.rate_type) + " - אירוח";
     lineItems.push({ name: label, qty, unitPrice: unitRate, total, vatAmount: null });
   });
@@ -136,9 +134,18 @@ function resolveData(quote, group) {
     lineItems.push({ name: r.description || "תוספת", qty, unitPrice: unit, total: qty * unit, vatAmount: null });
   });
 
+  // Adjustments (non-zero only, already filtered above)
   adjustLines.forEach(r => {
     const amt = Number(r.amount || 0);
     lineItems.push({ name: r.description || "התאמה", qty: 1, unitPrice: amt, total: amt, vatAmount: null, isAdjustment: true });
+  });
+
+  // Surcharges (positive, appear as normal line items)
+  surchargeLines.forEach(r => {
+    const amt = Number(r.amount || 0);
+    if (amt > 0) {
+      lineItems.push({ name: r.description || "תוספת תשלום", qty: 1, unitPrice: amt, total: amt, vatAmount: null, isSurcharge: true });
+    }
   });
 
   const subtotal    = Number(quote?.subtotal ?? 0);
@@ -148,33 +155,40 @@ function resolveData(quote, group) {
   const advance     = Number(quote?.advance_payment ?? Math.round(totalPrice * 0.3));
   const balance     = Number(quote?.balance_payment ?? (totalPrice - advance));
 
-  // Activity type label — prefer new package name if available
   const activityTypeLabel = packageLines.length > 0
     ? (PACKAGE_CATALOG_PDF[packageLines[0].package_id]?.name || "חבילה")
     : studentLines.length > 0
       ? (STUDENT_RATES[studentLines[0].rate_type]?.label || studentLines[0].rate_type)
-      : (group?.group_type === "DAY_USE" ? "יום סמינר" : "לינה");
+      : (isDayUse ? "יום סמינר" : "לינה");
 
-  // Audience
   const audienceLabel = (quote?.participant_count ?? group?.participant_count)
     ? "תלמידים"
     : (quote?.staff_count ?? group?.staff_count) ? "מבוגרים" : "תלמידים";
 
   const STATUS_HE = { DRAFT: "טיוטה", SENT: "נשלח", APPROVED: "מאושר", REJECTED: "נדחה", EXPIRED: "פג תוקף" };
 
+  // Contact person: use dedicated field first, never use client_name as first fallback
+  const contactPerson =
+    quote?.contact_person ||
+    quote?.client_contact_name ||
+    quote?.contact_name ||
+    group?.contact_name ||
+    "";
+
   return {
-    clientName:   snap?.clientName  || quote?.client_name  || group?.contact_name  || "—",
+    clientName:   snap?.clientName  || quote?.client_name  || "—",
     clientOrg:    snap?.clientOrg   || group?.group_name   || quote?.client_name   || "—",
     clientPhone:  snap?.clientPhone || quote?.client_phone || group?.contact_phone || "—",
     clientEmail:  snap?.clientEmail || quote?.client_email || group?.contact_email || "—",
     clientTaxId:  snap?.clientTaxId || quote?.client_tax_id || "",
-    contactName:  snap?.clientName  || quote?.client_name  || group?.contact_name  || "—",
+    contactPerson,
     groupName:    snap?.groupName   || snap?.group_name    || group?.group_name    || quote?.client_name || "—",
     activityTypeLabel,
     audienceLabel,
     arrival,
     departure,
     nights,
+    isDayUse,
     totalPax:     snap?.totalPax ?? quote?.estimated_pax ?? group?.total_pax ?? "—",
     lineItems,
     subtotal,
@@ -188,6 +202,7 @@ function resolveData(quote, group) {
     version:      quote?.version ?? 1,
     status:       STATUS_HE[quote?.status] || quote?.status || "",
     validUntil:   quote?.valid_until || "",
+    clientNotes:  quote?.client_notes || "",
   };
 }
 
@@ -199,73 +214,64 @@ const BLUE = "#1a56a0";
 const pageStyle = {
   width: "210mm",
   minHeight: "297mm",
-  padding: "14mm 16mm 20mm 16mm",
+  padding: "10mm 16mm 14mm 16mm",
   boxSizing: "border-box",
   fontFamily: BODY_FONT,
   fontSize: 12,
-  lineHeight: 1.6,
+  lineHeight: 1.5,
   direction: "rtl",
   backgroundColor: "#fff",
   position: "relative",
   color: "#1a1a1a",
 };
 
-// Centered logo + title used on Page 1 only
 function CoverHeader({ quoteNumber, logoUrl }) {
   return (
-    <div style={{ textAlign: "center", marginBottom: 32, direction: "ltr" }}>
+    <div style={{ textAlign: "center", marginBottom: 16, direction: "ltr" }}>
       <img
         src={logoUrl || LOGO_URL_FALLBACK}
         alt="בית הדור הבא"
-        style={{ height: 160, width: "auto", marginBottom: 24, display: "block", margin: "0 auto 24px auto" }}
+        style={{ height: 110, width: "auto", display: "block", margin: "0 auto 14px auto" }}
         onError={e => { e.target.style.display = "none"; }}
       />
-      <div style={{ fontSize: 28, fontWeight: 700, fontFamily: HEADING_FONT, color: BLUE, marginBottom: 8, direction: "rtl", letterSpacing: "-0.5px" }}>
+      <div style={{ fontSize: 24, fontWeight: 700, fontFamily: HEADING_FONT, color: BLUE, marginBottom: 4, direction: "rtl", letterSpacing: "-0.5px" }}>
         בית הדור הבא – חוות אהרונסון
       </div>
       {quoteNumber && (
-        <div style={{ fontSize: 11, color: "#666", marginTop: 4, direction: "rtl", fontFamily: BODY_FONT }}>מס׳ הצעה: {quoteNumber}</div>
+        <div style={{ fontSize: 11, color: "#666", marginTop: 2, direction: "rtl", fontFamily: BODY_FONT }}>מס׳ הצעה: {quoteNumber}</div>
       )}
     </div>
   );
 }
 
-// Compact header for pages 2 & 3
 function CompactHeader({ quoteNumber, logoUrl }) {
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `2px solid ${BLUE}`, paddingBottom: 10, marginBottom: 20 }}>
-      <div style={{ fontSize: 16, fontWeight: 700, fontFamily: HEADING_FONT, color: BLUE }}>בית הדור הבא – חוות אהרונסון</div>
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `2px solid ${BLUE}`, paddingBottom: 8, marginBottom: 16 }}>
+      <div style={{ fontSize: 15, fontWeight: 700, fontFamily: HEADING_FONT, color: BLUE }}>בית הדור הבא – חוות אהרונסון</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         {quoteNumber && <span style={{ fontSize: 11, color: "#666", fontFamily: BODY_FONT }}>מס׳ הצעה: {quoteNumber}</span>}
-        <img
-          src={logoUrl || LOGO_URL_FALLBACK}
-          alt=""
-          style={{ height: 48, width: "auto" }}
-          onError={e => { e.target.style.display = "none"; }}
-        />
+        <img src={logoUrl || LOGO_URL_FALLBACK} alt="" style={{ height: 40, width: "auto" }} onError={e => { e.target.style.display = "none"; }} />
       </div>
     </div>
   );
 }
 
-// Section heading matching reference (blue text + full-width bottom border)
 function SectionHeading({ children }) {
   return (
-    <div style={{ fontSize: 15, fontWeight: 700, fontFamily: HEADING_FONT, color: BLUE, borderBottom: `2px solid ${BLUE}`, paddingBottom: 6, marginTop: 20, marginBottom: 10 }}>
+    <div style={{ fontSize: 14, fontWeight: 700, fontFamily: HEADING_FONT, color: BLUE, borderBottom: `2px solid ${BLUE}`, paddingBottom: 4, marginTop: 14, marginBottom: 8 }}>
       {children}
     </div>
   );
 }
 
-// Table row for client/activity details — matches the bordered row style in the PDF
 function DetailTable({ rows }) {
   return (
-    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, lineHeight: 1.8 }}>
+    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11.5, lineHeight: 1.6 }}>
       <tbody>
         {rows.filter(r => r.value && r.value !== "—").map(({ label, value }, i) => (
           <tr key={i} style={{ borderBottom: "1px solid #dde8f5" }}>
-            <td style={{ padding: "9px 10px", fontWeight: 700, fontFamily: HEADING_FONT, color: "#333", width: "35%", textAlign: "right" }}>{label}:</td>
-            <td style={{ padding: "9px 10px", fontFamily: BODY_FONT, color: "#1a1a1a", textAlign: "right" }}>{value}</td>
+            <td style={{ padding: "6px 10px", fontWeight: 700, fontFamily: HEADING_FONT, color: "#333", width: "35%", textAlign: "right" }}>{label}:</td>
+            <td style={{ padding: "6px 10px", fontFamily: BODY_FONT, color: "#1a1a1a", textAlign: "right" }}>{value}</td>
           </tr>
         ))}
       </tbody>
@@ -273,110 +279,90 @@ function DetailTable({ rows }) {
   );
 }
 
-// ── Page 1 ────────────────────────────────────────────────────────────────────
+// ── Table styles ──────────────────────────────────────────────────────────────
+const tdBase = { padding: "7px 10px", borderBottom: "1px solid #dde8f5", fontSize: 11.5, lineHeight: 1.5, verticalAlign: "middle", fontFamily: BODY_FONT, color: "#1a1a1a" };
+const thBase = { padding: "8px 10px", background: BLUE, color: "#fff", fontWeight: 700, fontSize: 11.5, textAlign: "right", fontFamily: HEADING_FONT };
+
+// ── Page 1: intro + client + activity + pricing + notes ───────────────────────
 function Page1({ d, logoUrl }) {
+  const deposit = d.advance || Math.round(d.totalPrice * 0.3);
+  const bal     = d.balance || (d.totalPrice - deposit);
+
+  // Date range display
+  let dateDisplay;
+  if (d.isDayUse) {
+    dateDisplay = fmtDate(d.arrival);
+  } else {
+    const arrivalOk = d.arrival && d.departure && new Date(d.arrival) <= new Date(d.departure);
+    dateDisplay = arrivalOk
+      ? `${fmtDate(d.arrival)} – ${fmtDate(d.departure)}`
+      : fmtDate(d.arrival);
+  }
+
   return (
     <div style={{ ...pageStyle, pageBreakAfter: "always" }}>
       <CoverHeader quoteNumber={d.quoteNumber} logoUrl={logoUrl} />
 
       {/* Intro */}
-      <div style={{ textAlign: "center", fontSize: 15, fontWeight: 700, fontFamily: HEADING_FONT, color: BLUE, marginBottom: 10 }}>
+      <div style={{ textAlign: "center", fontSize: 13, fontWeight: 700, fontFamily: HEADING_FONT, color: BLUE, marginBottom: 6 }}>
         הצעת מחיר לסמינרים וימי עיון לצוותי חינוך
       </div>
-      <p style={{ fontSize: 12, fontFamily: BODY_FONT, color: "#2a2a2a", lineHeight: 1.8, textAlign: "center", marginBottom: 20 }}>
+      <p style={{ fontSize: 11.5, fontFamily: BODY_FONT, color: "#2a2a2a", lineHeight: 1.7, textAlign: "center", marginBottom: 10 }}>
         בית הדור הבא מציע מרחב לחיבור, העמקה ודיאלוג. בהמשך לשיחתנו, להלן הצעתנו עבור פעילות לצוותי חינוך:
       </p>
 
-      {/* Principles */}
-      <SectionHeading>עקרונות החוויה בבית הדור הבא:</SectionHeading>
-      <div style={{ fontSize: 12, fontFamily: BODY_FONT, lineHeight: 1.9, color: "#2a2a2a", textAlign: "center", marginTop: 10, marginBottom: 12 }}>
-        {[
-          "– חיבור בין עשייה להעמקה — שילוב בין פעילות מעשית לשיח משמעותי",
-          "– מרחב לקול האישי — יצירת הזדמנויות לביטוי אישי ולהקשבה",
-          "– רב-מימדיות — שילוב מגוון החושים ליצירת חוויה עמוקה ועוצמתית",
-          "– חיבור לערכי הליבה — אהבת המדינה ואנשיה, זיקה ליהדות וערכים ליברליים",
-        ].map((t, i) => <div key={i} style={{ marginBottom: 4 }}>{t}</div>)}
+      {/* Two columns: client + activity side by side */}
+      <div style={{ display: "flex", gap: 16, marginBottom: 0 }}>
+        <div style={{ flex: 1 }}>
+          <SectionHeading>פרטי לקוח</SectionHeading>
+          <DetailTable rows={[
+            { label: "שם לקוח / ארגון", value: d.clientName !== "—" ? d.clientName : d.clientOrg },
+            { label: "איש קשר",         value: d.contactPerson },
+            { label: "טלפון",           value: d.clientPhone },
+            { label: 'דוא"ל',          value: d.clientEmail },
+            { label: "ח.פ / ע.מ",      value: d.clientTaxId },
+          ]} />
+        </div>
+        <div style={{ flex: 1 }}>
+          <SectionHeading>פרטי פעילות</SectionHeading>
+          <DetailTable rows={[
+            { label: "שם קבוצה",     value: d.groupName },
+            { label: "קהל יעד",       value: d.audienceLabel },
+            { label: "סוג פעילות",    value: d.activityTypeLabel },
+            {
+              label: d.isDayUse ? "תאריך פעילות" : "תאריכים",
+              value: dateDisplay,
+            },
+            { label: "מס׳ לילות",     value: d.isDayUse ? null : (d.nights > 0 ? String(d.nights) : null) },
+            { label: 'סה"כ משתתפים', value: d.totalPax ? String(d.totalPax) : null },
+          ]} />
+        </div>
       </div>
-
-      {/* Package overview */}
-      <SectionHeading>חבילות הפעילות שלנו:</SectionHeading>
-      <div style={{ fontSize: 12, fontFamily: BODY_FONT, lineHeight: 1.9, color: "#2a2a2a", textAlign: "center", marginTop: 10, marginBottom: 12 }}>
-        <div style={{ marginBottom: 6 }}><strong style={{ fontFamily: HEADING_FONT, color: BLUE, fontSize: 13 }}>חבילה 1</strong> — לינה תלמידים ומכינות + סדנה אחת (17:00–11:00)</div>
-        <div style={{ marginBottom: 6 }}><strong style={{ fontFamily: HEADING_FONT, color: BLUE, fontSize: 13 }}>חבילה 2</strong> — יום סיור, ארוחה ושיחה על המכינות</div>
-        <div style={{ marginBottom: 6 }}><strong style={{ fontFamily: HEADING_FONT, color: BLUE, fontSize: 13 }}>חבילה 3</strong> — פעילות יום לצוותים: הרצאה + 2 סדנאות</div>
-        <div style={{ marginBottom: 6 }}><strong style={{ fontFamily: HEADING_FONT, color: BLUE, fontSize: 13 }}>חבילה 4</strong> — 24 שעות לתלמידים ומכינות: 3 סדנאות + סדנת סיכום</div>
-        <div style={{ marginBottom: 6 }}><strong style={{ fontFamily: HEADING_FONT, color: BLUE, fontSize: 13 }}>חבילה 5</strong> — 24 שעות למבוגרים: 3 סדנאות וסדנת סיכום</div>
-        <div><strong style={{ fontFamily: HEADING_FONT, color: BLUE, fontSize: 13 }}>חבילה 6</strong> — פעילות מבוגרים: פינת קפה ותוכן מותאם</div>
-      </div>
-
-      <div style={{ fontSize: 14, fontWeight: 700, fontFamily: HEADING_FONT, color: BLUE, textAlign: "center", marginBottom: 20 }}>עלויות פעילות:</div>
-
-      {/* Client details */}
-      <SectionHeading>פרטי לקוח</SectionHeading>
-      <DetailTable rows={[
-        { label: "שם לקוח",   value: d.clientName },
-        { label: "ארגון",     value: d.clientOrg },
-        { label: "טלפון",     value: d.clientPhone },
-        { label: 'דוא"ל',    value: d.clientEmail },
-        { label: "איש קשר",   value: d.contactName },
-        ...(d.clientTaxId ? [{ label: "ח.פ / ע.מ", value: d.clientTaxId }] : []),
-      ]} />
-    </div>
-  );
-}
-
-// ── Page 2 ────────────────────────────────────────────────────────────────────
-const tdBase = { padding: "9px 10px", borderBottom: "1px solid #dde8f5", fontSize: 12, lineHeight: 1.6, verticalAlign: "middle", fontFamily: BODY_FONT, color: "#1a1a1a" };
-const thBase = { padding: "10px 10px", background: BLUE, color: "#fff", fontWeight: 700, fontSize: 12, textAlign: "right", fontFamily: HEADING_FONT };
-
-function Page2({ d, logoUrl }) {
-  const deposit = d.advance || Math.round(d.totalPrice * 0.3);
-  const bal     = d.balance || (d.totalPrice - deposit);
-
-  const dateRange = (d.nights === 0 || !d.departure || d.arrival === d.departure)
-    ? fmtDate(d.arrival)
-    : `${fmtDate(d.departure)} - ${fmtDate(d.arrival)}`;
-
-  return (
-    <div style={{ ...pageStyle, pageBreakAfter: "always" }}>
-      <CompactHeader quoteNumber={d.quoteNumber} logoUrl={logoUrl} />
-
-      {/* Activity details table */}
-      <SectionHeading>פרטי פעילות</SectionHeading>
-      <DetailTable rows={[
-        { label: "שם קבוצה",         value: d.groupName },
-        { label: "קהל יעד",           value: d.audienceLabel },
-        { label: "סוג פעילות",        value: d.activityTypeLabel },
-        { label: "תאריכים",           value: dateRange },
-        { label: "מס׳ לילות",         value: d.nights > 0 ? String(d.nights) : "יום" },
-        { label: 'סה"כ משתתפים',     value: d.totalPax ? String(d.totalPax) : "—" },
-      ]} />
 
       {/* Pricing table */}
       <SectionHeading>פירוט תמחור</SectionHeading>
-      <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 6 }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 4 }}>
         <thead>
           <tr>
-            <th style={{ ...thBase, width: "42%" }}>פריט</th>
+            <th style={{ ...thBase, width: "44%" }}>פריט</th>
             <th style={{ ...thBase, textAlign: "center", width: "12%" }}>כמות</th>
-            <th style={{ ...thBase, textAlign: "center", width: "22%" }}>מחיר יחידה</th>
+            <th style={{ ...thBase, textAlign: "center", width: "20%" }}>מחיר יחידה</th>
             <th style={{ ...thBase, textAlign: "left",   width: "24%" }}>סה״כ</th>
           </tr>
         </thead>
         <tbody>
           {d.lineItems.map((item, i) => {
-            const isDiscount = item.isAdjustment && item.total < 0;
+            const isNegative = item.isAdjustment && item.total < 0;
+            const isSurcharge = item.isSurcharge;
             return (
               <tr key={i} style={{ background: i % 2 === 0 ? "#fff" : "#f5f8ff" }}>
                 <td style={{ ...tdBase }}>{item.name}</td>
                 <td style={{ ...tdBase, textAlign: "center" }}>{item.qty}</td>
-                <td style={{ ...tdBase, textAlign: "center" }}>
-                  ₪{fmt(item.unitPrice)}
-                </td>
-                <td style={{ ...tdBase, textAlign: "left", fontWeight: 600, color: isDiscount ? "#c00" : "#111" }}>
+                <td style={{ ...tdBase, textAlign: "center" }}>₪{fmt(item.unitPrice)}</td>
+                <td style={{ ...tdBase, textAlign: "left", fontWeight: 600, color: isNegative ? "#c00" : isSurcharge ? "#1a7a4a" : "#111" }}>
                   {item.vatAmount
                     ? `₪${fmt(item.unitPrice)} + ₪${fmt(item.vatAmount)} מע״מ`
-                    : isDiscount
+                    : isNegative
                       ? `-₪${fmt(Math.abs(item.total))}`
                       : `₪${fmt(item.total)}`
                   }
@@ -385,14 +371,12 @@ function Page2({ d, logoUrl }) {
             );
           })}
 
-          {/* Subtotal row (only when there's a discount) */}
           {d.discountAmt > 0 && (
             <tr style={{ background: "#f0f4fb" }}>
               <td colSpan={3} style={{ ...tdBase, fontWeight: 700, textAlign: "right" }}>סה״כ לפני הנחה</td>
               <td style={{ ...tdBase, textAlign: "left", fontWeight: 700 }}>₪{fmt(d.subtotal)}</td>
             </tr>
           )}
-          {/* Discount row */}
           {d.discountAmt > 0 && (
             <tr style={{ background: "#fff8f8" }}>
               <td colSpan={3} style={{ ...tdBase, color: "#c00" }}>
@@ -401,7 +385,6 @@ function Page2({ d, logoUrl }) {
               <td style={{ ...tdBase, textAlign: "left", color: "#c00", fontWeight: 600 }}>-₪{fmt(d.discountAmt)}</td>
             </tr>
           )}
-          {/* Grand total row */}
           <tr style={{ background: "#e8f0fc" }}>
             <td colSpan={3} style={{ ...tdBase, fontWeight: 800, fontSize: 13, color: BLUE }}>סה״כ לתשלום</td>
             <td style={{ ...tdBase, textAlign: "left", fontWeight: 800, fontSize: 13, color: BLUE }}>₪{fmt(d.totalPrice)}</td>
@@ -409,34 +392,38 @@ function Page2({ d, logoUrl }) {
         </tbody>
       </table>
 
-      {/* Payment terms */}
-      <div style={{ marginTop: 24 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, fontFamily: HEADING_FONT, color: BLUE, marginBottom: 12 }}>תנאי תשלום</div>
-        <div style={{ fontSize: 12, fontFamily: BODY_FONT, lineHeight: 1.9 }}>
-          <div style={{ marginBottom: 6 }}>מקדמה (30%): <strong>₪{fmt(deposit)}</strong></div>
-          <div>יתרה (70%): <strong>₪{fmt(bal)}</strong></div>
-        </div>
+      {/* Payment */}
+      <div style={{ marginTop: 12, fontSize: 11.5, fontFamily: BODY_FONT, lineHeight: 1.8 }}>
+        <strong style={{ fontFamily: HEADING_FONT, color: BLUE }}>תנאי תשלום: </strong>
+        מקדמה (30%): <strong>₪{fmt(deposit)}</strong> &nbsp;|&nbsp; יתרה (70%): <strong>₪{fmt(bal)}</strong>
+        {d.paymentTerms && <span> &nbsp;|&nbsp; {d.paymentTerms}</span>}
       </div>
 
-      {/* Meta + bank */}
-      <div style={{ marginTop: 20, fontSize: 11, fontFamily: BODY_FONT, color: "#555", lineHeight: 1.9 }}>
-        <div>גרסה: {d.version} | סטטוס: {d.status}</div>
-        <div style={{ marginTop: 10 }}>
-          <strong style={{ fontFamily: HEADING_FONT }}>ח.פ:</strong> קרן שמש הדור הבא (ע"ר) — 580786812
-        </div>
-        <div>
-          <strong style={{ fontFamily: HEADING_FONT }}>פרטי חשבון הבנק:</strong> קרן שמש הדור הבא (ע"ר) בנק הפועלים- 12 סניף- 170 חשבון- 368365
-        </div>
+      {/* Bank */}
+      <div style={{ marginTop: 8, fontSize: 10.5, fontFamily: BODY_FONT, color: "#555", lineHeight: 1.7 }}>
+        <strong style={{ fontFamily: HEADING_FONT }}>ח.פ:</strong> קרן שמש הדור הבא (ע"ר) — 580786812 &nbsp;|&nbsp;
+        <strong style={{ fontFamily: HEADING_FONT }}>בנק הפועלים:</strong> סניף 170 חשבון 368365
+        &nbsp;|&nbsp; גרסה: {d.version} &nbsp;|&nbsp; סטטוס: {d.status}
       </div>
+
+      {/* Client notes — only if present */}
+      {d.clientNotes && (
+        <>
+          <SectionHeading>הערות</SectionHeading>
+          <div style={{ fontSize: 12, fontFamily: BODY_FONT, color: "#2a2a2a", lineHeight: 1.8, whiteSpace: "pre-wrap" }}>
+            {d.clientNotes}
+          </div>
+        </>
+      )}
     </div>
   );
 }
 
-// ── Page 3 ────────────────────────────────────────────────────────────────────
+// ── Page 2: terms ─────────────────────────────────────────────────────────────
 function TermBlock({ title, bullets }) {
   return (
-    <div style={{ marginBottom: 16 }}>
-      <div style={{ fontSize: 13, fontWeight: 700, fontFamily: HEADING_FONT, color: BLUE, marginBottom: 8 }}>{title}</div>
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ fontSize: 13, fontWeight: 700, fontFamily: HEADING_FONT, color: BLUE, marginBottom: 6 }}>{title}</div>
       {bullets.map((b, i) => (
         <div key={i} style={{ fontSize: 12, fontFamily: BODY_FONT, color: "#2a2a2a", lineHeight: 1.7, paddingRight: 4, marginBottom: 4 }}>
           {bullets.length > 1 ? `• ${b}` : b}
@@ -455,44 +442,38 @@ function SigLine({ label, wide }) {
   );
 }
 
-function Page3({ logoUrl, footerUrl }) {
+function Page2({ logoUrl, quoteNumber, footerUrl }) {
   return (
     <div style={{ ...pageStyle }}>
-      <CompactHeader logoUrl={logoUrl} />
+      <CompactHeader quoteNumber={quoteNumber} logoUrl={logoUrl} />
 
       <SectionHeading>תנאי ההסכם</SectionHeading>
-      <div style={{ marginTop: 12 }}>
-
+      <div style={{ marginTop: 10 }}>
         <TermBlock title="כללי" bullets={[
           "הצעת המחיר תקפה למשך 14 יום מיום שליחתה בכתב.",
           "רק שליחה חזרה של מסמך זה חתום משמעה סגירת ההזמנה.",
         ]} />
-
         <TermBlock title="תשלום" bullets={[
           "תשלום מקדמה - בסך 30% מערך העסקה - ישולם חודש לפני הגעה | שאר התשלום - 70% מערך העסקה - ישולם ביום ההגעה.",
         ]} />
-
         <TermBlock title="ביטול עסקה" bullets={[
           "עד 7 ימים לפני ההגעה - ייגבו דמי ביטול בסך 5% או 100 ש״ח - הנמוך מביניהם",
           "פחות מ-7 ימים לפני ההגעה - ייגבו דמי ביטול בסך של 25% מערך ההזמנה",
         ]} />
-
         <TermBlock title="שינויים" bullets={[
           "ניתן לעשות שינויים בהזמנה לרבות מספר משתתפים וארוחות עד 10 ימים לפני הפעילות בבית",
           "דרישת התשלום תישלח לפי מספר המשתתפים שנמסר 10 ימים לפני תחילת הפעילות או לפי מספר המגיעים בפועל - לפי הגבוה מביניהם",
           "ניתן לעדכן בהעדפות ואלרגיות למזון עד 10 ימים לפני, לאחר מכן לא ניתן להבטיח שיהיה אוכל מתאים",
         ]} />
-
         <TermBlock title="כללי הבית" bullets={[
           "לא ניתן להכניס אוכל מכל סוג לבית הדור הבא",
           "כל נזק לציוד או מתקני הבית יחויב בעלות תיקון הנזק",
         ]} />
       </div>
 
-      {/* Signature block — inline style matching the reference */}
-      <div style={{ marginTop: 24 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, fontFamily: HEADING_FONT, color: BLUE, marginBottom: 16 }}>אישור ההצעה וחתימה</div>
-        <div style={{ marginBottom: 20 }}>
+      <div style={{ marginTop: 20 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, fontFamily: HEADING_FONT, color: BLUE, marginBottom: 14 }}>אישור ההצעה וחתימה</div>
+        <div style={{ marginBottom: 18 }}>
           <SigLine label="שם מלא" />
           <SigLine label="תפקיד" />
           <SigLine label="חתימה" />
@@ -503,9 +484,8 @@ function Page3({ logoUrl, footerUrl }) {
         </div>
       </div>
 
-      {/* Footer text + photo */}
-      <div style={{ marginTop: 32, textAlign: "center" }}>
-        <div style={{ fontSize: 14, fontWeight: 700, fontFamily: HEADING_FONT, color: BLUE, marginBottom: 14 }}>מחכים לכם בבית הדור הבא</div>
+      <div style={{ marginTop: 28, textAlign: "center" }}>
+        <div style={{ fontSize: 14, fontWeight: 700, fontFamily: HEADING_FONT, color: BLUE, marginBottom: 12 }}>מחכים לכם בבית הדור הבא</div>
         <div style={{ display: "inline-block", width: "65%" }}>
           <img
             src={footerUrl || FOOTER_URL_FALLBACK}
@@ -525,8 +505,7 @@ export default function QuotePdfTemplate({ quote, group, logoUrl, footerUrl }) {
   return (
     <div id="quote-pdf-root" style={{ background: "#fff" }}>
       <Page1 d={d} logoUrl={logoUrl} />
-      <Page2 d={d} logoUrl={logoUrl} />
-      <Page3 logoUrl={logoUrl} footerUrl={footerUrl} />
+      <Page2 logoUrl={logoUrl} quoteNumber={d.quoteNumber} footerUrl={footerUrl} />
     </div>
   );
 }

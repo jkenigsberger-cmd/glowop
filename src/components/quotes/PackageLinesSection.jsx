@@ -441,17 +441,36 @@ export default function PackageLinesSection({
         />
       ))}
 
-      {/* Addon lines */}
-      {addonLines.map((line, i) => (
-        <AddonLineRow
-          key={i}
-          line={line}
-          index={i}
-          onUpdate={updateAddonLine}
-          onRemove={removeAddonLine}
-          defaultPax={defaultPax}
-        />
-      ))}
+      {/* Addon lines — grouped visually: operator (כרמלים/אגד) separate from others */}
+      {(() => {
+        const operatorIds = new Set(["karmelim", "agad"]);
+        const operatorLines = addonLines.filter(l => operatorIds.has(l.addon_id));
+        const otherLines    = addonLines.filter(l => !operatorIds.has(l.addon_id));
+        return (
+          <>
+            {operatorLines.length > 0 && (
+              <div className="space-y-2">
+                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wide px-1 pt-1 border-t border-slate-200">כרמלים / אגד</div>
+                {operatorLines.map(line => {
+                  const i = addonLines.indexOf(line);
+                  return <AddonLineRow key={i} line={line} index={i} onUpdate={updateAddonLine} onRemove={removeAddonLine} defaultPax={defaultPax} />;
+                })}
+              </div>
+            )}
+            {otherLines.length > 0 && (
+              <div className="space-y-2">
+                {otherLines.length > 0 && operatorLines.length > 0 && (
+                  <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wide px-1 pt-1 border-t border-slate-200">תוספות</div>
+                )}
+                {otherLines.map(line => {
+                  const i = addonLines.indexOf(line);
+                  return <AddonLineRow key={i} line={line} index={i} onUpdate={updateAddonLine} onRemove={removeAddonLine} defaultPax={defaultPax} />;
+                })}
+              </div>
+            )}
+          </>
+        );
+      })()}
 
       {/* Action buttons */}
       <div className="flex items-center gap-2 flex-wrap">

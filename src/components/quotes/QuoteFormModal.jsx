@@ -520,11 +520,12 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
     quote_number:    quote?.quote_number    || "",
     version:         quote?.version         || 1,
     status:          quote?.status          || "DRAFT",
-    // A. Organization/client name comes from group name, NOT contact person
     client_name:     quote?.client_name     || group?.group_name    || "",
+    contact_person:  quote?.contact_person  || group?.contact_name  || "",
     client_phone:    quote?.client_phone    || group?.contact_phone || "",
     client_email:    quote?.client_email    || group?.contact_email || "",
     client_tax_id:   quote?.client_tax_id   || "",
+    client_notes:    quote?.client_notes    || "",
     arrival_date:    quote?.arrival_date    || group?.arrival_date   || "",
     departure_date:  quote?.departure_date  || group?.departure_date || "",
     estimated_pax:   quote?.estimated_pax   ?? group?.total_pax     ?? "",
@@ -573,6 +574,7 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
   const [lectures,       setLectures]       = useState(parse(quote?.lecture_lines,        []));
   const [addons,         setAddons]         = useState(parse(quote?.addon_lines,          []));
   const [adjustments,    setAdjustments]    = useState(parse(quote?.adjustment_lines,     []));
+  const [surcharges,     setSurcharges]     = useState(parse(quote?.surcharge_lines,       []));
   // New catalog lines
   const [packageLines,   setPackageLines]   = useState(parse(quote?.package_lines,        []));
   const [newAddonLines,  setNewAddonLines]  = useState(parse(quote?.new_addon_lines,      []));
@@ -587,6 +589,8 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
   const participantCount = Math.max(0, estimatedPax - staffCount);
   const nights = calcNights(form.arrival_date, form.departure_date);
   const staffExceedsTotal = staffCount > estimatedPax && estimatedPax > 0;
+  const datesReversed = quoteType !== "day_use" && form.arrival_date && form.departure_date &&
+    new Date(form.departure_date) < new Date(form.arrival_date);
   // B. Default pax for catalog lines: staff_count || participant_count || estimated_pax
   const catalogDefaultPax = staffCount || participantCount || estimatedPax || 0;
 
@@ -640,10 +644,11 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
   const lectureTotal        = lectures.reduce((s, r) => s + calcLecture(r), 0);
   const addonTotal          = addons.reduce((s, r) => s + calcAddon(r), 0);
   const adjustmentTotal     = adjustments.reduce((s, r) => s + Number(r.amount || 0), 0);
+  const surchargeTotal      = surcharges.reduce((s, r) => s + Number(r.amount || 0), 0);
   // New catalog totals
   const packageLinesTotal   = packageLines.reduce((s, r) => s + calcPackageLine(r), 0);
   const newAddonLinesTotal  = newAddonLines.reduce((s, r) => s + calcAddonLine(r), 0);
-  const subtotal            = studentLodgingTotal + adultLodgingTotal + workshopTotal + lectureTotal + coffeeTotal + addonTotal + adjustmentTotal + packageLinesTotal + newAddonLinesTotal;
+  const subtotal            = studentLodgingTotal + adultLodgingTotal + workshopTotal + lectureTotal + coffeeTotal + addonTotal + adjustmentTotal + surchargeTotal + packageLinesTotal + newAddonLinesTotal;
   const discountAmount      = Math.round(subtotal * Number(form.discount_percent || 0) / 100);
   const total_price         = subtotal - discountAmount;
   const advance             = Math.round(total_price * 0.3);
@@ -678,9 +683,12 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
       lecture_lines:         JSON.stringify(lectures),
       addon_lines:           JSON.stringify(addons),
       adjustment_lines:      JSON.stringify(adjustments),
+      surcharge_lines:       JSON.stringify(surcharges),
       package_lines:         JSON.stringify(packageLines),
       new_addon_lines:       JSON.stringify(newAddonLines),
       quote_type:            quoteType,
+      contact_person:        form.contact_person || undefined,
+      client_notes:          form.client_notes   || undefined,
       subtotal, discount_amount: discountAmount, total_price,
       advance_payment: advance, balance_payment: balance,
       version: Number(form.version),
@@ -854,8 +862,8 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
                     <Input value={form.client_name} onChange={e => set("client_name", e.target.value)} />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs text-slate-500">ח.פ / ע.מ</Label>
-                    <Input value={form.client_tax_id} onChange={e => set("client_tax_id", e.target.value)} />
+                    <Label className="text-xs text-slate-500">איש קשר</Label>
+                    <Input value={form.contact_person} onChange={e => set("contact_person", e.target.value)} placeholder="שם איש הקשר" />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs text-slate-500">טלפון</Label>
@@ -864,6 +872,10 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
                   <div className="space-y-1">
                     <Label className="text-xs text-slate-500">אימייל</Label>
                     <Input type="email" value={form.client_email} onChange={e => set("client_email", e.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-slate-500">ח.פ / ע.מ</Label>
+                    <Input value={form.client_tax_id} onChange={e => set("client_tax_id", e.target.value)} />
                   </div>
                 </div>
 
@@ -885,6 +897,11 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
                 {staffExceedsTotal && (
                   <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
                     ⚠️ מספר הצוות ({staffCount}) גדול מסה״כ המשתתפים ({estimatedPax})
+                  </div>
+                )}
+                {datesReversed && (
+                  <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">
+                    ⚠️ תאריך עזיבה ({form.departure_date}) קודם לתאריך הגעה ({form.arrival_date}) — נא לתקן
                   </div>
                 )}
               </SectionCard>
@@ -966,6 +983,29 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
                 <AdjustmentSection lines={adjustments} setLines={setAdjustments} />
               </SectionCard>
 
+              {/* Free surcharge */}
+              <SectionCard icon={Tag} title="תוספת תשלום חופשי" defaultOpen={surcharges.length > 0}>
+                <p className="text-xs text-slate-400 mb-2">סכום חיובי שיתווסף לסה״כ ויופיע ב-PDF</p>
+                <div className="space-y-2">
+                  {surcharges.map((r, idx) => (
+                    <div key={idx} className="grid grid-cols-12 gap-2 items-end bg-slate-50 rounded-xl p-2.5">
+                      <div className="col-span-8">
+                        <Input className="h-8 text-xs bg-white" placeholder="תיאור תוספת" value={r.description} onChange={e => setSurcharges(p => p.map((x, i) => i !== idx ? x : { ...x, description: e.target.value }))} />
+                      </div>
+                      <div className="col-span-2 space-y-0.5">
+                        <div className="text-[11px] text-slate-400 font-medium mb-0.5">סכום (₪)</div>
+                        <Input className="h-8 text-xs bg-white" type="number" min="0" value={r.amount} onChange={e => setSurcharges(p => p.map((x, i) => i !== idx ? x : { ...x, amount: e.target.value }))} />
+                      </div>
+                      <div className="col-span-2 flex items-end justify-end gap-1">
+                        <div className="text-xs font-semibold text-primary whitespace-nowrap">₪{Math.round(Number(r.amount) || 0).toLocaleString("he-IL")}</div>
+                        <button type="button" onClick={() => setSurcharges(p => p.filter((_, i) => i !== idx))} className="text-slate-300 hover:text-red-400 mb-0.5"><Trash2 className="w-3.5 h-3.5" /></button>
+                      </div>
+                    </div>
+                  ))}
+                  <Button type="button" variant="outline" size="sm" onClick={() => setSurcharges(p => [...p, { description: "", amount: 0 }])} className="gap-1.5 text-xs h-7 border-dashed"><Plus className="w-3 h-3" /> הוסף תוספת</Button>
+                </div>
+              </SectionCard>
+
               {/* Discount + payment terms */}
               <div className={`${CARD} px-5 py-4`}>
                 <div className={SEC_TITLE}><Tag className="w-4 h-4 text-primary" />הנחה ותנאי תשלום</div>
@@ -982,9 +1022,15 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
                 </div>
               </div>
 
+              {/* Client-visible notes */}
+              <div className={`${CARD} px-5 py-4`}>
+                <Label className="text-xs text-slate-500 mb-1 block">הערות ללקוח</Label>
+                <Textarea rows={2} value={form.client_notes} onChange={e => set("client_notes", e.target.value)} className="text-sm" placeholder="הערות שיופיעו בהצעת המחיר ללקוח" />
+              </div>
+
               {/* Internal notes */}
               <div className={`${CARD} px-5 py-4`}>
-                <Label className="text-xs text-slate-500 mb-1 block">הערות פנימיות</Label>
+                <Label className="text-xs text-slate-500 mb-1 block">הערות פנימיות (לא מופיע ב-PDF)</Label>
                 <Textarea rows={2} value={form.internal_notes} onChange={e => set("internal_notes", e.target.value)} className="text-sm" />
               </div>
 
@@ -1030,7 +1076,8 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
                   {workshopTotal       > 0 && <div className="flex justify-between"><span>סדנאות</span><span className="font-medium text-slate-700">{fmtMoney(workshopTotal)}</span></div>}
                   {lectureTotal        > 0 && <div className="flex justify-between"><span>הרצאות</span><span className="font-medium text-slate-700">{fmtMoney(lectureTotal)}</span></div>}
                   {coffeeTotal         > 0 && <div className="flex justify-between"><span>פינת קפה</span><span className="font-medium text-slate-700">{fmtMoney(coffeeTotal)}</span></div>}
-                  {(addonTotal + adjustmentTotal) !== 0 && <div className="flex justify-between"><span>תוספות</span><span className="font-medium text-slate-700">{fmtMoney(addonTotal + adjustmentTotal)}</span></div>}
+                  {(addonTotal + adjustmentTotal) !== 0 && <div className="flex justify-between"><span>התאמות</span><span className="font-medium text-slate-700">{fmtMoney(addonTotal + adjustmentTotal)}</span></div>}
+                  {surchargeTotal > 0 && <div className="flex justify-between"><span>תוספת תשלום</span><span className="font-medium text-slate-700">{fmtMoney(surchargeTotal)}</span></div>}
                 </div>
               </div>
             )}
