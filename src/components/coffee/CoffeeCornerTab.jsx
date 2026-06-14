@@ -16,7 +16,6 @@ const EMPTY_FORM = () => ({
   start_time: "10:00",
   end_time: "11:00",
   pax: "",
-  pax_sync_mode: "AUTO",
   coffee_corner_type: "פינת קפה רגילה",
   location_id: "",
   location_name_snapshot: "",
@@ -77,14 +76,11 @@ export default function CoffeeCornerTab({ groupId, profile, group }) {
 
   const openEdit = (req) => {
     setEditingId(req.id);
-    // Backward compat: treat as AUTO if pax matches group total and mode not set
-    const existingMode = req.pax_sync_mode || (req.pax === defaultPax ? "AUTO" : "MANUAL");
     setForm({
       date: req.date || "",
       start_time: req.start_time || "10:00",
       end_time: req.end_time || "11:00",
       pax: req.pax != null ? String(req.pax) : "",
-      pax_sync_mode: existingMode,
       coffee_corner_type: req.coffee_corner_type || "פינת קפה רגילה",
       location_id: req.location_id || "",
       location_name_snapshot: req.location_name_snapshot || "",
@@ -135,7 +131,6 @@ export default function CoffeeCornerTab({ groupId, profile, group }) {
       start_time: form.start_time,
       end_time: form.end_time,
       pax: Number(form.pax),
-      pax_sync_mode: form.pax_sync_mode || "AUTO",
       coffee_corner_type: form.coffee_corner_type || "פינת קפה רגילה",
       location_id: form.location_id || null,
       location_name_snapshot: form.location_name_snapshot || null,
@@ -259,28 +254,12 @@ export default function CoffeeCornerTab({ groupId, profile, group }) {
                 type="number"
                 min="1"
                 value={form.pax}
-                onChange={e => {
-                  const val = e.target.value;
-                  const newMode = defaultPax != null && Number(val) !== defaultPax ? "MANUAL" : form.pax_sync_mode;
-                  setForm(f => ({ ...f, pax: val, pax_sync_mode: newMode }));
-                }}
+                onChange={e => setForm(f => ({ ...f, pax: e.target.value }))}
                 placeholder="0"
               />
-              <label className="flex items-center gap-1.5 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={form.pax_sync_mode !== "MANUAL"}
-                  onChange={e => {
-                    if (e.target.checked) {
-                      setForm(f => ({ ...f, pax_sync_mode: "AUTO", pax: defaultPax != null ? String(defaultPax) : f.pax }));
-                    } else {
-                      setForm(f => ({ ...f, pax_sync_mode: "MANUAL" }));
-                    }
-                  }}
-                  className="w-3.5 h-3.5 accent-amber-600"
-                />
-                <span className="text-[10px] text-slate-500">עדכן כמות לפי סה״כ משתתפים בקבוצה</span>
-              </label>
+              {defaultPax && (
+                <p className="text-[10px] text-slate-400">ברירת מחדל: {defaultPax} (ניתן לשנות)</p>
+              )}
             </div>
 
             {/* Notes */}

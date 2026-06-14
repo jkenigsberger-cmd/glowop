@@ -163,7 +163,6 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
       }
 
       await base44.entities.Group.update(group.id, payload);
-
       // Keep OperationalGroupProfile in sync with group pax edits + dietary
       const existingProfiles = await base44.entities.OperationalGroupProfile.filter({ group_id: group.id });
       if (existingProfiles.length > 0) {

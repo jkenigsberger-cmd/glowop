@@ -81,19 +81,11 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
     [group, profile]
   );
 
-  // Resolved group total pax for sync
-  const groupTotalPax = useMemo(() =>
-    group?.total_pax ?? profile?.total_pax ?? null,
-    [group, profile]
-  );
-
   // Default empty schedule with pax auto-filled
   const makeEmptySchedule = () => ({
     date: "", start_time: "09:00", end_time: "10:00",
     activity_name: "", requested_location: "", activity_space_id: null,
-    quote_item_id: null,
-    pax: groupParticipantCount ? String(groupParticipantCount) : "",
-    notes: ""
+    quote_item_id: null, pax: groupParticipantCount ? String(groupParticipantCount) : "", notes: ""
   });
 
   const [newSchedule, setNewSchedule] = useState(makeEmptySchedule);
@@ -252,7 +244,6 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
         ...newSchedule,
         group_id: groupId,
         operational_group_profile_id: profileId,
-        pax_sync_mode: newSchedule.pax_sync_mode || "AUTO",
         source: "manual",
         status: "ACTIVE",
       });
@@ -771,33 +762,21 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
           <div className="space-y-2">
             {activeScheduleGrouped.map(entry =>
               entry.type === "split" ? (
-                <div key={entry.key}>
-                  <SplitActivityGroup
-                    items={entry.items}
-                    activitySpaces={activitySpaces}
-                    onCancel={handleCancelScheduleItem}
-                    onDuplicate={handleDuplicateActivity}
-                    saving={saving}
-                  />
-                  {groupTotalPax != null && (() => {
-                    const splitTotal = entry.items.reduce((s, i) => s + (Number(i.pax) || 0), 0);
-                    if (splitTotal > 0 && splitTotal !== groupTotalPax) {
-                      return (
-                        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-1.5 mt-1">
-                          ⚠ סה״כ המשתתפים בחלוקת המקומות ({splitTotal}) שונה מסה״כ המשתתפים בקבוצה ({groupTotalPax}).
-                        </p>
-                      );
-                    }
-                    return null;
-                  })()}
-                </div>
+                <SplitActivityGroup
+                  key={entry.key}
+                  items={entry.items}
+                  activitySpaces={activitySpaces}
+                  onCancel={handleCancelScheduleItem}
+                  onDuplicate={handleDuplicateActivity}
+                  saving={saving}
+                />
               ) : (
                 <ScheduleItemRow
                   key={entry.key}
                   item={entry.item}
                   activitySpaces={activitySpaces}
                   quoteActivities={[]}
-                  groupDateRange={{ arrivalDate, departureDate, groupTotalPax }}
+                  groupDateRange={{ arrivalDate, departureDate }}
                   onSave={handleSaveScheduleItem}
                   onCancel={handleCancelScheduleItem}
                   onDuplicate={handleDuplicateActivity}
@@ -820,7 +799,7 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
                   item={item}
                   activitySpaces={activitySpaces}
                   quoteActivities={[]}
-                  groupDateRange={{ arrivalDate, departureDate, groupTotalPax }}
+                  groupDateRange={{ arrivalDate, departureDate }}
                   onSave={handleSaveScheduleItem}
                   onCancel={() => {}}
                   saving={saving}
