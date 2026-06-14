@@ -186,40 +186,62 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
 
   // ── Coffee corner Kitchen sync helper ─────────────────────────────────────
   // Upserts or cancels a COFFEE_CORNER MealReservation linked to an activity.
-  // match key: group_id + date + source='manual' + meal_type=COFFEE_CORNER + notes contains activity_name
-  const syncActivityCoffee = async ({ wantCoffee, date, pax, activityName, splitGroupId, locations }) => {
+  // Match key: source_activity_id (stable per-activity FK, no text search)
+  const syncActivityCoffee = async ({ wantCoffee, date, startTime, pax, activityName, sourceActivityId, locations }) => {
     try {
-      const existing = await base44.entities.MealReservation.filter({ group_id: groupId, meal_type: "COFFEE_CORNER", source: "manual" });
-      // Find the one linked to this activity (by split_group_id in notes, or activity name)
-      const matchKey = splitGroupId || activityName;
-      const linked = existing.find(r =>
-        r.status === "ACTIVE" &&
-        r.date === date &&
-        r.notes?.includes(matchKey)
-      );
+      const existing = await base44.entities.MealReservation.filter({
+        group_id: groupId,
+        meal_type: "COFFEE_CORNER",
+        source_activity_id: sourceActivityId,
+      });
+      const linked = existing.find(r => r.status === "ACTIVE");
+      const cancelledLinked = existing.find(r => r.status === "CANCELLED");
 
       if (wantCoffee && pax > 0) {
-        const locationsStr = locations?.length ? ` | מקומות: ${locations.join(", ")}` : "";
-        const noteStr = `פינת קפה ועוגיות — ${activityName}${locationsStr} [${matchKey}]`;
+        const endHH = String(Number((startTime || "10:00").split(":")[0]) + 1).padStart(2, "0");
+        const endTime = `${endHH}:${(startTime || "10:00").split(":")[1] || "00"}`;
+        const locationsJson = JSON.stringify(locations || []);
         if (linked) {
-          await base44.entities.MealReservation.update(linked.id, { pax, notes: noteStr, status: "ACTIVE" });
+          await base44.entities.MealReservation.update(linked.id, {
+            pax,
+            date,
+            start_time: startTime || "10:00",
+            end_time: endTime,
+            activity_name: activityName,
+            coffee_locations_json: locationsJson,
+            status: "ACTIVE",
+          });
+        } else if (cancelledLinked) {
+          // Reactivate cancelled record
+          await base44.entities.MealReservation.update(cancelledLinked.id, {
+            pax,
+            date,
+            start_time: startTime || "10:00",
+            end_time: endTime,
+            activity_name: activityName,
+            coffee_locations_json: locationsJson,
+            status: "ACTIVE",
+          });
         } else {
+          const endHH2 = String(Number((startTime || "10:00").split(":")[0]) + 1).padStart(2, "0");
           await base44.entities.MealReservation.create({
             group_id: groupId,
             operational_group_profile_id: profileId,
             date,
             meal_type: "COFFEE_CORNER",
-            start_time: "10:00",
-            end_time: "11:00",
+            start_time: startTime || "10:00",
+            end_time: `${endHH2}:${(startTime || "10:00").split(":")[1] || "00"}`,
             pax,
             coffee_service_type: "קפה ועוגיות",
-            notes: noteStr,
+            activity_name: activityName,
+            coffee_locations_json: locationsJson,
+            source_activity_id: sourceActivityId,
             source: "manual",
             status: "ACTIVE",
           });
         }
       } else {
-        // Uncheck — cancel if exists
+        // Uncheck — cancel if active exists
         if (linked) {
           await base44.entities.MealReservation.update(linked.id, { status: "CANCELLED" });
         }
@@ -237,6 +259,19 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
       if (res.data?.error) {
         invalidate();
         return res.data.error;
+      }
+      // Sync coffee corner to Kitchen when editing an existing item
+      if (form.id) {
+        const space = activitySpaces.find(s => s.id === form.activity_space_id);
+        await syncActivityCoffee({
+          wantCoffee: !!form.coffee_corner,
+          date: form.date,
+          startTime: form.start_time,
+          pax: Number(form.pax) || groupParticipantCount || 0,
+          activityName: form.activity_name,
+          sourceActivityId: form.id,
+          locations: space ? [space.name] : [],
+        });
       }
       invalidate();
       toast.success("פעילות נשמרה");
@@ -294,21 +329,26 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
         ...newSchedule,
         group_id: groupId,
         operational_group_profile_id: profileId,
+        coffee_corner: singleCoffee,
         source: "manual",
         status: "ACTIVE",
       });
       if (res.data?.error) { setNewScheduleError(res.data.error); return; }
+      const savedId = res.data?.item?.id;
       // Sync coffee corner to Kitchen
-      await syncActivityCoffee({
-        wantCoffee: singleCoffee,
-        date: newSchedule.date,
-        pax: Number(newSchedule.pax) || groupParticipantCount || 0,
-        activityName: newSchedule.activity_name,
-        splitGroupId: null,
-        locations: newSchedule.activity_space_id
-          ? [activitySpaces.find(s => s.id === newSchedule.activity_space_id)?.name || ""].filter(Boolean)
-          : [],
-      });
+      if (savedId) {
+        await syncActivityCoffee({
+          wantCoffee: singleCoffee,
+          date: newSchedule.date,
+          startTime: newSchedule.start_time,
+          pax: Number(newSchedule.pax) || groupParticipantCount || 0,
+          activityName: newSchedule.activity_name,
+          sourceActivityId: savedId,
+          locations: newSchedule.activity_space_id
+            ? [activitySpaces.find(s => s.id === newSchedule.activity_space_id)?.name || ""].filter(Boolean)
+            : [],
+        });
+      }
       toast.success("פעילות נוספה");
       resetAddActivityForm();
       invalidate();
@@ -363,6 +403,7 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
           quote_item_id: newSchedule.quote_item_id || null,
           pax: row.pax ? Number(row.pax) : null,
           notes: newSchedule.notes || null,
+          coffee_corner: !!row.coffee_corner,
           split_group_id: splitGroupId,
           split_index: i + 1,
           split_total: splitRows.length,
@@ -382,6 +423,7 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
         createdIds.push(res.data.item.id);
       }
       // Sync coffee corner to Kitchen (sum pax of rows with coffee checked)
+      // Use the first created item's id as stable sourceActivityId for the split group
       const coffeeRows = splitRows.filter(r => r.coffee_corner);
       const wantCoffee = coffeeRows.length > 0;
       const coffeePax = coffeeRows.reduce((s, r) => s + (Number(r.pax) || 0), 0) ||
@@ -389,14 +431,17 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
       const coffeeLocations = coffeeRows.map(r =>
         activitySpaces.find(s => s.id === r.activity_space_id)?.name || ""
       ).filter(Boolean);
-      await syncActivityCoffee({
-        wantCoffee,
-        date: newSchedule.date,
-        pax: coffeePax,
-        activityName: newSchedule.activity_name,
-        splitGroupId,
-        locations: coffeeLocations,
-      });
+      if (createdIds[0]) {
+        await syncActivityCoffee({
+          wantCoffee,
+          date: newSchedule.date,
+          startTime: newSchedule.start_time,
+          pax: coffeePax,
+          activityName: newSchedule.activity_name,
+          sourceActivityId: createdIds[0],
+          locations: coffeeLocations,
+        });
+      }
       toast.success(`שיבוץ מפוצל נשמר — ${splitRows.length} מרחבים`);
       resetAddActivityForm();
       invalidate();

@@ -9,6 +9,10 @@ import { he } from "date-fns/locale";
 const MEAL_ORDER  = { BREAKFAST: 0, LUNCH: 1, DINNER: 2, OTHER: 3 };
 const MEAL_LABELS = { BREAKFAST: "ארוחת בוקר", LUNCH: "ארוחת צהריים", DINNER: "ארוחת ערב", OTHER: "אחר" };
 
+function safeJsonArr(str) {
+  try { const r = JSON.parse(str); return Array.isArray(r) ? r : []; } catch { return []; }
+}
+
 const DIET_FIELDS = [
   { key: "vegetarian_count",      label: "צמחונים" },
   { key: "vegan_count",           label: "טבעונים" },
@@ -113,16 +117,23 @@ export default function KitchenReport() {
   const groupMap   = useMemo(() => Object.fromEntries(groups.map(g => [g.id, g])), [groups]);
   const profileMap = useMemo(() => Object.fromEntries(profiles.map(p => [p.group_id, p])), [profiles]);
 
-  // Meals in date range (inclusive)
+  // Split meals and coffee corners
   const rangeMeals = useMemo(() => {
     if (!startDate) return [];
     return allMeals
-      .filter(m => m.date >= startDate && m.date <= endDate)
+      .filter(m => m.date >= startDate && m.date <= endDate && m.meal_type !== "COFFEE_CORNER")
       .sort((a, b) => {
         if (a.date !== b.date) return a.date.localeCompare(b.date);
         const typeCmp = (MEAL_ORDER[a.meal_type] ?? 99) - (MEAL_ORDER[b.meal_type] ?? 99);
         return typeCmp !== 0 ? typeCmp : (a.start_time || "").localeCompare(b.start_time || "");
       });
+  }, [allMeals, startDate, endDate]);
+
+  const rangeCoffee = useMemo(() => {
+    if (!startDate) return [];
+    return allMeals
+      .filter(m => m.date >= startDate && m.date <= endDate && m.meal_type === "COFFEE_CORNER")
+      .sort((a, b) => a.date !== b.date ? a.date.localeCompare(b.date) : (a.start_time || "").localeCompare(b.start_time || ""));
   }, [allMeals, startDate, endDate]);
 
   // ── aggregate totals ──────────────────────────────────────────────────────
@@ -447,6 +458,22 @@ export default function KitchenReport() {
           padding: 40px;
           text-align: center;
         }
+        .kr-coffee-card {
+          background: #fffbeb;
+          border: 1px solid #fde68a;
+          border-right: 4px solid #f59e0b;
+          border-radius: 0 8px 8px 0;
+          padding: 8px 12px;
+          margin-bottom: 6px;
+          font-size: 12px;
+        }
+        .kr-coffee-title {
+          font-size: 14px;
+          font-weight: 700;
+          color: #92400e;
+          margin-bottom: 3px;
+        }
+        .kr-coffee-meta { font-size: 12px; color: #78350f; }
 
         /* ── Verification table ── */
         .kr-verify-table {
@@ -508,7 +535,7 @@ export default function KitchenReport() {
           </div>
 
           {/* Empty state */}
-          {rangeMeals.length === 0 ? (
+          {rangeMeals.length === 0 && rangeCoffee.length === 0 ? (
             <div className="kr-no-data">
               לא נמצאו ארוחות בטווח התאריכים שנבחר
             </div>
@@ -628,7 +655,30 @@ export default function KitchenReport() {
                 </div>
               )}
 
-              {/* Section 4 — Daily breakdown */}
+              {/* Section 4 — פינת קפה */}
+              {rangeCoffee.length > 0 && (
+                <div className="kr-section">
+                  <div className="kr-section-title">☕ פינת קפה</div>
+                  {rangeCoffee.map(m => {
+                    const groupName = groupMap[m.group_id]?.group_name || "—";
+                    const locations = safeJsonArr(m.coffee_locations_json);
+                    return (
+                      <div key={m.id} className="kr-coffee-card">
+                        <div className="kr-coffee-title">{groupName}</div>
+                        {m.activity_name && <div className="kr-coffee-meta">פעילות: {m.activity_name}</div>}
+                        <div className="kr-coffee-meta">{fmtShort(m.date)}{m.start_time ? ` · ${m.start_time}` : ""}</div>
+                        <div className="kr-coffee-meta" style={{ fontWeight: 700 }}>כמות: {m.pax || "—"}</div>
+                        {locations.length > 0 && (
+                          <div className="kr-coffee-meta">מיקומים: {locations.join(", ")}</div>
+                        )}
+                        {m.notes && <div className="kr-coffee-meta">הערות: {m.notes}</div>}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Section 5 — Daily breakdown */}
               <div className="kr-section">
                 <div className="kr-section-title">פירוט יומי</div>
                 {days.map(day => {
@@ -717,7 +767,7 @@ export default function KitchenReport() {
                 })}
               </div>
 
-              {/* Section 5 — Verification breakdown */}
+              {/* Section 6 — Verification breakdown */}
               <div className="kr-section">
                 <div className="kr-section-title" style={{ color: "#64748b", fontSize: 12 }}>
                   פירוט לפי קבוצות לבדיקה

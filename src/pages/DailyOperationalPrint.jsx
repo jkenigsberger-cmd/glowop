@@ -89,8 +89,28 @@ export default function DailyOperationalPrint() {
     return Number(d.lifeThreatening_count) > 0;
   });
 
-  const sortedMeals = [...meals].sort((a, b) => (a.start_time || "").localeCompare(b.start_time || ""));
-  const sortedActivities = [...activities].sort((a, b) => (a.start_time || "").localeCompare(b.start_time || ""));
+  // Filter out COFFEE_CORNER from meals display (those come from activities)
+  const regularMeals = meals.filter(m => m.meal_type !== "COFFEE_CORNER");
+  const sortedMeals = [...regularMeals].sort((a, b) => (a.start_time || "").localeCompare(b.start_time || ""));
+
+  // Group split activities into single entries; keep singles as-is
+  const groupedActivities = (() => {
+    const result = [];
+    const splitSeen = new Set();
+    const sorted = [...activities].sort((a, b) => (a.start_time || "").localeCompare(b.start_time || ""));
+    for (const item of sorted) {
+      if (item.split_group_id) {
+        if (!splitSeen.has(item.split_group_id)) {
+          splitSeen.add(item.split_group_id);
+          const siblings = sorted.filter(x => x.split_group_id === item.split_group_id);
+          result.push({ type: "split", key: item.split_group_id, items: siblings, first: item });
+        }
+      } else {
+        result.push({ type: "single", key: item.id, item });
+      }
+    }
+    return result;
+  })();
 
   const generatedAt = format(new Date(), "dd/MM/yyyy HH:mm");
 
@@ -234,10 +254,11 @@ export default function DailyOperationalPrint() {
                 const diets = safeJson(m.special_diets_summary, {});
                 const lifeCount = Number(diets.lifeThreatening_count) || 0;
                 const hasDiets = DIET_LABELS.some(d => Number(diets[d.key]) > 0) || diets.diet_notes;
+                const mealLabel = m.meal_type === "COFFEE_CORNER" ? "פינת קפה" : (MEAL_LABELS[m.meal_type] || m.meal_type);
                 return (
                   <div key={m.id} className="meal-card">
                     <div className="meal-header">
-                      <span className="meal-type">{MEAL_LABELS[m.meal_type] || m.meal_type}</span>
+                      <span className="meal-type">{mealLabel}</span>
                       {m.start_time && <span className="meal-time" dir="ltr">{m.start_time}–{m.end_time}</span>}
                     </div>
                     {g && <div style={{ fontSize: "13px", fontWeight: "600", marginBottom: "3px" }}>{g.group_name}</div>}
@@ -266,20 +287,60 @@ export default function DailyOperationalPrint() {
 
         {/* Activities */}
         <div className="section">
-          <div className="section-header">⚡ פעילויות היום ({sortedActivities.length})</div>
+          <div className="section-header">⚡ פעילויות היום ({groupedActivities.length})</div>
           <div className="section-body">
-            {sortedActivities.length === 0 ? <div className="empty-note">אין פעילויות מתוכננות</div> :
-              sortedActivities.map(item => {
+            {groupedActivities.length === 0 ? <div className="empty-note">אין פעילויות מתוכננות</div> :
+              groupedActivities.map(entry => {
+                if (entry.type === "split") {
+                  const { first, items } = entry;
+                  const g = groups.find(x => x.id === first.group_id);
+                  const totalPax = items.reduce((s, i) => s + (Number(i.pax) || 0), 0);
+                  const coffeeItems = items.filter(i => i.coffee_corner);
+                  return (
+                    <div key={entry.key} className="activity-card">
+                      <div className="activity-time" dir="ltr">{first.start_time}–{first.end_time}</div>
+                      <div className="activity-name">{first.activity_name}</div>
+                      {g && <div className="activity-meta">🏕 {g.group_name}</div>}
+                      {totalPax > 0 && <div className="activity-meta">👥 {totalPax} משתתפים סה״כ</div>}
+                      <div style={{ marginTop: "4px", fontSize: "12px", color: "#475569" }}>
+                        {items.map((item, idx) => {
+                          const space = item.activity_space_id ? spaceById[item.activity_space_id] : null;
+                          return (
+                            <div key={item.id} style={{ display: "flex", alignItems: "center", gap: "6px", padding: "2px 0" }}>
+                              <span style={{ color: "#94a3b8", fontWeight: 700 }}>{idx + 1}.</span>
+                              <span>{space?.name || "—"}</span>
+                              {item.pax > 0 && <span style={{ color: "#94a3b8" }}>({item.pax})</span>}
+                              {item.coffee_corner && <span style={{ color: "#92400e", fontWeight: 600 }}>☕ פינת קפה</span>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {coffeeItems.length > 0 && (
+                        <div style={{ marginTop: "4px", fontSize: "12px", color: "#92400e", fontWeight: 600 }}>
+                          ☕ פינת קפה: {coffeeItems.map(i => spaceById[i.activity_space_id]?.name || "—").join(", ")}
+                        </div>
+                      )}
+                      {first.notes && <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "3px" }}>{first.notes}</div>}
+                    </div>
+                  );
+                }
+                // Single activity
+                const item = entry.item;
                 const g = groups.find(x => x.id === item.group_id);
                 const space = item.activity_space_id ? spaceById[item.activity_space_id] : null;
                 return (
-                  <div key={item.id} className="activity-card">
+                  <div key={entry.key} className="activity-card">
                     <div className="activity-time" dir="ltr">{item.start_time}–{item.end_time}</div>
                     <div className="activity-name">{item.activity_name}</div>
                     {g && <div className="activity-meta">🏕 {g.group_name}</div>}
                     {space && <div className="activity-meta">📍 {space.name}</div>}
                     {!space && item.requested_location && <div className="activity-meta">📍 {item.requested_location}</div>}
                     {item.pax > 0 && <div className="activity-meta">👥 {item.pax} משתתפים</div>}
+                    {item.coffee_corner && (
+                      <div style={{ fontSize: "12px", color: "#92400e", fontWeight: 600, marginTop: "3px" }}>
+                        ☕ פינת קפה{space ? `: ${space.name}` : ""}
+                      </div>
+                    )}
                     {item.notes && <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "3px" }}>{item.notes}</div>}
                   </div>
                 );
