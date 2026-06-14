@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Lock, CheckCircle2, ChevronDown, ChevronUp, Plus, X, LayoutGrid } from "lucide-react";
+import { Lock, CheckCircle2, ChevronDown, ChevronUp, Plus, X, LayoutGrid, AlertTriangle, Users } from "lucide-react";
 import TentDistributionEditor from "./TentDistributionEditor";
 import AutoAllocationButton from "./AutoAllocationButton";
 
@@ -52,13 +53,22 @@ export default function StudentNeighborhoodPanel({
     planned_tents: tents.length,
     notes: "",
   });
+  // Shared neighborhood override state
+  const [sharedAllowed, setSharedAllowed] = useState(false);
+  const [sharedReason, setSharedReason] = useState("");
 
   const totalBeds = tents.reduce((s, t) => s + (t.capacity || 0), 0);
   const isLockedByMe = !!lockByThisGroup;
   const isLockedByOther = !!lockByOtherGroup && !isLockedByMe;
+  // Is this neighborhood already shared (approved on existing reservation)?
+  const isAlreadyShared = !!(lockByThisGroup?.shared_neighborhood_allowed);
 
   const handleReserve = () => {
-    onReserve({
+    // If neighborhood is used by another group, require conscious shared override
+    if (isLockedByOther && !sharedAllowed) return;
+    if (isLockedByOther && sharedAllowed && !sharedReason.trim()) return;
+
+    const payload = {
       group_id: groupId,
       operational_group_profile_id: profileId,
       neighborhood_id: neighborhood.id,
@@ -69,7 +79,14 @@ export default function StudentNeighborhoodPanel({
       notes: form.notes,
       status: "ACTIVE",
       source: "allocation",
-    });
+    };
+    if (sharedAllowed && sharedReason.trim()) {
+      payload.shared_neighborhood_allowed = true;
+      payload.shared_neighborhood_reason = sharedReason.trim();
+    }
+    onReserve(payload);
+    setSharedAllowed(false);
+    setSharedReason("");
     setOpen(false);
   };
 
@@ -81,7 +98,8 @@ export default function StudentNeighborhoodPanel({
   // ── card color ─────────────────────────────────────────────────────────────
   let borderClass = "border-slate-200";
   let bgClass = "bg-white";
-  if (isLockedByMe) { borderClass = "border-emerald-300"; bgClass = "bg-emerald-50"; }
+  if (isLockedByMe && isAlreadyShared) { borderClass = "border-amber-300"; bgClass = "bg-amber-50"; }
+  else if (isLockedByMe) { borderClass = "border-emerald-300"; bgClass = "bg-emerald-50"; }
   else if (isLockedByOther) { borderClass = "border-red-200"; bgClass = "bg-red-50 opacity-75"; }
 
   return (
@@ -103,7 +121,12 @@ export default function StudentNeighborhoodPanel({
 
             {isLockedByOther && (
               <span className="inline-flex items-center gap-1 text-[10px] font-medium bg-red-100 text-red-700 border border-red-200 rounded-full px-2 py-0.5">
-                <Lock className="w-3 h-3" /> חסומה — {lockByOtherGroup.group_name}
+                <Lock className="w-3 h-3" /> בשימוש — {lockByOtherGroup.group_name}
+              </span>
+            )}
+            {isAlreadyShared && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-medium bg-amber-100 text-amber-700 border border-amber-200 rounded-full px-2 py-0.5">
+                <Users className="w-3 h-3" /> שכונה משותפת
               </span>
             )}
           </div>
@@ -118,10 +141,16 @@ export default function StudentNeighborhoodPanel({
               </p>
             );
           })()}
+          {/* Shared reason display */}
+          {isAlreadyShared && lockByThisGroup.shared_neighborhood_reason && (
+            <p className="text-[10px] text-amber-700 mt-0.5">
+              סיבה: {lockByThisGroup.shared_neighborhood_reason}
+            </p>
+          )}
         </div>
 
         {/* Actions */}
-        {!isLockedByOther && (
+        {(isLockedByOther || !isLockedByOther) && (
           <div className="flex items-center gap-1.5 shrink-0">
             {isLockedByMe ? (
               <>
@@ -167,10 +196,12 @@ export default function StudentNeighborhoodPanel({
             ) : (
               <Button
                 size="sm"
-                className="h-7 text-xs gap-1"
+                className={`h-7 text-xs gap-1 ${isLockedByOther ? "border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100" : ""}`}
+                variant={isLockedByOther ? "outline" : "default"}
                 onClick={() => setOpen(o => !o)}
               >
-                <Plus className="w-3 h-3" /> הוסף שכונה
+                {isLockedByOther ? <AlertTriangle className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
+                {isLockedByOther ? "שימוש משותף..." : "הוסף שכונה"}
               </Button>
             )}
           </div>
@@ -193,7 +224,7 @@ export default function StudentNeighborhoodPanel({
       />
 
       {/* Expand form */}
-      {open && !isLockedByOther && (
+      {open && (
         <div className="border-t border-slate-200 px-4 py-3 bg-white space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
@@ -231,9 +262,50 @@ export default function StudentNeighborhoodPanel({
               placeholder="הערות..."
             />
           </div>
+          {/* Shared neighborhood override section */}
+          {isLockedByOther && (
+            <div className="border border-amber-300 rounded-lg bg-amber-50 px-3 py-3 space-y-2">
+              <p className="text-xs font-semibold text-amber-800 flex items-center gap-1.5">
+                <AlertTriangle className="w-3.5 h-3.5" />
+                שכונה זו כבר בשימוש על ידי קבוצה אחרת בתאריכים אלו.
+              </p>
+              <p className="text-[11px] text-amber-700">
+                כדי לאפשר שימוש משותף, סמן את האפשרות למטה ורשום סיבה. האוהלים הספציפיים עדיין לא יהיו כפולים — המערכת תחסום כפל אוהלים.
+              </p>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={sharedAllowed}
+                  onChange={e => setSharedAllowed(e.target.checked)}
+                  className="w-4 h-4 accent-amber-600"
+                />
+                <span className="text-xs font-semibold text-amber-800">אפשר שימוש בשכונה משותפת</span>
+              </label>
+              {sharedAllowed && (
+                <div className="space-y-1">
+                  <label className="text-[11px] font-medium text-amber-800">סיבת אישור שכונה משותפת *</label>
+                  <Textarea
+                    value={sharedReason}
+                    onChange={e => setSharedReason(e.target.value)}
+                    placeholder="לדוגמה: הקבוצות משתמשות באוהלים שונים בלבד / אושר מול התפעול"
+                    className="text-xs min-h-[56px] border-amber-300 focus:border-amber-500"
+                  />
+                  {!sharedReason.trim() && (
+                    <p className="text-[10px] text-red-600">סיבה חובה לאישור שכונה משותפת</p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="flex gap-2 justify-end">
-            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setOpen(false)}>ביטול</Button>
-            <Button size="sm" className="h-7 text-xs" onClick={handleReserve} disabled={saving}>
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => { setOpen(false); setSharedAllowed(false); setSharedReason(""); }}>ביטול</Button>
+            <Button
+              size="sm"
+              className="h-7 text-xs"
+              onClick={handleReserve}
+              disabled={saving || (isLockedByOther && (!sharedAllowed || !sharedReason.trim()))}
+            >
               {isLockedByMe ? "עדכן" : "שמור שכונה"}
             </Button>
           </div>

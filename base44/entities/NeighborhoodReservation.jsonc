@@ -54,6 +54,23 @@
     },
     "notes": {
       "type": "string"
+    },
+    "shared_neighborhood_allowed": {
+      "type": "boolean",
+      "default": false,
+      "description": "Admin override \u2014 allows this group to share the neighborhood with another group on overlapping dates"
+    },
+    "shared_neighborhood_reason": {
+      "type": "string",
+      "description": "Mandatory reason when shared_neighborhood_allowed is true"
+    },
+    "shared_neighborhood_approved_by": {
+      "type": "string",
+      "description": "Email of admin who approved the shared neighborhood"
+    },
+    "shared_neighborhood_approved_at": {
+      "type": "string",
+      "description": "ISO datetime of approval"
     }
   },
   "required": [
