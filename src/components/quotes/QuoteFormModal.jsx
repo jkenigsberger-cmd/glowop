@@ -538,6 +538,16 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
 
   const [coffeeEnabled, setCoffeeEnabled] = useState(quote ? (quote.coffee_corner_pax > 0) : false);
 
+  // ── Quote type (for catalog organization) ────────────────────────────────────
+  const deriveQuoteType = () => {
+    if (quote?.quote_type) return quote.quote_type;
+    const gt = isNewGroupFlow ? groupForm.group_type : (group?.group_type || "LODGING");
+    if (gt === "LODGING") return "lodging";
+    if (gt === "DAY_USE") return "day_use";
+    return "custom";
+  };
+  const [quoteType, setQuoteType] = useState(deriveQuoteType);
+
   const initArrival    = quote?.arrival_date    || group?.arrival_date    || "";
   const initDeparture  = quote?.departure_date  || group?.departure_date  || "";
   const initNights     = calcNights(initArrival, initDeparture) || 1; // default 1 for row init
@@ -577,6 +587,8 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
   const participantCount = Math.max(0, estimatedPax - staffCount);
   const nights = calcNights(form.arrival_date, form.departure_date);
   const staffExceedsTotal = staffCount > estimatedPax && estimatedPax > 0;
+  // B. Default pax for catalog lines: staff_count || participant_count || estimated_pax
+  const catalogDefaultPax = staffCount || participantCount || estimatedPax || 0;
 
   // ── Capacity check ───────────────────────────────────────────────────────────
   const checkAvailability = useCallback(async () => {
@@ -668,6 +680,7 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
       adjustment_lines:      JSON.stringify(adjustments),
       package_lines:         JSON.stringify(packageLines),
       new_addon_lines:       JSON.stringify(newAddonLines),
+      quote_type:            quoteType,
       subtotal, discount_amount: discountAmount, total_price,
       advance_payment: advance, balance_payment: balance,
       version: Number(form.version),
@@ -750,6 +763,31 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
                   </div>
                 </SectionCard>
               )}
+
+              {/* Quote type selector */}
+              <div className={`${CARD} px-5 py-4`}>
+                <div className={SEC_TITLE}><Package className="w-4 h-4 text-primary" />סוג הצעת מחיר</div>
+                <div className="flex gap-2 flex-wrap">
+                  {[
+                    { id: "lodging",  label: "קבוצה עם לינה" },
+                    { id: "day_use",  label: "פעילות יום" },
+                    { id: "custom",   label: "מותאם אישית" },
+                  ].map(opt => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => setQuoteType(opt.id)}
+                      className={`px-4 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                        quoteType === opt.id
+                          ? "bg-primary text-white border-primary"
+                          : "bg-white text-slate-600 border-slate-200 hover:border-primary/50"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
               {/* Quote meta */}
               <SectionCard icon={SlidersHorizontal} title="פרטי הצעה" defaultOpen={true}>
@@ -846,58 +884,77 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
               </SectionCard>
 
               {/* ── NEW CATALOG PACKAGES ── */}
-              <SectionCard icon={Package} title="חבילות ומוצרים" subtitle="קטלוג חדש" defaultOpen={packageLines.length > 0 || newAddonLines.length > 0}>
+              <SectionCard icon={Package} title="חבילות ומוצרים" defaultOpen={true}>
                 <PackageLinesSection
                   packageLines={packageLines}
                   setPackageLines={setPackageLines}
                   addonLines={newAddonLines}
                   setAddonLines={setNewAddonLines}
-                  defaultPax={participantCount || estimatedPax}
+                  defaultPax={catalogDefaultPax}
+                  quoteType={quoteType}
                 />
               </SectionCard>
 
-              {/* Pricing sections — lodging hidden for DAY_USE */}
-              {isDayUse ? (
-                <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-sm text-blue-700">
-                  פעילות יום אינה כוללת לינה, ולכן רכיבי לינה לא יתווספו להצעה.
-                </div>
-              ) : (
-                <>
-                  <SectionCard icon={CalendarDays} title="לינה — תלמידים"
-                    subtitle={suggestedRateType === "weekend_lodging" ? "סוף שבוע" : "אמצע שבוע"}>
-                    <StudentLodgingSection lines={studentLodging} setLines={setStudentLodging}
-                      suggestedRateType={suggestedRateType} groupType={groupType}
-                      defaultPax={participantCount} defaultNights={nights} />
-                  </SectionCard>
-                  <SectionCard icon={Users} title="לינה — מבוגרים" subtitle="מחיר לאוהל ללילה" defaultOpen={adultLodging.length > 0}>
-                    <AdultLodgingSection lines={adultLodging} setLines={setAdultLodging} defaultNights={nights} adultsCount={staffCount} />
-                  </SectionCard>
-                </>
+              {/* ── LEGACY sections — only show if they have existing saved data ── */}
+              {studentLodging.length > 0 && (
+                <SectionCard icon={CalendarDays} title="לינה — תלמידים (ישן)"
+                  subtitle={suggestedRateType === "weekend_lodging" ? "סוף שבוע" : "אמצע שבוע"}
+                  defaultOpen={true}>
+                  <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 mb-2">
+                    שורות מהצעה ישנה — ניתן לערוך או למחוק
+                  </div>
+                  <StudentLodgingSection lines={studentLodging} setLines={setStudentLodging}
+                    suggestedRateType={suggestedRateType} groupType={groupType}
+                    defaultPax={participantCount} defaultNights={nights} />
+                </SectionCard>
+              )}
+              {adultLodging.length > 0 && (
+                <SectionCard icon={Users} title="לינה — מבוגרים (ישן)" defaultOpen={true}>
+                  <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 mb-2">
+                    שורות מהצעה ישנה — ניתן לערוך או למחוק
+                  </div>
+                  <AdultLodgingSection lines={adultLodging} setLines={setAdultLodging} defaultNights={nights} adultsCount={staffCount} />
+                </SectionCard>
+              )}
+              {workshops.length > 0 && (
+                <SectionCard icon={BookOpen} title="סדנאות (ישן)" defaultOpen={true}>
+                  <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 mb-2">
+                    שורות מהצעה ישנה — ניתן לערוך או למחוק
+                  </div>
+                  <WorkshopSection lines={workshops} setLines={setWorkshops} />
+                </SectionCard>
+              )}
+              {lectures.length > 0 && (
+                <SectionCard icon={Mic2} title="הרצאות (ישן)" defaultOpen={true}>
+                  <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 mb-2">
+                    שורות מהצעה ישנה — ניתן לערוך או למחוק
+                  </div>
+                  <LectureSection lines={lectures} setLines={setLectures} />
+                </SectionCard>
               )}
 
-              <SectionCard icon={BookOpen} title="סדנאות" defaultOpen={workshops.length > 0}>
-                <WorkshopSection lines={workshops} setLines={setWorkshops} />
-              </SectionCard>
+              {/* Coffee — show only if enabled or legacy has data */}
+              {(coffeeEnabled || (isEdit && quote?.coffee_corner_pax > 0)) && (
+                <SectionCard icon={Coffee} title="פינת קפה" subtitle={`₪${COFFEE_CORNER_RATE} לאיש צוות`} defaultOpen={coffeeEnabled}>
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input type="checkbox" checked={coffeeEnabled} onChange={e => setCoffeeEnabled(e.target.checked)} className="w-4 h-4 accent-primary" />
+                    <span className="text-sm">כלול פינת קפה</span>
+                  </label>
+                  {coffeeEnabled && staffCount > 0 && (
+                    <div className="text-sm text-slate-500 mt-1">{staffCount} אנשי צוות × ₪{COFFEE_CORNER_RATE} = <span className="font-semibold text-slate-700">₪{coffeeTotal.toLocaleString()}</span></div>
+                  )}
+                  {coffeeEnabled && staffCount === 0 && <p className="text-xs text-amber-600">הזן מספר אנשי צוות לחישוב</p>}
+                </SectionCard>
+              )}
 
-              <SectionCard icon={Mic2} title="הרצאות" defaultOpen={lectures.length > 0}>
-                <LectureSection lines={lectures} setLines={setLectures} />
-              </SectionCard>
-
-              {/* Coffee */}
-              <SectionCard icon={Coffee} title="פינת קפה" subtitle={`₪${COFFEE_CORNER_RATE} לאיש צוות`} defaultOpen={coffeeEnabled}>
-                <label className="flex items-center gap-2 cursor-pointer select-none">
-                  <input type="checkbox" checked={coffeeEnabled} onChange={e => setCoffeeEnabled(e.target.checked)} className="w-4 h-4 accent-primary" />
-                  <span className="text-sm">כלול פינת קפה</span>
-                </label>
-                {coffeeEnabled && staffCount > 0 && (
-                  <div className="text-sm text-slate-500 mt-1">{staffCount} אנשי צוות × ₪{COFFEE_CORNER_RATE} = <span className="font-semibold text-slate-700">₪{coffeeTotal.toLocaleString()}</span></div>
-                )}
-                {coffeeEnabled && staffCount === 0 && <p className="text-xs text-amber-600">הזן מספר אנשי צוות לחישוב</p>}
-              </SectionCard>
-
-              <SectionCard icon={Tag} title="תוספות חופשיות" defaultOpen={addons.length > 0}>
-                <AddonSection lines={addons} setLines={setAddons} />
-              </SectionCard>
+              {addons.length > 0 && (
+                <SectionCard icon={Tag} title="תוספות חופשיות (ישן)" defaultOpen={true}>
+                  <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 mb-2">
+                    שורות מהצעה ישנה — ניתן לערוך או למחוק
+                  </div>
+                  <AddonSection lines={addons} setLines={setAddons} />
+                </SectionCard>
+              )}
 
               <SectionCard icon={SlidersHorizontal} title="התאמות / הנחות" defaultOpen={adjustments.length > 0}>
                 <AdjustmentSection lines={adjustments} setLines={setAdjustments} />

@@ -169,9 +169,47 @@ function PackageLineRow({ line, index, onUpdate, onRemove, defaultPax }) {
   );
 }
 
+// ── Catalog layout per quote type ────────────────────────────────────────────
+function getCatalogLayout(quoteType) {
+  if (quoteType === "lodging") {
+    return {
+      primaryPackageIds: ["chavila_1", "chavila_4", "chavila_5"],
+      extraPackageIds:   ["chavila_2", "chavila_3", "chavila_6"],
+      primaryAddonGroups: ["כרמלים/ גלואו", "אגד/ סוכנים אחרים"],
+      extraAddonGroups:   ["ארוחות", "תוכן"],
+    };
+  }
+  if (quoteType === "day_use") {
+    return {
+      primaryPackageIds: ["chavila_2", "chavila_3", "chavila_6"],
+      extraPackageIds:   ["chavila_1", "chavila_4", "chavila_5"],
+      primaryAddonGroups: ["תוכן", "ארוחות"],
+      extraAddonGroups:   ["כרמלים/ גלואו", "אגד/ סוכנים אחרים"],
+    };
+  }
+  // custom — show all
+  return {
+    primaryPackageIds: ["chavila_1", "chavila_2", "chavila_3", "chavila_4", "chavila_5", "chavila_6"],
+    extraPackageIds:   [],
+    primaryAddonGroups: ["ארוחות", "כרמלים/ גלואו", "אגד/ סוכנים אחרים", "תוכן"],
+    extraAddonGroups:   [],
+  };
+}
+
+const ALL_ADDON_BY_GROUP = {
+  "ארוחות":               MEAL_ADDON_CATALOG,
+  "כרמלים/ גלואו":        OPERATOR_ADDON_CATALOG.filter(o => o.id === "karmelim"),
+  "אגד/ סוכנים אחרים":   OPERATOR_ADDON_CATALOG.filter(o => o.id === "agad"),
+  "תוכן":                 CONTENT_ADDON_CATALOG,
+};
+
 // ── Add package dropdown ──────────────────────────────────────────────────────
-function AddPackageDropdown({ onAdd }) {
+function AddPackageDropdown({ onAdd, quoteType }) {
   const [open, setOpen] = useState(false);
+  const layout = getCatalogLayout(quoteType);
+  const primary = PACKAGE_CATALOG.filter(p => layout.primaryPackageIds.includes(p.id));
+  const extra   = PACKAGE_CATALOG.filter(p => layout.extraPackageIds.includes(p.id));
+
   return (
     <div className="relative">
       <Button
@@ -186,21 +224,30 @@ function AddPackageDropdown({ onAdd }) {
         <ChevronDown className="w-3 h-3" />
       </Button>
       {open && (
-        <div className="absolute z-50 top-full mt-1 right-0 bg-white border border-slate-200 rounded-xl shadow-lg py-1 min-w-[200px]" dir="rtl">
-          {PACKAGE_CATALOG.map(pkg => (
-            <button
-              key={pkg.id}
-              type="button"
+        <div className="absolute z-50 top-full mt-1 right-0 bg-white border border-slate-200 rounded-xl shadow-lg py-1 min-w-[220px]" dir="rtl">
+          {primary.map(pkg => (
+            <button key={pkg.id} type="button"
               className="w-full text-right px-3 py-2 text-xs hover:bg-slate-50 text-slate-700"
-              onClick={() => {
-                onAdd(pkg);
-                setOpen(false);
-              }}
-            >
+              onClick={() => { onAdd(pkg); setOpen(false); }}>
               <div className="font-semibold">{pkg.name}</div>
               <div className="text-slate-400 text-[10px]">{pkg.description}</div>
             </button>
           ))}
+          {extra.length > 0 && (
+            <>
+              <div className="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wide border-t border-slate-100">
+                אפשרויות נוספות
+              </div>
+              {extra.map(pkg => (
+                <button key={pkg.id} type="button"
+                  className="w-full text-right px-3 py-2 text-xs hover:bg-slate-50 text-slate-600"
+                  onClick={() => { onAdd(pkg); setOpen(false); }}>
+                  <div className="font-semibold">{pkg.name}</div>
+                  <div className="text-slate-400 text-[10px]">{pkg.description}</div>
+                </button>
+              ))}
+            </>
+          )}
         </div>
       )}
     </div>
@@ -273,53 +320,50 @@ function AddonLineRow({ line, index, onUpdate, onRemove, defaultPax }) {
 }
 
 // ── Add addon dropdown ────────────────────────────────────────────────────────
-const ADDON_GROUPS = [
-  { label: "ארוחות", items: MEAL_ADDON_CATALOG },
-  { label: "כרמלים/ גלואו", items: OPERATOR_ADDON_CATALOG.filter(o => o.id === "karmelim") },
-  { label: "אגד/ סוכנים אחרים", items: OPERATOR_ADDON_CATALOG.filter(o => o.id === "agad") },
-  { label: "תוכן", items: CONTENT_ADDON_CATALOG },
-];
-
-function AddAddonDropdown({ onAdd }) {
+function AddAddonDropdown({ onAdd, quoteType }) {
   const [open, setOpen] = useState(false);
+  const layout = getCatalogLayout(quoteType);
+
+  const renderGroups = (groupLabels, isExtra) => groupLabels.map(label => {
+    const items = ALL_ADDON_BY_GROUP[label] || [];
+    if (!items.length) return null;
+    return (
+      <div key={label}>
+        {isExtra && groupLabels[0] === label && (
+          <div className="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wide border-t border-slate-100">
+            אפשרויות נוספות
+          </div>
+        )}
+        <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wide border-t border-slate-100 first:border-t-0">
+          {label}
+        </div>
+        {items.map(item => (
+          <button key={item.id} type="button"
+            className="w-full text-right px-3 py-2 text-xs hover:bg-slate-50 text-slate-700"
+            onClick={() => { onAdd(item); setOpen(false); }}>
+            <div className="font-medium">{item.label}</div>
+            <div className="text-slate-400 text-[10px]">
+              {item.rate ? `₪${item.rate} לאדם` : item.fixed_price ? `₪${item.fixed_price} ליחידה` : ""}
+            </div>
+          </button>
+        ))}
+      </div>
+    );
+  });
+
   return (
     <div className="relative">
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
+      <Button type="button" variant="outline" size="sm"
         className="gap-1.5 text-xs h-7 border-dashed"
-        onClick={() => setOpen(o => !o)}
-      >
+        onClick={() => setOpen(o => !o)}>
         <Plus className="w-3 h-3" />
         הוסף תוספת / מוצר
         <ChevronDown className="w-3 h-3" />
       </Button>
       {open && (
         <div className="absolute z-50 top-full mt-1 right-0 bg-white border border-slate-200 rounded-xl shadow-lg py-1 min-w-[240px]" dir="rtl">
-          {ADDON_GROUPS.map(group => (
-            <div key={group.label}>
-              <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wide border-t border-slate-100 first:border-t-0">
-                {group.label}
-              </div>
-              {group.items.map(item => (
-                <button
-                  key={item.id}
-                  type="button"
-                  className="w-full text-right px-3 py-2 text-xs hover:bg-slate-50 text-slate-700"
-                  onClick={() => {
-                    onAdd(item);
-                    setOpen(false);
-                  }}
-                >
-                  <div className="font-medium">{item.label}</div>
-                  <div className="text-slate-400 text-[10px]">
-                    {item.rate ? `₪${item.rate} לאדם` : item.fixed_price ? `₪${item.fixed_price} ליחידה` : ""}
-                  </div>
-                </button>
-              ))}
-            </div>
-          ))}
+          {renderGroups(layout.primaryAddonGroups, false)}
+          {layout.extraAddonGroups.length > 0 && renderGroups(layout.extraAddonGroups, true)}
         </div>
       )}
     </div>
@@ -333,6 +377,7 @@ export default function PackageLinesSection({
   addonLines,
   setAddonLines,
   defaultPax,
+  quoteType = "custom",
 }) {
   const handleAddPackage = (pkg) => {
     const defaultOptionId = pkg.pricing_options?.[0]?.id || null;
@@ -410,8 +455,8 @@ export default function PackageLinesSection({
 
       {/* Action buttons */}
       <div className="flex items-center gap-2 flex-wrap">
-        <AddPackageDropdown onAdd={handleAddPackage} />
-        <AddAddonDropdown onAdd={handleAddAddon} />
+        <AddPackageDropdown onAdd={handleAddPackage} quoteType={quoteType} />
+        <AddAddonDropdown onAdd={handleAddAddon} quoteType={quoteType} />
       </div>
     </div>
   );

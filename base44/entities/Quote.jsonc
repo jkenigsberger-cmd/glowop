@@ -25,6 +25,16 @@
       ],
       "default": "DRAFT"
     },
+    "quote_type": {
+      "type": "string",
+      "enum": [
+        "lodging",
+        "day_use",
+        "custom"
+      ],
+      "default": "lodging",
+      "description": "UI catalog type: lodging=\u05e7\u05d1\u05d5\u05e6\u05d4 \u05e2\u05dd \u05dc\u05d9\u05e0\u05d4, day_use=\u05e4\u05e2\u05d9\u05dc\u05d5\u05ea \u05d9\u05d5\u05dd, custom=\u05de\u05d5\u05ea\u05d0\u05dd \u05d0\u05d9\u05e9\u05d9\u05ea"
+    },
     "client_name": {
       "type": "string",
       "description": "Contact/org name at quote time"
