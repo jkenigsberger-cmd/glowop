@@ -137,17 +137,6 @@ export default function ScheduleItemRow({ item, activitySpaces, quoteActivities 
             <label className="text-xs text-slate-500">הערות</label>
             <Input value={form.notes || ""} onChange={e => set("notes", e.target.value)} placeholder="הערות..." />
           </div>
-          <div className="col-span-2">
-            <label className="flex items-center gap-2 cursor-pointer select-none w-fit">
-              <input
-                type="checkbox"
-                checked={!!form.coffee_corner}
-                onChange={e => set("coffee_corner", e.target.checked)}
-                className="w-4 h-4 accent-amber-500"
-              />
-              <span className="text-xs text-amber-700 font-medium">☕ פינת קפה</span>
-            </label>
-          </div>
         </div>
 
         {error && (
@@ -200,9 +189,6 @@ export default function ScheduleItemRow({ item, activitySpaces, quoteActivities 
             </span>
           )}
         </div>
-        {item.coffee_corner && (
-          <p className="text-xs text-amber-700 font-medium">☕ פינת קפה</p>
-        )}
         {item.notes && <p className="text-xs text-muted-foreground italic">{item.notes}</p>}
       </div>
       {item.status !== "CANCELLED" && (

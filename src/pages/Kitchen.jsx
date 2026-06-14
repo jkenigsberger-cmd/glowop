@@ -257,7 +257,7 @@ export default function Kitchen() {
                 <div className="flex items-center justify-between rounded-xl border px-4 py-2.5 bg-amber-100 text-amber-800 border-amber-200">
                   <div className="flex items-center gap-2 font-bold text-base">
                     <Coffee className="w-5 h-5" />
-                    פינת קפה
+                    פינת קפה ועוגיות
                   </div>
                   <div className="flex items-center gap-3 text-sm font-medium">
                     <span>{dayCoffeeCorners.length} קבוצות</span>

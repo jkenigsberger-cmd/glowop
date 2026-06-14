@@ -20,9 +20,9 @@ export default function SplitActivityGroup({ items, activitySpaces, onCancel, on
 
   const getSpaceName = (id) => activitySpaces.find(s => s.id === id)?.name || "—";
 
-  // Show coffee locations from coffee_corner field
+  // Show coffee locations from notes
   const coffeeLocations = sorted
-    .filter(i => i.coffee_corner)
+    .filter(i => i.notes?.includes("פינת קפה ועוגיות"))
     .map(i => getSpaceName(i.activity_space_id))
     .filter(Boolean);
 
@@ -45,7 +45,7 @@ export default function SplitActivityGroup({ items, activitySpaces, onCancel, on
             {totalPax > 0 ? ` · ${totalPax} משתתפים סה״כ` : ""}
           </p>
           {coffeeLocations.length > 0 && (
-            <p className="text-xs text-amber-700 font-medium">☕ פינת קפה: {coffeeLocations.join(", ")}</p>
+            <p className="text-xs text-amber-700">☕ קפה: {coffeeLocations.join(", ")}</p>
           )}
         </div>
 
@@ -89,14 +89,14 @@ export default function SplitActivityGroup({ items, activitySpaces, onCancel, on
         <div className="border-t border-purple-100 divide-y divide-slate-100">
           {sorted.map((item, idx) => {
             const spaceName = getSpaceName(item.activity_space_id);
-            const hasCoffee = !!item.coffee_corner;
+            const hasCoffee = item.notes?.includes("פינת קפה ועוגיות");
             return (
               <div key={item.id} className="px-4 py-2 flex items-center gap-3 text-xs text-slate-600 bg-slate-50/50">
                 <span className="font-bold text-slate-400 w-4 shrink-0">{idx + 1}.</span>
                 <MapPin className="w-3 h-3 text-primary shrink-0" />
                 <span className="font-medium">{spaceName}</span>
                 {item.pax ? <span className="text-slate-400">{item.pax} משתתפים</span> : null}
-                {hasCoffee && <span className="text-amber-700 font-medium">☕ פינת קפה</span>}
+                {hasCoffee && <span className="text-amber-600">☕</span>}
                 {!isCancelled && (
                   <RoleGate permission="MANAGE_ACTIVITIES">
                     <Button

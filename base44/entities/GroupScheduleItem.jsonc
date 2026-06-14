@@ -56,11 +56,6 @@
     "pax": {
       "type": "number"
     },
-    "coffee_corner": {
-      "type": "boolean",
-      "default": false,
-      "description": "True if \u05e4\u05d9\u05e0\u05ea \u05e7\u05e4\u05d4 is needed at this location for this activity"
-    },
     "notes": {
       "type": "string"
     },
