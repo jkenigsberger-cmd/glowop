@@ -287,7 +287,7 @@ export default function Kitchen() {
                       <div className="flex items-start justify-between gap-2">
                         <div>
                           <p className="font-semibold text-slate-800 text-sm">{groupMap[req.group_id]?.group_name || "קבוצה לא ידועה"}</p>
-                          <p className="text-xs text-amber-700 font-medium mt-0.5">פינת קפה ועוגיות</p>
+                          <p className="text-xs text-amber-700 font-medium mt-0.5">{req.coffee_corner_type || "פינת קפה רגילה"}</p>
                         </div>
                         <div className="text-right shrink-0">
                           <p className="text-2xl font-bold text-amber-700">{req.pax || "—"}</p>

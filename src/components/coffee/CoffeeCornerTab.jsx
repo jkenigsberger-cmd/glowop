@@ -9,11 +9,14 @@ import { toast } from "sonner";
 import { sortActivitySpaces, getActivitySpaceDisplayName } from "@/lib/activitySpaceUtils";
 import RoleGate from "@/components/RoleGate";
 
+const COFFEE_TYPES = ["פינת קפה רגילה", "פינת קפה ועוגיות", "פינת קפה ומאפה"];
+
 const EMPTY_FORM = () => ({
   date: "",
   start_time: "10:00",
   end_time: "11:00",
   pax: "",
+  coffee_corner_type: "פינת קפה רגילה",
   location_id: "",
   location_name_snapshot: "",
   notes: "",
@@ -78,6 +81,7 @@ export default function CoffeeCornerTab({ groupId, profile, group }) {
       start_time: req.start_time || "10:00",
       end_time: req.end_time || "11:00",
       pax: req.pax != null ? String(req.pax) : "",
+      coffee_corner_type: req.coffee_corner_type || "פינת קפה רגילה",
       location_id: req.location_id || "",
       location_name_snapshot: req.location_name_snapshot || "",
       notes: req.notes || "",
@@ -127,6 +131,7 @@ export default function CoffeeCornerTab({ groupId, profile, group }) {
       start_time: form.start_time,
       end_time: form.end_time,
       pax: Number(form.pax),
+      coffee_corner_type: form.coffee_corner_type || "פינת קפה רגילה",
       location_id: form.location_id || null,
       location_name_snapshot: form.location_name_snapshot || null,
       notes: form.notes || null,
@@ -211,6 +216,17 @@ export default function CoffeeCornerTab({ groupId, profile, group }) {
               <Input type="time" value={form.end_time} onChange={e => setForm(f => ({ ...f, end_time: e.target.value }))} />
             </div>
 
+            {/* Coffee type */}
+            <div className="space-y-1 col-span-2">
+              <label className="text-xs text-slate-500">סוג פינת קפה *</label>
+              <Select value={form.coffee_corner_type} onValueChange={v => setForm(f => ({ ...f, coffee_corner_type: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {COFFEE_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+
             {/* Location */}
             <div className="space-y-1 col-span-2">
               <label className="text-xs text-slate-500">מיקום</label>
@@ -285,6 +301,9 @@ export default function CoffeeCornerTab({ groupId, profile, group }) {
                     <Coffee className="w-4 h-4 text-amber-600 shrink-0" />
                     <span className="font-semibold text-amber-800 text-sm">פינת קפה</span>
                   </div>
+                  <p className="text-xs text-amber-700 font-medium">
+                    סוג: {req.coffee_corner_type || "פינת קפה רגילה"}
+                  </p>
                   <p className="text-sm text-slate-700 font-medium">
                     {req.date?.split("-").reverse().join("/")}
                   </p>

@@ -286,6 +286,7 @@ export default function DailyOperationalPrint() {
                       {req.start_time}–{req.end_time}
                     </div>
                     {g && <div style={{ fontSize: "14px", fontWeight: "700", color: "#1e293b", marginBottom: "3px" }}>{g.group_name}</div>}
+                    <div style={{ fontSize: "12px", color: "#92400e", fontWeight: "600" }}>סוג: {req.coffee_corner_type || "פינת קפה רגילה"}</div>
                     {req.location_name_snapshot && <div style={{ fontSize: "12px", color: "#475569" }}>📍 {req.location_name_snapshot}</div>}
                     <div style={{ fontSize: "12px", color: "#475569" }}>👥 {req.pax} אנשים</div>
                     {req.notes && <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "3px" }}>💬 {req.notes}</div>}

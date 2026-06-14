@@ -746,6 +746,7 @@ export default function KitchenReport() {
                         <th>שעות</th>
                         <th>קבוצה</th>
                         <th>כמות</th>
+                        <th>סוג</th>
                         <th>מיקום</th>
                         <th>הערות</th>
                       </tr>
@@ -757,6 +758,7 @@ export default function KitchenReport() {
                           <td style={{ direction: "ltr" }}>{r.start_time}–{r.end_time}</td>
                           <td>{groupMap[r.group_id]?.group_name || "—"}</td>
                           <td style={{ fontWeight: 600 }}>{r.pax || "—"}</td>
+                          <td>{r.coffee_corner_type || "פינת קפה רגילה"}</td>
                           <td>{r.location_name_snapshot || "—"}</td>
                           <td style={{ color: "#64748b" }}>{r.notes || "—"}</td>
                         </tr>

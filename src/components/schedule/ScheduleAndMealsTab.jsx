@@ -52,11 +52,9 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
   // Split state
   const [splitEnabled, setSplitEnabled] = useState(false);
   const [splitRows, setSplitRows] = useState([
-    { activity_space_id: "", pax: "", coffee_corner: false },
-    { activity_space_id: "", pax: "", coffee_corner: false },
+    { activity_space_id: "", pax: "" },
+    { activity_space_id: "", pax: "" },
   ]);
-  // Single-location coffee checkbox
-  const [singleCoffee, setSingleCoffee] = useState(false);
 
   const profileId = profile?.id;
   const arrivalDate   = group?.arrival_date   || "";
@@ -144,10 +142,9 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
     });
     setSplitEnabled(false);
     setSplitRows([
-      { activity_space_id: "", pax: "", coffee_corner: false },
-      { activity_space_id: "", pax: "", coffee_corner: false },
+      { activity_space_id: "", pax: "" },
+      { activity_space_id: "", pax: "" },
     ]);
-    setSingleCoffee(false);
     setNewScheduleError(null);
     setAddingSchedule(true);
     toast("שכפול פעילות — בחר תאריך חדש ושמור", { icon: "📋" });
@@ -172,61 +169,15 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
     });
     setSplitEnabled(false);
     setSplitRows([
-      { activity_space_id: "", pax: groupParticipantCount ? String(Math.ceil(groupParticipantCount / 2)) : "", coffee_corner: false },
-      { activity_space_id: "", pax: groupParticipantCount ? String(Math.floor(groupParticipantCount / 2)) : "", coffee_corner: false },
+      { activity_space_id: "", pax: groupParticipantCount ? String(Math.ceil(groupParticipantCount / 2)) : "" },
+      { activity_space_id: "", pax: groupParticipantCount ? String(Math.floor(groupParticipantCount / 2)) : "" },
     ]);
-    setSingleCoffee(false);
     setNewScheduleError(null);
     setAddingSchedule(true);
     // Scroll to form
     setTimeout(() => {
       document.getElementById("add-activity-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 50);
-  };
-
-  // ── Coffee corner Kitchen sync helper ─────────────────────────────────────
-  // Upserts or cancels a COFFEE_CORNER MealReservation linked to an activity.
-  // match key: group_id + date + source='manual' + meal_type=COFFEE_CORNER + notes contains activity_name
-  const syncActivityCoffee = async ({ wantCoffee, date, pax, activityName, splitGroupId, locations }) => {
-    try {
-      const existing = await base44.entities.MealReservation.filter({ group_id: groupId, meal_type: "COFFEE_CORNER", source: "manual" });
-      // Find the one linked to this activity (by split_group_id in notes, or activity name)
-      const matchKey = splitGroupId || activityName;
-      const linked = existing.find(r =>
-        r.status === "ACTIVE" &&
-        r.date === date &&
-        r.notes?.includes(matchKey)
-      );
-
-      if (wantCoffee && pax > 0) {
-        const locationsStr = locations?.length ? ` | מקומות: ${locations.join(", ")}` : "";
-        const noteStr = `פינת קפה ועוגיות — ${activityName}${locationsStr} [${matchKey}]`;
-        if (linked) {
-          await base44.entities.MealReservation.update(linked.id, { pax, notes: noteStr, status: "ACTIVE" });
-        } else {
-          await base44.entities.MealReservation.create({
-            group_id: groupId,
-            operational_group_profile_id: profileId,
-            date,
-            meal_type: "COFFEE_CORNER",
-            start_time: "10:00",
-            end_time: "11:00",
-            pax,
-            coffee_service_type: "קפה ועוגיות",
-            notes: noteStr,
-            source: "manual",
-            status: "ACTIVE",
-          });
-        }
-      } else {
-        // Uncheck — cancel if exists
-        if (linked) {
-          await base44.entities.MealReservation.update(linked.id, { status: "CANCELLED" });
-        }
-      }
-    } catch (e) {
-      console.warn("[syncActivityCoffee] non-fatal:", e?.message);
-    }
   };
 
   // ── Schedule handlers ──────────────────────────────────────────────────────
@@ -270,8 +221,7 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
     setAddingSchedule(false);
     setNewScheduleError(null);
     setSplitEnabled(false);
-    setSplitRows([{ activity_space_id: "", pax: "", coffee_corner: false }, { activity_space_id: "", pax: "", coffee_corner: false }]);
-    setSingleCoffee(false);
+    setSplitRows([{ activity_space_id: "", pax: "" }, { activity_space_id: "", pax: "" }]);
     setNewSchedule(makeEmptySchedule());
   };
 
@@ -298,17 +248,6 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
         status: "ACTIVE",
       });
       if (res.data?.error) { setNewScheduleError(res.data.error); return; }
-      // Sync coffee corner to Kitchen
-      await syncActivityCoffee({
-        wantCoffee: singleCoffee,
-        date: newSchedule.date,
-        pax: Number(newSchedule.pax) || groupParticipantCount || 0,
-        activityName: newSchedule.activity_name,
-        splitGroupId: null,
-        locations: newSchedule.activity_space_id
-          ? [activitySpaces.find(s => s.id === newSchedule.activity_space_id)?.name || ""].filter(Boolean)
-          : [],
-      });
       toast.success("פעילות נוספה");
       resetAddActivityForm();
       invalidate();
@@ -381,22 +320,6 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
         }
         createdIds.push(res.data.item.id);
       }
-      // Sync coffee corner to Kitchen (sum pax of rows with coffee checked)
-      const coffeeRows = splitRows.filter(r => r.coffee_corner);
-      const wantCoffee = coffeeRows.length > 0;
-      const coffeePax = coffeeRows.reduce((s, r) => s + (Number(r.pax) || 0), 0) ||
-        Number(newSchedule.pax) || groupParticipantCount || 0;
-      const coffeeLocations = coffeeRows.map(r =>
-        activitySpaces.find(s => s.id === r.activity_space_id)?.name || ""
-      ).filter(Boolean);
-      await syncActivityCoffee({
-        wantCoffee,
-        date: newSchedule.date,
-        pax: coffeePax,
-        activityName: newSchedule.activity_name,
-        splitGroupId,
-        locations: coffeeLocations,
-      });
       toast.success(`שיבוץ מפוצל נשמר — ${splitRows.length} מרחבים`);
       resetAddActivityForm();
       invalidate();
@@ -546,8 +469,8 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
     if (enabled) {
       const divided = autoDividePax(splitTotalPax, 2);
       setSplitRows([
-        { activity_space_id: "", pax: divided[0] !== "" ? String(divided[0]) : "", coffee_corner: false },
-        { activity_space_id: "", pax: divided[1] !== "" ? String(divided[1]) : "", coffee_corner: false },
+        { activity_space_id: "", pax: divided[0] !== "" ? String(divided[0]) : "" },
+        { activity_space_id: "", pax: divided[1] !== "" ? String(divided[1]) : "" },
       ]);
     }
   };
@@ -558,7 +481,7 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
   };
 
   const addSplitRow = () => {
-    setSplitRows(rows => [...rows, { activity_space_id: "", pax: "", coffee_corner: false }]);
+    setSplitRows(rows => [...rows, { activity_space_id: "", pax: "" }]);
   };
 
   const removeSplitRow = (idx) => {
@@ -704,34 +627,21 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
 
               {/* Single-space selector — only when NOT split */}
               {!splitEnabled && (
-                <>
-                  <div className="space-y-1 col-span-2">
-                    <label className="text-xs text-slate-500">מרחב פעילות</label>
-                    <Select
-                      value={newSchedule.activity_space_id || "none"}
-                      onValueChange={v => setNewSchedule(s => ({ ...s, activity_space_id: v === "none" ? null : v }))}
-                    >
-                      <SelectTrigger><SelectValue placeholder="לא הוקצה (אופציונלי)" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">— לא הוקצה —</SelectItem>
-                        {sortActivitySpaces(activitySpaces).map(sp => (
-                          <SelectItem key={sp.id} value={sp.id}>{getActivitySpaceDisplayName(sp)}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="col-span-2">
-                    <label className="flex items-center gap-2 cursor-pointer select-none w-fit">
-                      <input
-                        type="checkbox"
-                        checked={singleCoffee}
-                        onChange={e => setSingleCoffee(e.target.checked)}
-                        className="w-4 h-4 accent-amber-500"
-                      />
-                      <span className="text-xs text-amber-700 font-medium">☕ פינת קפה ועוגיות בפעילות זו</span>
-                    </label>
-                  </div>
-                </>
+                <div className="space-y-1 col-span-2">
+                  <label className="text-xs text-slate-500">מרחב פעילות</label>
+                  <Select
+                    value={newSchedule.activity_space_id || "none"}
+                    onValueChange={v => setNewSchedule(s => ({ ...s, activity_space_id: v === "none" ? null : v }))}
+                  >
+                    <SelectTrigger><SelectValue placeholder="לא הוקצה (אופציונלי)" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">— לא הוקצה —</SelectItem>
+                      {sortActivitySpaces(activitySpaces).map(sp => (
+                        <SelectItem key={sp.id} value={sp.id}>{getActivitySpaceDisplayName(sp)}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               )}
 
               <div className="space-y-1 col-span-2">
@@ -807,15 +717,6 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
                         <X className="w-4 h-4" />
                       </button>
                     </div>
-                    <label className="flex items-center gap-2 cursor-pointer select-none mr-5">
-                      <input
-                        type="checkbox"
-                        checked={!!row.coffee_corner}
-                        onChange={e => setSplitRows(rows => rows.map((r, i) => i === idx ? { ...r, coffee_corner: e.target.checked } : r))}
-                        className="w-3.5 h-3.5 accent-amber-500"
-                      />
-                      <span className="text-[11px] text-amber-700">☕ פינת קפה ועוגיות</span>
-                    </label>
                   </div>
                 ))}
                 <button

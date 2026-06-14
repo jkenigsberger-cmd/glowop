@@ -25,13 +25,23 @@
     "pax": {
       "type": "number"
     },
+    "coffee_corner_type": {
+      "type": "string",
+      "enum": [
+        "\u05e4\u05d9\u05e0\u05ea \u05e7\u05e4\u05d4 \u05e8\u05d2\u05d9\u05dc\u05d4",
+        "\u05e4\u05d9\u05e0\u05ea \u05e7\u05e4\u05d4 \u05d5\u05e2\u05d5\u05d2\u05d9\u05d5\u05ea",
+        "\u05e4\u05d9\u05e0\u05ea \u05e7\u05e4\u05d4 \u05d5\u05de\u05d0\u05e4\u05d4"
+      ],
+      "default": "\u05e4\u05d9\u05e0\u05ea \u05e7\u05e4\u05d4 \u05e8\u05d2\u05d9\u05dc\u05d4",
+      "description": "\u05e1\u05d5\u05d2 \u05e4\u05d9\u05e0\u05ea \u05e7\u05e4\u05d4"
+    },
     "location_id": {
       "type": "string",
-      "description": "FK to ActivitySpace \u2014 optional"
+      "description": "FK to ActivitySpace \u2014 optional, informational only"
     },
     "location_name_snapshot": {
       "type": "string",
-      "description": "Hebrew visible name of the selected location, saved as text"
+      "description": "Hebrew visible name of the selected location, saved as text for reports"
     },
     "notes": {
       "type": "string"
