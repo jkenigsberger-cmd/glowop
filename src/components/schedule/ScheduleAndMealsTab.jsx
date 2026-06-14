@@ -287,6 +287,19 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
   const handleCancelScheduleItem = async (id) => {
     if (!window.confirm("לבטל פעילות זו?")) return;
     await base44.entities.GroupScheduleItem.update(id, { status: "CANCELLED" });
+    // Cancel linked coffee kitchen request if this item was the source
+    try {
+      const coffeeRecords = await base44.entities.MealReservation.filter({
+        group_id: groupId,
+        meal_type: "COFFEE_CORNER",
+        source_activity_id: id,
+      });
+      for (const r of coffeeRecords.filter(r => r.status === "ACTIVE")) {
+        await base44.entities.MealReservation.update(r.id, { status: "CANCELLED" });
+      }
+    } catch (e) {
+      console.warn("[handleCancelScheduleItem] coffee cancel non-fatal:", e?.message);
+    }
     invalidate();
     toast.success("פעילות בוטלה");
   };
