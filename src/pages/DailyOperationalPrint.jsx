@@ -54,6 +54,12 @@ export default function DailyOperationalPrint() {
     enabled: !!dateParam,
   });
 
+  const { data: coffeeRequests = [] } = useQuery({
+    queryKey: ["coffee-daily-print", dateParam],
+    queryFn: () => base44.entities.CoffeeCornerRequest.filter({ date: dateParam, status: "ACTIVE" }),
+    enabled: !!dateParam,
+  });
+
   const { data: allocations = [] } = useQuery({
     queryKey: ["allocs-daily-print"],
     queryFn: () => base44.entities.SleepingAllocation.filter({ status: "CONFIRMED" }),
@@ -89,8 +95,11 @@ export default function DailyOperationalPrint() {
     return Number(d.lifeThreatening_count) > 0;
   });
 
-  const sortedMeals = [...meals].sort((a, b) => (a.start_time || "").localeCompare(b.start_time || ""));
+  const sortedMeals = [...meals]
+    .filter(m => m.meal_type !== "COFFEE_CORNER")
+    .sort((a, b) => (a.start_time || "").localeCompare(b.start_time || ""));
   const sortedActivities = [...activities].sort((a, b) => (a.start_time || "").localeCompare(b.start_time || ""));
+  const sortedCoffee = [...coffeeRequests].sort((a, b) => (a.start_time || "").localeCompare(b.start_time || ""));
 
   const generatedAt = format(new Date(), "dd/MM/yyyy HH:mm");
 
@@ -257,6 +266,29 @@ export default function DailyOperationalPrint() {
                       </div>
                     )}
                     {m.notes && <div style={{ fontSize: "11px", color: "#166534", marginTop: "4px" }}>💬 {m.notes}</div>}
+                  </div>
+                );
+              })
+            }
+          </div>
+        </div>
+
+        {/* Coffee Corner */}
+        <div className="section">
+          <div className="section-header" style={{ background: "#92400e" }}>☕ פינת קפה ({sortedCoffee.length})</div>
+          <div className="section-body">
+            {sortedCoffee.length === 0 ? <div className="empty-note">אין פינות קפה מתוכננות</div> :
+              sortedCoffee.map(req => {
+                const g = groups.find(x => x.id === req.group_id);
+                return (
+                  <div key={req.id} style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRight: "4px solid #92400e", borderRadius: "0 8px 8px 0", padding: "8px 12px", marginBottom: "6px" }}>
+                    <div style={{ fontSize: "12px", fontWeight: "700", color: "#92400e", direction: "ltr", display: "inline-block", marginBottom: "2px" }}>
+                      {req.start_time}–{req.end_time}
+                    </div>
+                    {g && <div style={{ fontSize: "14px", fontWeight: "700", color: "#1e293b", marginBottom: "3px" }}>{g.group_name}</div>}
+                    {req.location_name_snapshot && <div style={{ fontSize: "12px", color: "#475569" }}>📍 {req.location_name_snapshot}</div>}
+                    <div style={{ fontSize: "12px", color: "#475569" }}>👥 {req.pax} אנשים</div>
+                    {req.notes && <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "3px" }}>💬 {req.notes}</div>}
                   </div>
                 );
               })

@@ -22,6 +22,7 @@ import ScheduleAndMealsTab from "@/components/schedule/ScheduleAndMealsTab";
 import GroupLifecycleActions from "@/components/groups/GroupLifecycleActions";
 import RoleGate from "@/components/RoleGate";
 import ReviewAlertsBanner from "@/components/alerts/ReviewAlertsBanner";
+import CoffeeCornerTab from "@/components/coffee/CoffeeCornerTab";
 
 export default function GroupDetail() {
   const { id } = useParams();
@@ -187,6 +188,7 @@ export default function GroupDetail() {
           {[
             { key: "overview", label: "סקירה כללית" },
             { key: "schedule", label: "📅 לוח זמנים וארוחות" },
+            { key: "coffee", label: "☕ פינת קפה" },
             { key: "sleeping", label: "🛏️ דרישות לינה" },
           ].map(tab => (
             <button
@@ -207,6 +209,13 @@ export default function GroupDetail() {
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 space-y-6">
 
         {activeTab === "sleeping" && <SleepingRequirementsTab groupId={id} profile={operationalProfile} group={group} />}
+        {activeTab === "coffee" && (
+          <CoffeeCornerTab
+            groupId={id}
+            profile={operationalProfile}
+            group={group}
+          />
+        )}
         {activeTab === "schedule" && (
           <ScheduleAndMealsTab
             groupId={id}

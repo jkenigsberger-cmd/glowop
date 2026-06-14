@@ -1,0 +1,66 @@
+{
+  "name": "CoffeeCornerRequest",
+  "type": "object",
+  "properties": {
+    "group_id": {
+      "type": "string",
+      "description": "FK to Group"
+    },
+    "operational_group_profile_id": {
+      "type": "string",
+      "description": "FK to OperationalGroupProfile"
+    },
+    "date": {
+      "type": "string",
+      "format": "date"
+    },
+    "start_time": {
+      "type": "string",
+      "description": "HH:MM"
+    },
+    "end_time": {
+      "type": "string",
+      "description": "HH:MM"
+    },
+    "pax": {
+      "type": "number"
+    },
+    "location_id": {
+      "type": "string",
+      "description": "FK to ActivitySpace \u2014 optional"
+    },
+    "location_name_snapshot": {
+      "type": "string",
+      "description": "Hebrew visible name of the selected location, saved as text"
+    },
+    "notes": {
+      "type": "string"
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "manual",
+        "external_form"
+      ],
+      "default": "manual"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "ACTIVE",
+        "CANCELLED"
+      ],
+      "default": "ACTIVE"
+    }
+  },
+  "required": [
+    "group_id",
+    "operational_group_profile_id",
+    "date",
+    "start_time",
+    "end_time",
+    "pax",
+    "source",
+    "status"
+  ]
+}

@@ -28,6 +28,12 @@ export default function Kitchen() {
     queryFn: () => base44.entities.MealReservation.filter({ status: "ACTIVE" }),
   });
 
+  // Load CoffeeCornerRequests separately
+  const { data: allCoffeeRequests = [], isLoading: loadingCoffee } = useQuery({
+    queryKey: ["coffeeCornerRequests_kitchen"],
+    queryFn: () => base44.entities.CoffeeCornerRequest.filter({ status: "ACTIVE" }),
+  });
+
   // Load groups + profiles in parallel
   const { data: groups = [] } = useQuery({
     queryKey: ["groups_kitchen"],
@@ -52,7 +58,7 @@ export default function Kitchen() {
     return m;
   }, [profiles]);
 
-  // Meals for selected date — split regular meals from coffee corner
+  // Meals for selected date — exclude COFFEE_CORNER from legacy MealReservation
   const dayMeals = useMemo(() => {
     return allMeals
       .filter(m => m.date === selectedDate && m.meal_type !== "COFFEE_CORNER")
@@ -63,11 +69,21 @@ export default function Kitchen() {
       });
   }, [allMeals, selectedDate]);
 
-  const dayCoffeeCorners = useMemo(() => {
+  // CoffeeCornerRequests for selected date (new entity)
+  const dayCoffeeRequests = useMemo(() => {
+    return allCoffeeRequests
+      .filter(r => r.date === selectedDate)
+      .sort((a, b) => (a.start_time || "").localeCompare(b.start_time || ""));
+  }, [allCoffeeRequests, selectedDate]);
+
+  // Legacy COFFEE_CORNER from MealReservation (keep showing for backward compat)
+  const dayCoffeeLegacy = useMemo(() => {
     return allMeals
       .filter(m => m.date === selectedDate && m.meal_type === "COFFEE_CORNER")
       .sort((a, b) => (a.start_time || "").localeCompare(b.start_time || ""));
   }, [allMeals, selectedDate]);
+
+  const dayCoffeeCorners = useMemo(() => [...dayCoffeeRequests, ...dayCoffeeLegacy], [dayCoffeeRequests, dayCoffeeLegacy]);
 
   // Group meals by meal type
   const mealsByType = useMemo(() => {
@@ -201,7 +217,7 @@ export default function Kitchen() {
         {/* Kitchen review alerts */}
         <ReviewAlertsBanner module="KITCHEN" />
 
-        {loadingMeals ? (
+        {loadingMeals || loadingCoffee ? (
           <div className="flex justify-center py-16">
             <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
           </div>
@@ -251,22 +267,48 @@ export default function Kitchen() {
               </div>
             </div>
 
-            {/* Coffee Corner — separate section */}
+            {/* Coffee Corner — separate section (CoffeeCornerRequest + legacy MealReservation COFFEE_CORNER) */}
             {dayCoffeeCorners.length > 0 && (
               <section className="space-y-3">
                 <div className="flex items-center justify-between rounded-xl border px-4 py-2.5 bg-amber-100 text-amber-800 border-amber-200">
                   <div className="flex items-center gap-2 font-bold text-base">
                     <Coffee className="w-5 h-5" />
-                    פינת קפה ועוגיות
+                    פינת קפה
                   </div>
                   <div className="flex items-center gap-3 text-sm font-medium">
                     <span>{dayCoffeeCorners.length} קבוצות</span>
                     <span className="opacity-60">·</span>
-                    <span>{dayCoffeeCorners.reduce((s, m) => s + (Number(m.pax) || 0), 0)} אנשים</span>
+                    <span>{dayCoffeeCorners.reduce((s, r) => s + (Number(r.pax) || 0), 0)} אנשים</span>
                   </div>
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
-                  {dayCoffeeCorners.map(meal => (
+                  {dayCoffeeRequests.map(req => (
+                    <div key={req.id} className="bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="font-semibold text-slate-800 text-sm">{groupMap[req.group_id]?.group_name || "קבוצה לא ידועה"}</p>
+                          <p className="text-xs text-amber-700 font-medium mt-0.5">פינת קפה ועוגיות</p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-2xl font-bold text-amber-700">{req.pax || "—"}</p>
+                          <p className="text-[10px] text-amber-600">אנשים</p>
+                        </div>
+                      </div>
+                      {req.start_time && (
+                        <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                          <span>🕐</span>
+                          <span>{req.start_time}{req.end_time ? ` – ${req.end_time}` : ""}</span>
+                        </div>
+                      )}
+                      {req.location_name_snapshot && (
+                        <p className="text-xs text-slate-500">📍 {req.location_name_snapshot}</p>
+                      )}
+                      {req.notes && (
+                        <p className="text-xs text-slate-500 border-t border-amber-100 pt-2">{req.notes}</p>
+                      )}
+                    </div>
+                  ))}
+                  {dayCoffeeLegacy.map(meal => (
                     <KitchenCoffeeCard key={meal.id} meal={meal} group={groupMap[meal.group_id]} />
                   ))}
                 </div>

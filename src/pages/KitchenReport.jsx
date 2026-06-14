@@ -100,6 +100,11 @@ export default function KitchenReport() {
     queryFn: () => base44.entities.MealReservation.filter({ status: "ACTIVE" }),
   });
 
+  const { data: allCoffeeRequests = [] } = useQuery({
+    queryKey: ["coffeeCornerRequests_kitchenReport"],
+    queryFn: () => base44.entities.CoffeeCornerRequest.filter({ status: "ACTIVE" }),
+  });
+
   const { data: groups = [] } = useQuery({
     queryKey: ["groups_kitchenReport"],
     queryFn: () => base44.entities.Group.list(),
@@ -113,17 +118,28 @@ export default function KitchenReport() {
   const groupMap   = useMemo(() => Object.fromEntries(groups.map(g => [g.id, g])), [groups]);
   const profileMap = useMemo(() => Object.fromEntries(profiles.map(p => [p.group_id, p])), [profiles]);
 
-  // Meals in date range (inclusive)
+  // Meals in date range (inclusive) — exclude COFFEE_CORNER from meals
   const rangeMeals = useMemo(() => {
     if (!startDate) return [];
     return allMeals
-      .filter(m => m.date >= startDate && m.date <= endDate)
+      .filter(m => m.date >= startDate && m.date <= endDate && m.meal_type !== "COFFEE_CORNER")
       .sort((a, b) => {
         if (a.date !== b.date) return a.date.localeCompare(b.date);
         const typeCmp = (MEAL_ORDER[a.meal_type] ?? 99) - (MEAL_ORDER[b.meal_type] ?? 99);
         return typeCmp !== 0 ? typeCmp : (a.start_time || "").localeCompare(b.start_time || "");
       });
   }, [allMeals, startDate, endDate]);
+
+  // CoffeeCornerRequests in date range
+  const rangeCoffee = useMemo(() => {
+    if (!startDate) return [];
+    return allCoffeeRequests
+      .filter(r => r.date >= startDate && r.date <= endDate)
+      .sort((a, b) => {
+        if (a.date !== b.date) return a.date.localeCompare(b.date);
+        return (a.start_time || "").localeCompare(b.start_time || "");
+      });
+  }, [allCoffeeRequests, startDate, endDate]);
 
   // ── aggregate totals ──────────────────────────────────────────────────────
   const totals = useMemo(() => {
@@ -508,9 +524,9 @@ export default function KitchenReport() {
           </div>
 
           {/* Empty state */}
-          {rangeMeals.length === 0 ? (
+          {rangeMeals.length === 0 && rangeCoffee.length === 0 ? (
             <div className="kr-no-data">
-              לא נמצאו ארוחות בטווח התאריכים שנבחר
+              לא נמצאו ארוחות או פינות קפה בטווח התאריכים שנבחר
             </div>
           ) : (
             <>
@@ -717,7 +733,40 @@ export default function KitchenReport() {
                 })}
               </div>
 
-              {/* Section 5 — Verification breakdown */}
+              {/* Section 5 — Coffee Corner */}
+              {rangeCoffee.length > 0 && (
+                <div className="kr-section">
+                  <div className="kr-section-title" style={{ color: "#92400e", borderBottomColor: "#fde68a" }}>
+                    ☕ פינת קפה
+                  </div>
+                  <table className="kr-verify-table">
+                    <thead>
+                      <tr>
+                        <th>תאריך</th>
+                        <th>שעות</th>
+                        <th>קבוצה</th>
+                        <th>כמות</th>
+                        <th>מיקום</th>
+                        <th>הערות</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rangeCoffee.map(r => (
+                        <tr key={r.id}>
+                          <td>{fmtShort(r.date)}</td>
+                          <td style={{ direction: "ltr" }}>{r.start_time}–{r.end_time}</td>
+                          <td>{groupMap[r.group_id]?.group_name || "—"}</td>
+                          <td style={{ fontWeight: 600 }}>{r.pax || "—"}</td>
+                          <td>{r.location_name_snapshot || "—"}</td>
+                          <td style={{ color: "#64748b" }}>{r.notes || "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Section 6 — Verification breakdown */}
               <div className="kr-section">
                 <div className="kr-section-title" style={{ color: "#64748b", fontSize: 12 }}>
                   פירוט לפי קבוצות לבדיקה
