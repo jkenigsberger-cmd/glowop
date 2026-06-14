@@ -7,8 +7,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Trash2, CalendarDays, Users, Coffee, BookOpen, Mic2, Tag, SlidersHorizontal, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, Trash2, CalendarDays, Users, Coffee, BookOpen, Mic2, Tag, SlidersHorizontal, ChevronDown, ChevronUp, Package } from "lucide-react";
 import CapacityWarningBanner from "./CapacityWarningBanner";
+import PackageLinesSection from "./PackageLinesSection";
+import { calcPackageLine, calcAddonLine } from "@/lib/quoteCatalog";
 
 // ── Catalog ───────────────────────────────────────────────────────────────────
 const STUDENT_LODGING_RATES = {
@@ -561,6 +563,9 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
   const [lectures,       setLectures]       = useState(parse(quote?.lecture_lines,        []));
   const [addons,         setAddons]         = useState(parse(quote?.addon_lines,          []));
   const [adjustments,    setAdjustments]    = useState(parse(quote?.adjustment_lines,     []));
+  // New catalog lines
+  const [packageLines,   setPackageLines]   = useState(parse(quote?.package_lines,        []));
+  const [newAddonLines,  setNewAddonLines]  = useState(parse(quote?.new_addon_lines,      []));
   const [saving, setSaving] = useState(false);
   const [availabilityResult, setAvailabilityResult] = useState(null);
   const [checkingAvailability, setCheckingAvailability] = useState(false);
@@ -623,7 +628,10 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
   const lectureTotal        = lectures.reduce((s, r) => s + calcLecture(r), 0);
   const addonTotal          = addons.reduce((s, r) => s + calcAddon(r), 0);
   const adjustmentTotal     = adjustments.reduce((s, r) => s + Number(r.amount || 0), 0);
-  const subtotal            = studentLodgingTotal + adultLodgingTotal + workshopTotal + lectureTotal + coffeeTotal + addonTotal + adjustmentTotal;
+  // New catalog totals
+  const packageLinesTotal   = packageLines.reduce((s, r) => s + calcPackageLine(r), 0);
+  const newAddonLinesTotal  = newAddonLines.reduce((s, r) => s + calcAddonLine(r), 0);
+  const subtotal            = studentLodgingTotal + adultLodgingTotal + workshopTotal + lectureTotal + coffeeTotal + addonTotal + adjustmentTotal + packageLinesTotal + newAddonLinesTotal;
   const discountAmount      = Math.round(subtotal * Number(form.discount_percent || 0) / 100);
   const total_price         = subtotal - discountAmount;
   const advance             = Math.round(total_price * 0.3);
@@ -658,6 +666,8 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
       lecture_lines:         JSON.stringify(lectures),
       addon_lines:           JSON.stringify(addons),
       adjustment_lines:      JSON.stringify(adjustments),
+      package_lines:         JSON.stringify(packageLines),
+      new_addon_lines:       JSON.stringify(newAddonLines),
       subtotal, discount_amount: discountAmount, total_price,
       advance_payment: advance, balance_payment: balance,
       version: Number(form.version),
@@ -835,6 +845,17 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
                 )}
               </SectionCard>
 
+              {/* ── NEW CATALOG PACKAGES ── */}
+              <SectionCard icon={Package} title="חבילות ומוצרים" subtitle="קטלוג חדש" defaultOpen={packageLines.length > 0 || newAddonLines.length > 0}>
+                <PackageLinesSection
+                  packageLines={packageLines}
+                  setPackageLines={setPackageLines}
+                  addonLines={newAddonLines}
+                  setAddonLines={setNewAddonLines}
+                  defaultPax={participantCount || estimatedPax}
+                />
+              </SectionCard>
+
               {/* Pricing sections — lodging hidden for DAY_USE */}
               {isDayUse ? (
                 <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-sm text-blue-700">
@@ -939,6 +960,8 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
               <div className={`${CARD} px-4 py-3`}>
                 <div className="text-xs font-semibold text-slate-500 mb-2">פירוט</div>
                 <div className="space-y-1 text-xs text-slate-500">
+                  {packageLinesTotal    > 0 && <div className="flex justify-between"><span>חבילות</span><span className="font-medium text-slate-700">{fmtMoney(packageLinesTotal)}</span></div>}
+                  {newAddonLinesTotal  > 0 && <div className="flex justify-between"><span>תוספות קטלוג</span><span className="font-medium text-slate-700">{fmtMoney(newAddonLinesTotal)}</span></div>}
                   {studentLodgingTotal > 0 && <div className="flex justify-between"><span>לינה תלמידים</span><span className="font-medium text-slate-700">{fmtMoney(studentLodgingTotal)}</span></div>}
                   {adultLodgingTotal   > 0 && <div className="flex justify-between"><span>לינה מבוגרים</span><span className="font-medium text-slate-700">{fmtMoney(adultLodgingTotal)}</span></div>}
                   {workshopTotal       > 0 && <div className="flex justify-between"><span>סדנאות</span><span className="font-medium text-slate-700">{fmtMoney(workshopTotal)}</span></div>}

@@ -62,21 +62,29 @@
       "type": "number",
       "description": "Students / participants"
     },
+    "package_lines": {
+      "type": "string",
+      "description": "JSON array \u2014 new catalog packages: [{package_id, option_id, quantity, unit_price, shirley_addon, price_overridden, notes}]"
+    },
+    "new_addon_lines": {
+      "type": "string",
+      "description": "JSON array \u2014 new catalog addons: [{addon_id, quantity, unit_price, notes}]"
+    },
     "student_lodging_lines": {
       "type": "string",
-      "description": "JSON array: [{rate_type: 'day_activity'|'midweek_lodging'|'weekend_lodging', pax, nights, rate, total}]"
+      "description": "JSON array (legacy): [{rate_type, pax, nights, rate, total}]"
     },
     "adult_lodging_lines": {
       "type": "string",
-      "description": "JSON array: [{tent_type: 'BED3'|'BED68', tent_count, nights, rate_per_tent_per_night, total}]"
+      "description": "JSON array (legacy): [{tent_type, tent_count, nights, rate_per_tent_per_night, total}]"
     },
     "workshop_lines": {
       "type": "string",
-      "description": "JSON array: [{name, audience: 'STUDENTS'|'ADULTS', rate, total}]"
+      "description": "JSON array (legacy): [{name, audience, rate, total}]"
     },
     "lecture_lines": {
       "type": "string",
-      "description": "JSON array: [{name, lecturer, base_price, vat_included, vat_amount, total}]"
+      "description": "JSON array (legacy): [{name, lecturer, base_price, vat_included, vat_amount, total}]"
     },
     "coffee_corner_pax": {
       "type": "number",
@@ -84,7 +92,7 @@
     },
     "addon_lines": {
       "type": "string",
-      "description": "JSON array: [{description, quantity, unit_price, total}]"
+      "description": "JSON array (legacy): [{description, quantity, unit_price, total}]"
     },
     "adjustment_lines": {
       "type": "string",

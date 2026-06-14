@@ -11,6 +11,26 @@ const fmtDate = (d) => {
 };
 const parse = (str, fb = []) => { try { const r = JSON.parse(str); return Array.isArray(r) ? r : fb; } catch { return fb; } };
 
+// New catalog imports (inline to keep PDF self-contained)
+const PACKAGE_CATALOG_PDF = {
+  chavila_1: { name: "חבילה 1", description: "לינה - תלמידים ותלמידות - 17:00 עד 11:00 למחרת" },
+  chavila_2: { name: "חבילה 2", description: "יום סיור, ארוחה ושיחה על המכינות" },
+  chavila_3: { name: "חבילה 3", description: "פעילות יום לצוותים — הרצאה + 2 סדנאות" },
+  chavila_4: { name: "חבילה 4", description: "פעילות 24 שעות — תלמידים ומכינות" },
+  chavila_5: { name: "חבילה 5", description: "פעילות 24 שעות — מבוגרים" },
+  chavila_6: { name: "חבילה 6", description: "פעילות מבוגרים — פינת קפה ותוכן" },
+};
+const ADDON_CATALOG_PDF = {
+  meal_breakfast:           { label: "ארוחת בוקר",                               group: "ארוחות" },
+  meal_lunch:               { label: "ארוחת צהריים",                              group: "ארוחות" },
+  meal_dinner:              { label: "ארוחת ערב",                                 group: "ארוחות" },
+  karmelim:                 { label: "כרמלים/ גלואו — לינה + 3 ארוחות",           group: "כרמלים/ גלואו" },
+  agad:                     { label: "אגד/ סוכנים אחרים — לילה תלמידים",          group: "אגד/ סוכנים אחרים" },
+  content_student_workshop: { label: "סדנת תוכן בית הדור הבא — תלמידים",           group: "תוכן" },
+  content_adult_workshop:   { label: "סדנת תוכן בית הדור הבא — מבוגרים",          group: "תוכן" },
+  content_shirley_lecture:  { label: "הרצאה של שירלי בבית — כולם",               group: "תוכן" },
+};
+
 const LOGO_URL_FALLBACK   = "https://media.base44.com/images/public/69ea08de3791d203c52ea3cc/107796e98_quote-logo.png";
 const FOOTER_URL_FALLBACK = "https://media.base44.com/images/public/69ea08de3791d203c52ea3cc/c500ec249_quote-footer-photo.jpg";
 
@@ -19,13 +39,16 @@ function resolveData(quote, group) {
   let snap = null;
   try { snap = quote?.snapshot ? JSON.parse(quote.snapshot) : null; } catch {}
 
-  const studentLines  = parse(quote?.student_lodging_lines);
-  const adultLines    = parse(quote?.adult_lodging_lines);
-  const workshopLines = parse(quote?.workshop_lines);
-  const lectureLines  = parse(quote?.lecture_lines);
-  const addonLines    = parse(quote?.addon_lines);
-  const adjustLines   = parse(quote?.adjustment_lines);
+  const studentLines   = parse(quote?.student_lodging_lines);
+  const adultLines     = parse(quote?.adult_lodging_lines);
+  const workshopLines  = parse(quote?.workshop_lines);
+  const lectureLines   = parse(quote?.lecture_lines);
+  const addonLines     = parse(quote?.addon_lines);
+  const adjustLines    = parse(quote?.adjustment_lines);
   const coffeeCornerPax = Number(quote?.coffee_corner_pax || 0);
+  // New catalog lines
+  const packageLines   = parse(quote?.package_lines);
+  const newAddonLines  = parse(quote?.new_addon_lines);
 
   const isDayUse  = (group?.group_type === "DAY_USE") || (studentLines.length > 0 && studentLines[0].rate_type === "day_activity");
   const arrival   = quote?.arrival_date   || snap?.startDate   || group?.arrival_date   || "";
@@ -45,6 +68,31 @@ function resolveData(quote, group) {
   };
 
   const lineItems = [];
+
+  // ── New catalog package lines ─────────────────────────────────────────────
+  packageLines.forEach(r => {
+    const pkg = PACKAGE_CATALOG_PDF[r.package_id];
+    if (!pkg) return;
+    const qty = Number(r.quantity || 0);
+    const unitPrice = Number(r.unit_price || 0);
+    let total = qty * unitPrice;
+    // Shirley add-on for חבילה 3
+    if (r.shirley_addon) total += 5000;
+    lineItems.push({ name: pkg.name, description: pkg.description, qty, unitPrice, total, vatAmount: null });
+    // Add Shirley as separate line for clarity
+    if (r.shirley_addon) {
+      lineItems.push({ name: "תוספת הרצאה של שירלי", qty: 1, unitPrice: 5000, total: 5000, vatAmount: null });
+    }
+  });
+
+  // ── New addon lines ───────────────────────────────────────────────────────
+  newAddonLines.forEach(r => {
+    const item = ADDON_CATALOG_PDF[r.addon_id];
+    const qty = Number(r.quantity || 0);
+    const unitPrice = Number(r.unit_price || 0);
+    const total = qty * unitPrice;
+    lineItems.push({ name: item?.label || r.addon_id, qty, unitPrice, total, vatAmount: null });
+  });
 
   studentLines.forEach(r => {
 
@@ -100,10 +148,12 @@ function resolveData(quote, group) {
   const advance     = Number(quote?.advance_payment ?? Math.round(totalPrice * 0.3));
   const balance     = Number(quote?.balance_payment ?? (totalPrice - advance));
 
-  // Activity type label from first student lodging line
-  const activityTypeLabel = studentLines.length > 0
-    ? (STUDENT_RATES[studentLines[0].rate_type]?.label || studentLines[0].rate_type)
-    : (group?.group_type === "DAY_USE" ? "יום סמינר" : "לינה");
+  // Activity type label — prefer new package name if available
+  const activityTypeLabel = packageLines.length > 0
+    ? (PACKAGE_CATALOG_PDF[packageLines[0].package_id]?.name || "חבילה")
+    : studentLines.length > 0
+      ? (STUDENT_RATES[studentLines[0].rate_type]?.label || studentLines[0].rate_type)
+      : (group?.group_type === "DAY_USE" ? "יום סמינר" : "לינה");
 
   // Audience
   const audienceLabel = (quote?.participant_count ?? group?.participant_count)
@@ -248,12 +298,15 @@ function Page1({ d, logoUrl }) {
         ].map((t, i) => <div key={i} style={{ marginBottom: 4 }}>{t}</div>)}
       </div>
 
-      {/* Tracks */}
-      <SectionHeading>יש לנו שלושה מסלולי תוכן אפשריים:</SectionHeading>
+      {/* Package overview */}
+      <SectionHeading>חבילות הפעילות שלנו:</SectionHeading>
       <div style={{ fontSize: 12, fontFamily: BODY_FONT, lineHeight: 1.9, color: "#2a2a2a", textAlign: "center", marginTop: 10, marginBottom: 12 }}>
-        <div style={{ marginBottom: 6 }}><strong style={{ fontFamily: HEADING_FONT, color: BLUE, fontSize: 13 }}>שיבולת</strong> — תוכן מלא של הגוף המתארח, השתלבות בסדר היום של בית הדור הבא</div>
-        <div style={{ marginBottom: 6 }}><strong style={{ fontFamily: HEADING_FONT, color: BLUE, fontSize: 13 }}>אלומה</strong> — תוכן של הגוף המתארח, עם סדנה מלאה אחת של בית הדור הבא ביום, והשתלבות בסדר היום של בית הדור הבא</div>
-        <div><strong style={{ fontFamily: HEADING_FONT, color: BLUE, fontSize: 13 }}>שדה</strong> — תוכן מלא ומותאם אישית של בית הדור הבא</div>
+        <div style={{ marginBottom: 6 }}><strong style={{ fontFamily: HEADING_FONT, color: BLUE, fontSize: 13 }}>חבילה 1</strong> — לינה תלמידים ומכינות + סדנה אחת (17:00–11:00)</div>
+        <div style={{ marginBottom: 6 }}><strong style={{ fontFamily: HEADING_FONT, color: BLUE, fontSize: 13 }}>חבילה 2</strong> — יום סיור, ארוחה ושיחה על המכינות</div>
+        <div style={{ marginBottom: 6 }}><strong style={{ fontFamily: HEADING_FONT, color: BLUE, fontSize: 13 }}>חבילה 3</strong> — פעילות יום לצוותים: הרצאה + 2 סדנאות</div>
+        <div style={{ marginBottom: 6 }}><strong style={{ fontFamily: HEADING_FONT, color: BLUE, fontSize: 13 }}>חבילה 4</strong> — 24 שעות לתלמידים ומכינות: 3 סדנאות + סדנת סיכום</div>
+        <div style={{ marginBottom: 6 }}><strong style={{ fontFamily: HEADING_FONT, color: BLUE, fontSize: 13 }}>חבילה 5</strong> — 24 שעות למבוגרים: 3 סדנאות וסדנת סיכום</div>
+        <div><strong style={{ fontFamily: HEADING_FONT, color: BLUE, fontSize: 13 }}>חבילה 6</strong> — פעילות מבוגרים: פינת קפה ותוכן מותאם</div>
       </div>
 
       <div style={{ fontSize: 14, fontWeight: 700, fontFamily: HEADING_FONT, color: BLUE, textAlign: "center", marginBottom: 20 }}>עלויות פעילות:</div>
