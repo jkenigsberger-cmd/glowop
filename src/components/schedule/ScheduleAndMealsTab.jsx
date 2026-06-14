@@ -81,23 +81,22 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
     [group, profile]
   );
 
-  // Default empty schedule with pax auto-filled
-  const makeEmptySchedule = () => ({
-    date: "", start_time: "09:00", end_time: "10:00",
-    activity_name: "", requested_location: "", activity_space_id: null,
-    quote_item_id: null,
-    pax: groupTotalPax != null ? String(groupTotalPax) : (groupParticipantCount ? String(groupParticipantCount) : ""),
-    pax_sync_mode: "AUTO",
-    notes: ""
-  });
-
-  const [newSchedule, setNewSchedule] = useState(makeEmptySchedule);
-
   // Resolved group total pax for sync
   const groupTotalPax = useMemo(() =>
     group?.total_pax ?? profile?.total_pax ?? null,
     [group, profile]
   );
+
+  // Default empty schedule with pax auto-filled
+  const makeEmptySchedule = () => ({
+    date: "", start_time: "09:00", end_time: "10:00",
+    activity_name: "", requested_location: "", activity_space_id: null,
+    quote_item_id: null,
+    pax: groupParticipantCount ? String(groupParticipantCount) : "",
+    notes: ""
+  });
+
+  const [newSchedule, setNewSchedule] = useState(makeEmptySchedule);
 
   // The approved quote (or first quote) for activity suggestions
   const activeQuote = quotes.find(q => q.status === "APPROVED") || quotes[0];
