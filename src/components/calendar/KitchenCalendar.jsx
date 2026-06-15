@@ -203,7 +203,7 @@ function KitchenDayCell({ date, meals, coffeeRequests, isCurrentMonth, onClick }
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 
-export default function KitchenCalendar() {
+export default function KitchenCalendar({ onDaySelect }) {
   const [pivot, setPivot] = useState(moment());
   const [modalDate, setModalDate] = useState(null);
   const navigate = useNavigate();
@@ -229,7 +229,11 @@ export default function KitchenCalendar() {
 
   const handleNavigate = (dateStr) => {
     setModalDate(null);
-    navigate(`/kitchen?date=${dateStr}`);
+    if (onDaySelect) {
+      onDaySelect(dateStr);
+    } else {
+      navigate(`/kitchen`);
+    }
   };
 
   return (
