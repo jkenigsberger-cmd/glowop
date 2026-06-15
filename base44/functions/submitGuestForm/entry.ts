@@ -278,6 +278,22 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ── Sync arrival/departure times to Group ────────────────────────────────
+    // The guest form is the operational truth for times — always update the group
+    const arrivalTime   = fields.estimated_arrival_time   || null;
+    const departureTime = fields.estimated_departure_time || null;
+    if (arrivalTime || departureTime) {
+      try {
+        const timeUpdate = {};
+        if (arrivalTime)   timeUpdate.arrival_time   = arrivalTime;
+        if (departureTime) timeUpdate.departure_time = departureTime;
+        await base44.asServiceRole.entities.Group.update(group_id, timeUpdate);
+        console.log('[submitGuestForm] synced arrival/departure times to Group:', timeUpdate);
+      } catch (timeErr) {
+        console.warn('[submitGuestForm] failed to sync times to Group (non-fatal):', timeErr?.message);
+      }
+    }
+
     // ── Create review alert so admin sees the new submission ─────────────────
     try {
       await base44.asServiceRole.entities.OperationalReviewAlert.create({

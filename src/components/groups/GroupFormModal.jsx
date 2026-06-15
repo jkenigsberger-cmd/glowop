@@ -24,6 +24,8 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
     group_type:    group?.group_type    || "LODGING",
     arrival_date:  group?.arrival_date  || "",
     departure_date: group?.departure_date || "",
+    arrival_time:  group?.arrival_time  || "",
+    departure_time: group?.departure_time || "",
     total_pax:     group?.total_pax     ?? "",
     staff_count:   group?.staff_count   ?? "",
     boys_count:    group?.boys_count    ?? "",
@@ -362,6 +364,14 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
             <div className="space-y-1">
               <Label>{isDayUse ? "תאריך האירוע" : "תאריך עזיבה"}</Label>
               <Input type="date" value={form.departure_date} onChange={e => set("departure_date", e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <Label>שעת הגעה <span className="text-slate-400 font-normal text-[11px]">(אופציונלי)</span></Label>
+              <Input type="time" value={form.arrival_time} onChange={e => set("arrival_time", e.target.value)} placeholder="לדוגמה 15:00" />
+            </div>
+            <div className="space-y-1">
+              <Label>שעת יציאה <span className="text-slate-400 font-normal text-[11px]">(אופציונלי)</span></Label>
+              <Input type="time" value={form.departure_time} onChange={e => set("departure_time", e.target.value)} placeholder="לדוגמה 11:00" />
             </div>
           </div>
 

@@ -63,10 +63,16 @@ function DayModal({ dateStr, groups, onClose }) {
             className="w-full text-right rounded-xl border border-slate-200 bg-white px-4 py-3 hover:bg-slate-50 transition-colors space-y-0.5"
           >
             <p className="font-semibold text-slate-800 text-sm">{g.group_name}</p>
-            <div className="flex gap-2 text-[11px] text-slate-500">
+            <div className="flex gap-2 text-[11px] text-slate-500 flex-wrap">
               {g.total_pax && <span>👥 {g.total_pax}</span>}
               {g.group_type && <span>{GROUP_TYPE_HEB[g.group_type] || g.group_type}</span>}
               {g.status && <span className="text-slate-400">{STATUS_HEB[g.status] || g.status}</span>}
+              {title === "נכנסים" && g.arrival_time && (
+                <span className="text-emerald-600 font-medium">🕐 שעת הגעה: {g.arrival_time}</span>
+              )}
+              {title === "יוצאים" && g.departure_time && (
+                <span className="text-orange-500 font-medium">🕐 שעת יציאה: {g.departure_time}</span>
+              )}
             </div>
           </button>
         ))}

@@ -123,8 +123,18 @@ function GroupCard({ group, dateStr, meals, activities, spaces, alerts, defaultO
           {(!highlightSection || highlightSection === "movement") && (
             <div className="px-4 py-3 space-y-1">
               <p className="text-xs font-bold uppercase tracking-wide text-slate-400 mb-1.5">תנועה</p>
-              {isCheckin && <div className="flex items-center gap-2 text-emerald-700 text-xs"><ArrowDownCircle className="w-3.5 h-3.5 shrink-0" /><span>צ׳ק אין — {group.arrival_date}</span></div>}
-              {isCheckout && <div className="flex items-center gap-2 text-orange-600 text-xs"><ArrowUpCircle className="w-3.5 h-3.5 shrink-0" /><span>צ׳ק אאוט — {group.departure_date}</span></div>}
+              {isCheckin && (
+                <div className="flex items-center gap-2 text-emerald-700 text-xs">
+                  <ArrowDownCircle className="w-3.5 h-3.5 shrink-0" />
+                  <span>צ׳ק אין — {group.arrival_date}{group.arrival_time ? ` · ${group.arrival_time}` : ""}</span>
+                </div>
+              )}
+              {isCheckout && (
+                <div className="flex items-center gap-2 text-orange-600 text-xs">
+                  <ArrowUpCircle className="w-3.5 h-3.5 shrink-0" />
+                  <span>צ׳ק אאוט — {group.departure_date}{group.departure_time ? ` · ${group.departure_time}` : ""}</span>
+                </div>
+              )}
               {!isCheckin && !isCheckout && <div className="flex items-center gap-2 text-blue-500 text-xs"><Moon className="w-3.5 h-3.5 shrink-0" /><span>שוהה באתר</span></div>}
             </div>
           )}
@@ -211,22 +221,34 @@ function GroupCard({ group, dateStr, meals, activities, spaces, alerts, defaultO
 }
 
 // ── Filter pill ───────────────────────────────────────────────────────────────
-function FilterPill({ label, count, icon: Icon, active, onClick, colorCls }) {
+// Color configs per filter type — inactive: soft tinted pill; active: solid color
+const FILTER_COLORS = {
+  all:        { inactive: "bg-slate-50 border-slate-300 text-slate-700 hover:bg-slate-100",        active: "bg-slate-700 border-slate-700 text-white shadow-sm" },
+  checkins:   { inactive: "bg-emerald-50 border-emerald-300 text-emerald-700 hover:bg-emerald-100", active: "bg-emerald-600 border-emerald-600 text-white shadow-sm" },
+  checkouts:  { inactive: "bg-orange-50 border-orange-300 text-orange-700 hover:bg-orange-100",    active: "bg-orange-500 border-orange-500 text-white shadow-sm" },
+  meals:      { inactive: "bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100",         active: "bg-amber-500 border-amber-500 text-white shadow-sm" },
+  activities: { inactive: "bg-purple-50 border-purple-300 text-purple-700 hover:bg-purple-100",    active: "bg-purple-600 border-purple-600 text-white shadow-sm" },
+  alerts:     { inactive: "bg-red-50 border-red-300 text-red-700 hover:bg-red-100",                active: "bg-red-600 border-red-600 text-white shadow-sm" },
+};
+
+function FilterPill({ label, count, icon: Icon, active, onClick, filterKey }) {
   if (count === 0) return null;
+  const colors = FILTER_COLORS[filterKey] || FILTER_COLORS.all;
   return (
     <button
       type="button"
       onClick={onClick}
       className={cn(
         "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium border transition-all",
-        active
-          ? cn("border-transparent shadow-sm", colorCls)
-          : "bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+        active ? colors.active : colors.inactive
       )}
     >
       {Icon && <Icon className="w-3.5 h-3.5 shrink-0" />}
       {label}
-      <span className={cn("rounded-full px-1.5 py-0.5 text-[11px] leading-none font-bold", active ? "bg-white/30" : "bg-slate-100 text-slate-500")}>
+      <span className={cn(
+        "rounded-full px-1.5 py-0.5 text-[11px] leading-none font-bold",
+        active ? "bg-white/25 text-white" : "bg-white/80 text-slate-600"
+      )}>
         {count}
       </span>
     </button>
@@ -391,8 +413,8 @@ export default function OperationalDaySummary({
 
   // Which groups to show in the list, depending on active filter
   const visibleGroups = useMemo(() => {
-    if (activeFilter === "checkins")  return checkins;
-    if (activeFilter === "checkouts") return checkouts;
+    if (activeFilter === "checkins")  return [...checkins].sort((a, b) => (a.arrival_time || "99:99").localeCompare(b.arrival_time || "99:99"));
+    if (activeFilter === "checkouts") return [...checkouts].sort((a, b) => (a.departure_time || "99:99").localeCompare(b.departure_time || "99:99"));
     if (activeFilter === "meals")     return allGroupsOnDay.filter(g => dayMeals.some(m => m.group_id === g.id));
     if (activeFilter === "activities") return allGroupsOnDay.filter(g => dayActivities.some(a => a.group_id === g.id));
     if (activeFilter === "alerts")    return allGroupsOnDay.filter(g => dayAlerts.some(a => a.group_id === g.id));
@@ -433,54 +455,18 @@ export default function OperationalDaySummary({
               </p>
               {/* Filter pills */}
               <div className="flex flex-wrap gap-2">
-                <FilterPill
-                  label="כל הקבוצות"
-                  count={allGroupsOnDay.length}
-                  icon={Users}
-                  active={activeFilter === "all"}
-                  onClick={() => handleFilter("all")}
-                  colorCls="bg-slate-700 text-white"
-                />
-                <FilterPill
-                  label="נכנסים"
-                  count={checkins.length}
-                  icon={ArrowDownCircle}
-                  active={activeFilter === "checkins"}
-                  onClick={() => handleFilter("checkins")}
-                  colorCls="bg-emerald-600 text-white"
-                />
-                <FilterPill
-                  label="יוצאים"
-                  count={checkouts.length}
-                  icon={ArrowUpCircle}
-                  active={activeFilter === "checkouts"}
-                  onClick={() => handleFilter("checkouts")}
-                  colorCls="bg-orange-500 text-white"
-                />
-                <FilterPill
-                  label="ארוחות"
-                  count={dayMeals.length}
-                  icon={UtensilsCrossed}
-                  active={activeFilter === "meals"}
-                  onClick={() => handleFilter("meals")}
-                  colorCls="bg-amber-600 text-white"
-                />
-                <FilterPill
-                  label="פעילויות"
-                  count={dayActivities.length}
-                  icon={Activity}
-                  active={activeFilter === "activities"}
-                  onClick={() => handleFilter("activities")}
-                  colorCls="bg-purple-600 text-white"
-                />
-                <FilterPill
-                  label="התראות"
-                  count={dayAlerts.length}
-                  icon={AlertTriangle}
-                  active={activeFilter === "alerts"}
-                  onClick={() => handleFilter("alerts")}
-                  colorCls="bg-red-600 text-white"
-                />
+                <FilterPill label="כל הקבוצות" count={allGroupsOnDay.length} icon={Users}
+                  active={activeFilter === "all"} onClick={() => handleFilter("all")} filterKey="all" />
+                <FilterPill label="נכנסים" count={checkins.length} icon={ArrowDownCircle}
+                  active={activeFilter === "checkins"} onClick={() => handleFilter("checkins")} filterKey="checkins" />
+                <FilterPill label="יוצאים" count={checkouts.length} icon={ArrowUpCircle}
+                  active={activeFilter === "checkouts"} onClick={() => handleFilter("checkouts")} filterKey="checkouts" />
+                <FilterPill label="ארוחות" count={dayMeals.length} icon={UtensilsCrossed}
+                  active={activeFilter === "meals"} onClick={() => handleFilter("meals")} filterKey="meals" />
+                <FilterPill label="פעילויות" count={dayActivities.length} icon={Activity}
+                  active={activeFilter === "activities"} onClick={() => handleFilter("activities")} filterKey="activities" />
+                <FilterPill label="התראות" count={dayAlerts.length} icon={AlertTriangle}
+                  active={activeFilter === "alerts"} onClick={() => handleFilter("alerts")} filterKey="alerts" />
               </div>
             </>
           )}

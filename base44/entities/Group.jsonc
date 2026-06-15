@@ -22,6 +22,14 @@
       "type": "string",
       "format": "date"
     },
+    "arrival_time": {
+      "type": "string",
+      "description": "HH:MM \u2014 estimated arrival time on arrival day"
+    },
+    "departure_time": {
+      "type": "string",
+      "description": "HH:MM \u2014 estimated departure time on departure day"
+    },
     "total_pax": {
       "type": "number"
     },

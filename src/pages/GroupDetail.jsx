@@ -151,7 +151,9 @@ export default function GroupDetail() {
                     <span className="flex items-center gap-1">
                       <Calendar className="w-3.5 h-3.5" />
                       {format(new Date(group.arrival_date), "dd/MM/yyyy")}
+                      {group.arrival_time && <span className="text-emerald-600 font-medium">· {group.arrival_time}</span>}
                       {group.departure_date && ` — ${format(new Date(group.departure_date), "dd/MM/yyyy")}`}
+                      {group.departure_time && <span className="text-orange-500 font-medium">· {group.departure_time}</span>}
                     </span>
                   )}
                   {group.total_pax && <span className="flex items-center gap-1"><Users className="w-3.5 h-3.5" />{group.total_pax} משתתפים</span>}
