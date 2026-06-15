@@ -106,12 +106,32 @@ export default function DailyOperationalPrint() {
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Heebo:wght@400;600;700&display=swap');
+        @font-face {
+          font-family: 'Kav16';
+          src: url('https://raw.githubusercontent.com/jkenigsberger-cmd/fonts-/refs/heads/main/Kav16-Semibold.otf') format('opentype');
+          font-weight: 600;
+          font-style: normal;
+          font-display: swap;
+        }
+        @font-face {
+          font-family: 'SimplerPro';
+          src: url('https://raw.githubusercontent.com/jkenigsberger-cmd/fonts-/refs/heads/main/SimplerPro_HL-Regular.otf') format('opentype');
+          font-weight: 400;
+          font-style: normal;
+          font-display: swap;
+        }
+        @font-face {
+          font-family: 'SimplerPro';
+          src: url('https://raw.githubusercontent.com/jkenigsberger-cmd/fonts-/refs/heads/main/SimplerPro_HL-Bold.otf') format('opentype');
+          font-weight: 700;
+          font-style: normal;
+          font-display: swap;
+        }
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body, html { direction: rtl; font-family: 'Heebo', Arial, sans-serif; font-size: 13px; background: #f8f9fa; color: #1e293b; }
+        body, html { direction: rtl; font-family: 'SimplerPro', 'Arial Hebrew', Arial, sans-serif; font-size: 13px; background: #f8f9fa; color: #1e293b; }
         .print-page { max-width: 800px; margin: 0 auto; background: white; padding: 24px 28px; }
         .doc-header { border-bottom: 3px solid #1e40af; padding-bottom: 16px; margin-bottom: 20px; }
-        .doc-title { font-size: 22px; font-weight: 700; color: #1e40af; margin-bottom: 4px; }
+        .doc-title { font-size: 22px; font-weight: 700; color: #1e40af; margin-bottom: 4px; font-family: 'Kav16', 'Arial Hebrew', Arial, sans-serif; }
         .doc-date { font-size: 16px; font-weight: 700; color: #1e293b; margin-bottom: 4px; }
         .doc-generated { font-size: 11px; color: #94a3b8; margin-top: 6px; }
         .section { margin-bottom: 20px; page-break-inside: avoid; }

@@ -43,7 +43,7 @@ export default function CleaningHoursPrintTemplate({ shifts, from, to }) {
 
   const page = {
     width: "210mm", minHeight: "297mm", padding: "14mm 16mm 20mm",
-    boxSizing: "border-box", fontFamily: '"Arial Hebrew", Arial, sans-serif',
+    boxSizing: "border-box", fontFamily: '"SimplerPro", "Arial Hebrew", Arial, sans-serif',
     fontSize: 12, direction: "rtl", backgroundColor: "#fff", color: "#111",
   };
 
@@ -54,7 +54,7 @@ export default function CleaningHoursPrintTemplate({ shifts, from, to }) {
     <div id="cleaning-print-root" style={page}>
       {/* Header */}
       <div style={{ textAlign: "center", borderBottom: "2px solid #1a56a0", paddingBottom: 12, marginBottom: 20 }}>
-        <div style={{ fontSize: 20, fontWeight: 700, color: "#1a56a0" }}>דוח שעות עובדות ניקיון</div>
+        <div style={{ fontSize: 20, fontWeight: 700, color: "#1a56a0", fontFamily: '"Kav16", "Arial Hebrew", Arial, sans-serif' }}>דוח שעות עובדות ניקיון</div>
         <div style={{ fontSize: 12, color: "#555", marginTop: 4 }}>
           מתאריך {fmtDate(from)} עד תאריך {fmtDate(to)}
         </div>

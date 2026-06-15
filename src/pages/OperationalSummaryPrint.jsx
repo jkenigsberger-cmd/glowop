@@ -292,13 +292,33 @@ export default function OperationalSummaryPrint() {
     <>
       {/* Inline styles for print */}
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Heebo:wght@400;600;700&display=swap');
+        @font-face {
+          font-family: 'Kav16';
+          src: url('https://raw.githubusercontent.com/jkenigsberger-cmd/fonts-/refs/heads/main/Kav16-Semibold.otf') format('opentype');
+          font-weight: 600;
+          font-style: normal;
+          font-display: swap;
+        }
+        @font-face {
+          font-family: 'SimplerPro';
+          src: url('https://raw.githubusercontent.com/jkenigsberger-cmd/fonts-/refs/heads/main/SimplerPro_HL-Regular.otf') format('opentype');
+          font-weight: 400;
+          font-style: normal;
+          font-display: swap;
+        }
+        @font-face {
+          font-family: 'SimplerPro';
+          src: url('https://raw.githubusercontent.com/jkenigsberger-cmd/fonts-/refs/heads/main/SimplerPro_HL-Bold.otf') format('opentype');
+          font-weight: 700;
+          font-style: normal;
+          font-display: swap;
+        }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
         body, html {
           direction: rtl;
-          font-family: 'Heebo', 'Arial Hebrew', Arial, sans-serif;
+          font-family: 'SimplerPro', 'Arial Hebrew', Arial, sans-serif;
           font-size: 13px;
           background: #f8f9fa;
           color: #1e293b;
@@ -322,12 +342,14 @@ export default function OperationalSummaryPrint() {
           font-weight: 700;
           color: #1e40af;
           margin-bottom: 6px;
+          font-family: 'Kav16', 'Arial Hebrew', Arial, sans-serif;
         }
         .doc-group-name {
           font-size: 18px;
           font-weight: 700;
           color: #1e293b;
           margin-bottom: 4px;
+          font-family: 'Kav16', 'Arial Hebrew', Arial, sans-serif;
         }
         .doc-meta {
           display: flex;

@@ -209,8 +209,8 @@ function resolveData(quote, group) {
 }
 
 // ── Shared styles ─────────────────────────────────────────────────────────────
-const HEADING_FONT = '"Arial Hebrew", "Noto Sans Hebrew", "Heebo", "Rubik", Arial, sans-serif';
-const BODY_FONT = '"Arial Hebrew", "Noto Sans Hebrew", "Heebo", "Rubik", Arial, sans-serif';
+const HEADING_FONT = '"Kav16", "Arial Hebrew", Arial, sans-serif';
+const BODY_FONT = '"SimplerPro", "Arial Hebrew", Arial, sans-serif';
 const BLUE = "#1a56a0";
 
 const pageStyle = {
