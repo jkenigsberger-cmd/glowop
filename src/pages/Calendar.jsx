@@ -58,7 +58,7 @@ function MonthDayCell({ date, groups, meals, activities, onClick, isCurrentMonth
       type="button"
       onClick={() => onClick(date)}
       className={cn(
-        "min-h-[96px] p-1.5 flex flex-col gap-1 border-b border-r border-slate-100 text-right w-full transition-colors",
+        "min-h-[110px] p-2 flex flex-col gap-1 border-b border-r border-slate-200 text-right w-full transition-colors",
         isCurrentMonth ? "bg-white hover:bg-slate-50" : "bg-slate-50/60 hover:bg-slate-100/60",
         isToday && "ring-1 ring-inset ring-primary/40"
       )}
@@ -128,7 +128,7 @@ function MonthView({ dates, groups, meals, activities, pivot, onClick }) {
     <div className="rounded-xl overflow-hidden border border-slate-200 shadow-sm">
       <div className="grid grid-cols-7 bg-slate-50 border-b border-slate-200">
         {HEB_DAYS_SUN.map((d) => (
-          <div key={d} className="text-center text-xs font-semibold text-slate-500 py-2.5 border-r border-slate-100 last:border-r-0">
+          <div key={d} className="text-center text-xs font-semibold text-slate-500 py-3 border-r border-slate-200">
             {d}
           </div>
         ))}
@@ -166,28 +166,28 @@ function WeekDayColumn({ date, groups, meals, activities, onClick }) {
       type="button"
       onClick={() => onClick(date)}
       className={cn(
-        "flex flex-col min-h-[220px] border-r border-slate-200 last:border-r-0 text-right w-full transition-colors",
+        "flex flex-col min-h-[260px] border-r border-slate-200 text-right w-full transition-colors",
         isToday ? "bg-primary/5 hover:bg-primary/10" : "bg-white hover:bg-slate-50"
       )}
     >
       {/* Day header */}
       <div className={cn(
-        "px-2 py-2.5 border-b text-center w-full",
+        "px-2 py-3 border-b text-center w-full",
         isToday ? "bg-primary text-white border-primary/30" : "bg-slate-50 border-slate-200 text-slate-600"
       )}>
-        <div className={cn("text-[10px] font-semibold uppercase tracking-wide", isToday ? "text-white/80" : "text-slate-400")}>
+        <div className={cn("text-[11px] font-semibold uppercase tracking-wide", isToday ? "text-white/80" : "text-slate-400")}>
           {date.format("dddd")}
         </div>
-        <div className={cn("text-xl font-bold leading-tight mt-0.5", isToday ? "text-white" : "text-slate-800")}>
+        <div className={cn("text-2xl font-bold leading-tight mt-0.5", isToday ? "text-white" : "text-slate-800")}>
           {date.format("D")}
         </div>
-        <div className={cn("text-[9px] mt-0.5", isToday ? "text-white/70" : "text-slate-400")}>
+        <div className={cn("text-[10px] mt-0.5", isToday ? "text-white/70" : "text-slate-400")}>
           {date.format("MMM")}
         </div>
       </div>
 
       {/* Summary content */}
-      <div className="flex-1 p-2 flex flex-col gap-1.5">
+      <div className="flex-1 p-2.5 flex flex-col gap-2">
         {!hasContent && (
           <div className="flex items-center justify-center h-full text-slate-200 text-xs mt-4">—</div>
         )}
