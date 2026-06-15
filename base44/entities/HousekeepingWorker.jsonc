@@ -1,0 +1,23 @@
+{
+  "name": "HousekeepingWorker",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Worker display name"
+    },
+    "phone": {
+      "type": "string"
+    },
+    "active": {
+      "type": "boolean",
+      "default": true
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "name"
+  ]
+}
