@@ -8,7 +8,6 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import GroupAllocationCard from "@/components/housekeeping/GroupAllocationCard";
 import ReviewAlertsBanner from "@/components/alerts/ReviewAlertsBanner";
-import WorkerShiftSection from "@/components/housekeeping/WorkerShiftSection";
 
 const TODAY = new Date().toISOString().slice(0, 10);
 const DAYS_AHEAD = 7;
@@ -281,9 +280,6 @@ export default function Housekeeping() {
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 space-y-8">
         {/* Housekeeping review alerts */}
         <ReviewAlertsBanner module="HOUSEKEEPING" />
-
-        {/* Worker shift clock-in/out — always show for today */}
-        <WorkerShiftSection date={startDate} />
 
         {!hasAnyActivity && (
           <div className="text-center py-20 text-muted-foreground">
