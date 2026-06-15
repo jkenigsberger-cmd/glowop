@@ -65,47 +65,47 @@ function MonthDayCell({ date, groups, meals, activities, onClick, isCurrentMonth
     >
       {/* Day number */}
       <span className={cn(
-        "text-[11px] font-semibold leading-none mb-0.5 self-end",
+        "text-xs font-semibold leading-none mb-0.5 self-end",
         isToday
-          ? "bg-primary text-white w-5 h-5 rounded-full flex items-center justify-center text-[10px]"
+          ? "bg-primary text-white w-5 h-5 rounded-full flex items-center justify-center text-[11px]"
           : isCurrentMonth ? "text-slate-600" : "text-slate-300"
       )}>
         {date.format("D")}
       </span>
 
       {!hasContent && (
-        <span className="text-[10px] text-slate-200 leading-tight">—</span>
+        <span className="text-[11px] text-slate-200 leading-tight">—</span>
       )}
 
       {/* Groups on site */}
       {onSite.length > 0 && (
         <div className="flex items-center gap-1 flex-wrap">
           {checkins.length > 0 && (
-            <span className="text-[9px] font-bold bg-emerald-500 text-white rounded px-1 py-0.5 leading-none">
+            <span className="text-[11px] font-bold bg-emerald-500 text-white rounded px-1.5 py-0.5 leading-none">
               ↓{checkins.length}
             </span>
           )}
           {checkouts.length > 0 && (
-            <span className="text-[9px] font-bold bg-orange-500 text-white rounded px-1 py-0.5 leading-none">
+            <span className="text-[11px] font-bold bg-orange-500 text-white rounded px-1.5 py-0.5 leading-none">
               ↑{checkouts.length}
             </span>
           )}
-          <span className="text-[9px] text-slate-500 font-medium">{onSite.length} קבוצות</span>
+          <span className="text-[11px] text-slate-500 font-medium">{onSite.length} קבוצות</span>
         </div>
       )}
 
       {/* Pax */}
       {totalPax > 0 && (
-        <span className="text-[9px] text-slate-400 leading-none">{totalPax} 👤</span>
+        <span className="text-[11px] text-slate-400 leading-none">{totalPax} 👤</span>
       )}
 
       {/* Meals summary */}
       {Object.keys(mealsByType).length > 0 && (
-        <div className="flex flex-wrap gap-0.5">
+        <div className="flex flex-wrap gap-1">
           {Object.entries(mealsByType)
             .sort(([a], [b]) => (MEAL_ORDER[a] ?? 99) - (MEAL_ORDER[b] ?? 99))
             .map(([type, { pax }]) => (
-              <span key={type} className="text-[9px] bg-amber-100 text-amber-700 rounded px-1 py-0.5 leading-none font-medium">
+              <span key={type} className="text-[11px] bg-amber-100 text-amber-700 rounded px-1.5 py-0.5 leading-none font-medium">
                 {MEAL_TYPE_HEB[type] || type} {pax > 0 ? pax : ""}
               </span>
             ))}
@@ -114,7 +114,7 @@ function MonthDayCell({ date, groups, meals, activities, onClick, isCurrentMonth
 
       {/* Activities count */}
       {dayActivities.length > 0 && (
-        <span className="text-[9px] bg-purple-100 text-purple-700 rounded px-1 py-0.5 leading-none font-medium">
+        <span className="text-[11px] bg-purple-100 text-purple-700 rounded px-1.5 py-0.5 leading-none font-medium">
           {dayActivities.length} פעילויות
         </span>
       )}
@@ -198,20 +198,20 @@ function WeekDayColumn({ date, groups, meals, activities, onClick }) {
             {/* Movement badges */}
             <div className="flex flex-wrap gap-1">
               {checkins.length > 0 && (
-                <span className="text-[10px] font-bold bg-emerald-500 text-white rounded px-1.5 py-0.5 leading-none">
+                <span className="text-xs font-bold bg-emerald-500 text-white rounded px-1.5 py-0.5 leading-none">
                   ↓ נכנסים {checkins.length}
                 </span>
               )}
               {checkouts.length > 0 && (
-                <span className="text-[10px] font-bold bg-orange-500 text-white rounded px-1.5 py-0.5 leading-none">
+                <span className="text-xs font-bold bg-orange-500 text-white rounded px-1.5 py-0.5 leading-none">
                   ↑ יוצאים {checkouts.length}
                 </span>
               )}
             </div>
             {/* On site summary */}
             <div className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-right">
-              <p className="text-[10px] font-semibold text-slate-600">{onSite.length} קבוצות באתר</p>
-              {totalPax > 0 && <p className="text-[10px] text-slate-400">{totalPax} אורחים</p>}
+              <p className="text-xs font-semibold text-slate-600">{onSite.length} קבוצות באתר</p>
+              {totalPax > 0 && <p className="text-xs text-slate-400">{totalPax} אורחים</p>}
             </div>
           </div>
         )}
@@ -222,20 +222,20 @@ function WeekDayColumn({ date, groups, meals, activities, onClick }) {
             {Object.entries(mealsByType)
               .sort(([a], [b]) => (MEAL_ORDER[a] ?? 99) - (MEAL_ORDER[b] ?? 99))
               .map(([type, { pax, count }]) => (
-                <div key={type} className="flex items-center justify-between gap-1">
-                  <span className="text-[10px] font-semibold text-amber-700">{MEAL_TYPE_HEB[type] || type}</span>
-                  <span className="text-[10px] text-amber-600">{pax > 0 ? `${pax} 🍽` : `${count}`}</span>
-                </div>
-              ))}
-          </div>
-        )}
+                  <div key={type} className="flex items-center justify-between gap-1">
+                    <span className="text-xs font-semibold text-amber-700">{MEAL_TYPE_HEB[type] || type}</span>
+                    <span className="text-xs text-amber-600">{pax > 0 ? `${pax} 🍽` : `${count}`}</span>
+                  </div>
+                ))}
+              </div>
+              )}
 
-        {/* Activities */}
-        {dayActivities.length > 0 && (
-          <div className="bg-purple-50 border border-purple-100 rounded-lg px-2 py-1.5">
-            <p className="text-[10px] font-semibold text-purple-700">{dayActivities.length} פעילויות</p>
-          </div>
-        )}
+              {/* Activities */}
+              {dayActivities.length > 0 && (
+              <div className="bg-purple-50 border border-purple-100 rounded-lg px-2 py-1.5">
+              <p className="text-xs font-semibold text-purple-700">{dayActivities.length} פעילויות</p>
+              </div>
+              )}
       </div>
     </button>
   );
