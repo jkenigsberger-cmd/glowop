@@ -517,12 +517,142 @@ function Page2({ logoUrl, quoteNumber, footerUrl }) {
   );
 }
 
+// ── Page 3: content & workshops catalog ──────────────────────────────────────
+const CONTENT_CATALOG = [
+  {
+    category: 'חברה ישראלית',
+    subtitle: '"ואהבת לרעך כמוך"',
+    description: 'מסע בזהות, שייכות ואחריות חברתית',
+    workshops: [
+      { name: 'ענייני פנים | ענייני חוץ', desc: 'מסע בזהות ושייכות אישית, משפחתית ולאומית' },
+      { name: 'יוצרים תקווה', desc: 'תקווה כפעולה: איך מדמיינים עתיד טוב ומתחילים לבנות אותו' },
+      { name: 'שירארץ', desc: 'היסטוריה חיה של ישראל דרך השירים שליוו אותנו' },
+      { name: 'מי שרוצה מצליח?', desc: 'סדנה על פערים כלכליים-חברתיים ושוויון הזדמנויות (לצעירים)' },
+    ],
+    lectures: [
+      { name: 'פדגוגיה של תקווה', presenter: 'שירלי רימון ברכה' },
+      { name: 'לצאת מדעתנו', presenter: 'מירב לשם גונן' },
+    ],
+  },
+  {
+    category: 'חינוך פוליטי',
+    subtitle: 'מה למעלה ומה למטה',
+    description: 'אוריינות פוליטית וחשיבות הקול האישי',
+    workshops: [
+      { name: 'סדנת סטיקרים', desc: 'היסטוריה חיה דרך הסטיקרים שעיצבו את השיח הציבורי' },
+      { name: 'הקול שלי במרחב', desc: 'הקשבה וקריאה מעמיקה במגילת העצמאות (לצעירים)' },
+      { name: 'סדנת נרטיבים', desc: 'פיתוח חשיבה ביקורתית על מסרים מסביבנו (לצעירים)' },
+    ],
+    lectures: [
+      { name: 'חינוך כמעשה נרטיבי', presenter: 'שירלי רימון ברכה' },
+    ],
+  },
+  {
+    category: 'פדגוגיה של מורכבות',
+    subtitle: '"מחלוקת לשם שמיים"',
+    description: 'איך מנהלים שיח של מחלוקות בחדר מורים או בכיתה',
+    workshops: [
+      { name: 'סדנת אומץ', desc: '"איך לא להסכים נכון" | מרחב פתוח למפגש בין זהויות ודעות' },
+    ],
+    lectures: [],
+  },
+  {
+    category: 'חלומות ערים',
+    subtitle: 'אסטרטגיה וחשיבה יצירתית',
+    description: 'פיתוח צוותים, חזון ויכולת שינוי',
+    workshops: [
+      { name: 'סדנת חלימה — Dragon Dreaming', desc: 'חשיבה אסטרטגית משותפת על חזון ויעדים (למבוגרים)' },
+      { name: 'מעגל הזהב — למה, איך ומה', desc: 'מציאת הכוח הפנימי ליצירת שינוי (סיימון סינק — לצעירים)' },
+      { name: 'קפסולת זמן', desc: 'תמונת עתיד ואחריות אישית (לצעירים)' },
+      { name: 'סדנת עיבוד', desc: 'תרבות ארגונית תומכת חלומות (למבוגרים)' },
+    ],
+    lectures: [
+      { name: 'בניית אקוסיסטם חינוכי', presenter: 'רותי אנזל' },
+      { name: 'פדגוגיה של חוויה', presenter: 'עדי פאר' },
+      { name: 'מסע של שינוי — הובלת שינוי ארגוני', presenter: 'שירלי רימון ברכה' },
+      { name: 'POV: מבוגר אחראי', presenter: 'סדנה לצוותי חינוך שמנגישה את דור ה-Z' },
+    ],
+  },
+  {
+    category: 'שניים אוחזין',
+    subtitle: 'יהודית ודמוקרטית',
+    description: 'עיסוק בגם וגם — איך ישראל יכולה להמשיך להיות יהודית ודמוקרטית גם בעתיד',
+    workshops: [],
+    lectures: [
+      { name: 'יהודית ודמוקרטית — הגם וגם כדרך חיים', presenter: 'שירלי רימון ברכה' },
+    ],
+  },
+];
+
+function ContentCatalogPage({ logoUrl, quoteNumber }) {
+  return (
+    <div style={{ ...pageStyle, pageBreakBefore: "always" }}>
+      <CompactHeader quoteNumber={quoteNumber} logoUrl={logoUrl} />
+
+      <div style={{ fontSize: 15, fontWeight: 700, fontFamily: HEADING_FONT, color: BLUE, borderBottom: `2px solid ${BLUE}`, paddingBottom: 6, marginBottom: 16 }}>
+        אפשרויות תוכן וסדנאות
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px 20px" }}>
+        {CONTENT_CATALOG.map((cat, ci) => (
+          <div key={ci} style={{ pageBreakInside: "avoid", breakInside: "avoid", border: "1px solid #dde8f5", borderRadius: 6, overflow: "hidden" }}>
+            {/* Category header */}
+            <div style={{ background: BLUE, color: "#fff", padding: "6px 10px" }}>
+              <div style={{ fontSize: 12, fontWeight: 700, fontFamily: HEADING_FONT }}>{cat.category}</div>
+              <div style={{ fontSize: 10.5, fontFamily: BODY_FONT, opacity: 0.88 }}>{cat.subtitle}</div>
+            </div>
+
+            <div style={{ padding: "8px 10px" }}>
+              {cat.description && (
+                <div style={{ fontSize: 10.5, fontFamily: BODY_FONT, color: "#555", marginBottom: 6, lineHeight: 1.5 }}>{cat.description}</div>
+              )}
+
+              {cat.workshops.length > 0 && (
+                <>
+                  <div style={{ fontSize: 10.5, fontWeight: 700, fontFamily: HEADING_FONT, color: BLUE, marginBottom: 4 }}>סדנאות</div>
+                  {cat.workshops.map((w, wi) => (
+                    <div key={wi} style={{ marginBottom: 4, paddingRight: 6, borderRight: `2px solid ${BLUE}` }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, fontFamily: HEADING_FONT, color: "#1a1a1a" }}>{w.name}</span>
+                      {w.desc && (
+                        <div style={{ fontSize: 10, fontFamily: BODY_FONT, color: "#555", lineHeight: 1.4 }}>{w.desc}</div>
+                      )}
+                    </div>
+                  ))}
+                </>
+              )}
+
+              {cat.lectures.length > 0 && (
+                <>
+                  <div style={{ fontSize: 10.5, fontWeight: 700, fontFamily: HEADING_FONT, color: "#1a7a4a", marginTop: cat.workshops.length > 0 ? 8 : 0, marginBottom: 4 }}>הרצאות</div>
+                  {cat.lectures.map((l, li) => (
+                    <div key={li} style={{ marginBottom: 3, paddingRight: 6, borderRight: "2px solid #1a7a4a" }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, fontFamily: HEADING_FONT, color: "#1a1a1a" }}>{l.name}</span>
+                      {l.presenter && (
+                        <span style={{ fontSize: 10, fontFamily: BODY_FONT, color: "#666" }}> — {l.presenter}</span>
+                      )}
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ marginTop: 14, fontSize: 10, fontFamily: BODY_FONT, color: "#888", borderTop: "1px solid #e5e5e5", paddingTop: 8, lineHeight: 1.6 }}>
+        כל הסדנאות וההרצאות מותאמות לצרכי הקבוצה ולגיל המשתתפים. לפרטים נוספים וסיוע בבניית תכנית — צרו קשר.
+      </div>
+    </div>
+  );
+}
+
 // ── Main export ───────────────────────────────────────────────────────────────
 export default function QuotePdfTemplate({ quote, group, logoUrl, footerUrl }) {
   const d = resolveData(quote, group);
   return (
     <div id="quote-pdf-root" style={{ background: "#fff" }}>
       <Page1 d={d} logoUrl={logoUrl} />
+      <ContentCatalogPage logoUrl={logoUrl} quoteNumber={d.quoteNumber} />
       <Page2 logoUrl={logoUrl} quoteNumber={d.quoteNumber} footerUrl={footerUrl} />
     </div>
   );
