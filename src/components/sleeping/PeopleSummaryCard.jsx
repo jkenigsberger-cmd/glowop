@@ -152,12 +152,19 @@ export default function PeopleSummaryCard({ profile, vipRows = [], boysDist = []
             <p className="text-[11px] text-slate-400 pr-1 mt-1">מגדר לא הוגדר</p>
           ) : null}
 
-          {/* Single countdown: all VIP rows + alt tent together */}
-          <CountdownBadge
-            total={staffTotal}
-            assigned={totalStaffAssigned}
-            color="bg-violet-50 border-violet-200 text-violet-700"
-          />
+          {/* Single countdown: only VIP rows count as "real" allocation */}
+          {vipPeopleAssigned > 0 ? (
+            <CountdownBadge
+              total={staffTotal}
+              assigned={totalStaffAssigned}
+              color="bg-violet-50 border-violet-200 text-violet-700"
+            />
+          ) : staffTotal != null ? (
+            <div className="mt-2 rounded-lg px-3 py-1.5 text-xs flex items-center justify-between border bg-amber-50 border-amber-300 text-amber-700">
+              <span>שובצו: <strong>0</strong> / {staffTotal}</span>
+              <span className="font-medium">* כולם באוהל חילופי</span>
+            </div>
+          ) : null}
 
           <div className="text-[10px] text-violet-500 pt-0.5 space-y-0.5">
             <p>→ אוהלי VIP (80–89): {vipPeopleAssigned} אנשים</p>
