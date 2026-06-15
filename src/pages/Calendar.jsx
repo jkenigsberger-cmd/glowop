@@ -3,33 +3,19 @@ import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
 import moment from "moment";
 import "moment/locale/he";
-import { ChevronLeft, ChevronRight, CalendarDays } from "lucide-react";
+import { ChevronLeft, ChevronRight, CalendarDays, Users, UtensilsCrossed } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import CalendarEventModal from "../components/calendar/CalendarEventModal.jsx";
+import CheckInOutCalendar from "../components/calendar/CheckInOutCalendar.jsx";
+import KitchenCalendar from "../components/calendar/KitchenCalendar.jsx";
+import { getWeekDatesSunday, getMonthDatesSunday, HEB_DAYS_SUN } from "@/lib/calendarWeek";
 
 moment.locale("he");
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
 const fmt = (d) => moment(d).format("YYYY-MM-DD");
 const isSameDay = (a, b) => fmt(a) === fmt(b);
-
-function getWeekDates(pivot) {
-  const start = moment(pivot).startOf("isoWeek");
-  return Array.from({ length: 7 }, (_, i) => start.clone().add(i, "days"));
-}
-
-function getMonthDates(pivot) {
-  const start = moment(pivot).startOf("month").startOf("isoWeek");
-  const end   = moment(pivot).endOf("month").endOf("isoWeek");
-  const days  = [];
-  let cur = start.clone();
-  while (cur.isSameOrBefore(end, "day")) {
-    days.push(cur.clone());
-    cur.add(1, "day");
-  }
-  return days;
-}
 
 // ─── Event builders ───────────────────────────────────────────────────────────
 const EXCLUDED_STATUSES = new Set(["CANCELLED", "COMPLETED", "ARCHIVED"]);
@@ -187,14 +173,12 @@ function MonthDayCell({ date, events, onClick, isCurrentMonth }) {
   );
 }
 
-const HEB_DAYS = ["שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת", "ראשון"];
-
 function MonthView({ dates, allEvents, pivot, onClick }) {
   const currentMonth = pivot.month();
   return (
     <div className="rounded-xl overflow-hidden border border-slate-200 shadow-sm">
       <div className="grid grid-cols-7 bg-slate-50 border-b border-slate-200">
-        {HEB_DAYS.map((d) => (
+        {HEB_DAYS_SUN.map((d) => (
           <div key={d} className="text-center text-xs font-semibold text-slate-500 py-2.5 border-r border-slate-100 last:border-r-0">
             {d}
           </div>
@@ -492,6 +476,7 @@ export default function Calendar() {
   const [pivot, setPivot]       = useState(moment());
   const [view, setView]         = useState("week");
   const [selected, setSelected] = useState(null);
+  const [tab, setTab]           = useState("operational"); // "operational" | "checkinout" | "kitchen"
 
   const { data: groups = [] } = useQuery({
     queryKey: ["cal-groups"],
@@ -525,7 +510,7 @@ export default function Calendar() {
   ], [groups, meals, scheduleItems, activitySpaces, holds, groupById, spaceById]);
 
   const dates = useMemo(
-    () => view === "week" ? getWeekDates(pivot) : getMonthDates(pivot),
+    () => view === "week" ? getWeekDatesSunday(pivot) : getMonthDatesSunday(pivot),
     [pivot, view]
   );
 
@@ -548,15 +533,27 @@ export default function Calendar() {
             לוח שנה תפעולי
           </h1>
         </div>
-        <Legend />
-        <AgendaView
-          pivot={pivot}
-          allEvents={allEvents}
-          onClick={setSelected}
-          onPrev={() => goAgendaDay(-1)}
-          onNext={() => goAgendaDay(1)}
-          onToday={goToday}
-        />
+        {/* Mobile tab switcher */}
+        <div className="flex gap-1 overflow-x-auto pb-1">
+          <Button size="sm" variant={tab === "operational" ? "default" : "outline"} onClick={() => setTab("operational")} className="shrink-0 text-xs">לוח תפעולי</Button>
+          <Button size="sm" variant={tab === "checkinout" ? "default" : "outline"} onClick={() => setTab("checkinout")} className="shrink-0 text-xs">צ׳ק אין / אאוט</Button>
+          <Button size="sm" variant={tab === "kitchen" ? "default" : "outline"} onClick={() => setTab("kitchen")} className="shrink-0 text-xs">מטבח</Button>
+        </div>
+        {tab === "operational" && (
+          <>
+            <Legend />
+            <AgendaView
+              pivot={pivot}
+              allEvents={allEvents}
+              onClick={setSelected}
+              onPrev={() => goAgendaDay(-1)}
+              onNext={() => goAgendaDay(1)}
+              onToday={goToday}
+            />
+          </>
+        )}
+        {tab === "checkinout" && <CheckInOutCalendar />}
+        {tab === "kitchen" && <KitchenCalendar />}
       </div>
 
       {/* ── DESKTOP layout ───────────────────────────────────────────── */}
@@ -571,39 +568,62 @@ export default function Calendar() {
           <p className="text-sm text-muted-foreground">צפייה בלבד — עריכה ב-GroupDetail / שיבוץ / לוח ארוחות</p>
         </div>
 
-        {/* Controls */}
-        <div className="flex items-center justify-between gap-2 flex-wrap">
-          <div className="flex items-center gap-1">
-            <Button size="sm" variant="outline" onClick={() => go(-1)}>
-              <ChevronRight className="w-4 h-4" />
-            </Button>
-            <Button size="sm" variant="outline" onClick={goToday} className="px-3">
-              היום
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => go(1)}>
-              <ChevronLeft className="w-4 h-4" />
-            </Button>
-            <span className="text-base font-bold text-slate-700 mr-2">{titleStr}</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <Button size="sm" variant={view === "week" ? "default" : "outline"} onClick={() => setView("week")}>
-              שבוע
-            </Button>
-            <Button size="sm" variant={view === "month" ? "default" : "outline"} onClick={() => setView("month")}>
-              חודש
-            </Button>
-          </div>
+        {/* Tab switcher */}
+        <div className="flex gap-1 border-b border-slate-200 pb-1">
+          <Button size="sm" variant={tab === "operational" ? "default" : "ghost"}
+            onClick={() => setTab("operational")} className="gap-1.5">
+            <CalendarDays className="w-4 h-4" /> לוח תפעולי
+          </Button>
+          <Button size="sm" variant={tab === "checkinout" ? "default" : "ghost"}
+            onClick={() => setTab("checkinout")} className="gap-1.5">
+            <Users className="w-4 h-4" /> צ׳ק אין / צ׳ק אאוט
+          </Button>
+          <Button size="sm" variant={tab === "kitchen" ? "default" : "ghost"}
+            onClick={() => setTab("kitchen")} className="gap-1.5">
+            <UtensilsCrossed className="w-4 h-4" /> לוח שנה מטבח
+          </Button>
         </div>
 
-        {/* Legend */}
-        <Legend />
-
-        {/* Calendar body */}
-        {view === "week" ? (
-          <WeekView dates={dates} allEvents={allEvents} onClick={setSelected} />
-        ) : (
-          <MonthView dates={dates} allEvents={allEvents} pivot={pivot} onClick={setSelected} />
+        {/* Operational tab */}
+        {tab === "operational" && (
+          <>
+            {/* Controls */}
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-1">
+                <Button size="sm" variant="outline" onClick={() => go(-1)}>
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+                <Button size="sm" variant="outline" onClick={goToday} className="px-3">
+                  היום
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => go(1)}>
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+                <span className="text-base font-bold text-slate-700 mr-2">{titleStr}</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <Button size="sm" variant={view === "week" ? "default" : "outline"} onClick={() => setView("week")}>
+                  שבוע
+                </Button>
+                <Button size="sm" variant={view === "month" ? "default" : "outline"} onClick={() => setView("month")}>
+                  חודש
+                </Button>
+              </div>
+            </div>
+            <Legend />
+            {view === "week" ? (
+              <WeekView dates={dates} allEvents={allEvents} onClick={setSelected} />
+            ) : (
+              <MonthView dates={dates} allEvents={allEvents} pivot={pivot} onClick={setSelected} />
+            )}
+          </>
         )}
+
+        {/* Check-in / Check-out tab */}
+        {tab === "checkinout" && <CheckInOutCalendar />}
+
+        {/* Kitchen calendar tab */}
+        {tab === "kitchen" && <KitchenCalendar />}
 
       </div>
 
