@@ -5,6 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Pencil, Trash2, Check, X, MapPin, Copy } from "lucide-react";
 import { sortActivitySpaces, getActivitySpaceDisplayName } from "@/lib/activitySpaceUtils";
 import RoleGate from "@/components/RoleGate";
+import { ACTIVITY_CATALOG, catalogItemLabel } from "@/lib/activityCatalog.js";
 
 const LOCATION_OPTIONS = ["כיתה", "מתחם חוץ", "מחוץ לחווה", "אחר"];
 
@@ -62,6 +63,35 @@ export default function ScheduleItemRow({ item, activitySpaces, quoteActivities 
         {arrivalDate && departureDate && (
           <p className="text-xs text-slate-400">תאריכים מותרים: {arrivalDate} עד {departureDate}</p>
         )}
+
+        {/* Catalog prefill dropdown */}
+        <div className="space-y-1">
+          <label className="text-xs text-slate-500">בחר סדנה / הרצאה</label>
+          <Select
+            value="none"
+            onValueChange={v => {
+              if (v === "none") return;
+              const item = ACTIVITY_CATALOG.find((_, i) => String(i) === v);
+              if (!item) return;
+              set("activity_name", item.name);
+              if (item.lecturer) set("notes", item.lecturer + (form.notes ? " | " + form.notes : ""));
+            }}
+          >
+            <SelectTrigger className="text-xs">
+              <SelectValue placeholder="בחרו מתוך המאגר או הזינו פעילות ידנית" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">— בחרו מתוך המאגר או הזינו פעילות ידנית —</SelectItem>
+              {ACTIVITY_CATALOG.map((item, i) => (
+                <SelectItem key={i} value={String(i)}>
+                  {catalogItemLabel(item)}
+                  {item.audience ? ` (${item.audience})` : ""}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
             <label className="text-xs text-slate-500">תאריך</label>

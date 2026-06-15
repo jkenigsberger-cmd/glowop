@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, RefreshCw, CalendarDays, UtensilsCrossed, GitBranch, X, Shuffle } from "lucide-react";
+import { ACTIVITY_CATALOG, catalogItemLabel } from "@/lib/activityCatalog.js";
 import { toast } from "sonner";
 import ScheduleItemRow from "./ScheduleItemRow";
 import SplitActivityGroup from "./SplitActivityGroup";
@@ -205,6 +206,29 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
     await base44.entities.GroupScheduleItem.update(id, { status: "CANCELLED" });
     invalidate();
     toast.success("פעילות בוטלה");
+  };
+
+  // Save edits for a split activity group — update each row via saveGroupScheduleItem
+  const handleEditSplitGroup = async (updatedRows) => {
+    setSaving(true);
+    try {
+      for (const row of updatedRows) {
+        const res = await base44.functions.invoke("saveGroupScheduleItem", { ...row });
+        if (res.data?.error) {
+          invalidate();
+          setSaving(false);
+          return res.data.error;
+        }
+      }
+      invalidate();
+      toast.success("פעילות עודכנה");
+      setSaving(false);
+      return null;
+    } catch (err) {
+      invalidate();
+      setSaving(false);
+      return err?.response?.data?.error || err?.message || "השמירה נכשלה";
+    }
   };
 
   const validateScheduleDate = (date) => {
@@ -546,6 +570,40 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
             {arrivalDate && departureDate && (
               <p className="text-xs text-slate-400">תאריכים מותרים: {arrivalDate} עד {departureDate}</p>
             )}
+
+            {/* Catalog prefill dropdown */}
+            <div className="space-y-1">
+              <label className="text-xs text-slate-500">בחר סדנה / הרצאה</label>
+              <Select
+                value="none"
+                onValueChange={v => {
+                  if (v === "none") return;
+                  const item = ACTIVITY_CATALOG.find((_, i) => String(i) === v);
+                  if (!item) return;
+                  setNewSchedule(s => ({
+                    ...s,
+                    activity_name: item.name,
+                    notes: item.lecturer
+                      ? item.lecturer + (s.notes ? " | " + s.notes : "")
+                      : s.notes,
+                  }));
+                }}
+              >
+                <SelectTrigger className="text-xs">
+                  <SelectValue placeholder="בחרו מתוך המאגר או הזינו פעילות ידנית" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">— בחרו מתוך המאגר או הזינו פעילות ידנית —</SelectItem>
+                  {ACTIVITY_CATALOG.map((item, i) => (
+                    <SelectItem key={i} value={String(i)}>
+                      {catalogItemLabel(item)}
+                      {item.audience ? ` (${item.audience})` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
 
               {/* Quote talk selector — always shown if quote has talks */}
@@ -768,6 +826,8 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
                   activitySpaces={activitySpaces}
                   onCancel={handleCancelScheduleItem}
                   onDuplicate={handleDuplicateActivity}
+                  onEditSave={handleEditSplitGroup}
+                  groupDateRange={{ arrivalDate, departureDate }}
                   saving={saving}
                 />
               ) : (
