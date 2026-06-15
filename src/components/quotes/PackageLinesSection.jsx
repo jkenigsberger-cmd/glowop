@@ -398,8 +398,10 @@ export default function PackageLinesSection({
 }) {
   const handleAddPackage = (pkg) => {
     const defaultOptionId = pkg.pricing_options?.[0]?.id || null;
+    // Always use estimated_pax (defaultPax) for per-person packages
+    const qty = Number(defaultPax) || 0;
     const defaultRate = pkg.pricing_type === "per_person_threshold"
-      ? resolvePackageUnitPrice(pkg.id, defaultOptionId, Number(defaultPax || 0))
+      ? resolvePackageUnitPrice(pkg.id, defaultOptionId, qty)
       : (pkg.pricing_options?.[0]?.rate ?? 0);
 
     setPackageLines(prev => [
@@ -407,7 +409,7 @@ export default function PackageLinesSection({
       {
         package_id: pkg.id,
         option_id: defaultOptionId,
-        quantity: Number(defaultPax) || 0,
+        quantity: qty,
         unit_price: defaultRate,
         shirley_addon: false,
         price_overridden: false,
@@ -417,11 +419,14 @@ export default function PackageLinesSection({
   };
 
   const handleAddAddon = (item) => {
+    // fixed_per_unit (content items) → default qty 1
+    // all per-person items (meals, operators) → default qty = estimated_pax
+    const isFixedUnit = item.pricing_type === "fixed_per_unit";
     setAddonLines(prev => [
       ...prev,
       {
         addon_id: item.id,
-        quantity: item.pricing_type === "fixed_per_unit" ? 1 : Number(defaultPax) || 0,
+        quantity: isFixedUnit ? 1 : Number(defaultPax) || 0,
         unit_price: item.rate ?? item.fixed_price ?? 0,
         notes: "",
       },

@@ -591,8 +591,8 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
   const staffExceedsTotal = staffCount > estimatedPax && estimatedPax > 0;
   const datesReversed = quoteType !== "day_use" && form.arrival_date && form.departure_date &&
     new Date(form.departure_date) < new Date(form.arrival_date);
-  // B. Default pax for catalog lines: staff_count || participant_count || estimated_pax
-  const catalogDefaultPax = staffCount || participantCount || estimatedPax || 0;
+  // B. Default pax for catalog lines: always use estimated_pax (total participants)
+  const catalogDefaultPax = estimatedPax || 0;
 
   // ── Capacity check ───────────────────────────────────────────────────────────
   const checkAvailability = useCallback(async () => {
@@ -750,9 +750,11 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
                       <Input value={groupForm.client_tax_id} onChange={e => handleGroupContactChange("client_tax_id", e.target.value)} placeholder="מספר חברה / עוסק" />
                     </div>
                     <div className="space-y-1">
-                      <Label className="text-xs text-slate-500">שם איש קשר</Label>
-                      {/* contact_name is separate from org_name — not mirrored to client_name */}
-                      <Input value={groupForm.contact_name} onChange={e => setGroupField("contact_name", e.target.value)} />
+                      <Label className="text-xs text-slate-500">איש קשר (מופיע ב-PDF)</Label>
+                      <Input value={groupForm.contact_name} onChange={e => {
+                        setGroupField("contact_name", e.target.value);
+                        set("contact_person", e.target.value);
+                      }} placeholder="שם מלא של איש הקשר" />
                     </div>
                     <div className="space-y-1">
                       <Label className="text-xs text-slate-500">טלפון</Label>
@@ -862,8 +864,8 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
                     <Input value={form.client_name} onChange={e => set("client_name", e.target.value)} />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs text-slate-500">איש קשר</Label>
-                    <Input value={form.contact_person} onChange={e => set("contact_person", e.target.value)} placeholder="שם איש הקשר" />
+                    <Label className="text-xs text-slate-500">איש קשר (מופיע ב-PDF)</Label>
+                    <Input value={form.contact_person} onChange={e => set("contact_person", e.target.value)} placeholder="שם מלא של איש הקשר" />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs text-slate-500">טלפון</Label>

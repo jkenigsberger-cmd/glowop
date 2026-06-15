@@ -651,8 +651,8 @@ export default function QuotePdfTemplate({ quote, group, logoUrl, footerUrl }) {
   const d = resolveData(quote, group);
   return (
     <div id="quote-pdf-root" style={{ background: "#fff" }}>
-      <Page1 d={d} logoUrl={logoUrl} />
       <ContentCatalogPage logoUrl={logoUrl} quoteNumber={d.quoteNumber} />
+      <Page1 d={d} logoUrl={logoUrl} />
       <Page2 logoUrl={logoUrl} quoteNumber={d.quoteNumber} footerUrl={footerUrl} />
     </div>
   );
