@@ -8,62 +8,70 @@ const SHIFT_OPTIONS = [
 ];
 
 function timeToMinutes(t) {
+  if (!t) return null;
   const [h, m] = t.split(":").map(Number);
   return h * 60 + m;
 }
 
-const EMPTY = {
-  date: new Date().toISOString().slice(0, 10),
-  shift_type: "MORNING",
-  label: "",
-  workers_count: 2,
-  start_time: "",
-  end_time: "",
-  notes: "",
-};
+function getIsraelTime() {
+  // Returns HH:MM in Israel local time
+  return new Date().toLocaleTimeString("he-IL", {
+    timeZone: "Asia/Jerusalem",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).slice(0, 5);
+}
+
+function calcDuration(start, end) {
+  if (!start || !end) return null;
+  const startMins = timeToMinutes(start);
+  const endMins = timeToMinutes(end);
+  if (endMins === null || startMins === null) return null;
+  return endMins - startMins;
+}
+
+function fmtMins(mins) {
+  if (mins == null || mins <= 0) return null;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return `${h}:${String(m).padStart(2, "0")}`;
+}
 
 export default function CleaningShiftForm({ initial, onSave, onCancel }) {
-  const [form, setForm] = useState(initial ? {
-    date: initial.date || EMPTY.date,
-    shift_type: initial.shift_type || EMPTY.shift_type,
-    label: initial.label || "",
-    workers_count: initial.workers_count || 2,
-    start_time: initial.start_time || "",
-    end_time: initial.end_time || "",
-    notes: initial.notes || "",
-  } : { ...EMPTY });
+  const [form, setForm] = useState(() => ({
+    date: initial?.date || new Date().toISOString().slice(0, 10),
+    shift_type: initial?.shift_type || "MORNING",
+    label: initial?.label || "",
+    workers_count: initial?.workers_count || 1,
+    start_time: initial?.start_time || getIsraelTime(),
+    end_time: initial?.end_time || "",
+    notes: initial?.notes || "",
+  }));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
-  const durationMinutes = () => {
-    if (!form.start_time || !form.end_time) return null;
-    return timeToMinutes(form.end_time) - timeToMinutes(form.start_time);
-  };
-
-  const fmt = (mins) => {
-    if (mins == null || mins <= 0) return null;
-    const h = Math.floor(mins / 60);
-    const m = mins % 60;
-    return `${h}:${String(m).padStart(2, "0")}`;
-  };
-
-  const perWorker = durationMinutes();
-  const total = perWorker != null && perWorker > 0 ? perWorker * Number(form.workers_count) : null;
+  const perWorkerMins = calcDuration(form.start_time, form.end_time);
+  const totalMins = perWorkerMins != null && perWorkerMins > 0
+    ? perWorkerMins * Number(form.workers_count)
+    : null;
 
   const handleSave = async () => {
     setError(null);
     if (!form.date) return setError("יש לבחור תאריך");
-    if (!form.shift_type) return setError("יש לבחור משמרת");
+    if (!form.start_time) return setError("יש להזין שעת כניסה");
     if (!form.workers_count || Number(form.workers_count) < 1) return setError("יש להזין מספר עובדות");
-    if (!form.start_time) return setError("יש להזין שעת התחלה");
-    if (!form.end_time) return setError("יש להזין שעת סיום");
-    const dur = durationMinutes();
-    if (dur == null || dur <= 0) return setError("שעת הסיום חייבת להיות אחרי שעת ההתחלה");
 
-    const mins = dur;
-    const totalMins = mins * Number(form.workers_count);
+    // Validate end_time only if provided
+    if (form.end_time) {
+      const dur = calcDuration(form.start_time, form.end_time);
+      if (dur === null || dur <= 0) return setError("שעת יציאה חייבת להיות אחרי שעת כניסה");
+    }
+
+    const mins = form.end_time ? calcDuration(form.start_time, form.end_time) : null;
+    const totalWorkerMins = mins != null && mins > 0 ? mins * Number(form.workers_count) : null;
 
     setSaving(true);
     await onSave({
@@ -72,9 +80,9 @@ export default function CleaningShiftForm({ initial, onSave, onCancel }) {
       label: form.label || null,
       workers_count: Number(form.workers_count),
       start_time: form.start_time,
-      end_time: form.end_time,
-      minutes_per_worker: mins,
-      total_worker_minutes: totalMins,
+      end_time: form.end_time || null,
+      minutes_per_worker: mins || null,
+      total_worker_minutes: totalWorkerMins || null,
       notes: form.notes || null,
       status: "ACTIVE",
     });
@@ -84,6 +92,17 @@ export default function CleaningShiftForm({ initial, onSave, onCancel }) {
   return (
     <div className="space-y-4" dir="rtl">
       <div className="grid grid-cols-2 gap-3">
+        {/* Worker name / label */}
+        <div className="space-y-1">
+          <label className="text-sm font-medium text-slate-700">עובדת / שם עובדת</label>
+          <input
+            type="text"
+            value={form.label}
+            onChange={e => set("label", e.target.value)}
+            placeholder="שם העובדת..."
+            className="w-full border border-input rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring bg-background"
+          />
+        </div>
         {/* Date */}
         <div className="space-y-1">
           <label className="text-sm font-medium text-slate-700">תאריך</label>
@@ -94,21 +113,35 @@ export default function CleaningShiftForm({ initial, onSave, onCancel }) {
             className="w-full border border-input rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring bg-background"
           />
         </div>
-        {/* Shift */}
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        {/* Start time */}
         <div className="space-y-1">
-          <label className="text-sm font-medium text-slate-700">משמרת</label>
-          <select
-            value={form.shift_type}
-            onChange={e => set("shift_type", e.target.value)}
+          <label className="text-sm font-medium text-slate-700">שעת כניסה <span className="text-red-500">*</span></label>
+          <input
+            type="time"
+            value={form.start_time}
+            onChange={e => set("start_time", e.target.value)}
             className="w-full border border-input rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring bg-background"
-          >
-            {SHIFT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
+          />
+        </div>
+        {/* End time — optional */}
+        <div className="space-y-1">
+          <label className="text-sm font-medium text-slate-700">
+            שעת יציאה <span className="text-slate-400 font-normal text-xs">(אופציונלי)</span>
+          </label>
+          <input
+            type="time"
+            value={form.end_time}
+            onChange={e => set("end_time", e.target.value)}
+            className="w-full border border-input rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring bg-background"
+          />
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        {/* Workers */}
+        {/* Workers count */}
         <div className="space-y-1">
           <label className="text-sm font-medium text-slate-700">מספר עובדות</label>
           <select
@@ -121,50 +154,29 @@ export default function CleaningShiftForm({ initial, onSave, onCancel }) {
             ))}
           </select>
         </div>
-        {/* Label */}
+        {/* Shift type */}
         <div className="space-y-1">
-          <label className="text-sm font-medium text-slate-700">תווית (אופציונלי)</label>
-          <input
-            type="text"
-            value={form.label}
-            onChange={e => set("label", e.target.value)}
-            placeholder="צוות ראשון..."
+          <label className="text-sm font-medium text-slate-700">משמרת</label>
+          <select
+            value={form.shift_type}
+            onChange={e => set("shift_type", e.target.value)}
             className="w-full border border-input rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring bg-background"
-          />
+          >
+            {SHIFT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1">
-          <label className="text-sm font-medium text-slate-700">שעת התחלה</label>
-          <input
-            type="time"
-            value={form.start_time}
-            onChange={e => set("start_time", e.target.value)}
-            className="w-full border border-input rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring bg-background"
-          />
-        </div>
-        <div className="space-y-1">
-          <label className="text-sm font-medium text-slate-700">שעת סיום</label>
-          <input
-            type="time"
-            value={form.end_time}
-            onChange={e => set("end_time", e.target.value)}
-            className="w-full border border-input rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring bg-background"
-          />
-        </div>
-      </div>
-
-      {/* Live calc preview */}
-      {perWorker != null && perWorker > 0 && (
+      {/* Live calc preview — only when both times present */}
+      {perWorkerMins != null && perWorkerMins > 0 && (
         <div className="bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 text-sm space-y-1">
           <div className="flex justify-between">
             <span className="text-slate-600">שעות לעובדת אחת:</span>
-            <span className="font-semibold">{fmt(perWorker)}</span>
+            <span className="font-semibold">{fmtMins(perWorkerMins)}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-slate-600">סה״כ שעות עבודה ({form.workers_count} עובדות):</span>
-            <span className="font-bold text-primary">{fmt(total)}</span>
+            <span className="text-slate-600">סה״כ שעות ({form.workers_count} עובדות):</span>
+            <span className="font-bold text-primary">{fmtMins(totalMins)}</span>
           </div>
         </div>
       )}

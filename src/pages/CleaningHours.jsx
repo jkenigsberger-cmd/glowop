@@ -129,7 +129,7 @@ export default function CleaningHours() {
           </div>
           {canEdit && (
             <Button size="sm" onClick={() => setShowForm(v => !v)} className="gap-1">
-              <Plus className="w-4 h-4" /> הוסף משמרת ניקיון
+              <Plus className="w-4 h-4" /> רשום כניסת עובדת
             </Button>
           )}
         </div>
@@ -139,7 +139,7 @@ export default function CleaningHours() {
         {/* Add form */}
         {showForm && (
           <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
-            <h2 className="text-sm font-bold text-slate-700 mb-4">משמרת חדשה</h2>
+            <h2 className="text-sm font-bold text-slate-700 mb-4">רישום כניסת עובדת</h2>
             <CleaningShiftForm onSave={handleSave} onCancel={() => setShowForm(false)} />
           </div>
         )}
@@ -157,13 +157,13 @@ export default function CleaningHours() {
           <div className="space-y-6">
             {sortedDates.map(date => {
               const rows = byDate[date];
-              const dayTotal = rows.reduce((s, r) => s + (r.total_worker_minutes || 0), 0);
+              const dayTotal = rows.filter(r => r.end_time).reduce((s, r) => s + (r.total_worker_minutes || 0), 0);
               return (
                 <section key={date} className="bg-white border border-slate-200 rounded-xl overflow-hidden">
                   <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
                     <h3 className="text-sm font-bold text-slate-700">{formatDateHebrew(date)}</h3>
                     <span className="text-xs bg-primary/10 text-primary font-semibold px-2 py-0.5 rounded-full">
-                      סה״כ יום: {fmtMins(dayTotal)}
+                      סה״כ יום: {dayTotal > 0 ? fmtMins(dayTotal) : "—"}
                     </span>
                   </div>
                   <div className="p-3 space-y-2">
