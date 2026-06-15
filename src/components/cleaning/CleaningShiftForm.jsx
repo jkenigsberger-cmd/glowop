@@ -80,7 +80,7 @@ export default function CleaningShiftForm({ initial, onSave, onCancel }) {
       label: form.label || null,
       workers_count: Number(form.workers_count),
       start_time: form.start_time,
-      end_time: form.end_time || null,
+      end_time: form.end_time || "",
       minutes_per_worker: mins || null,
       total_worker_minutes: totalWorkerMins || null,
       notes: form.notes || null,

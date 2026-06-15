@@ -89,7 +89,7 @@ export default function CleaningShiftRow({ shift, canEdit, onRefresh }) {
   const [cancelling, setCancelling] = useState(false);
 
   // Derive open/closed from data
-  const isOpen = !!shift.start_time && !shift.end_time;
+  const isOpen = !!shift.start_time && !shift.end_time?.trim();
 
   const handleCancel = async () => {
     setCancelling(true);
@@ -105,7 +105,7 @@ export default function CleaningShiftRow({ shift, canEdit, onRefresh }) {
     // If end_time was cleared, recalculate/clear duration fields
     const updatedData = { ...data };
     if (!updatedData.end_time) {
-      updatedData.end_time = null;
+      updatedData.end_time = "";
       updatedData.minutes_per_worker = null;
       updatedData.total_worker_minutes = null;
     }
