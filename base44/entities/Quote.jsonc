@@ -65,6 +65,14 @@
       "type": "string",
       "format": "date"
     },
+    "arrival_time": {
+      "type": "string",
+      "description": "HH:MM \u2014 estimated arrival time on arrival day (optional)"
+    },
+    "departure_time": {
+      "type": "string",
+      "description": "HH:MM \u2014 estimated departure time on departure day (optional)"
+    },
     "nights": {
       "type": "number",
       "description": "Calculated from date range, stored for pricing"

@@ -90,6 +90,8 @@ Deno.serve(async (req) => {
     if (quote.client_email)   groupUpdate.contact_email = quote.client_email;
     if (quote.arrival_date)   groupUpdate.arrival_date  = quote.arrival_date;
     if (quote.departure_date) groupUpdate.departure_date = quote.departure_date;
+    if (quote.arrival_time)   groupUpdate.arrival_time   = quote.arrival_time;
+    if (quote.departure_time) groupUpdate.departure_time = quote.departure_time;
     if (totalPax != null)     groupUpdate.total_pax     = totalPax;
     if (staffCount != null)   groupUpdate.staff_count   = staffCount;
     if (participantCount != null) groupUpdate.participant_count = participantCount;

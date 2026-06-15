@@ -32,7 +32,7 @@ const MEAL_LABELS = { BREAKFAST: "ארוחת בוקר", LUNCH: "ארוחת צה�
 const GENDER_LABELS = { BOYS: "בנים", GIRLS: "בנות", MEN: "גברים", WOMEN: "נשים" };
 const ALLOC_TYPE_LABELS = { STUDENT: "חניכים", STAFF: "צוות/VIP" };
 
-export default function OperationalProfileDisplay({ groupId }) {
+export default function OperationalProfileDisplay({ groupId, group }) {
   const { data: profiles = [], isLoading } = useQuery({
     queryKey: ["operationalProfile", groupId],
     queryFn: () => base44.entities.OperationalGroupProfile.filter({ group_id: groupId }),
@@ -123,6 +123,23 @@ export default function OperationalProfileDisplay({ groupId }) {
         </div>
 
         <div className="px-4 py-4 space-y-5">
+
+          {/* Logistics times */}
+          <div className="flex items-center gap-6 bg-slate-50 rounded-lg px-3 py-2.5 border border-slate-200">
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-slate-400">שעת הגעה:</span>
+              <span className={`font-semibold ${group?.arrival_time ? "text-emerald-700" : "text-slate-400 italic font-normal"}`}>
+                {group?.arrival_time || "לא הוגדר"}
+              </span>
+            </div>
+            <div className="w-px h-4 bg-slate-300" />
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-slate-400">שעת יציאה:</span>
+              <span className={`font-semibold ${group?.departure_time ? "text-orange-600" : "text-slate-400 italic font-normal"}`}>
+                {group?.departure_time || "לא הוגדר"}
+              </span>
+            </div>
+          </div>
 
           {/* Headcounts */}
           <div>

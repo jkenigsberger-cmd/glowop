@@ -396,7 +396,7 @@ export default function GroupDetail() {
         </RoleGate>
 
         {/* Operational Profile */}
-        <OperationalProfileDisplay groupId={id} />
+        <OperationalProfileDisplay groupId={id} group={group} />
 
         {/* Operational Hold — admin debug card */}
         <OperationalHoldCard groupId={id} />

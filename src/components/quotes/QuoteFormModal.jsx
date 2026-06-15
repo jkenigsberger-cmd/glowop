@@ -528,6 +528,8 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
     client_notes:    quote?.client_notes    || "",
     arrival_date:    quote?.arrival_date    || group?.arrival_date   || "",
     departure_date:  quote?.departure_date  || group?.departure_date || "",
+    arrival_time:    quote?.arrival_time    || group?.arrival_time   || "",
+    departure_time:  quote?.departure_time  || group?.departure_time || "",
     estimated_pax:   quote?.estimated_pax   ?? group?.total_pax     ?? "",
     staff_count:     quote?.staff_count     ?? group?.staff_count   ?? "",
     discount_percent: quote?.discount_percent ?? 0,
@@ -666,6 +668,7 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
         group_name: groupForm.org_name || form.client_name,
         group_type: groupForm.group_type,
         arrival_date: form.arrival_date || undefined, departure_date: form.departure_date || undefined,
+        arrival_time: form.arrival_time || undefined, departure_time: form.departure_time || undefined,
         total_pax: totalPax || undefined, staff_count: staffPax || undefined,
         participant_count: Math.max(0, totalPax - staffPax) || undefined,
         contact_name: groupForm.contact_name || undefined,
@@ -689,6 +692,8 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
       quote_type:            quoteType,
       contact_person:        form.contact_person || undefined,
       client_notes:          form.client_notes   || undefined,
+      arrival_time: form.arrival_time || undefined,
+      departure_time: form.departure_time || undefined,
       subtotal, discount_amount: discountAmount, total_price,
       advance_payment: advance, balance_payment: balance,
       version: Number(form.version),
@@ -878,6 +883,18 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
                   <div className="space-y-1">
                     <Label className="text-xs text-slate-500">ח.פ / ע.מ</Label>
                     <Input value={form.client_tax_id} onChange={e => set("client_tax_id", e.target.value)} />
+                  </div>
+                </div>
+
+                {/* Arrival/departure times */}
+                <div className="border-t border-slate-100 pt-3 grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs text-slate-500">שעת הגעה <span className="text-slate-300">(אופציונלי)</span></Label>
+                    <Input type="time" value={form.arrival_time} onChange={e => set("arrival_time", e.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-slate-500">שעת יציאה <span className="text-slate-300">(אופציונלי)</span></Label>
+                    <Input type="time" value={form.departure_time} onChange={e => set("departure_time", e.target.value)} />
                   </div>
                 </div>
 
