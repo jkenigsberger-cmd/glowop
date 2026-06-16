@@ -12,6 +12,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import LogisticsFields, { LOGISTICS_DEFAULTS } from "./LogisticsFields";
 
 export default function SplitActivityEditModal({
   items,
@@ -29,13 +30,21 @@ export default function SplitActivityEditModal({
   const [startTime, setStartTime] = useState(first.start_time || "");
   const [endTime, setEndTime] = useState(first.end_time || "");
 
-  // Per-row: space + pax
+  // Per-row: space + pax + notes + logistics
   const [rows, setRows] = useState(
     items.map(item => ({
       id: item.id,
       activity_space_id: item.activity_space_id || "",
       pax: item.pax ?? "",
       notes: item.notes || "",
+      needs_projector:    !!item.needs_projector,
+      needs_screen:       !!item.needs_screen,
+      needs_microphone:   !!item.needs_microphone,
+      needs_sound:        !!item.needs_sound,
+      needs_whiteboard:   !!item.needs_whiteboard,
+      needs_chair_circle: !!item.needs_chair_circle,
+      chairs_count:       item.chairs_count ?? "",
+      logistics_other:    item.logistics_other || "",
       // carry-along fields needed by saveGroupScheduleItem
       group_id: item.group_id,
       operational_group_profile_id: item.operational_group_profile_id,
@@ -113,34 +122,49 @@ export default function SplitActivityEditModal({
           </div>
 
           {/* Per-space rows */}
-          <div className="space-y-2">
-            <Label className="text-xs text-muted-foreground">מרחבים ומשתתפים</Label>
+          <div className="space-y-3">
+            <Label className="text-xs text-muted-foreground">מרחבים, משתתפים וצרכים לוגיסטיים</Label>
             {rows.map((row, idx) => (
-              <div key={row.id} className="flex items-center gap-2 bg-slate-50 rounded-lg px-3 py-2">
-                <span className="text-xs font-bold text-slate-400 w-4 shrink-0">{idx + 1}.</span>
-                <div className="flex-1">
-                  <Select
-                    value={row.activity_space_id || "none"}
-                    onValueChange={v => updateRow(idx, "activity_space_id", v === "none" ? "" : v)}
-                  >
-                    <SelectTrigger className="text-xs h-8">
-                      <SelectValue placeholder="בחר מרחב" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">ללא מרחב</SelectItem>
-                      {activitySpaces.map(s => (
-                        <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+              <div key={row.id} className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-400 w-4 shrink-0">{idx + 1}.</span>
+                  <div className="flex-1">
+                    <Select
+                      value={row.activity_space_id || "none"}
+                      onValueChange={v => updateRow(idx, "activity_space_id", v === "none" ? "" : v)}
+                    >
+                      <SelectTrigger className="text-xs h-8">
+                        <SelectValue placeholder="בחר מרחב" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">ללא מרחב</SelectItem>
+                        {activitySpaces.map(s => (
+                          <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Input
+                    type="number"
+                    min={0}
+                    placeholder="משתתפים"
+                    value={row.pax}
+                    onChange={e => updateRow(idx, "pax", e.target.value)}
+                    className="w-24 text-xs h-8"
+                  />
                 </div>
+                {/* Notes per row */}
                 <Input
-                  type="number"
-                  min={0}
-                  placeholder="משתתפים"
-                  value={row.pax}
-                  onChange={e => updateRow(idx, "pax", e.target.value)}
-                  className="w-24 text-xs h-8"
+                  value={row.notes}
+                  onChange={e => updateRow(idx, "notes", e.target.value)}
+                  placeholder="הערות למרחב זה..."
+                  className="text-xs h-7"
+                />
+                {/* Logistics per row */}
+                <LogisticsFields
+                  value={row}
+                  onChange={patch => setRows(prev => prev.map((r, i) => i === idx ? { ...r, ...patch } : r))}
+                  compact
                 />
               </div>
             ))}

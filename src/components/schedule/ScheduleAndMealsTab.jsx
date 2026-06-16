@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, RefreshCw, CalendarDays, UtensilsCrossed, GitBranch, X, Shuffle } from "lucide-react";
 import { ACTIVITY_CATALOG, catalogItemLabel } from "@/lib/activityCatalog.js";
+import LogisticsFields, { LOGISTICS_DEFAULTS } from "./LogisticsFields";
 import { toast } from "sonner";
 import ScheduleItemRow from "./ScheduleItemRow";
 import SplitActivityGroup from "./SplitActivityGroup";
@@ -52,10 +53,8 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
 
   // Split state
   const [splitEnabled, setSplitEnabled] = useState(false);
-  const [splitRows, setSplitRows] = useState([
-    { activity_space_id: "", pax: "" },
-    { activity_space_id: "", pax: "" },
-  ]);
+  const emptySplitRow = () => ({ activity_space_id: "", pax: "", notes: "", ...LOGISTICS_DEFAULTS });
+  const [splitRows, setSplitRows] = useState([emptySplitRow(), emptySplitRow()]);
 
   const profileId = profile?.id;
   const arrivalDate   = group?.arrival_date   || "";
@@ -86,7 +85,8 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
   const makeEmptySchedule = () => ({
     date: "", start_time: "09:00", end_time: "10:00",
     activity_name: "", requested_location: "", activity_space_id: null,
-    quote_item_id: null, pax: groupParticipantCount ? String(groupParticipantCount) : "", notes: ""
+    quote_item_id: null, pax: groupParticipantCount ? String(groupParticipantCount) : "", notes: "",
+    ...LOGISTICS_DEFAULTS,
   });
 
   const [newSchedule, setNewSchedule] = useState(makeEmptySchedule);
@@ -135,6 +135,14 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
       activity_space_id: item.activity_space_id || null,
       pax: item.pax ? String(item.pax) : (groupParticipantCount ? String(groupParticipantCount) : ""),
       notes: item.notes || "",
+      needs_projector:    !!item.needs_projector,
+      needs_screen:       !!item.needs_screen,
+      needs_microphone:   !!item.needs_microphone,
+      needs_sound:        !!item.needs_sound,
+      needs_whiteboard:   !!item.needs_whiteboard,
+      needs_chair_circle: !!item.needs_chair_circle,
+      chairs_count:       item.chairs_count ?? "",
+      logistics_other:    item.logistics_other || "",
       quote_item_id: null,
       // date/time intentionally left blank so admin must pick a new slot
       date: "",
@@ -170,8 +178,8 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
     });
     setSplitEnabled(false);
     setSplitRows([
-      { activity_space_id: "", pax: groupParticipantCount ? String(Math.ceil(groupParticipantCount / 2)) : "" },
-      { activity_space_id: "", pax: groupParticipantCount ? String(Math.floor(groupParticipantCount / 2)) : "" },
+      { ...emptySplitRow(), pax: groupParticipantCount ? String(Math.ceil(groupParticipantCount / 2)) : "" },
+      { ...emptySplitRow(), pax: groupParticipantCount ? String(Math.floor(groupParticipantCount / 2)) : "" },
     ]);
     setNewScheduleError(null);
     setAddingSchedule(true);
@@ -245,7 +253,7 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
     setAddingSchedule(false);
     setNewScheduleError(null);
     setSplitEnabled(false);
-    setSplitRows([{ activity_space_id: "", pax: "" }, { activity_space_id: "", pax: "" }]);
+    setSplitRows([emptySplitRow(), emptySplitRow()]);
     setNewSchedule(makeEmptySchedule());
   };
 
@@ -325,7 +333,15 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
           activity_space_id: row.activity_space_id || null,
           quote_item_id: newSchedule.quote_item_id || null,
           pax: row.pax ? Number(row.pax) : null,
-          notes: newSchedule.notes || null,
+          notes: row.notes || null,
+          needs_projector:    !!row.needs_projector,
+          needs_screen:       !!row.needs_screen,
+          needs_microphone:   !!row.needs_microphone,
+          needs_sound:        !!row.needs_sound,
+          needs_whiteboard:   !!row.needs_whiteboard,
+          needs_chair_circle: !!row.needs_chair_circle,
+          chairs_count:       row.chairs_count ? Number(row.chairs_count) : null,
+          logistics_other:    row.logistics_other || null,
           split_group_id: splitGroupId,
           split_index: i + 1,
           split_total: splitRows.length,
@@ -493,8 +509,8 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
     if (enabled) {
       const divided = autoDividePax(splitTotalPax, 2);
       setSplitRows([
-        { activity_space_id: "", pax: divided[0] !== "" ? String(divided[0]) : "" },
-        { activity_space_id: "", pax: divided[1] !== "" ? String(divided[1]) : "" },
+        { ...emptySplitRow(), pax: divided[0] !== "" ? String(divided[0]) : "" },
+        { ...emptySplitRow(), pax: divided[1] !== "" ? String(divided[1]) : "" },
       ]);
     }
   };
@@ -505,7 +521,7 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
   };
 
   const addSplitRow = () => {
-    setSplitRows(rows => [...rows, { activity_space_id: "", pax: "" }]);
+    setSplitRows(rows => [...rows, emptySplitRow()]);
   };
 
   const removeSplitRow = (idx) => {
@@ -707,6 +723,16 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
                 <Input value={newSchedule.notes} onChange={e => setNewSchedule(s => ({ ...s, notes: e.target.value }))} placeholder="הערות..." />
               </div>
 
+              {/* Logistics — shown for single mode (split mode has logistics per row) */}
+              {!splitEnabled && (
+                <div className="col-span-2 border border-blue-100 rounded-lg p-3 bg-blue-50/30">
+                  <LogisticsFields
+                    value={newSchedule}
+                    onChange={patch => setNewSchedule(s => ({ ...s, ...patch }))}
+                  />
+                </div>
+              )}
+
               {/* ── Split toggle — ALWAYS visible ── */}
               <div className="col-span-2">
                 <label className="flex items-center gap-2 cursor-pointer select-none w-fit">
@@ -738,7 +764,7 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
                   </button>
                 </div>
                 {splitRows.map((row, idx) => (
-                  <div key={idx} className="bg-white rounded-lg px-3 py-2 border border-blue-100 space-y-1.5">
+                  <div key={idx} className="bg-white rounded-lg px-3 py-2 border border-blue-100 space-y-2">
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-bold text-slate-400 w-5 shrink-0">{idx + 1}.</span>
                       <div className="flex-1">
@@ -775,6 +801,17 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
                         <X className="w-4 h-4" />
                       </button>
                     </div>
+                    <Input
+                      value={row.notes || ""}
+                      onChange={e => setSplitRows(rows => rows.map((r, i) => i === idx ? { ...r, notes: e.target.value } : r))}
+                      placeholder="הערות למרחב זה..."
+                      className="h-7 text-xs"
+                    />
+                    <LogisticsFields
+                      value={row}
+                      onChange={patch => setSplitRows(rows => rows.map((r, i) => i === idx ? { ...r, ...patch } : r))}
+                      compact
+                    />
                   </div>
                 ))}
                 <button

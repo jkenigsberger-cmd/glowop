@@ -6,12 +6,13 @@ import { Pencil, Trash2, Check, X, MapPin, Copy } from "lucide-react";
 import { sortActivitySpaces, getActivitySpaceDisplayName } from "@/lib/activitySpaceUtils";
 import RoleGate from "@/components/RoleGate";
 import { ACTIVITY_CATALOG, catalogItemLabel } from "@/lib/activityCatalog.js";
+import LogisticsFields, { LogisticsBadges, LOGISTICS_DEFAULTS, pickLogistics } from "./LogisticsFields";
 
 const LOCATION_OPTIONS = ["כיתה", "מתחם חוץ", "מחוץ לחווה", "אחר"];
 
 export default function ScheduleItemRow({ item, activitySpaces, quoteActivities = [], groupDateRange = {}, onSave, onCancel, onDuplicate, saving }) {
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ ...item });
+  const [form, setForm] = useState({ ...LOGISTICS_DEFAULTS, ...item });
   const [error, setError] = useState(null);
   const [customName, setCustomName] = useState(false);
 
@@ -53,7 +54,7 @@ export default function ScheduleItemRow({ item, activitySpaces, quoteActivities 
     setCustomName(
       !quoteActivities.length || !quoteActivities.includes(item.activity_name)
     );
-    setForm({ ...item });
+    setForm({ ...LOGISTICS_DEFAULTS, ...item });
     setEditing(true);
   };
 
@@ -169,6 +170,13 @@ export default function ScheduleItemRow({ item, activitySpaces, quoteActivities 
           </div>
         </div>
 
+        <div className="border border-blue-100 rounded-lg p-3 bg-blue-50/30">
+          <LogisticsFields
+            value={form}
+            onChange={patch => setForm(f => ({ ...f, ...patch }))}
+          />
+        </div>
+
         {error && (
           <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>
         )}
@@ -219,7 +227,8 @@ export default function ScheduleItemRow({ item, activitySpaces, quoteActivities 
             </span>
           )}
         </div>
-        {item.notes && <p className="text-xs text-muted-foreground italic">{item.notes}</p>}
+        <LogisticsBadges item={item} />
+        {item.notes && <p className="text-xs text-muted-foreground italic mt-0.5">{item.notes}</p>}
       </div>
       {item.status !== "CANCELLED" && (
         <RoleGate permission="MANAGE_ACTIVITIES">
