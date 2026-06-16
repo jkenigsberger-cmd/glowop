@@ -144,7 +144,7 @@ export default function AppNav() {
       {/* ── Desktop header ───────────────────────────────────────────────────── */}
       <header className="hidden sm:block bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm" dir="rtl">
         {/* Single unified nav row */}
-        <div className="w-full px-4 sm:px-6 flex items-center gap-1 h-1">
+        <div className="w-full px-4 flex items-center gap-1 h-11 sm:px-4">
           {/* Brand */}
           <span className="text-sm font-bold text-slate-700 tracking-widest select-none ml-3 shrink-0">
             הדור הבא
