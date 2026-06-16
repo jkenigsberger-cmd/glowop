@@ -2,14 +2,16 @@ import { useState, useMemo } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { format, parseISO, isPast, isToday } from "date-fns";
-import { Users, Plus, AlertTriangle, Clock, FileText } from "lucide-react";
+import { format, parseISO } from "date-fns";
+import { Users, Plus, Clock, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import GroupFormModal from "@/components/groups/GroupFormModal";
 import QuoteFormModal from "@/components/quotes/QuoteFormModal";
 import RoleGate from "@/components/RoleGate";
+import SearchBar from "@/components/search/SearchBar";
+import DateRangeFilter from "@/components/search/DateRangeFilter";
 
 const TODAY = new Date().toISOString().slice(0, 10);
 
@@ -52,6 +54,11 @@ function GroupRow({ group, showUnmarkedBadge = false }) {
 export default function Groups() {
   const [showForm, setShowForm] = useState(false);
   const [showQuoteForm, setShowQuoteForm] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterStart, setFilterStart] = useState(null);
+  const [filterEnd, setFilterEnd] = useState(null);
+  const [typeFilter, setTypeFilter] = useState("ALL");
+  const [statusFilter, setStatusFilter] = useState("ALL");
 
   const { data: groups = [], refetch } = useQuery({
     queryKey: ["groups"],
@@ -116,18 +123,39 @@ export default function Groups() {
       .sort((a, b) => (b.arrival_date || "").localeCompare(a.arrival_date || ""));
   }, [groups]);
 
-  const TabPanel = ({ items, emptyText, showUnmarkedBadges = false, isFinished }) => (
-    <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100">
-      {items.length === 0 ? (
-        <p className="text-sm text-slate-400 text-center py-10">{emptyText}</p>
-      ) : (
-        items.map(g => {
-          const isUnmarked = showUnmarkedBadges && isFinished(g) && g.status !== "COMPLETED";
-          return <GroupRow key={g.id} group={g} showUnmarkedBadge={isUnmarked} />;
-        })
-      )}
-    </div>
-  );
+  // Client-side search + date filter
+  const filterGroups = (items) => {
+    const q = searchQuery.trim().toLowerCase();
+    return items.filter(g => {
+      if (q && !([g.group_name, g.contact_name, g.contact_phone, g.contact_email, g.internal_notes]
+        .some(f => f && f.toLowerCase().includes(q)))) return false;
+      if (typeFilter !== "ALL" && g.group_type !== typeFilter) return false;
+      if (statusFilter !== "ALL" && g.status !== statusFilter) return false;
+      if (filterStart && g.departure_date && g.departure_date < filterStart) return false;
+      if (filterEnd && g.arrival_date && g.arrival_date > filterEnd) return false;
+      return true;
+    });
+  };
+
+  const hasFilters = searchQuery || filterStart || filterEnd || typeFilter !== "ALL" || statusFilter !== "ALL";
+
+  const TabPanel = ({ items, emptyText, showUnmarkedBadges = false, isFinished }) => {
+    const filtered = filterGroups(items);
+    return (
+      <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100">
+        {filtered.length === 0 ? (
+          <p className="text-sm text-slate-400 text-center py-10">
+            {hasFilters ? "לא נמצאו תוצאות" : emptyText}
+          </p>
+        ) : (
+          filtered.map(g => {
+            const isUnmarked = showUnmarkedBadges && isFinished(g) && g.status !== "COMPLETED";
+            return <GroupRow key={g.id} group={g} showUnmarkedBadge={isUnmarked} />;
+          })
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-background" dir="rtl">
@@ -184,11 +212,50 @@ export default function Groups() {
 
       {/* Content */}
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6">
+
+        {/* Search & Filters */}
+        <div className="space-y-3 mb-4 p-3 bg-slate-50 rounded-xl border border-slate-200">
+          <SearchBar
+            value={searchQuery}
+            onChange={setSearchQuery}
+            placeholder="חפש קבוצה לפי שם, איש קשר, טלפון, אימייל..."
+          />
+          <div className="flex flex-wrap gap-2 items-center">
+            <select
+              value={typeFilter}
+              onChange={e => setTypeFilter(e.target.value)}
+              className="text-sm border border-slate-200 rounded-lg px-2 py-1.5 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/20"
+            >
+              <option value="ALL">כל הסוגים</option>
+              <option value="LODGING">לינה</option>
+              <option value="DAY_USE">באי יום</option>
+            </select>
+            <select
+              value={statusFilter}
+              onChange={e => setStatusFilter(e.target.value)}
+              className="text-sm border border-slate-200 rounded-lg px-2 py-1.5 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/20"
+            >
+              <option value="ALL">כל הסטטוסים</option>
+              <option value="DRAFT">טיוטה</option>
+              <option value="CONFIRMED">מאושר</option>
+              <option value="COMPLETED">הושלם</option>
+              <option value="CANCELLED">בוטל</option>
+              <option value="ARCHIVED">ארכיון</option>
+            </select>
+          </div>
+          <DateRangeFilter
+            startDate={filterStart}
+            endDate={filterEnd}
+            onStartChange={setFilterStart}
+            onEndChange={setFilterEnd}
+          />
+        </div>
+
         <Tabs defaultValue="active">
           <TabsList className="mb-4">
-            <TabsTrigger value="active">פעילות ({active.length})</TabsTrigger>
-            <TabsTrigger value="history">היסטוריה ({history.length})</TabsTrigger>
-            <TabsTrigger value="frozen">קפואות ({frozen.length})</TabsTrigger>
+            <TabsTrigger value="active">פעילות ({filterGroups(active).length})</TabsTrigger>
+            <TabsTrigger value="history">היסטוריה ({filterGroups(history).length})</TabsTrigger>
+            <TabsTrigger value="frozen">קפואות ({filterGroups(frozen).length})</TabsTrigger>
             </TabsList>
 
             <TabsContent value="active">

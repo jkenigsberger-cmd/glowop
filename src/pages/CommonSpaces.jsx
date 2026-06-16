@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import moment from "moment";
 import "moment/locale/he";
 import { Layers, ChevronLeft, ChevronRight } from "lucide-react";
+import SearchBar from "@/components/search/SearchBar";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { sortActivitySpaces } from "@/lib/activitySpaceUtils";
@@ -18,6 +19,7 @@ export default function CommonSpaces() {
   const [tab, setTab] = useState("overview");
   const [selectedDate, setSelectedDate] = useState(moment().format("YYYY-MM-DD"));
   const [weekPivot, setWeekPivot] = useState(moment());
+  const [spaceSearch, setSpaceSearch] = useState("");
 
   // ── Data ──────────────────────────────────────────────────────────────────
   const { data: rawSpaces = [] } = useQuery({
@@ -25,6 +27,15 @@ export default function CommonSpaces() {
     queryFn: () => base44.entities.ActivitySpace.list(),
   });
   const activitySpaces = sortActivitySpaces(rawSpaces);
+
+  const filteredSpaces = useMemo(() => {
+    const q = spaceSearch.trim().toLowerCase();
+    if (!q) return activitySpaces;
+    return activitySpaces.filter(s =>
+      [s.name, s.code, s.notes].some(f => f && f.toLowerCase().includes(q)) ||
+      (s.capacity && String(s.capacity).includes(q))
+    );
+  }, [activitySpaces, spaceSearch]);
 
   const { data: scheduleItems = [] } = useQuery({
     queryKey: ["spaces-schedule-items"],
@@ -127,23 +138,31 @@ export default function CommonSpaces() {
 
         {/* ── OVERVIEW TAB ─────────────────────────────────────────────────── */}
         {tab === "overview" && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {activitySpaces.map((space) => (
-              <SpaceOverviewCard
-                key={space.id}
-                space={space}
-                items={itemsBySpaceId[space.id] || []}
-                onSelectDay={(date) => {
-                  setSelectedDate(date);
-                  setTab("daily");
-                }}
-              />
-            ))}
-            {activitySpaces.length === 0 && (
-              <p className="col-span-4 text-sm text-slate-400 text-center py-12">
-                לא נמצאו מרחבי פעילות במלאי.
-              </p>
-            )}
+          <div className="space-y-4">
+            <SearchBar
+              value={spaceSearch}
+              onChange={setSpaceSearch}
+              placeholder="חפש לפי שם מרחב, קיבולת, ציוד..."
+              className="max-w-sm"
+            />
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {filteredSpaces.map((space) => (
+                <SpaceOverviewCard
+                  key={space.id}
+                  space={space}
+                  items={itemsBySpaceId[space.id] || []}
+                  onSelectDay={(date) => {
+                    setSelectedDate(date);
+                    setTab("daily");
+                  }}
+                />
+              ))}
+              {filteredSpaces.length === 0 && (
+                <p className="col-span-4 text-sm text-slate-400 text-center py-12">
+                  {spaceSearch ? "לא נמצאו תוצאות" : "לא נמצאו מרחבי פעילות במלאי."}
+                </p>
+              )}
+            </div>
           </div>
         )}
 

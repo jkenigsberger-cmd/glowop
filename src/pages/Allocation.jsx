@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
 import { BedDouble, Users, ChevronDown, ChevronUp, CheckCircle2, Clock, AlertCircle, Shield, Car } from "lucide-react";
+import SearchBar from "@/components/search/SearchBar";
+import DateRangeFilter from "@/components/search/DateRangeFilter";
 import { Button } from "@/components/ui/button";
 import SleepingAllocationTab from "@/components/sleeping/SleepingAllocationTab";
 import ReviewAlertsBanner from "@/components/alerts/ReviewAlertsBanner";
@@ -199,6 +201,10 @@ function GroupAllocationCard({ profile, group, allocations }) {
 }
 
 export default function Allocation() {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterStart, setFilterStart] = useState(null);
+  const [filterEnd, setFilterEnd] = useState(null);
+
   const { data: groups = [], isLoading: loadingGroups } = useQuery({
     queryKey: ["groups"],
     queryFn: () => base44.entities.Group.list("-arrival_date", 300),
@@ -247,6 +253,20 @@ export default function Allocation() {
     const db = groupById[b.group_id]?.arrival_date || "";
     return da.localeCompare(db);
   });
+
+  // Search + date filter (client-side, display only)
+  const filteredSorted = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return sorted.filter(p => {
+      const g = groupById[p.group_id];
+      if (!g) return false;
+      if (q && !([g.group_name, g.contact_name, g.contact_phone, g.contact_email]
+        .some(f => f && f.toLowerCase().includes(q)))) return false;
+      if (filterStart && g.departure_date && g.departure_date < filterStart) return false;
+      if (filterEnd && g.arrival_date && g.arrival_date > filterEnd) return false;
+      return true;
+    });
+  }, [sorted, searchQuery, filterStart, filterEnd, groupById]);
 
   // Stats
   const totalReady = sorted.length;
@@ -307,14 +327,30 @@ export default function Allocation() {
           </div>
         </div>
 
+        {/* Search & Filters */}
+        <div className="space-y-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
+          <SearchBar
+            value={searchQuery}
+            onChange={setSearchQuery}
+            placeholder="חפש קבוצה לפי שם, איש קשר..."
+          />
+          <DateRangeFilter
+            startDate={filterStart}
+            endDate={filterEnd}
+            onStartChange={setFilterStart}
+            onEndChange={setFilterEnd}
+            showChips
+          />
+        </div>
+
         {/* Queue */}
-        {sorted.length === 0 ? (
+        {filteredSorted.length === 0 ? (
           <div className="text-center py-16 border-2 border-dashed border-slate-200 rounded-xl text-muted-foreground text-sm">
-            אין קבוצות הממתינות לשיבוץ כרגע
+            {searchQuery || filterStart || filterEnd ? "לא נמצאו תוצאות" : "אין קבוצות הממתינות לשיבוץ כרגע"}
           </div>
         ) : (
           <div className="space-y-3">
-            {sorted.map(profile => {
+            {filteredSorted.map(profile => {
               const group = groupById[profile.group_id];
               if (!group) return null;
               return (

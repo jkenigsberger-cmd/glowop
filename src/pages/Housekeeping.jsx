@@ -8,6 +8,7 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import GroupAllocationCard from "@/components/housekeeping/GroupAllocationCard";
 import ReviewAlertsBanner from "@/components/alerts/ReviewAlertsBanner";
+import SearchBar from "@/components/search/SearchBar";
 
 const TODAY = new Date().toISOString().slice(0, 10);
 const DAYS_AHEAD = 7;
@@ -22,6 +23,7 @@ function formatDateHebrew(dateStr) {
 
 export default function Housekeeping() {
   const [startDate, setStartDate] = useState(TODAY);
+  const [searchQuery, setSearchQuery] = useState("");
   const queryClient = useQueryClient();
   const refetchAllocations = () => queryClient.invalidateQueries({ queryKey: ["sleepingAllocations"] });
 
@@ -186,6 +188,21 @@ export default function Housekeeping() {
 
   const hasAnyActivity = dateData.some(d => d.hasActivity);
 
+  // Filter group IDs by search query (display only — no logic changed)
+  const matchGroupId = (gid) => {
+    if (!searchQuery) return true;
+    const q = searchQuery.trim().toLowerCase();
+    const g = groupsMap[gid];
+    if (!g) return false;
+    return [g.group_name, g.contact_name].some(f => f && f.toLowerCase().includes(q));
+  };
+
+  const matchGroup = (g) => {
+    if (!searchQuery) return true;
+    const q = searchQuery.trim().toLowerCase();
+    return [g.group_name, g.contact_name].some(f => f && f.toLowerCase().includes(q));
+  };
+
   // ── Helpers to build props for GroupAllocationCard ───────────────────────────
   const cardProps = (groupId, allocations, type) => ({
     group:             groupsMap[groupId],
@@ -278,6 +295,14 @@ export default function Housekeeping() {
 
       {/* Content */}
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 space-y-8">
+        {/* Search */}
+        <SearchBar
+          value={searchQuery}
+          onChange={setSearchQuery}
+          placeholder="חפש קבוצה לפי שם..."
+          className="max-w-sm"
+        />
+
         {/* Housekeeping review alerts */}
         <ReviewAlertsBanner module="HOUSEKEEPING" />
 
@@ -322,16 +347,16 @@ export default function Housekeeping() {
                     קבוצות נכנסות
                   </h3>
                   <div className="space-y-2">
-                    {checkInGroupIds.map(gid => (
+                    {checkInGroupIds.filter(matchGroupId).map(gid => (
                       <GroupAllocationCard key={gid} {...cardProps(gid, checkInAllocsByGroup[gid] || [], "checkin")} />
                     ))}
-                    {draftCheckIn.map(g => (
+                    {draftCheckIn.filter(matchGroup).map(g => (
                       <GroupAllocationCard key={g.id} {...warnCardProps(g, "checkin")} />
                     ))}
-                    {nhoodCheckIn.map(g => (
+                    {nhoodCheckIn.filter(matchGroup).map(g => (
                       <GroupAllocationCard key={g.id} {...warnCardProps(g, "checkin")} />
                     ))}
-                    {noneCheckIn.map(g => (
+                    {noneCheckIn.filter(matchGroup).map(g => (
                       <GroupAllocationCard key={g.id} {...warnCardProps(g, "checkin")} />
                     ))}
                   </div>
@@ -346,16 +371,16 @@ export default function Housekeeping() {
                     קבוצות יוצאות
                   </h3>
                   <div className="space-y-2">
-                    {checkOutGroupIds.map(gid => (
+                    {checkOutGroupIds.filter(matchGroupId).map(gid => (
                       <GroupAllocationCard key={gid} {...cardProps(gid, checkOutAllocsByGroup[gid] || [], "checkout")} />
                     ))}
-                    {draftCheckOut.map(g => (
+                    {draftCheckOut.filter(matchGroup).map(g => (
                       <GroupAllocationCard key={g.id} {...warnCardProps(g, "checkout")} />
                     ))}
-                    {nhoodCheckOut.map(g => (
+                    {nhoodCheckOut.filter(matchGroup).map(g => (
                       <GroupAllocationCard key={g.id} {...warnCardProps(g, "checkout")} />
                     ))}
-                    {noneCheckOut.map(g => (
+                    {noneCheckOut.filter(matchGroup).map(g => (
                       <GroupAllocationCard key={g.id} {...warnCardProps(g, "checkout")} />
                     ))}
                   </div>
@@ -370,7 +395,7 @@ export default function Housekeeping() {
                     אוהלים תפוסים
                   </h3>
                   <div className="space-y-2">
-                    {occupiedGroupIds.map(gid => (
+                    {occupiedGroupIds.filter(matchGroupId).map(gid => (
                       <GroupAllocationCard key={gid} {...cardProps(gid, occupiedAllocsByGroup[gid] || [], "occupied")} />
                     ))}
                   </div>

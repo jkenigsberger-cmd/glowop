@@ -1,13 +1,14 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, CheckSquare, CalendarDays, BedDouble,
-  UtensilsCrossed, Wrench, ShieldAlert, Layers, Lock, Menu, X, Users
+  UtensilsCrossed, Wrench, ShieldAlert, Layers, Lock, Menu, X, Users, Search
 } from "lucide-react";
 import { revokeAccess } from "@/components/PilotAccessGate";
 import { useRoleContext } from "@/lib/RoleContext";
 import { ROLE_NAV_LINKS, ROLE_LABELS } from "@/lib/roles";
 import { useAlertCounts } from "@/hooks/useAlertCounts";
+import GlobalSearch from "@/components/search/GlobalSearch";
 
 // Map nav link keys to alert modules
 const LINK_ALERT_MODULE = {
@@ -106,8 +107,21 @@ function DrawerNavLink({ to, label, icon: Icon, pathname, onClick, alertCount })
 export default function AppNav() {
   const { pathname } = useLocation();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const { role, internalUser } = useRoleContext();
   const alertCounts = useAlertCounts();
+
+  // Ctrl+K / Cmd+K shortcut
+  useEffect(() => {
+    const handler = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        setSearchOpen(true);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
 
   const currentTitle = Object.entries(PAGE_TITLES).find(([path]) =>
     path === "/" ? pathname === "/" : pathname === path || pathname.startsWith(path + "/")
@@ -125,6 +139,8 @@ export default function AppNav() {
 
   return (
     <>
+      <GlobalSearch isOpen={searchOpen} onClose={() => setSearchOpen(false)} />
+
       {/* ── Desktop header ───────────────────────────────────────────────────── */}
       <header className="hidden sm:block bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm" dir="rtl">
         {/* Top strip: brand + user info */}
@@ -164,6 +180,16 @@ export default function AppNav() {
 
           {/* Spacer */}
           <div className="flex-1" />
+
+          {/* Global search button */}
+          <button
+            onClick={() => setSearchOpen(true)}
+            className="flex items-center gap-2 px-3 py-1.5 text-xs text-slate-400 border border-slate-200 rounded-lg bg-slate-50 hover:bg-slate-100 hover:text-slate-600 transition-colors ml-2"
+          >
+            <Search className="w-3.5 h-3.5" />
+            <span>חיפוש מהיר</span>
+            <kbd className="text-[10px] bg-slate-200 text-slate-500 rounded px-1.5 py-0.5 font-mono">⌘K</kbd>
+          </button>
 
           {/* Admin / Users links — right-aligned */}
           <div className="flex items-center gap-1">
@@ -207,9 +233,13 @@ export default function AppNav() {
           >
             <Menu className="w-5 h-5" />
           </button>
-          <div className="text-center">
-            <span className="text-sm font-bold text-slate-800">{currentTitle || "הדור הבא"}</span>
-          </div>
+          <button
+            onClick={() => setSearchOpen(true)}
+            className="flex-1 mx-2 flex items-center gap-2 px-3 py-2 text-xs text-slate-400 border border-slate-200 rounded-lg bg-slate-50"
+          >
+            <Search className="w-3.5 h-3.5 shrink-0" />
+            <span>חיפוש מהיר...</span>
+          </button>
           <button
             onClick={() => { revokeAccess(); window.location.reload(); }}
             className="flex items-center justify-center w-12 h-12 -mx-1 rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-50 active:bg-red-100 transition-colors touch-manipulation"
