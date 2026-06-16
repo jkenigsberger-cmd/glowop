@@ -97,7 +97,7 @@ function MonthDayCell({ date, groups, meals, activities, onClick, isCurrentMonth
             </span>
         }
           {dayUseGroups.length > 0 &&
-        <span className="text-[11px] font-bold bg-teal-500 rounded px-1.5 py-0.5 leading-none text-[hsl(var(--brand-yellow))]">
+        <span className="text-[11px] font-bold bg-teal-500 rounded px-1.5 py-0.5 leading-none text-[hsl(var(--popover))]">
               ☀{dayUseGroups.length}
             </span>
         }
