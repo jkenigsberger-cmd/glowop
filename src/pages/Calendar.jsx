@@ -12,39 +12,39 @@ import { getWeekDatesSunday, getMonthDatesSunday, HEB_DAYS_SUN } from "@/lib/cal
 
 moment.locale("he");
 
-const fmt     = (d) => moment(d).format("YYYY-MM-DD");
-const fmtDay  = (d) => moment(d).format("YYYY-MM-DD");
+const fmt = (d) => moment(d).format("YYYY-MM-DD");
+const fmtDay = (d) => moment(d).format("YYYY-MM-DD");
 const todayStr = fmt(moment());
 const EXCLUDED_STATUSES = new Set(["CANCELLED", "COMPLETED", "ARCHIVED"]);
 
 const MEAL_TYPE_HEB = { BREAKFAST: "בוקר", LUNCH: "צהריים", DINNER: "ערב", COFFEE_CORNER: "קפה", OTHER: "אחר" };
-const MEAL_ORDER    = { BREAKFAST: 0, LUNCH: 1, DINNER: 2, COFFEE_CORNER: 3, OTHER: 4 };
+const MEAL_ORDER = { BREAKFAST: 0, LUNCH: 1, DINNER: 2, COFFEE_CORNER: 3, OTHER: 4 };
 
 // ─── Compact day summary helpers ─────────────────────────────────────────────
 
 const isDayUse = (g) => g.group_type === "DAY_USE";
 
 function getDaySummary(dateStr, groups, meals, activities) {
-  const activeGroups = groups.filter(g => !EXCLUDED_STATUSES.has(g.status) && g.arrival_date && g.departure_date);
+  const activeGroups = groups.filter((g) => !EXCLUDED_STATUSES.has(g.status) && g.arrival_date && g.departure_date);
   // Lodging check-ins/outs/staying
-  const checkins   = activeGroups.filter(g => !isDayUse(g) && fmtDay(g.arrival_date)   === dateStr);
-  const checkouts  = activeGroups.filter(g => !isDayUse(g) && fmtDay(g.departure_date) === dateStr);
-  const staying    = activeGroups.filter(g => !isDayUse(g) && fmtDay(g.arrival_date) < dateStr && fmtDay(g.departure_date) > dateStr);
+  const checkins = activeGroups.filter((g) => !isDayUse(g) && fmtDay(g.arrival_date) === dateStr);
+  const checkouts = activeGroups.filter((g) => !isDayUse(g) && fmtDay(g.departure_date) === dateStr);
+  const staying = activeGroups.filter((g) => !isDayUse(g) && fmtDay(g.arrival_date) < dateStr && fmtDay(g.departure_date) > dateStr);
   // Day-use groups active today
-  const dayUseGroups = activeGroups.filter(g => isDayUse(g) && fmtDay(g.arrival_date) === dateStr);
-  const onSite     = [...checkins, ...staying];
-  const totalPax   = [...onSite, ...dayUseGroups].reduce((s, g) => s + (Number(g.total_pax) || 0), 0);
+  const dayUseGroups = activeGroups.filter((g) => isDayUse(g) && fmtDay(g.arrival_date) === dateStr);
+  const onSite = [...checkins, ...staying];
+  const totalPax = [...onSite, ...dayUseGroups].reduce((s, g) => s + (Number(g.total_pax) || 0), 0);
 
-  const dayMeals = meals.filter(m => m.status === "ACTIVE" && m.date === dateStr && m.meal_type !== "COFFEE_CORNER");
+  const dayMeals = meals.filter((m) => m.status === "ACTIVE" && m.date === dateStr && m.meal_type !== "COFFEE_CORNER");
   const mealsByType = {};
-  dayMeals.forEach(m => {
+  dayMeals.forEach((m) => {
     const t = m.meal_type || "OTHER";
     if (!mealsByType[t]) mealsByType[t] = { count: 0, pax: 0 };
     mealsByType[t].count++;
     mealsByType[t].pax += Number(m.pax) || 0;
   });
 
-  const dayActivities = activities.filter(i => i.status === "ACTIVE" && i.date === dateStr);
+  const dayActivities = activities.filter((i) => i.status === "ACTIVE" && i.date === dateStr);
 
   return { checkins, checkouts, staying, dayUseGroups, onSite, totalPax, mealsByType, dayMeals, dayActivities };
 }
@@ -67,70 +67,70 @@ function MonthDayCell({ date, groups, meals, activities, onClick, isCurrentMonth
         "min-h-[110px] p-2 flex flex-col gap-1 border-b border-r border-slate-200 text-right w-full transition-colors",
         isCurrentMonth ? "bg-white hover:bg-slate-50" : "bg-slate-50/60 hover:bg-slate-100/60",
         isToday && "ring-1 ring-inset ring-primary/40"
-      )}
-    >
+      )}>
+      
       {/* Day number */}
       <span className={cn(
         "text-xs font-semibold leading-none mb-0.5 self-end",
-        isToday
-          ? "bg-primary text-white w-5 h-5 rounded-full flex items-center justify-center text-[11px]"
-          : isCurrentMonth ? "text-slate-600" : "text-slate-300"
+        isToday ?
+        "bg-primary text-white w-5 h-5 rounded-full flex items-center justify-center text-[11px]" :
+        isCurrentMonth ? "text-slate-600" : "text-slate-300"
       )}>
         {date.format("D")}
       </span>
 
-      {!hasContent && (
-        <span className="text-[11px] text-slate-200 leading-tight">—</span>
-      )}
+      {!hasContent &&
+      <span className="text-[11px] text-slate-200 leading-tight">—</span>
+      }
 
       {/* Groups on site */}
-      {allOnDay.length > 0 && (
-        <div className="flex items-center gap-1 flex-wrap">
-          {checkins.length > 0 && (
-            <span className="text-[11px] font-bold bg-emerald-500 text-white rounded px-1.5 py-0.5 leading-none">
+      {allOnDay.length > 0 &&
+      <div className="flex items-center gap-1 flex-wrap">
+          {checkins.length > 0 &&
+        <span className="text-[11px] font-bold bg-emerald-500 text-white rounded px-1.5 py-0.5 leading-none">
               ↓{checkins.length}
             </span>
-          )}
-          {checkouts.length > 0 && (
-            <span className="text-[11px] font-bold bg-orange-500 text-white rounded px-1.5 py-0.5 leading-none">
+        }
+          {checkouts.length > 0 &&
+        <span className="text-[11px] font-bold bg-orange-500 text-white rounded px-1.5 py-0.5 leading-none">
               ↑{checkouts.length}
             </span>
-          )}
-          {dayUseGroups.length > 0 && (
-            <span className="text-[11px] font-bold bg-teal-500 text-white rounded px-1.5 py-0.5 leading-none">
+        }
+          {dayUseGroups.length > 0 &&
+        <span className="text-[11px] font-bold bg-teal-500 rounded px-1.5 py-0.5 leading-none text-[hsl(var(--brand-yellow))]">
               ☀{dayUseGroups.length}
             </span>
-          )}
+        }
           <span className="text-[11px] text-slate-500 font-medium">{allOnDay.length} קבוצות</span>
         </div>
-      )}
+      }
 
       {/* Pax */}
-      {totalPax > 0 && (
-        <span className="text-[11px] text-slate-400 leading-none">{totalPax} 👤</span>
-      )}
+      {totalPax > 0 &&
+      <span className="text-[11px] text-slate-400 leading-none">{totalPax} 👤</span>
+      }
 
       {/* Meals summary */}
-      {Object.keys(mealsByType).length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {Object.entries(mealsByType)
-            .sort(([a], [b]) => (MEAL_ORDER[a] ?? 99) - (MEAL_ORDER[b] ?? 99))
-            .map(([type, { pax }]) => (
-              <span key={type} className="text-[11px] bg-amber-100 text-amber-700 rounded px-1.5 py-0.5 leading-none font-medium">
+      {Object.keys(mealsByType).length > 0 &&
+      <div className="flex flex-wrap gap-1">
+          {Object.entries(mealsByType).
+        sort(([a], [b]) => (MEAL_ORDER[a] ?? 99) - (MEAL_ORDER[b] ?? 99)).
+        map(([type, { pax }]) =>
+        <span key={type} className="text-[11px] bg-amber-100 text-amber-700 rounded px-1.5 py-0.5 leading-none font-medium">
                 {MEAL_TYPE_HEB[type] || type} {pax > 0 ? pax : ""}
               </span>
-            ))}
+        )}
         </div>
-      )}
+      }
 
       {/* Activities count */}
-      {dayActivities.length > 0 && (
-        <span className="text-[11px] bg-purple-100 text-purple-700 rounded px-1.5 py-0.5 leading-none font-medium">
+      {dayActivities.length > 0 &&
+      <span className="text-[11px] bg-purple-100 text-purple-700 rounded px-1.5 py-0.5 leading-none font-medium">
           {dayActivities.length} פעילויות
         </span>
-      )}
-    </button>
-  );
+      }
+    </button>);
+
 }
 
 function MonthView({ dates, groups, meals, activities, pivot, onClick }) {
@@ -138,29 +138,29 @@ function MonthView({ dates, groups, meals, activities, pivot, onClick }) {
   return (
     <div className="rounded-xl overflow-hidden border border-slate-200 shadow-sm">
       <div className="grid grid-cols-7 bg-slate-50 border-b border-slate-200">
-        {HEB_DAYS_SUN.map((d) => (
-          <div key={d} className="text-center text-xs font-semibold text-slate-500 py-3 border-r border-slate-200">
+        {HEB_DAYS_SUN.map((d) =>
+        <div key={d} className="text-center text-xs font-semibold text-slate-500 py-3 border-r border-slate-200">
             {d}
           </div>
-        ))}
+        )}
       </div>
-      {Array.from({ length: dates.length / 7 }, (_, wi) => (
-        <div key={wi} className="grid grid-cols-7">
-          {dates.slice(wi * 7, wi * 7 + 7).map((date) => (
-            <MonthDayCell
-              key={date.toISOString()}
-              date={date}
-              groups={groups}
-              meals={meals}
-              activities={activities}
-              onClick={onClick}
-              isCurrentMonth={date.month() === currentMonth}
-            />
-          ))}
+      {Array.from({ length: dates.length / 7 }, (_, wi) =>
+      <div key={wi} className="grid grid-cols-7">
+          {dates.slice(wi * 7, wi * 7 + 7).map((date) =>
+        <MonthDayCell
+          key={date.toISOString()}
+          date={date}
+          groups={groups}
+          meals={meals}
+          activities={activities}
+          onClick={onClick}
+          isCurrentMonth={date.month() === currentMonth} />
+
+        )}
         </div>
-      ))}
-    </div>
-  );
+      )}
+    </div>);
+
 }
 
 // ─── Compact Week Day Column ──────────────────────────────────────────────────
@@ -180,8 +180,8 @@ function WeekDayColumn({ date, groups, meals, activities, onClick }) {
       className={cn(
         "flex flex-col min-h-[260px] border-r border-slate-200 text-right w-full transition-colors",
         isToday ? "bg-primary/5 hover:bg-primary/10" : "bg-white hover:bg-slate-50"
-      )}
-    >
+      )}>
+      
       {/* Day header */}
       <div className={cn(
         "px-2 py-3 border-b text-center w-full",
@@ -200,84 +200,84 @@ function WeekDayColumn({ date, groups, meals, activities, onClick }) {
 
       {/* Summary content */}
       <div className="flex-1 p-2.5 flex flex-col gap-2">
-        {!hasContent && (
-          <div className="flex items-center justify-center h-full text-slate-200 text-xs mt-4">—</div>
-        )}
+        {!hasContent &&
+        <div className="flex items-center justify-center h-full text-slate-200 text-xs mt-4">—</div>
+        }
 
         {/* Groups */}
-        {allOnDay.length > 0 && (
-          <div className="space-y-1">
+        {allOnDay.length > 0 &&
+        <div className="space-y-1">
             {/* Movement badges */}
             <div className="flex flex-wrap gap-1">
-              {checkins.length > 0 && (
-                <span className="text-xs font-bold bg-emerald-500 text-white rounded px-1.5 py-0.5 leading-none">
+              {checkins.length > 0 &&
+            <span className="text-xs font-bold bg-emerald-500 text-white rounded px-1.5 py-0.5 leading-none">
                   ↓ צ׳ק-אין {checkins.length}
                 </span>
-              )}
-              {checkouts.length > 0 && (
-                <span className="text-xs font-bold bg-orange-500 text-white rounded px-1.5 py-0.5 leading-none">
+            }
+              {checkouts.length > 0 &&
+            <span className="text-xs font-bold bg-orange-500 text-white rounded px-1.5 py-0.5 leading-none">
                   ↑ צ׳ק-אאוט {checkouts.length}
                 </span>
-              )}
-              {dayUseGroups.length > 0 && (
-                <span className="text-xs font-bold bg-teal-500 text-white rounded px-1.5 py-0.5 leading-none">
+            }
+              {dayUseGroups.length > 0 &&
+            <span className="text-xs font-bold bg-teal-500 text-white rounded px-1.5 py-0.5 leading-none">
                   ☀ באי יום {dayUseGroups.length}
                 </span>
-              )}
+            }
             </div>
             {/* On site summary */}
             <div className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-right">
               <p className="text-xs font-semibold text-slate-600">{allOnDay.length} קבוצות באתר</p>
-              {onSite.length > 0 && dayUseGroups.length > 0 && (
-                <p className="text-[11px] text-slate-400">לינה: {onSite.length} · באי יום: {dayUseGroups.length}</p>
-              )}
+              {onSite.length > 0 && dayUseGroups.length > 0 &&
+            <p className="text-[11px] text-slate-400">לינה: {onSite.length} · באי יום: {dayUseGroups.length}</p>
+            }
               {totalPax > 0 && <p className="text-xs text-slate-400">{totalPax} אורחים</p>}
             </div>
           </div>
-        )}
+        }
 
         {/* Meals */}
-        {Object.keys(mealsByType).length > 0 && (
-          <div className="bg-amber-50 border border-amber-100 rounded-lg px-2 py-1.5 space-y-0.5">
-            {Object.entries(mealsByType)
-              .sort(([a], [b]) => (MEAL_ORDER[a] ?? 99) - (MEAL_ORDER[b] ?? 99))
-              .map(([type, { pax, count }]) => (
-                  <div key={type} className="flex items-center justify-between gap-1">
+        {Object.keys(mealsByType).length > 0 &&
+        <div className="bg-amber-50 border border-amber-100 rounded-lg px-2 py-1.5 space-y-0.5">
+            {Object.entries(mealsByType).
+          sort(([a], [b]) => (MEAL_ORDER[a] ?? 99) - (MEAL_ORDER[b] ?? 99)).
+          map(([type, { pax, count }]) =>
+          <div key={type} className="flex items-center justify-between gap-1">
                     <span className="text-xs font-semibold text-amber-700">{MEAL_TYPE_HEB[type] || type}</span>
                     <span className="text-xs text-amber-600">{pax > 0 ? `${pax} 🍽` : `${count}`}</span>
                   </div>
-                ))}
+          )}
               </div>
-              )}
+        }
 
               {/* Activities */}
-              {dayActivities.length > 0 && (
-              <div className="bg-purple-50 border border-purple-100 rounded-lg px-2 py-1.5">
+              {dayActivities.length > 0 &&
+        <div className="bg-purple-50 border border-purple-100 rounded-lg px-2 py-1.5">
               <p className="text-xs font-semibold text-purple-700">{dayActivities.length} פעילויות</p>
               </div>
-              )}
+        }
       </div>
-    </button>
-  );
+    </button>);
+
 }
 
 function WeekView({ dates, groups, meals, activities, onClick }) {
   return (
     <div className="rounded-xl border border-slate-200 overflow-hidden shadow-sm">
       <div className="grid grid-cols-7">
-        {dates.map((date) => (
-          <WeekDayColumn
-            key={date.toISOString()}
-            date={date}
-            groups={groups}
-            meals={meals}
-            activities={activities}
-            onClick={onClick}
-          />
-        ))}
+        {dates.map((date) =>
+        <WeekDayColumn
+          key={date.toISOString()}
+          date={date}
+          groups={groups}
+          meals={meals}
+          activities={activities}
+          onClick={onClick} />
+
+        )}
       </div>
-    </div>
-  );
+    </div>);
+
 }
 
 // ─── Mobile Agenda View ───────────────────────────────────────────────────────
@@ -310,19 +310,19 @@ function AgendaView({ pivot, groups, meals, activities, onDayClick, onPrev, onNe
         className={cn(
           "w-full text-center py-3 rounded-xl font-bold text-base transition-colors",
           isToday ? "bg-primary/10 text-primary hover:bg-primary/20" : "bg-slate-50 text-slate-700 hover:bg-slate-100"
-        )}
-      >
+        )}>
+        
         {dayLabel}
         {isToday && <span className="mr-2 text-sm font-normal">— היום</span>}
       </button>
 
       {/* Quick summary for mobile */}
       <div className="bg-white border border-slate-200 rounded-xl p-3 space-y-2">
-        {onSite.length === 0 && Object.keys(mealsByType).length === 0 && dayActivities.length === 0 && (
-          <p className="text-sm text-slate-400 text-center py-4">אין אירועים ביום זה</p>
-        )}
-        {allOnDay.length > 0 && (
-          <div className="space-y-1">
+        {onSite.length === 0 && Object.keys(mealsByType).length === 0 && dayActivities.length === 0 &&
+        <p className="text-sm text-slate-400 text-center py-4">אין אירועים ביום זה</p>
+        }
+        {allOnDay.length > 0 &&
+        <div className="space-y-1">
             <div className="flex items-center justify-between">
               <span className="text-sm font-semibold text-slate-700">{allOnDay.length} קבוצות באתר{totalPax > 0 ? ` · ${totalPax} אורחים` : ""}</span>
               <div className="flex gap-1">
@@ -331,33 +331,33 @@ function AgendaView({ pivot, groups, meals, activities, onDayClick, onPrev, onNe
                 {dayUseGroups.length > 0 && <span className="text-[10px] bg-teal-500 text-white rounded px-1.5 py-0.5 font-bold">☀{dayUseGroups.length}</span>}
               </div>
             </div>
-            {onSite.length > 0 && dayUseGroups.length > 0 && (
-              <p className="text-[11px] text-slate-400">לינה: {onSite.length} · באי יום: {dayUseGroups.length}</p>
-            )}
+            {onSite.length > 0 && dayUseGroups.length > 0 &&
+          <p className="text-[11px] text-slate-400">לינה: {onSite.length} · באי יום: {dayUseGroups.length}</p>
+          }
           </div>
-        )}
-        {Object.keys(mealsByType).length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {Object.entries(mealsByType)
-              .sort(([a], [b]) => (MEAL_ORDER[a] ?? 99) - (MEAL_ORDER[b] ?? 99))
-              .map(([type, { pax }]) => (
-                <span key={type} className="text-[10px] bg-amber-100 text-amber-700 rounded px-1.5 py-0.5 font-medium">
+        }
+        {Object.keys(mealsByType).length > 0 &&
+        <div className="flex flex-wrap gap-1">
+            {Object.entries(mealsByType).
+          sort(([a], [b]) => (MEAL_ORDER[a] ?? 99) - (MEAL_ORDER[b] ?? 99)).
+          map(([type, { pax }]) =>
+          <span key={type} className="text-[10px] bg-amber-100 text-amber-700 rounded px-1.5 py-0.5 font-medium">
                   {MEAL_TYPE_HEB[type]} {pax > 0 ? pax : ""}
                 </span>
-              ))}
+          )}
           </div>
-        )}
-        {dayActivities.length > 0 && (
-          <span className="text-[10px] bg-purple-100 text-purple-700 rounded px-1.5 py-0.5 font-medium inline-block">
+        }
+        {dayActivities.length > 0 &&
+        <span className="text-[10px] bg-purple-100 text-purple-700 rounded px-1.5 py-0.5 font-medium inline-block">
             {dayActivities.length} פעילויות
           </span>
-        )}
-        {(onSite.length > 0 || Object.keys(mealsByType).length > 0 || dayActivities.length > 0) && (
-          <p className="text-[10px] text-slate-400 text-center mt-1">לחץ על התאריך לפרטים מלאים</p>
-        )}
+        }
+        {(onSite.length > 0 || Object.keys(mealsByType).length > 0 || dayActivities.length > 0) &&
+        <p className="text-[10px] text-slate-400 text-center mt-1">לחץ על התאריך לפרטים מלאים</p>
+        }
       </div>
-    </div>
-  );
+    </div>);
+
 }
 
 // ─── Legend ───────────────────────────────────────────────────────────────────
@@ -371,8 +371,8 @@ function Legend() {
       <div className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-teal-500 inline-block" /> באי יום</div>
       <div className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-amber-400 inline-block" /> ארוחות</div>
       <div className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-purple-500 inline-block" /> פעילויות</div>
-    </div>
-  );
+    </div>);
+
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -380,30 +380,30 @@ function Legend() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export default function Calendar() {
-  const [pivot, setPivot]         = useState(moment());
-  const [view, setView]           = useState("week");
+  const [pivot, setPivot] = useState(moment());
+  const [view, setView] = useState("week");
   const [selectedDate, setSelectedDate] = useState(null); // moment object — for day summary
-  const [tab, setTab]             = useState("operational"); // "operational" | "checkinout"
+  const [tab, setTab] = useState("operational"); // "operational" | "checkinout"
 
   const { data: groups = [] } = useQuery({
     queryKey: ["cal-groups"],
-    queryFn: () => base44.entities.Group.list("-arrival_date", 500),
+    queryFn: () => base44.entities.Group.list("-arrival_date", 500)
   });
   const { data: meals = [] } = useQuery({
     queryKey: ["cal-meals"],
-    queryFn: () => base44.entities.MealReservation.filter({ status: "ACTIVE" }),
+    queryFn: () => base44.entities.MealReservation.filter({ status: "ACTIVE" })
   });
   const { data: scheduleItems = [] } = useQuery({
     queryKey: ["cal-schedule"],
-    queryFn: () => base44.entities.GroupScheduleItem.filter({ status: "ACTIVE" }),
+    queryFn: () => base44.entities.GroupScheduleItem.filter({ status: "ACTIVE" })
   });
   const { data: activitySpaces = [] } = useQuery({
     queryKey: ["cal-spaces"],
-    queryFn: () => base44.entities.ActivitySpace.list(),
+    queryFn: () => base44.entities.ActivitySpace.list()
   });
   const { data: alerts = [] } = useQuery({
     queryKey: ["cal-alerts"],
-    queryFn: () => base44.entities.OperationalReviewAlert.filter({ status: "OPEN" }),
+    queryFn: () => base44.entities.OperationalReviewAlert.filter({ status: "OPEN" })
   });
 
   const dates = useMemo(
@@ -415,9 +415,9 @@ export default function Calendar() {
   const goAgendaDay = (dir) => setPivot((p) => p.clone().add(dir, "day"));
   const goToday = () => setPivot(moment());
 
-  const titleStr = view === "week"
-    ? `${dates[0].format("D MMM")} – ${dates[6].format("D MMM YYYY")}`
-    : pivot.format("MMMM YYYY");
+  const titleStr = view === "week" ?
+  `${dates[0].format("D MMM")} – ${dates[6].format("D MMM YYYY")}` :
+  pivot.format("MMMM YYYY");
 
   const handleDayClick = (date) => setSelectedDate(date);
 
@@ -434,18 +434,18 @@ export default function Calendar() {
           <Button size="sm" variant={tab === "operational" ? "default" : "outline"} onClick={() => setTab("operational")} className="shrink-0 text-xs">לוח תפעולי</Button>
           <Button size="sm" variant={tab === "checkinout" ? "default" : "outline"} onClick={() => setTab("checkinout")} className="shrink-0 text-xs">צ׳ק אין / אאוט</Button>
         </div>
-        {tab === "operational" && (
-          <AgendaView
-            pivot={pivot}
-            groups={groups}
-            meals={meals}
-            activities={scheduleItems}
-            onDayClick={handleDayClick}
-            onPrev={() => goAgendaDay(-1)}
-            onNext={() => goAgendaDay(1)}
-            onToday={goToday}
-          />
-        )}
+        {tab === "operational" &&
+        <AgendaView
+          pivot={pivot}
+          groups={groups}
+          meals={meals}
+          activities={scheduleItems}
+          onDayClick={handleDayClick}
+          onPrev={() => goAgendaDay(-1)}
+          onNext={() => goAgendaDay(1)}
+          onToday={goToday} />
+
+        }
         {tab === "checkinout" && <CheckInOutCalendar />}
       </div>
 
@@ -463,17 +463,17 @@ export default function Calendar() {
         {/* Tab switcher */}
         <div className="flex gap-1 border-b border-slate-200 pb-1">
           <Button size="sm" variant={tab === "operational" ? "default" : "ghost"}
-            onClick={() => setTab("operational")} className="gap-1.5">
+          onClick={() => setTab("operational")} className="gap-1.5">
             <CalendarDays className="w-4 h-4" /> לוח תפעולי
           </Button>
           <Button size="sm" variant={tab === "checkinout" ? "default" : "ghost"}
-            onClick={() => setTab("checkinout")} className="gap-1.5">
+          onClick={() => setTab("checkinout")} className="gap-1.5">
             <Users className="w-4 h-4" /> צ׳ק אין / צ׳ק אאוט
           </Button>
         </div>
 
-        {tab === "operational" && (
-          <>
+        {tab === "operational" &&
+        <>
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <div className="flex items-center gap-1">
                 <Button size="sm" variant="outline" onClick={() => go(-1)}>
@@ -493,13 +493,13 @@ export default function Calendar() {
 
             <Legend />
 
-            {view === "week" ? (
-              <WeekView dates={dates} groups={groups} meals={meals} activities={scheduleItems} onClick={handleDayClick} />
-            ) : (
-              <MonthView dates={dates} groups={groups} meals={meals} activities={scheduleItems} pivot={pivot} onClick={handleDayClick} />
-            )}
+            {view === "week" ?
+          <WeekView dates={dates} groups={groups} meals={meals} activities={scheduleItems} onClick={handleDayClick} /> :
+
+          <MonthView dates={dates} groups={groups} meals={meals} activities={scheduleItems} pivot={pivot} onClick={handleDayClick} />
+          }
           </>
-        )}
+        }
 
         {tab === "checkinout" && <CheckInOutCalendar />}
       </div>
@@ -513,8 +513,8 @@ export default function Calendar() {
         allMeals={meals}
         allActivities={scheduleItems}
         allSpaces={activitySpaces}
-        allAlerts={alerts}
-      />
-    </div>
-  );
+        allAlerts={alerts} />
+      
+    </div>);
+
 }
