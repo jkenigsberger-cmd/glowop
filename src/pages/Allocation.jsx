@@ -204,6 +204,7 @@ export default function Allocation() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStart, setFilterStart] = useState(null);
   const [filterEnd, setFilterEnd] = useState(null);
+  const [statusFilter, setStatusFilter] = useState(null); // null | "all" | "allocated" | "pending"
 
   const { data: groups = [], isLoading: loadingGroups } = useQuery({
     queryKey: ["groups"],
@@ -254,7 +255,17 @@ export default function Allocation() {
     return da.localeCompare(db);
   });
 
-  // Search + date filter (client-side, display only)
+  // Helper: get allocation status key for a profile
+  const getAllocStatus = (p) => {
+    const allocs = allocationsByGroupId[p.group_id] || [];
+    const active = allocs.filter(a => a.status !== "CANCELLED");
+    const confirmed = active.filter(a => a.status === "CONFIRMED");
+    if (confirmed.length > 0 && active.length === confirmed.length) return "allocated";
+    if (active.length > 0) return "partial";
+    return "pending";
+  };
+
+  // Search + date + status filter (client-side, display only)
   const filteredSorted = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return sorted.filter(p => {
@@ -264,9 +275,15 @@ export default function Allocation() {
         .some(f => f && f.toLowerCase().includes(q)))) return false;
       if (filterStart && g.departure_date && g.departure_date < filterStart) return false;
       if (filterEnd && g.arrival_date && g.arrival_date > filterEnd) return false;
+      if (statusFilter && statusFilter !== "all") {
+        const s = getAllocStatus(p);
+        if (statusFilter === "allocated" && s !== "allocated") return false;
+        if (statusFilter === "pending" && s !== "pending") return false;
+        if (statusFilter === "partial" && s !== "partial") return false;
+      }
       return true;
     });
-  }, [sorted, searchQuery, filterStart, filterEnd, groupById]);
+  }, [sorted, searchQuery, filterStart, filterEnd, groupById, statusFilter, allocationsByGroupId]);
 
   // Stats
   const totalReady = sorted.length;
@@ -311,20 +328,58 @@ export default function Allocation() {
         {/* Allocation review alerts */}
         <ReviewAlertsBanner module="ALLOCATION" />
 
-        {/* Stats strip */}
+        {/* Stats strip — clickable filters */}
         <div className="grid grid-cols-3 gap-3">
-          <div className="bg-card border border-border rounded-xl px-4 py-3 text-center">
+          {/* All / total */}
+          <button
+            type="button"
+            onClick={() => setStatusFilter(f => f === "all" || f === null ? null : null)}
+            className={`rounded-xl px-4 py-3 text-center border transition-all ${
+              !statusFilter || statusFilter === "all"
+                ? "bg-primary/10 border-primary ring-2 ring-primary/30"
+                : "bg-card border-border hover:bg-slate-50"
+            }`}
+          >
             <p className="text-2xl font-bold text-primary">{totalReady}</p>
-            <p className="text-xs text-muted-foreground">מוכנות לשיבוץ</p>
-          </div>
-          <div className="bg-card border border-border rounded-xl px-4 py-3 text-center">
+            <p className="text-xs text-muted-foreground">הכל</p>
+            {(!statusFilter || statusFilter === "all") && (
+              <span className="text-[10px] text-primary font-semibold">מסנן פעיל</span>
+            )}
+          </button>
+
+          {/* Pending */}
+          <button
+            type="button"
+            onClick={() => setStatusFilter(f => f === "pending" ? null : "pending")}
+            className={`rounded-xl px-4 py-3 text-center border transition-all ${
+              statusFilter === "pending"
+                ? "bg-amber-50 border-amber-400 ring-2 ring-amber-300"
+                : "bg-card border-border hover:bg-amber-50/50"
+            }`}
+          >
             <p className="text-2xl font-bold text-amber-600">{pendingCount}</p>
             <p className="text-xs text-muted-foreground">ממתינות</p>
-          </div>
-          <div className="bg-card border border-border rounded-xl px-4 py-3 text-center">
+            {statusFilter === "pending" && (
+              <span className="text-[10px] text-amber-600 font-semibold">מסנן פעיל</span>
+            )}
+          </button>
+
+          {/* Allocated */}
+          <button
+            type="button"
+            onClick={() => setStatusFilter(f => f === "allocated" ? null : "allocated")}
+            className={`rounded-xl px-4 py-3 text-center border transition-all ${
+              statusFilter === "allocated"
+                ? "bg-emerald-50 border-emerald-400 ring-2 ring-emerald-300"
+                : "bg-card border-border hover:bg-emerald-50/50"
+            }`}
+          >
             <p className="text-2xl font-bold text-emerald-600">{fullyAllocated}</p>
             <p className="text-xs text-muted-foreground">שובצו</p>
-          </div>
+            {statusFilter === "allocated" && (
+              <span className="text-[10px] text-emerald-600 font-semibold">מסנן פעיל</span>
+            )}
+          </button>
         </div>
 
         {/* Search & Filters */}
@@ -346,7 +401,7 @@ export default function Allocation() {
         {/* Queue */}
         {filteredSorted.length === 0 ? (
           <div className="text-center py-16 border-2 border-dashed border-slate-200 rounded-xl text-muted-foreground text-sm">
-            {searchQuery || filterStart || filterEnd ? "לא נמצאו תוצאות" : "אין קבוצות הממתינות לשיבוץ כרגע"}
+            {statusFilter ? "לא נמצאו קבוצות בסטטוס זה" : (searchQuery || filterStart || filterEnd ? "לא נמצאו תוצאות" : "אין קבוצות הממתינות לשיבוץ כרגע")}
           </div>
         ) : (
           <div className="space-y-3">
