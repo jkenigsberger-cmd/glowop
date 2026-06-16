@@ -1,8 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, CheckSquare, CalendarDays, BedDouble,
-  UtensilsCrossed, Wrench, ShieldAlert, Layers, Lock, Menu, X, Users, Search
+  UtensilsCrossed, Wrench, ShieldAlert, Layers, Lock,
+  Menu, X, Users, Search, ChevronDown, Settings
 } from "lucide-react";
 import { revokeAccess } from "@/components/PilotAccessGate";
 import { useRoleContext } from "@/lib/RoleContext";
@@ -10,96 +11,132 @@ import { ROLE_NAV_LINKS, ROLE_LABELS } from "@/lib/roles";
 import { useAlertCounts } from "@/hooks/useAlertCounts";
 import GlobalSearch from "@/components/search/GlobalSearch";
 
-// Map nav link keys to alert modules
+// Alert module mapping
 const LINK_ALERT_MODULE = {
-  "kitchen":     "KITCHEN",
-  "allocation":  "ALLOCATION",
-  "housekeeping":"HOUSEKEEPING",
+  kitchen:      "KITCHEN",
+  allocation:   "ALLOCATION",
+  housekeeping: "HOUSEKEEPING",
 };
 
+// All available nav links
 const ALL_LINKS = [
-  { key: "dashboard",       to: "/dashboard",       label: "בית",              icon: LayoutDashboard },
-  { key: "approved-groups", to: "/approved-groups", label: "קבוצות מאושרות",   icon: CheckSquare },
-  { key: "calendar",        to: "/calendar",        label: "לוח שנה",           icon: CalendarDays },
-  { key: "allocation",      to: "/allocation",      label: "שיבוץ לינה",        icon: BedDouble },
-  { key: "common-spaces",   to: "/common-spaces",   label: "מרחבי פעילות",     icon: Layers },
-  { key: "housekeeping",    to: "/housekeeping",    label: "משק בית",           icon: BedDouble },
-  { key: "kitchen",         to: "/kitchen",         label: "מטבח",              icon: UtensilsCrossed },
-  { key: "maintenance",     to: "/maintenance",     label: "תחזוקה",            icon: Wrench },
+  { key: "dashboard",       to: "/dashboard",       label: "בית",             icon: LayoutDashboard, group: "primary" },
+  { key: "approved-groups", to: "/approved-groups", label: "קבוצות",          icon: CheckSquare,     group: "primary" },
+  { key: "calendar",        to: "/calendar",        label: "לוח שנה",          icon: CalendarDays,    group: "primary" },
+  { key: "allocation",      to: "/allocation",      label: "לינה",             icon: BedDouble,       group: "primary" },
+  { key: "common-spaces",   to: "/common-spaces",   label: "מרחבי פעילות",    icon: Layers,          group: "primary" },
+  { key: "housekeeping",    to: "/housekeeping",    label: "משק בית",          icon: BedDouble,       group: "primary" },
+  { key: "kitchen",         to: "/kitchen",         label: "מטבח",             icon: UtensilsCrossed, group: "primary" },
+  { key: "maintenance",     to: "/maintenance",     label: "תחזוקה",           icon: Wrench,          group: "ops" },
 ];
 
-const PAGE_TITLES = {
-  "/dashboard":       "בית",
-  "/approved-groups": "קבוצות מאושרות",
-  "/groups":          "קבוצות",
-  "/calendar":        "לוח שנה",
-  "/allocation":      "שיבוץ לינה",
-  "/common-spaces":   "מרחבי פעילות",
-  "/housekeeping":    "משק בית",
-  "/kitchen":         "מטבח",
-  "/maintenance":     "תחזוקה",
-  "/admin":           "ניהול",
-  "/admin/users":     "ניהול משתמשים",
-};
-
-
 function isActive(linkTo, pathname) {
-  return linkTo === "/" ? pathname === "/" : pathname === linkTo || pathname.startsWith(linkTo + "/");
+  return linkTo === "/"
+    ? pathname === "/"
+    : pathname === linkTo || pathname.startsWith(linkTo + "/");
 }
 
-function AlertBadge({ count }) {
+function AlertBadge({ count, small }) {
   if (!count || count < 1) return null;
   return (
-    <span className="absolute -top-1 -left-1 min-w-[16px] h-4 flex items-center justify-center bg-red-500 text-white text-[10px] font-bold rounded-full px-1 leading-none z-10 pointer-events-none">
+    <span className={`inline-flex items-center justify-center bg-red-500 text-white font-bold rounded-full leading-none pointer-events-none
+      ${small ? "min-w-[14px] h-3.5 text-[9px] px-0.5" : "min-w-[16px] h-4 text-[10px] px-1"}`}>
       {count > 9 ? "9+" : count}
     </span>
   );
 }
 
-function NavTab({ to, label, icon: Icon, pathname, onClick, alertCount }) {
+// Desktop primary nav pill
+function NavPill({ to, label, icon: Icon, pathname, alertCount }) {
   const active = isActive(to, pathname);
   return (
     <Link
       to={to}
-      onClick={onClick}
-      className={`relative flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium whitespace-nowrap transition-all duration-150 rounded-md ${
-        active
-          ? "text-primary bg-primary/8 font-semibold"
-          : "text-slate-500 hover:text-slate-800 hover:bg-slate-100"
-      }`}
+      className={`relative flex items-center gap-1.5 px-3 py-1.5 text-sm whitespace-nowrap rounded-full transition-all duration-150 select-none
+        ${active
+          ? "bg-primary/10 text-primary font-semibold"
+          : "text-slate-500 hover:text-slate-700 hover:bg-slate-100 font-medium"
+        }`}
     >
-      <span className="relative">
-        <Icon className="w-3.5 h-3.5 shrink-0" />
-        <AlertBadge count={alertCount} />
-      </span>
-      {label}
-      {active && (
-        <span className="absolute bottom-0 right-2 left-2 h-0.5 bg-primary rounded-full" />
-      )}
+      <Icon className="w-3.5 h-3.5 shrink-0" />
+      <span>{label}</span>
+      {alertCount > 0 && <AlertBadge count={alertCount} small />}
     </Link>
   );
 }
 
-function DrawerNavLink({ to, label, icon: Icon, pathname, onClick, alertCount }) {
+// Dropdown menu
+function NavDropdown({ label, icon: Icon, items, pathname, alertCounts }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  const totalBadge = items.reduce((s, it) => s + (alertCounts[it.key] || 0), 0);
+  const anyActive = items.some(it => isActive(it.to, pathname));
+
+  // Close on outside click
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen(v => !v)}
+        className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-full transition-all duration-150 select-none
+          ${anyActive
+            ? "bg-primary/10 text-primary font-semibold"
+            : "text-slate-500 hover:text-slate-700 hover:bg-slate-100 font-medium"
+          }`}
+      >
+        <Icon className="w-3.5 h-3.5 shrink-0" />
+        <span>{label}</span>
+        {totalBadge > 0 && <AlertBadge count={totalBadge} small />}
+        <ChevronDown className={`w-3 h-3 shrink-0 transition-transform duration-150 ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && (
+        <div className="absolute top-full mt-1.5 right-0 min-w-[180px] bg-white border border-slate-200 rounded-xl shadow-lg py-1.5 z-50">
+          {items.map(item => {
+            const active = isActive(item.to, pathname);
+            const cnt = alertCounts[item.key] || 0;
+            return (
+              <Link
+                key={item.to}
+                to={item.to}
+                onClick={() => setOpen(false)}
+                className={`flex items-center gap-2.5 px-3.5 py-2 text-sm transition-colors
+                  ${active
+                    ? "text-primary bg-primary/6 font-semibold"
+                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-800"
+                  }`}
+              >
+                <item.icon className="w-3.5 h-3.5 shrink-0 text-slate-400" />
+                <span className="flex-1">{item.label}</span>
+                {cnt > 0 && <AlertBadge count={cnt} />}
+              </Link>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Mobile drawer link
+function DrawerLink({ to, label, icon: Icon, pathname, onClick, alertCount }) {
   const active = isActive(to, pathname);
   return (
     <Link
       to={to}
       onClick={onClick}
-      className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
-        active
-          ? "bg-primary/10 text-primary font-semibold"
-          : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-      }`}
+      className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors
+        ${active ? "bg-primary/10 text-primary font-semibold" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"}`}
     >
-      <span className="relative">
-        <Icon className="w-4 h-4 shrink-0" />
-        <AlertBadge count={alertCount} />
-      </span>
+      <Icon className="w-4 h-4 shrink-0" />
       <span className="flex-1">{label}</span>
-      {alertCount > 0 && (
-        <span className="text-[11px] font-bold text-red-500">{alertCount}</span>
-      )}
+      {alertCount > 0 && <AlertBadge count={alertCount} />}
     </Link>
   );
 }
@@ -123,126 +160,144 @@ export default function AppNav() {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
-  const currentTitle = Object.entries(PAGE_TITLES).find(([path]) =>
-    path === "/" ? pathname === "/" : pathname === path || pathname.startsWith(path + "/")
-  )?.[1] || "";
-
   const closeDrawer = () => setDrawerOpen(false);
 
   const allowedKeys = role ? (ROLE_NAV_LINKS[role] || []) : [];
-  const visibleLinks = ALL_LINKS.filter(l => allowedKeys.includes(l.key));
   const showAdmin = allowedKeys.includes("admin");
   const showUserManagement = role === "SUPER_ADMIN";
 
+  // Primary links: dashboard through kitchen
+  const PRIMARY_KEYS = ["dashboard", "approved-groups", "calendar", "allocation", "common-spaces", "housekeeping", "kitchen"];
+  const primaryLinks = ALL_LINKS.filter(l => PRIMARY_KEYS.includes(l.key) && allowedKeys.includes(l.key));
+
+  // Ops dropdown: maintenance + any future ops secondary keys
+  const OPS_KEYS = ["maintenance"];
+  const opsLinks = ALL_LINKS.filter(l => OPS_KEYS.includes(l.key) && allowedKeys.includes(l.key));
+
+  // Admin dropdown items (not from ALL_LINKS — separate)
+  const adminDropdownItems = [];
+  if (showUserManagement) adminDropdownItems.push({ key: "admin-users", to: "/admin/users", label: "משתמשים", icon: Users });
+  if (showAdmin) adminDropdownItems.push({ key: "admin", to: "/admin", label: "ניהול מערכת", icon: ShieldAlert });
+
   const userName = internalUser?.name || "";
   const roleLabel = ROLE_LABELS[role] || role || "";
+
+  // Per-item alert count helper
+  const getCount = (key) => alertCounts[LINK_ALERT_MODULE[key]] || 0;
+
+  // Ops badge counts
+  const opsBadgeMap = Object.fromEntries(opsLinks.map(l => [l.key, getCount(l.key)]));
+  // Admin badge map — no alerts currently but structure is ready
+  const adminBadgeMap = {};
 
   return (
     <>
       <GlobalSearch isOpen={searchOpen} onClose={() => setSearchOpen(false)} />
 
-      {/* ── Desktop header ───────────────────────────────────────────────────── */}
-      <header className="hidden sm:block bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm" dir="rtl">
-        {/* Top strip: brand + user info */}
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 flex items-center justify-between h-10 border-b border-slate-100">
-          <span className="text-xs font-bold text-slate-400 tracking-widest uppercase select-none">
+      {/* ── Desktop header ─────────────────────────────────────────────── */}
+      <header className="hidden sm:block bg-white border-b border-slate-200 sticky top-0 z-40" dir="rtl">
+        <div className="max-w-screen-xl mx-auto px-4 lg:px-6 flex items-center h-14 gap-1">
+
+          {/* Brand */}
+          <span className="text-xs font-bold text-slate-300 tracking-widest uppercase select-none ml-3 shrink-0">
             הדור הבא
           </span>
-          <div className="flex items-center gap-3">
-            {role && (
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs text-slate-500">{userName}</span>
-                {userName && <span className="text-slate-300 text-xs">·</span>}
-                <span className="text-[11px] font-semibold text-primary bg-primary/8 rounded-full px-2 py-0.5">
-                  {roleLabel}
-                </span>
-              </div>
-            )}
-            <button
-              onClick={() => { revokeAccess(); window.location.reload(); }}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
-              title="נעילת מערכת"
-            >
-              <Lock className="w-3 h-3" />
-              נעילה
-            </button>
-          </div>
-        </div>
 
-        {/* Nav tabs row */}
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 flex items-center gap-0.5 h-10 overflow-x-auto">
-          {visibleLinks.map(link => (
-            <NavTab
-              key={link.to} {...link} pathname={pathname}
-              alertCount={alertCounts[LINK_ALERT_MODULE[link.key]] || 0}
-            />
-          ))}
+          <div className="w-px h-5 bg-slate-200 mx-1 shrink-0" />
+
+          {/* Primary nav pills */}
+          <nav className="flex items-center gap-0.5 flex-nowrap">
+            {primaryLinks.map(link => (
+              <NavPill
+                key={link.key}
+                {...link}
+                pathname={pathname}
+                alertCount={getCount(link.key)}
+              />
+            ))}
+
+            {/* Ops dropdown — only if has items */}
+            {opsLinks.length > 0 && (
+              <NavDropdown
+                label="תפעול"
+                icon={Wrench}
+                items={opsLinks}
+                pathname={pathname}
+                alertCounts={opsBadgeMap}
+              />
+            )}
+
+            {/* Admin dropdown — only if has items */}
+            {adminDropdownItems.length > 0 && (
+              <NavDropdown
+                label="ניהול"
+                icon={ShieldAlert}
+                items={adminDropdownItems}
+                pathname={pathname}
+                alertCounts={adminBadgeMap}
+              />
+            )}
+          </nav>
 
           {/* Spacer */}
           <div className="flex-1" />
 
-          {/* Global search button */}
-          <button
-            onClick={() => setSearchOpen(true)}
-            className="flex items-center gap-2 px-3 py-1.5 text-xs text-slate-400 border border-slate-200 rounded-lg bg-slate-50 hover:bg-slate-100 hover:text-slate-600 transition-colors ml-2"
-          >
-            <Search className="w-3.5 h-3.5" />
-            <span>חיפוש מהיר</span>
-            <kbd className="text-[10px] bg-slate-200 text-slate-500 rounded px-1.5 py-0.5 font-mono">⌘K</kbd>
-          </button>
+          {/* Right side: search + user */}
+          <div className="flex items-center gap-2 shrink-0">
+            {/* Quick search pill */}
+            <button
+              onClick={() => setSearchOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-slate-400 border border-slate-200 rounded-full bg-slate-50 hover:bg-slate-100 hover:text-slate-600 hover:border-slate-300 transition-all duration-150"
+            >
+              <Search className="w-3.5 h-3.5 shrink-0" />
+              <span className="hidden lg:inline">חיפוש מהיר</span>
+              <kbd className="hidden lg:inline text-[10px] bg-slate-200 text-slate-400 rounded px-1.5 py-0.5 font-mono leading-none">⌘K</kbd>
+            </button>
 
-          {/* Admin / Users links — right-aligned */}
-          <div className="flex items-center gap-1">
-            {showUserManagement && (
-              <Link
-                to="/admin/users"
-                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-md text-sm font-medium whitespace-nowrap transition-all ${
-                  pathname.startsWith("/admin/users")
-                    ? "text-red-700 bg-red-50 font-semibold"
-                    : "text-slate-500 hover:text-red-700 hover:bg-red-50"
-                }`}
-              >
-                <Users className="w-3.5 h-3.5 shrink-0" />
-                משתמשים
-              </Link>
+            <div className="w-px h-5 bg-slate-200 shrink-0" />
+
+            {/* User info */}
+            {role && (
+              <div className="flex items-center gap-1.5">
+                {userName && <span className="text-xs text-slate-500 hidden lg:inline">{userName}</span>}
+                <span className="text-[11px] font-semibold text-primary bg-primary/8 rounded-full px-2 py-0.5 whitespace-nowrap">
+                  {roleLabel}
+                </span>
+              </div>
             )}
-            {showAdmin && (
-              <Link
-                to="/admin"
-                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-md text-sm font-medium whitespace-nowrap transition-all ${
-                  pathname.startsWith("/admin") && !pathname.startsWith("/admin/users")
-                    ? "text-amber-700 bg-amber-50 font-semibold"
-                    : "text-slate-500 hover:text-amber-700 hover:bg-amber-50"
-                }`}
-              >
-                <ShieldAlert className="w-3.5 h-3.5 shrink-0" />
-                ניהול
-              </Link>
-            )}
+
+            {/* Lock */}
+            <button
+              onClick={() => { revokeAccess(); window.location.reload(); }}
+              title="נעילת מערכת"
+              className="flex items-center justify-center w-7 h-7 rounded-full text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors"
+            >
+              <Lock className="w-3.5 h-3.5" />
+            </button>
           </div>
         </div>
       </header>
 
-      {/* ── Mobile top bar ───────────────────────────────────────────────────── */}
-      <div className="sm:hidden sticky top-0 z-40 bg-white border-b border-slate-200 shadow-sm" dir="rtl">
+      {/* ── Mobile top bar ──────────────────────────────────────────────── */}
+      <div className="sm:hidden sticky top-0 z-40 bg-white border-b border-slate-200" dir="rtl">
         <div className="flex items-center justify-between px-2 h-14">
           <button
             onClick={() => setDrawerOpen(true)}
-            className="flex items-center justify-center w-12 h-12 -mx-1 rounded-xl text-slate-600 hover:bg-slate-100 active:bg-slate-200 transition-colors touch-manipulation"
+            className="flex items-center justify-center w-12 h-12 rounded-xl text-slate-600 hover:bg-slate-100 active:bg-slate-200 transition-colors"
             aria-label="פתח תפריט"
           >
             <Menu className="w-5 h-5" />
           </button>
           <button
             onClick={() => setSearchOpen(true)}
-            className="flex-1 mx-2 flex items-center gap-2 px-3 py-2 text-xs text-slate-400 border border-slate-200 rounded-lg bg-slate-50"
+            className="flex-1 mx-2 flex items-center gap-2 px-3 py-2 text-xs text-slate-400 border border-slate-200 rounded-full bg-slate-50"
           >
             <Search className="w-3.5 h-3.5 shrink-0" />
             <span>חיפוש מהיר...</span>
           </button>
           <button
             onClick={() => { revokeAccess(); window.location.reload(); }}
-            className="flex items-center justify-center w-12 h-12 -mx-1 rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-50 active:bg-red-100 transition-colors touch-manipulation"
+            className="flex items-center justify-center w-12 h-12 rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
             aria-label="נעילה"
           >
             <Lock className="w-4 h-4" />
@@ -250,7 +305,7 @@ export default function AppNav() {
         </div>
       </div>
 
-      {/* ── Mobile drawer ────────────────────────────────────────────────────── */}
+      {/* ── Mobile drawer ───────────────────────────────────────────────── */}
       {drawerOpen && (
         <div className="sm:hidden fixed inset-0 z-50 flex" dir="rtl">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={closeDrawer} />
@@ -267,7 +322,7 @@ export default function AppNav() {
               </div>
               <button
                 onClick={closeDrawer}
-                className="flex items-center justify-center w-11 h-11 rounded-xl text-slate-400 hover:bg-slate-100 active:bg-slate-200 transition-colors touch-manipulation"
+                className="flex items-center justify-center w-10 h-10 rounded-xl text-slate-400 hover:bg-slate-100 transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -275,47 +330,47 @@ export default function AppNav() {
 
             {/* Nav links */}
             <div className="flex-1 overflow-y-auto p-3 space-y-0.5">
-              {visibleLinks.map(link => (
-                <DrawerNavLink
-                  key={link.to} {...link} pathname={pathname} onClick={closeDrawer}
-                  alertCount={alertCounts[LINK_ALERT_MODULE[link.key]] || 0}
+              {primaryLinks.map(link => (
+                <DrawerLink
+                  key={link.key}
+                  {...link}
+                  pathname={pathname}
+                  onClick={closeDrawer}
+                  alertCount={getCount(link.key)}
+                />
+              ))}
+              {opsLinks.map(link => (
+                <DrawerLink
+                  key={link.key}
+                  {...link}
+                  pathname={pathname}
+                  onClick={closeDrawer}
+                  alertCount={getCount(link.key)}
                 />
               ))}
             </div>
 
-            {/* Bottom section */}
-            <div className="shrink-0 p-3 border-t border-slate-100 space-y-0.5">
-              {showUserManagement && (
-                <Link
-                  to="/admin/users"
-                  onClick={closeDrawer}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
-                    pathname.startsWith("/admin/users")
-                      ? "bg-red-50 text-red-700 font-semibold"
-                      : "text-slate-600 hover:bg-red-50 hover:text-red-700"
-                  }`}
-                >
-                  <Users className="w-4 h-4" />
-                  ניהול משתמשים
-                </Link>
-              )}
-              {showAdmin && (
-                <Link
-                  to="/admin"
-                  onClick={closeDrawer}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
-                    pathname.startsWith("/admin") && !pathname.startsWith("/admin/users")
-                      ? "bg-amber-50 text-amber-700 font-semibold"
-                      : "text-slate-600 hover:bg-amber-50 hover:text-amber-700"
-                  }`}
-                >
-                  <ShieldAlert className="w-4 h-4" />
-                  ניהול
-                </Link>
-              )}
+            {/* Admin + lock */}
+            {(adminDropdownItems.length > 0) && (
+              <div className="shrink-0 p-3 border-t border-slate-100 space-y-0.5">
+                {adminDropdownItems.map(item => (
+                  <DrawerLink
+                    key={item.key}
+                    to={item.to}
+                    label={item.label}
+                    icon={item.icon}
+                    pathname={pathname}
+                    onClick={closeDrawer}
+                    alertCount={0}
+                  />
+                ))}
+              </div>
+            )}
+
+            <div className="shrink-0 px-3 pb-3">
               <button
                 onClick={() => { revokeAccess(); window.location.reload(); }}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-500 hover:text-red-600 hover:bg-red-50 transition-colors"
+                className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium text-slate-500 hover:text-red-600 hover:bg-red-50 transition-colors"
               >
                 <Lock className="w-4 h-4" />
                 נעילת מערכת
