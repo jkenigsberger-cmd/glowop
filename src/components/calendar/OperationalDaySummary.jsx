@@ -28,13 +28,7 @@ const isDayUse = (group) => group.group_type === "DAY_USE";
 // ── Movement label — split by group_type ─────────────────────────────────────
 function movementLabel(group, dateStr) {
   if (isDayUse(group)) {
-    // Day-use groups never get "check-in/check-out" labels
-    const isArrival   = fmt(group.arrival_date)   === dateStr;
-    const isDeparture = fmt(group.departure_date)  === dateStr;
-    if (isArrival && isDeparture) return { label: "קבוצת יום", color: "bg-teal-100 text-teal-700" };
-    if (isArrival)                return { label: "קבוצת יום", color: "bg-teal-100 text-teal-700" };
-    if (isDeparture)              return { label: "קבוצת יום", color: "bg-teal-100 text-teal-700" };
-    return                               { label: "קבוצת יום", color: "bg-teal-100 text-teal-700" };
+    return { label: "באי יום", color: "bg-teal-100 text-teal-700" };
   }
   // Lodging groups
   const isCheckin  = fmt(group.arrival_date)   === dateStr;
@@ -122,7 +116,7 @@ function GroupCard({ group, dateStr, meals, activities, spaces, alerts, defaultO
         return (
           <div className="flex items-center gap-2 text-teal-700 text-xs">
             <Sun className="w-3.5 h-3.5 shrink-0" />
-            <span>קבוצת יום · {group.arrival_time}–{group.departure_time}</span>
+            <span>באי יום · {group.arrival_time}–{group.departure_time}</span>
           </div>
         );
       }
@@ -131,19 +125,19 @@ function GroupCard({ group, dateStr, meals, activities, spaces, alerts, defaultO
           {hasArrival && (
             <div className="flex items-center gap-2 text-teal-700 text-xs">
               <Sun className="w-3.5 h-3.5 shrink-0" />
-              <span>קבוצת יום · הגעה {group.arrival_time}</span>
+              <span>באי יום · הגעה {group.arrival_time}</span>
             </div>
           )}
           {hasDeparture && (
             <div className="flex items-center gap-2 text-teal-600 text-xs">
               <Sun className="w-3.5 h-3.5 shrink-0" />
-              <span>קבוצת יום · סיום {group.departure_time}</span>
+              <span>באי יום · סיום {group.departure_time}</span>
             </div>
           )}
           {!hasArrival && !hasDeparture && (
             <div className="flex items-center gap-2 text-teal-600 text-xs">
               <Sun className="w-3.5 h-3.5 shrink-0" />
-              <span>קבוצת יום</span>
+              <span>באי יום</span>
             </div>
           )}
         </div>
@@ -368,7 +362,7 @@ function GroupedFlatSection({ filter, groups, dateStr, meals, activities, spaces
             <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 flex items-center gap-2">
               <span className={cn("w-2 h-2 rounded-full shrink-0", dotCls)} />
               <p className="text-sm font-semibold text-slate-800">{group.group_name}</p>
-              {isDay && <span className="text-xs bg-teal-100 text-teal-700 rounded px-1.5 py-0.5 leading-none font-medium">קבוצת יום</span>}
+              {isDay && <span className="text-xs bg-teal-100 text-teal-700 rounded px-1.5 py-0.5 leading-none font-medium">באי יום</span>}
               {group.total_pax > 0 && <span className="text-xs text-slate-400 mr-auto">{group.total_pax} אורחים</span>}
             </div>
 
@@ -439,7 +433,7 @@ const FILTER_TITLES = {
   all:        "כל הקבוצות",
   checkins:   "צ׳ק-אין לינה היום",
   checkouts:  "צ׳ק-אאוט לינה היום",
-  dayuse:     "קבוצות יום היום",
+  dayuse:     "באי יום — היום",
   meals:      "ארוחות היום",
   activities: "פעילויות בלו״ז היום",
   alerts:     "התראות היום",
@@ -539,10 +533,21 @@ export default function OperationalDaySummary({
             <p className="text-sm text-slate-400">אין קבוצות ביום זה</p>
           ) : (
             <>
-              <p className="text-xs text-slate-500">
-                <span className="font-semibold text-slate-700">{allGroupsOnDay.length} קבוצות באתר</span>
-                {totalPaxOnSite > 0 && <span className="mr-2">· {totalPaxOnSite} אורחים</span>}
-              </p>
+              <div className="space-y-0.5">
+                <p className="text-xs text-slate-500">
+                  <span className="font-semibold text-slate-700">{allGroupsOnDay.length} קבוצות באתר</span>
+                  {totalPaxOnSite > 0 && <span className="mr-2">· {totalPaxOnSite} אורחים</span>}
+                </p>
+                {(lodgingCheckins.length + lodgingCheckouts.length + staying.length > 0 || dayUseGroups.length > 0) && (
+                  <p className="text-[11px] text-slate-400">
+                    {lodgingCheckins.length + lodgingCheckouts.length + staying.length > 0 && (
+                      <span>לינה: {[...new Set([...lodgingCheckins, ...lodgingCheckouts, ...staying].map(g => g.id))].length}</span>
+                    )}
+                    {lodgingCheckins.length + lodgingCheckouts.length + staying.length > 0 && dayUseGroups.length > 0 && <span> · </span>}
+                    {dayUseGroups.length > 0 && <span>באי יום: {dayUseGroups.length}</span>}
+                  </p>
+                )}
+              </div>
               <div className="flex flex-wrap gap-2">
                 <FilterPill label="כל הקבוצות" count={allGroupsOnDay.length} icon={Users}
                   active={activeFilter === "all"} onClick={() => handleFilter("all")} filterKey="all" />
@@ -550,7 +555,7 @@ export default function OperationalDaySummary({
                   active={activeFilter === "checkins"} onClick={() => handleFilter("checkins")} filterKey="checkins" />
                 <FilterPill label="צ׳ק-אאוט לינה" count={lodgingCheckouts.length} icon={ArrowUpCircle}
                   active={activeFilter === "checkouts"} onClick={() => handleFilter("checkouts")} filterKey="checkouts" />
-                <FilterPill label="קבוצות יום" count={dayUseGroups.length} icon={Sun}
+                <FilterPill label="באי יום" count={dayUseGroups.length} icon={Sun}
                   active={activeFilter === "dayuse"} onClick={() => handleFilter("dayuse")} filterKey="dayuse" />
                 <FilterPill label="ארוחות" count={dayMeals.length} icon={UtensilsCrossed}
                   active={activeFilter === "meals"} onClick={() => handleFilter("meals")} filterKey="meals" />

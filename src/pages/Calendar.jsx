@@ -22,13 +22,18 @@ const MEAL_ORDER    = { BREAKFAST: 0, LUNCH: 1, DINNER: 2, COFFEE_CORNER: 3, OTH
 
 // ─── Compact day summary helpers ─────────────────────────────────────────────
 
+const isDayUse = (g) => g.group_type === "DAY_USE";
+
 function getDaySummary(dateStr, groups, meals, activities) {
   const activeGroups = groups.filter(g => !EXCLUDED_STATUSES.has(g.status) && g.arrival_date && g.departure_date);
-  const checkins  = activeGroups.filter(g => fmtDay(g.arrival_date)   === dateStr);
-  const checkouts = activeGroups.filter(g => fmtDay(g.departure_date) === dateStr);
-  const staying   = activeGroups.filter(g => fmtDay(g.arrival_date) < dateStr && fmtDay(g.departure_date) > dateStr);
-  const onSite    = [...checkins, ...staying];
-  const totalPax  = onSite.reduce((s, g) => s + (Number(g.total_pax) || 0), 0);
+  // Lodging check-ins/outs/staying
+  const checkins   = activeGroups.filter(g => !isDayUse(g) && fmtDay(g.arrival_date)   === dateStr);
+  const checkouts  = activeGroups.filter(g => !isDayUse(g) && fmtDay(g.departure_date) === dateStr);
+  const staying    = activeGroups.filter(g => !isDayUse(g) && fmtDay(g.arrival_date) < dateStr && fmtDay(g.departure_date) > dateStr);
+  // Day-use groups active today
+  const dayUseGroups = activeGroups.filter(g => isDayUse(g) && fmtDay(g.arrival_date) === dateStr);
+  const onSite     = [...checkins, ...staying];
+  const totalPax   = [...onSite, ...dayUseGroups].reduce((s, g) => s + (Number(g.total_pax) || 0), 0);
 
   const dayMeals = meals.filter(m => m.status === "ACTIVE" && m.date === dateStr && m.meal_type !== "COFFEE_CORNER");
   const mealsByType = {};
@@ -41,7 +46,7 @@ function getDaySummary(dateStr, groups, meals, activities) {
 
   const dayActivities = activities.filter(i => i.status === "ACTIVE" && i.date === dateStr);
 
-  return { checkins, checkouts, staying, onSite, totalPax, mealsByType, dayMeals, dayActivities };
+  return { checkins, checkouts, staying, dayUseGroups, onSite, totalPax, mealsByType, dayMeals, dayActivities };
 }
 
 // ─── Compact Month Day Cell ───────────────────────────────────────────────────
@@ -49,9 +54,10 @@ function getDaySummary(dateStr, groups, meals, activities) {
 function MonthDayCell({ date, groups, meals, activities, onClick, isCurrentMonth }) {
   const dateStr = fmt(date);
   const isToday = dateStr === todayStr;
-  const { checkins, checkouts, onSite, totalPax, mealsByType, dayActivities } = getDaySummary(dateStr, groups, meals, activities);
+  const { checkins, checkouts, dayUseGroups, onSite, totalPax, mealsByType, dayActivities } = getDaySummary(dateStr, groups, meals, activities);
+  const allOnDay = [...onSite, ...dayUseGroups];
 
-  const hasContent = onSite.length > 0 || Object.keys(mealsByType).length > 0 || dayActivities.length > 0;
+  const hasContent = allOnDay.length > 0 || Object.keys(mealsByType).length > 0 || dayActivities.length > 0;
 
   return (
     <button
@@ -78,7 +84,7 @@ function MonthDayCell({ date, groups, meals, activities, onClick, isCurrentMonth
       )}
 
       {/* Groups on site */}
-      {onSite.length > 0 && (
+      {allOnDay.length > 0 && (
         <div className="flex items-center gap-1 flex-wrap">
           {checkins.length > 0 && (
             <span className="text-[11px] font-bold bg-emerald-500 text-white rounded px-1.5 py-0.5 leading-none">
@@ -90,7 +96,12 @@ function MonthDayCell({ date, groups, meals, activities, onClick, isCurrentMonth
               ↑{checkouts.length}
             </span>
           )}
-          <span className="text-[11px] text-slate-500 font-medium">{onSite.length} קבוצות</span>
+          {dayUseGroups.length > 0 && (
+            <span className="text-[11px] font-bold bg-teal-500 text-white rounded px-1.5 py-0.5 leading-none">
+              ☀{dayUseGroups.length}
+            </span>
+          )}
+          <span className="text-[11px] text-slate-500 font-medium">{allOnDay.length} קבוצות</span>
         </div>
       )}
 
@@ -157,9 +168,10 @@ function MonthView({ dates, groups, meals, activities, pivot, onClick }) {
 function WeekDayColumn({ date, groups, meals, activities, onClick }) {
   const dateStr = fmt(date);
   const isToday = dateStr === todayStr;
-  const { checkins, checkouts, staying, onSite, totalPax, mealsByType, dayActivities } = getDaySummary(dateStr, groups, meals, activities);
+  const { checkins, checkouts, staying, dayUseGroups, onSite, totalPax, mealsByType, dayActivities } = getDaySummary(dateStr, groups, meals, activities);
+  const allOnDay = [...onSite, ...dayUseGroups];
 
-  const hasContent = onSite.length > 0 || Object.keys(mealsByType).length > 0 || dayActivities.length > 0;
+  const hasContent = allOnDay.length > 0 || Object.keys(mealsByType).length > 0 || dayActivities.length > 0;
 
   return (
     <button
@@ -193,24 +205,32 @@ function WeekDayColumn({ date, groups, meals, activities, onClick }) {
         )}
 
         {/* Groups */}
-        {onSite.length > 0 && (
+        {allOnDay.length > 0 && (
           <div className="space-y-1">
             {/* Movement badges */}
             <div className="flex flex-wrap gap-1">
               {checkins.length > 0 && (
                 <span className="text-xs font-bold bg-emerald-500 text-white rounded px-1.5 py-0.5 leading-none">
-                  ↓ נכנסים {checkins.length}
+                  ↓ צ׳ק-אין {checkins.length}
                 </span>
               )}
               {checkouts.length > 0 && (
                 <span className="text-xs font-bold bg-orange-500 text-white rounded px-1.5 py-0.5 leading-none">
-                  ↑ יוצאים {checkouts.length}
+                  ↑ צ׳ק-אאוט {checkouts.length}
+                </span>
+              )}
+              {dayUseGroups.length > 0 && (
+                <span className="text-xs font-bold bg-teal-500 text-white rounded px-1.5 py-0.5 leading-none">
+                  ☀ באי יום {dayUseGroups.length}
                 </span>
               )}
             </div>
             {/* On site summary */}
             <div className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-right">
-              <p className="text-xs font-semibold text-slate-600">{onSite.length} קבוצות באתר</p>
+              <p className="text-xs font-semibold text-slate-600">{allOnDay.length} קבוצות באתר</p>
+              {onSite.length > 0 && dayUseGroups.length > 0 && (
+                <p className="text-[11px] text-slate-400">לינה: {onSite.length} · באי יום: {dayUseGroups.length}</p>
+              )}
               {totalPax > 0 && <p className="text-xs text-slate-400">{totalPax} אורחים</p>}
             </div>
           </div>
@@ -266,7 +286,8 @@ function AgendaView({ pivot, groups, meals, activities, onDayClick, onPrev, onNe
   const dateStr = fmt(pivot);
   const isToday = dateStr === todayStr;
   const dayLabel = pivot.format("dddd, D בMMMM YYYY");
-  const { checkins, checkouts, staying, onSite, totalPax, mealsByType, dayActivities } = getDaySummary(dateStr, groups, meals, activities);
+  const { checkins, checkouts, staying, dayUseGroups, onSite, totalPax, mealsByType, dayActivities } = getDaySummary(dateStr, groups, meals, activities);
+  const allOnDay = [...onSite, ...dayUseGroups];
 
   return (
     <div className="space-y-3">
@@ -300,13 +321,19 @@ function AgendaView({ pivot, groups, meals, activities, onDayClick, onPrev, onNe
         {onSite.length === 0 && Object.keys(mealsByType).length === 0 && dayActivities.length === 0 && (
           <p className="text-sm text-slate-400 text-center py-4">אין אירועים ביום זה</p>
         )}
-        {onSite.length > 0 && (
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-semibold text-slate-700">{onSite.length} קבוצות באתר · {totalPax} אורחים</span>
-            <div className="flex gap-1">
-              {checkins.length > 0 && <span className="text-[10px] bg-emerald-500 text-white rounded px-1.5 py-0.5 font-bold">↓{checkins.length}</span>}
-              {checkouts.length > 0 && <span className="text-[10px] bg-orange-500 text-white rounded px-1.5 py-0.5 font-bold">↑{checkouts.length}</span>}
+        {allOnDay.length > 0 && (
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-semibold text-slate-700">{allOnDay.length} קבוצות באתר{totalPax > 0 ? ` · ${totalPax} אורחים` : ""}</span>
+              <div className="flex gap-1">
+                {checkins.length > 0 && <span className="text-[10px] bg-emerald-500 text-white rounded px-1.5 py-0.5 font-bold">↓{checkins.length}</span>}
+                {checkouts.length > 0 && <span className="text-[10px] bg-orange-500 text-white rounded px-1.5 py-0.5 font-bold">↑{checkouts.length}</span>}
+                {dayUseGroups.length > 0 && <span className="text-[10px] bg-teal-500 text-white rounded px-1.5 py-0.5 font-bold">☀{dayUseGroups.length}</span>}
+              </div>
             </div>
+            {onSite.length > 0 && dayUseGroups.length > 0 && (
+              <p className="text-[11px] text-slate-400">לינה: {onSite.length} · באי יום: {dayUseGroups.length}</p>
+            )}
           </div>
         )}
         {Object.keys(mealsByType).length > 0 && (
@@ -338,9 +365,10 @@ function AgendaView({ pivot, groups, meals, activities, onDayClick, onPrev, onNe
 function Legend() {
   return (
     <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500 bg-white border border-slate-100 rounded-lg px-4 py-2">
-      <div className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-emerald-500 inline-block" /> נכנסים</div>
-      <div className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-orange-500 inline-block" /> יוצאים</div>
-      <div className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-slate-300 inline-block" /> שוהים</div>
+      <div className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-emerald-500 inline-block" /> צ׳ק-אין</div>
+      <div className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-orange-500 inline-block" /> צ׳ק-אאוט</div>
+      <div className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-blue-300 inline-block" /> שוהים</div>
+      <div className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-teal-500 inline-block" /> באי יום</div>
       <div className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-amber-400 inline-block" /> ארוחות</div>
       <div className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-purple-500 inline-block" /> פעילויות</div>
     </div>
