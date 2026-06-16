@@ -205,7 +205,7 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
 
       // ── Review alerts (additive, never blocks save) ────────────────────────
       try {
-        const groupIsConfirmed = group.status === "CONFIRMED" || group.status === "COMPLETED";
+        const groupIsConfirmed = group.status === "CONFIRMED" || group.status === "PENDING_APPROVAL" || group.status === "COMPLETED";
         const isLodging = payload.group_type === "LODGING";
         if (groupIsConfirmed || existingProfiles.length > 0) {
           // A. Pax changes
@@ -344,6 +344,7 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
                   <Select value={form.status} onValueChange={v => set("status", v)}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="PENDING_APPROVAL">בהמתנה</SelectItem>
                       <SelectItem value="CONFIRMED">מאושר</SelectItem>
                       <SelectItem value="COMPLETED">הסתיים</SelectItem>
                       <SelectItem value="ARCHIVED">מוקפא</SelectItem>

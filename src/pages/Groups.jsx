@@ -16,11 +16,12 @@ import DateRangeFilter from "@/components/search/DateRangeFilter";
 const TODAY = new Date().toISOString().slice(0, 10);
 
 const STATUS_LABELS = {
-  DRAFT:     { label: "טיוטה",   color: "bg-slate-100 text-slate-600" },
-  CONFIRMED: { label: "מאושר",   color: "bg-blue-100 text-blue-700" },
-  COMPLETED: { label: "הושלם",   color: "bg-green-100 text-green-700" },
-  CANCELLED: { label: "בוטל",    color: "bg-red-100 text-red-600" },
-  ARCHIVED:  { label: "ארכיון",  color: "bg-amber-100 text-amber-700" },
+  DRAFT:            { label: "טיוטה",    color: "bg-slate-100 text-slate-600" },
+  PENDING_APPROVAL: { label: "בהמתנה",  color: "bg-orange-100 text-orange-700" },
+  CONFIRMED:        { label: "מאושר",    color: "bg-blue-100 text-blue-700" },
+  COMPLETED:        { label: "הושלם",    color: "bg-green-100 text-green-700" },
+  CANCELLED:        { label: "בוטל",     color: "bg-red-100 text-red-600" },
+  ARCHIVED:         { label: "ארכיון",   color: "bg-amber-100 text-amber-700" },
 };
 
 function GroupRow({ group, showUnmarkedBadge = false }) {
@@ -80,6 +81,7 @@ export default function Groups() {
     if (g.status === "CANCELLED" || g.status === "ARCHIVED" || g.status === "COMPLETED") {
       return false;
     }
+    // PENDING_APPROVAL behaves like CONFIRMED — show in active list
     if (isHistoricallyFinished(g)) {
       return false;
     }
@@ -237,6 +239,7 @@ export default function Groups() {
             >
               <option value="ALL">כל הסטטוסים</option>
               <option value="DRAFT">טיוטה</option>
+              <option value="PENDING_APPROVAL">בהמתנה</option>
               <option value="CONFIRMED">מאושר</option>
               <option value="COMPLETED">הושלם</option>
               <option value="CANCELLED">בוטל</option>

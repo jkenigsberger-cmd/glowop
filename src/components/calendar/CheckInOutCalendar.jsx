@@ -17,7 +17,7 @@ const isSameDay = (a, b) => fmt(a) === fmt(b);
 const EXCLUDED = new Set(["CANCELLED", "ARCHIVED"]);
 
 const GROUP_TYPE_HEB = { LODGING: "לינה", DAY_USE: "פעילות יום" };
-const STATUS_HEB = { DRAFT: "טיוטה", CONFIRMED: "מאושר", COMPLETED: "הסתיים" };
+const STATUS_HEB = { DRAFT: "טיוטה", PENDING_APPROVAL: "בהמתנה", CONFIRMED: "מאושר", COMPLETED: "הסתיים" };
 
 function useGroups() {
   return useQuery({

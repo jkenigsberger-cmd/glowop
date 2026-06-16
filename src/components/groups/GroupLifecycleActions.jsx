@@ -116,7 +116,7 @@ export default function GroupLifecycleActions({ group, onDeleted, onUpdated }) {
   const [loading, setLoading] = useState(false);
 
   const status = group?.status;
-  const isActive = status === "DRAFT" || status === "CONFIRMED";
+  const isActive = status === "DRAFT" || status === "CONFIRMED" || status === "PENDING_APPROVAL";
   const isArchived = status === "ARCHIVED";
   const isCompleted = status === "COMPLETED";
 
