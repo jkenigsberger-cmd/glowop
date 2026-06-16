@@ -47,11 +47,14 @@ Deno.serve(async (req) => {
 </div>
         `.trim();
 
-        await base44.asServiceRole.integrations.Core.SendEmail({
-            to: "vered@keren-hador.com",
-            subject: subject,
-            body: body_html,
-        });
+        const recipients = ["vered@keren-hador.com", "hospitality@glow-glamping.com"];
+        for (const email of recipients) {
+            await base44.asServiceRole.integrations.Core.SendEmail({
+                to: email,
+                subject: subject,
+                body: body_html,
+            });
+        }
 
         return Response.json({ success: true });
     } catch (error) {
