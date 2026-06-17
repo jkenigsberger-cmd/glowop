@@ -110,12 +110,50 @@ Deno.serve(async (req) => {
     const accessToken = connection.accessToken;
 
     if (syncRecords.length > 0) {
-      // Update existing event
       const sr = syncRecords[0];
       const calendarId = sr.calendar_id || KEREN_HADOR_CALENDAR_ID;
 
+      // If record points to a different calendar, migrate to Keren Hador
+      if (calendarId !== KEREN_HADOR_CALENDAR_ID) {
+        // Best-effort delete old event from old calendar
+        try {
+          await fetch(
+            `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(sr.calendar_event_id)}`,
+            { method: 'DELETE', headers: { Authorization: `Bearer ${accessToken}` } }
+          );
+        } catch (_) { /* ignore */ }
+
+        // Delete old sync record
+        await base44.asServiceRole.entities.CalendarSync.delete(sr.id);
+
+        // Create new event on Keren Hador
+        const res = await fetch(
+          `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(KEREN_HADOR_CALENDAR_ID)}/events`,
+          {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify(eventPayload),
+          }
+        );
+
+        const created = await res.json();
+        if (!res.ok) {
+          console.error('[syncCommonSpaceToCalendar] Migrate-create error:', created);
+          return Response.json({ ok: false, error: created?.error?.message || 'Migrate create failed' }, { status: 500 });
+        }
+
+        await base44.asServiceRole.entities.CalendarSync.create({
+          group_schedule_item_id: itemId,
+          calendar_event_id: created.id,
+          calendar_id: KEREN_HADOR_CALENDAR_ID,
+        });
+
+        return Response.json({ ok: true, action: 'migrated_event', calendar_event_id: created.id });
+      }
+
+      // Update existing event on Keren Hador
       const res = await fetch(
-        `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(sr.calendar_event_id)}`,
+        `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(KEREN_HADOR_CALENDAR_ID)}/events/${encodeURIComponent(sr.calendar_event_id)}`,
         {
           method: 'PATCH',
           headers: {
