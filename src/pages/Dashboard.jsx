@@ -3,32 +3,39 @@ import { base44 } from "@/api/base44Client";
 import { format, addDays } from "date-fns";
 import { he } from "date-fns/locale";
 import { useState, useMemo } from "react";
-import DashboardSummaryCards from "@/components/dashboard/DashboardSummaryCards";
+import DashboardSummaryCards, { SECTION_IDS } from "@/components/dashboard/DashboardSummaryCards";
 import DashboardGroupCard from "@/components/dashboard/DashboardGroupCard";
 import DashboardWarnings from "@/components/dashboard/DashboardWarnings";
 import DashboardMealsToday from "@/components/dashboard/DashboardMealsToday";
 import DashboardActivitiesToday from "@/components/dashboard/DashboardActivitiesToday";
 import DashboardQuickLinks from "@/components/dashboard/DashboardQuickLinks";
+import OccupancyMap from "@/components/dashboard/OccupancyMap";
 import { Button } from "@/components/ui/button";
-import { FileText, ChevronRight, ChevronLeft } from "lucide-react";
+import { FileText, ChevronRight, ChevronLeft, BedDouble, Sun, Users, LogIn, LogOut, UtensilsCrossed, CalendarDays, AlertTriangle } from "lucide-react";
 import { useRoleContext } from "@/lib/RoleContext";
 
 const toDateStr = (date) => format(date, "yyyy-MM-dd");
 const TODAY = toDateStr(new Date());
 
-function Section({ title, children }) {
+function Section({ title, children, id, icon: Icon }) {
   return (
-    <section className="space-y-3">
-      <h2 className="font-bold text-base text-foreground border-b border-border pb-1">{title}</h2>
+    <section id={id} className="space-y-3 scroll-mt-20">
+      <h2 className="font-bold text-base text-foreground flex items-center gap-2 border-b border-border pb-1.5">
+        {Icon && <Icon className="w-4 h-4 text-slate-500" />}
+        {title}
+      </h2>
       {children}
     </section>
   );
 }
 
+// ── Pax debug panel (admin only) ────────────────────────────────────────
+
 function PaxDebugPanel({ activeGroups, profileByGroupId }) {
   const [open, setOpen] = useState(false);
   const { role } = useRoleContext();
   if (role !== "SUPER_ADMIN" && role !== "ADMIN") return null;
+
   return (
     <div className="bg-amber-50 border border-amber-300 rounded-xl p-3 text-xs" dir="rtl">
       <button
@@ -79,6 +86,7 @@ function PaxDebugPanel({ activeGroups, profileByGroupId }) {
 
 export default function Dashboard() {
   const [selectedDate, setSelectedDate] = useState(TODAY);
+  const [activeFilter, setActiveFilter] = useState(null);
   const isToday = selectedDate === TODAY;
 
   const shiftDate = (days) => {
@@ -86,7 +94,7 @@ export default function Dashboard() {
     setSelectedDate(toDateStr(addDays(d, days)));
   };
 
-  // ── Data fetching ──────────────────────────────────────────────────────────
+  // ── Data fetching ──────────────────────────────────────────────────────
   const { data: groups = [] } = useQuery({
     queryKey: ["groups"],
     queryFn: () => base44.entities.Group.list("-arrival_date", 300),
@@ -127,17 +135,23 @@ export default function Dashboard() {
     queryFn: () => base44.entities.ActivitySpace.list(),
   });
 
-  // ── Lookup maps ────────────────────────────────────────────────────────────
+  const { data: neighborhoods = [] } = useQuery({
+    queryKey: ["neighborhoods"],
+    queryFn: () => base44.entities.Neighborhood.list("sort_order", 50),
+  });
+
+  // ── Lookup maps ────────────────────────────────────────────────────────
   const groupById = useMemo(() => Object.fromEntries(groups.map(g => [g.id, g])), [groups]);
   const profileByGroupId = useMemo(() => Object.fromEntries(profiles.map(p => [p.group_id, p])), [profiles]);
   const profileById = useMemo(() => Object.fromEntries(profiles.map(p => [p.id, p])), [profiles]);
   const spaceById = useMemo(() => Object.fromEntries(activitySpaces.map(s => [s.id, s])), [activitySpaces]);
   const allocatedGroupIds = useMemo(() => new Set(allocations.map(a => a.group_id)), [allocations]);
 
-  // ── Date-filtered data (all driven by selectedDate) ───────────────────────
+  // ── Date-filtered data ─────────────────────────────────────────────────
   const EXCLUDED = new Set(["CANCELLED", "COMPLETED", "ARCHIVED"]);
   const NEXT_DATE = toDateStr(addDays(new Date(selectedDate + "T00:00:00"), 1));
 
+  // Active groups (lodging + day-use) on this date
   const activeGroups = useMemo(() => groups.filter(g => {
     if (EXCLUDED.has(g.status)) return false;
     if (g.group_type === "DAY_USE") return g.arrival_date === selectedDate;
@@ -146,13 +160,27 @@ export default function Dashboard() {
     return g.arrival_date <= selectedDate && dep > selectedDate;
   }), [groups, selectedDate]);
 
+  // Day-use groups only
+  const dayUseGroups = useMemo(() =>
+    activeGroups.filter(g => g.group_type === "DAY_USE"),
+    [activeGroups]
+  );
+
+  // Lodging groups only (for sleeping/night count)
+  const lodgingGroups = useMemo(() =>
+    activeGroups.filter(g => g.group_type === "LODGING"),
+    [activeGroups]
+  );
+
   const arrivingToday = useMemo(() =>
     groups.filter(g => !EXCLUDED.has(g.status) && g.arrival_date === selectedDate),
     [groups, selectedDate]
   );
 
+  // Lodging groups that sleep tonight (not day-use, not departing today)
   const sleepingTonight = useMemo(() => groups.filter(g => {
     if (EXCLUDED.has(g.status)) return false;
+    if (g.group_type !== "LODGING") return false;
     const dep = g.departure_date && g.departure_date.trim() !== "" ? g.departure_date : null;
     return dep && g.arrival_date <= selectedDate && dep > selectedDate;
   }), [groups, selectedDate]);
@@ -172,7 +200,7 @@ export default function Dashboard() {
     [activities, selectedDate]
   );
 
-  // ── Stats ─────────────────────────────────────────────────────────────────
+  // ── Stats ──────────────────────────────────────────────────────────────
   const totalPaxOnSite = useMemo(() =>
     activeGroups.reduce((sum, g) => {
       const p = profileByGroupId[g.id];
@@ -191,10 +219,11 @@ export default function Dashboard() {
   );
 
   const stats = {
-    activeGroups:        activeGroups.length,
-    arrivingToday:       arrivingToday.length,
+    activeGroups:        lodgingGroups.length,
+    arrivingToday:       arrivingToday.filter(g => g.group_type !== "DAY_USE").length,
     sleepingTonight:     sleepingTonight.length,
     departingToday:      departingToday.length,
+    dayUseGroups:        dayUseGroups.length,
     totalPaxOnSite,
     mealsToday:          mealsForDate.length,
     activitiesToday:     activitiesForDate.length,
@@ -202,22 +231,33 @@ export default function Dashboard() {
     maintenanceIssues,
   };
 
-  // ── Operational warnings ──────────────────────────────────────────────────
+  // ── Operational warnings (LODGING ONLY for sleeping alerts) ────────────
+
+  // ★ FIX: Only check LODGING groups for sleeping requirement alerts
+  const arrivingLodging = useMemo(() =>
+    arrivingToday.filter(g => g.group_type === "LODGING"),
+    [arrivingToday]
+  );
+
   const arrivingNoSleeping = useMemo(() =>
-    arrivingToday
+    arrivingLodging
       .map(g => profileByGroupId[g.id])
       .filter(p => p && !p.sleeping_requirements_completed)
       .map(p => ({ id: p.group_id, label: groupById[p.group_id]?.group_name || p.group_id })),
-    [arrivingToday, profileByGroupId, groupById]
+    [arrivingLodging, profileByGroupId, groupById]
+  );
+
+  const arrivingNextLodging = useMemo(() =>
+    groups.filter(g => g.arrival_date === NEXT_DATE && g.group_type === "LODGING"),
+    [groups, NEXT_DATE]
   );
 
   const arrivingNextNoSleeping = useMemo(() =>
-    groups
-      .filter(g => g.arrival_date === NEXT_DATE)
+    arrivingNextLodging
       .map(g => profileByGroupId[g.id])
       .filter(p => p && !p.sleeping_requirements_completed)
       .map(p => ({ id: p.group_id, label: groupById[p.group_id]?.group_name || p.group_id })),
-    [groups, NEXT_DATE, profileByGroupId, groupById]
+    [arrivingNextLodging, profileByGroupId, groupById]
   );
 
   const arrivingSoonGroupIds = useMemo(() =>
@@ -239,7 +279,7 @@ export default function Dashboard() {
 
   const warnings = { arrivingNoSleeping, arrivingNextNoSleeping, arrivingSoonPendingAllocation, brokenItems: brokenItemsList };
 
-  // ── Per-group counts ───────────────────────────────────────────────────────
+  // ── Per-group counts ───────────────────────────────────────────────────
   const mealsByGroup = useMemo(() => {
     const map = {};
     mealsForDate.forEach(m => { map[m.group_id] = (map[m.group_id] || 0) + 1; });
@@ -256,9 +296,9 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-background" dir="rtl">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 space-y-8">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-6">
 
-        {/* Header */}
+        {/* ── Header ──────────────────────────────────────────────────── */}
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2">
@@ -279,21 +319,21 @@ export default function Dashboard() {
           </Button>
         </div>
 
-        {/* Date navigation */}
-        <div className="space-y-2 sm:space-y-0 sm:flex sm:items-center sm:gap-2 sm:flex-wrap">
-          <div className="flex items-center gap-2">
-            <Button size="sm" variant="outline" onClick={() => shiftDate(-1)} className="gap-1 flex-1 sm:flex-none h-9">
+        {/* ── Date navigation ─────────────────────────────────────────── */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1">
+            <Button size="sm" variant="outline" onClick={() => shiftDate(-1)} className="gap-1 h-9">
               <ChevronRight className="w-4 h-4" /> יום קודם
             </Button>
             <Button
               size="sm"
               variant={isToday ? "default" : "outline"}
               onClick={() => setSelectedDate(TODAY)}
-              className="h-9 px-4"
+              className="h-9 px-3"
             >
               היום
             </Button>
-            <Button size="sm" variant="outline" onClick={() => shiftDate(1)} className="gap-1 flex-1 sm:flex-none h-9">
+            <Button size="sm" variant="outline" onClick={() => shiftDate(1)} className="gap-1 h-9">
               יום הבא <ChevronLeft className="w-4 h-4" />
             </Button>
           </div>
@@ -301,31 +341,39 @@ export default function Dashboard() {
             type="date"
             value={selectedDate}
             onChange={e => e.target.value && setSelectedDate(e.target.value)}
-            className="w-full sm:w-auto border border-input bg-transparent rounded-md px-3 py-1.5 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+            className="border border-input bg-transparent rounded-md px-3 py-1.5 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
           />
         </div>
 
-        {/* Summary cards */}
-        <DashboardSummaryCards stats={stats} isToday={isToday} />
+        {/* ── Summary cards (clickable) ────────────────────────────────── */}
+        <DashboardSummaryCards
+          stats={stats}
+          isToday={isToday}
+          activeFilter={activeFilter}
+          onFilterClick={setActiveFilter}
+        />
 
         {/* Admin pax debug panel */}
-        <PaxDebugPanel activeGroups={activeGroups} profileByGroupId={profileByGroupId} />
+        <PaxDebugPanel activeGroups={lodgingGroups} profileByGroupId={profileByGroupId} />
 
-        {/* Quick links */}
-        <Section title="קישורים מהירים">
-          <DashboardQuickLinks />
+        {/* ── VISUAL OCCUPANCY MAP ── THE CENTERPIECE ──────────────────── */}
+        <Section id={SECTION_IDS.occupancy} title="מפת תפוסה יומית" icon={BedDouble}>
+          <OccupancyMap
+            selectedDate={selectedDate}
+            neighborhoods={neighborhoods}
+            tents={tents}
+            allocations={allocations}
+            groups={groups}
+          />
         </Section>
 
-        {/* Operational warnings */}
-        <Section title="התראות תפעוליות">
-          <DashboardWarnings warnings={warnings} selectedDate={selectedDate} today={TODAY} />
-        </Section>
+        {/* ── Group movement sections ──────────────────────────────────── */}
 
-        {/* Arriving */}
-        {arrivingToday.length > 0 && (
-          <Section title={`קבוצות נכנסות (${arrivingToday.length})`}>
+        {/* Arriving lodging */}
+        {arrivingToday.filter(g => g.group_type === "LODGING").length > 0 && (
+          <Section id={SECTION_IDS.arriving} title={`קבוצות נכנסות (${arrivingToday.filter(g => g.group_type === "LODGING").length})`} icon={LogIn}>
             <div className="space-y-2">
-              {arrivingToday.map(g => (
+              {arrivingToday.filter(g => g.group_type === "LODGING").map(g => (
                 <DashboardGroupCard
                   key={g.id}
                   group={g}
@@ -337,9 +385,9 @@ export default function Dashboard() {
           </Section>
         )}
 
-        {/* Sleeping */}
+        {/* Sleeping tonight */}
         {sleepingTonight.length > 0 && (
-          <Section title={`לנים בלילה (${sleepingTonight.length})`}>
+          <Section id={SECTION_IDS.sleeping} title={`לנים בלילה (${sleepingTonight.length})`} icon={Users}>
             <div className="space-y-2">
               {sleepingTonight.map(g => (
                 <DashboardGroupCard
@@ -357,7 +405,7 @@ export default function Dashboard() {
 
         {/* Departing */}
         {departingToday.length > 0 && (
-          <Section title={`קבוצות יוצאות (${departingToday.length})`}>
+          <Section id={SECTION_IDS.departing} title={`קבוצות יוצאות (${departingToday.length})`} icon={LogOut}>
             <div className="space-y-2">
               {departingToday.map(g => (
                 <DashboardGroupCard
@@ -371,14 +419,40 @@ export default function Dashboard() {
           </Section>
         )}
 
-        {/* Meals */}
-        <Section title={`ארוחות (${mealsForDate.length})`}>
+        {/* ── Day-use groups ───────────────────────────────────────────── */}
+        {dayUseGroups.length > 0 && (
+          <Section id={SECTION_IDS.dayUse} title={`באי יום (${dayUseGroups.length})`} icon={Sun}>
+            <div className="space-y-2">
+              {dayUseGroups.map(g => (
+                <DashboardGroupCard
+                  key={g.id}
+                  group={g}
+                  profile={profileByGroupId[g.id]}
+                  mode="dayuse"
+                />
+              ))}
+            </div>
+          </Section>
+        )}
+
+        {/* ── Meals ────────────────────────────────────────────────────── */}
+        <Section id={SECTION_IDS.meals} title={`ארוחות (${mealsForDate.length})`} icon={UtensilsCrossed}>
           <DashboardMealsToday meals={mealsForDate} groupById={groupById} profileById={profileById} />
         </Section>
 
-        {/* Activities */}
-        <Section title={`פעילויות (${activitiesForDate.length})`}>
+        {/* ── Activities ───────────────────────────────────────────────── */}
+        <Section id={SECTION_IDS.activities} title={`פעילויות (${activitiesForDate.length})`} icon={CalendarDays}>
           <DashboardActivitiesToday activities={activitiesForDate} groupById={groupById} spaceById={spaceById} />
+        </Section>
+
+        {/* ── Alerts ───────────────────────────────────────────────────── */}
+        <Section id={SECTION_IDS.warnings} title="התראות תפעוליות" icon={AlertTriangle}>
+          <DashboardWarnings warnings={warnings} selectedDate={selectedDate} today={TODAY} />
+        </Section>
+
+        {/* ── Quick links ──────────────────────────────────────────────── */}
+        <Section title="קישורים מהירים">
+          <DashboardQuickLinks />
         </Section>
 
       </div>

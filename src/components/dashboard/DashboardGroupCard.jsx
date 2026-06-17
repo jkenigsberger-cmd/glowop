@@ -2,7 +2,8 @@ import { Link } from "react-router-dom";
 import { Users, ChevronLeft, CheckCircle2, Clock, UtensilsCrossed, CalendarDays, StickyNote } from "lucide-react";
 
 export default function DashboardGroupCard({ group, profile, mealsToday = 0, activitiesToday = 0, mode }) {
-  // mode: "arriving" | "sleeping" | "departing"
+  // mode: "arriving" | "sleeping" | "departing" | "dayuse"
+  const isDayUse = group.group_type === "DAY_USE" || mode === "dayuse";
   const hasDepartureLunch = profile && mode === "departing" &&
     (() => { try { const mp = JSON.parse(profile.meal_plan || "[]"); return mp.some(m => m.sandwich_instead === false && m.meal_type === "LUNCH"); } catch { return false; } })();
 
@@ -46,8 +47,8 @@ export default function DashboardGroupCard({ group, profile, mealsToday = 0, act
           )}
         </div>
 
-        {group.group_type === 'DAY_USE' ? (
-          <span className="text-[10px] bg-amber-50 border border-amber-200 text-amber-700 rounded-full px-2 py-0.5">🎓 פעילות יום</span>
+        {isDayUse ? (
+          <span className="text-[10px] bg-amber-50 border border-amber-200 text-amber-700 rounded-full px-2 py-0.5">☀️ באי יום</span>
         ) : profile && (
           <div className="flex items-center gap-1">
             {profile.sleeping_requirements_completed ? (
