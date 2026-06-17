@@ -1,9 +1,12 @@
+import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
 import { he } from "date-fns/locale";
 import { CheckCircle2, Clock, Calendar, Users, ChevronLeft, BedDouble, CalendarDays } from "lucide-react";
+import GroupFilters, { filterGroups } from "@/components/groups/GroupFilters";
+import DayGroupHeader, { groupByDay } from "@/components/groups/DayGroupHeader";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -36,6 +39,27 @@ function nightsCount(arrival, departure) {
 export default function ApprovedGroups() {
   const today = new Date().toISOString().slice(0, 10);
 
+  // ── filter state ──────────────────────────────────────────────
+  const [searchQuery, setSearchQuery] = useState("");
+  const [monthFilter, setMonthFilter] = useState("ALL");
+  const [typeFilter, setTypeFilter] = useState("ALL");
+  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [dateStart, setDateStart] = useState(null);
+  const [dateEnd, setDateEnd] = useState(null);
+
+  const filterState = { searchQuery, monthFilter, typeFilter, statusFilter, dateStart, dateEnd };
+  const hasFilters = searchQuery || monthFilter !== "ALL" || typeFilter !== "ALL" || statusFilter !== "ALL" || dateStart || dateEnd;
+
+  const clearAll = () => {
+    setSearchQuery("");
+    setMonthFilter("ALL");
+    setTypeFilter("ALL");
+    setStatusFilter("ALL");
+    setDateStart(null);
+    setDateEnd(null);
+  };
+
+  // ── data ───────────────────────────────────────────────────────
   const { data: profiles = [], isLoading: loadingProfiles } = useQuery({
     queryKey: ["operationalProfiles"],
     queryFn: () => base44.entities.OperationalGroupProfile.list("-accepted_at", 200),
@@ -58,39 +82,46 @@ export default function ApprovedGroups() {
 
   const loading = loadingProfiles || loadingGroups;
 
-  // Build lookup maps
+  // ── maps ───────────────────────────────────────────────────────
   const groupById = Object.fromEntries(groups.map(g => [g.id, g]));
   const scheduleByProfile = {};
   const mealsByProfile = {};
   scheduleItems.forEach(s => {
-    if (!scheduleByProfile[s.operational_group_profile_id])
-      scheduleByProfile[s.operational_group_profile_id] = [];
+    if (!scheduleByProfile[s.operational_group_profile_id]) scheduleByProfile[s.operational_group_profile_id] = [];
     scheduleByProfile[s.operational_group_profile_id].push(s);
   });
   mealItems.forEach(m => {
-    if (!mealsByProfile[m.operational_group_profile_id])
-      mealsByProfile[m.operational_group_profile_id] = [];
+    if (!mealsByProfile[m.operational_group_profile_id]) mealsByProfile[m.operational_group_profile_id] = [];
     mealsByProfile[m.operational_group_profile_id].push(m);
   });
 
-  // Sort: arriving soonest first, past groups at bottom
-  const sorted = [...profiles].sort((a, b) => {
-    const ga = groupById[a.group_id];
-    const gb = groupById[b.group_id];
-    const da = ga?.arrival_date || "";
-    const db = gb?.arrival_date || "";
-    return da.localeCompare(db);
-  });
+  // ── filter profiles by their associated group ──────────────────
+  const activeProfiles = useMemo(() => {
+    // First filter profiles to only CONFIRMED groups
+    const confirmed = profiles.filter(p => {
+      const g = groupById[p.group_id];
+      return g && g.status === "CONFIRMED";
+    });
 
-  // Filter: only CONFIRMED groups (exclude CANCELLED, COMPLETED, ARCHIVED)
-  const activeProfiles = sorted.filter(p => {
-    const g = groupById[p.group_id];
-    if (!g) return false;
-    const isOperational = g.status === "CONFIRMED";
-    return isOperational;
-  });
+    // Then apply search/filter using the group data
+    // filterGroups works on Group entities, so we need to filter profiles by group
+    const filteredGroupIds = new Set(
+      filterGroups(
+        confirmed.map(p => groupById[p.group_id]).filter(Boolean),
+        filterState
+      ).map(g => g.id)
+    );
 
-  // Bucket: upcoming (arrival >= today), past (departure < today)
+    return confirmed
+      .filter(p => filteredGroupIds.has(p.group_id))
+      .sort((a, b) => {
+        const ga = groupById[a.group_id];
+        const gb = groupById[b.group_id];
+        return (ga?.arrival_date || "").localeCompare(gb?.arrival_date || "");
+      });
+  }, [profiles, groupById, filterState]);
+
+  // Bucket: upcoming vs past
   const upcoming = activeProfiles.filter(p => {
     const g = groupById[p.group_id];
     return !g?.departure_date || g.departure_date >= today;
@@ -100,6 +131,7 @@ export default function ApprovedGroups() {
     return g?.departure_date && g.departure_date < today;
   });
 
+  // ── render row ─────────────────────────────────────────────────
   function renderRow(profile) {
     const group = groupById[profile.group_id];
     if (!group) return null;
@@ -118,7 +150,7 @@ export default function ApprovedGroups() {
       >
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0 space-y-1.5">
-            {/* Name + active badge */}
+            {/* Name + type + active badge */}
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-semibold text-sm text-foreground">{group.group_name}</span>
               {isActive && (
@@ -126,12 +158,12 @@ export default function ApprovedGroups() {
                   פעיל עכשיו
                 </span>
               )}
-              <span className="text-xs text-muted-foreground">
-               {group.group_type === "LODGING" ? "לינה" : "פעילות יום"}
+              <span className={`text-[10px] font-medium rounded-full px-1.5 py-0.5 border ${group.group_type === "DAY_USE" ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-blue-50 text-blue-700 border-blue-200"}`}>
+                {group.group_type === "LODGING" ? "לינה" : "באי יום"}
               </span>
             </div>
 
-            {/* Dates + nights */}
+            {/* Dates + pax */}
             <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
               <span className="flex items-center gap-1">
                 <Calendar className="w-3 h-3" />
@@ -142,38 +174,63 @@ export default function ApprovedGroups() {
               <span className="flex items-center gap-1">
                 <Users className="w-3 h-3" />
                 {profile.total_pax ?? group.total_pax ?? "—"} אנשים
-                {profile.participant_count != null && ` · ${profile.participant_count} חניכים`}
-                {profile.staff_count != null && ` · ${profile.staff_count} צוות`}
               </span>
             </div>
 
             {/* Status pills */}
             <div className="flex items-center gap-2 flex-wrap">
-              <StatusPill
-                done={profile.sleeping_requirements_completed}
-                labelDone="דרישות לינה ✓"
-                labelPending="ממתין לדרישות לינה"
-              />
-              <StatusPill
-                done={hasSchedule}
-                labelDone={`לוח זמנים (${schedules.length})`}
-                labelPending="אין פעילויות"
-              />
-              <StatusPill
-                done={hasMeals}
-                labelDone={`ארוחות (${meals.length})`}
-                labelPending="אין ארוחות"
-              />
+              <StatusPill done={profile.sleeping_requirements_completed} labelDone="דרישות לינה ✓" labelPending="ממתין לדרישות לינה" />
+              <StatusPill done={hasSchedule} labelDone={`לוח זמנים (${schedules.length})`} labelPending="אין פעילויות" />
+              <StatusPill done={hasMeals} labelDone={`ארוחות (${meals.length})`} labelPending="אין ארוחות" />
             </div>
           </div>
 
-          {/* Arrow */}
           <ChevronLeft className="w-4 h-4 text-muted-foreground shrink-0 mt-1" />
         </div>
       </Link>
     );
   }
 
+  // ── day-grouped list ────────────────────────────────────────────
+  function DayGroupedList({ items, emptyText }) {
+    const dayGroups = groupByDay(items.map(p => groupById[p.group_id]).filter(Boolean));
+
+    if (dayGroups.length === 0) {
+      return (
+        <div className="text-center py-16 text-muted-foreground text-sm border-2 border-dashed border-slate-200 rounded-xl">
+          {emptyText}
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-4">
+        {dayGroups.map(({ date, items: dayGroupsList }) => {
+          // Map back to profiles
+          const dayProfiles = items.filter(p => dayGroupsList.some(g => g.id === p.group_id));
+          return (
+            <div key={date}>
+              <DayGroupHeader dateStr={date} />
+              <div className="space-y-2 mt-1">
+                {dayProfiles.map(renderRow)}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  function emptyText() {
+    if (hasFilters) {
+      if (monthFilter !== "ALL") return "לא נמצאו קבוצות בחודש שנבחר";
+      if (searchQuery) return "לא נמצאו קבוצות התואמות לחיפוש";
+      return "לא נמצאו קבוצות";
+    }
+    return "אין קבוצות מאושרות";
+  }
+
+  // ── render ─────────────────────────────────────────────────────
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[40vh]">
@@ -199,36 +256,36 @@ export default function ApprovedGroups() {
           </div>
           <div className="text-left text-xs text-muted-foreground">
             <span className="bg-muted border border-border rounded-full px-3 py-1 font-medium">
-              {upcoming.length} קבוצות
+              {activeProfiles.length} קבוצות
             </span>
           </div>
         </div>
+
+        {/* Filters */}
+        <GroupFilters
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          monthFilter={monthFilter}
+          onMonthChange={setMonthFilter}
+          typeFilter={typeFilter}
+          onTypeChange={setTypeFilter}
+          statusFilter={statusFilter}
+          onStatusChange={setStatusFilter}
+          dateStart={dateStart}
+          onDateStartChange={setDateStart}
+          dateEnd={dateEnd}
+          onDateEndChange={setDateEnd}
+          onClearAll={clearAll}
+          showStatus={false}
+        />
 
         {/* Stats strip */}
         {upcoming.length > 0 && (
           <div className="grid grid-cols-3 gap-3">
             {[
-              {
-                label: "מגיעים היום",
-                value: upcoming.filter(p => groupById[p.group_id]?.arrival_date === today).length,
-                icon: CalendarDays,
-                color: "text-blue-600",
-              },
-              {
-                label: "פעילים עכשיו",
-                value: upcoming.filter(p => {
-                  const g = groupById[p.group_id];
-                  return g?.arrival_date <= today && g?.departure_date >= today;
-                }).length,
-                icon: Users,
-                color: "text-emerald-600",
-              },
-              {
-                label: "עוזבים היום",
-                value: upcoming.filter(p => groupById[p.group_id]?.departure_date === today).length,
-                icon: BedDouble,
-                color: "text-amber-600",
-              },
+              { label: "מגיעים היום", value: upcoming.filter(p => groupById[p.group_id]?.arrival_date === today).length, icon: CalendarDays, color: "text-blue-600" },
+              { label: "פעילים עכשיו", value: upcoming.filter(p => { const g = groupById[p.group_id]; return g?.arrival_date <= today && g?.departure_date >= today; }).length, icon: Users, color: "text-emerald-600" },
+              { label: "עוזבים היום", value: upcoming.filter(p => groupById[p.group_id]?.departure_date === today).length, icon: BedDouble, color: "text-amber-600" },
             ].map(({ label, value, icon: Icon, color }) => (
               <div key={label} className="bg-card border border-border rounded-xl px-4 py-3 text-center">
                 <Icon className={`w-4 h-4 ${color} mx-auto mb-1`} />
@@ -240,15 +297,7 @@ export default function ApprovedGroups() {
         )}
 
         {/* Upcoming groups */}
-        {upcoming.length === 0 ? (
-          <div className="text-center py-16 text-muted-foreground text-sm border-2 border-dashed border-slate-200 rounded-xl">
-            אין קבוצות מאושרות עתידיות
-          </div>
-        ) : (
-          <section className="space-y-2">
-            {upcoming.map(renderRow)}
-          </section>
-        )}
+        <DayGroupedList items={upcoming} emptyText={emptyText()} />
 
         {/* Past groups — collapsed */}
         {past.length > 0 && (
