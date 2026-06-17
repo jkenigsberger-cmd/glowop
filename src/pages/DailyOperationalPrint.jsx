@@ -175,6 +175,22 @@ export default function DailyOperationalPrint() {
         .btn-print { background: #1e40af; color: white; border: none; border-radius: 8px; padding: 9px 20px; font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; }
         .btn-back { background: white; color: #1e40af; border: 2px solid #1e40af; border-radius: 8px; padding: 9px 20px; font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; text-decoration: none; display: inline-flex; align-items: center; }
         .empty-note { font-size: 12px; color: #94a3b8; font-style: italic; padding: 6px 0; }
+        /* ── Check-in tents section ──────────────────────────────── */
+        .checkin-group-card { background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 10px; padding: 14px 16px; margin-bottom: 12px; }
+        .checkin-group-card:last-child { margin-bottom: 0; }
+        .checkin-group-header { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #ccfbf1; }
+        .checkin-group-name { font-weight: 700; font-size: 15px; color: #0f766e; }
+        .checkin-group-meta { font-size: 12px; color: #115e59; white-space: nowrap; }
+        .checkin-group-meta-sep { color: #5eead4; font-weight: 700; margin: 0 2px; }
+        .checkin-nhood-block { margin-bottom: 8px; }
+        .checkin-nhood-block:last-child { margin-bottom: 0; }
+        .checkin-nhood-title { font-size: 12px; font-weight: 600; color: #0d9488; margin-bottom: 4px; padding-right: 2px; }
+        .checkin-tent-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+        .checkin-tent-card { background: white; border: 1px solid #ccfbf1; border-radius: 8px; padding: 5px 10px; text-align: center; min-width: 44px; }
+        .checkin-tent-code { font-size: 12px; font-weight: 700; color: #0f766e; line-height: 1.3; }
+        .checkin-tent-pax { font-size: 13px; font-weight: 800; color: #115e59; line-height: 1.3; }
+        .checkin-tent-vip { display: inline-block; background: #fef3c7; color: #92400e; font-size: 9px; font-weight: 700; border-radius: 4px; padding: 1px 4px; margin-top: 1px; }
+        .checkin-no-allocs { color: #dc2626; font-size: 11px; font-weight: 700; }
         @media print { .print-controls { display: none !important; } .print-page { padding: 10px 14px; } @page { size: A4; margin: 15mm 12mm; } }
         @media (max-width: 600px) { .print-page { padding: 14px 12px; } .print-controls { flex-direction: column; } .btn-print, .btn-back { width: 100%; justify-content: center; } }
       `}</style>
@@ -247,48 +263,46 @@ export default function DailyOperationalPrint() {
                   if (!byNeighborhood[nid]) byNeighborhood[nid] = [];
                   byNeighborhood[nid].push({ ...a, tentCode: tent?.code || "?", tentType: tent?.tent_type || "STANDARD", tentCapacity: tent?.tent_type === "VIP" ? 4 : (tent?.capacity || 8) });
                 });
+
                 if (groupAllocs.length === 0) {
                   return (
-                    <div key={g.id} className="group-row">
-                      <span className="group-name">{g.group_name}</span>
-                      <span className="group-meta">{g.arrival_time ? `צ׳ק-אין ${g.arrival_time}` : "שעת הגעה לא ידועה"}</span>
-                      <span className="group-meta">👥 {p?.total_pax ?? g.total_pax}</span>
-                      <span style={{ color: "#dc2626", fontSize: "11px", fontWeight: "700" }}>⚠ אין שיבוץ לינה מאושר</span>
+                    <div key={g.id} className="checkin-group-card" style={{ borderColor: "#fecaca", background: "#fef2f2" }}>
+                      <div className="checkin-group-header" style={{ borderColor: "#fecaca" }}>
+                        <span className="checkin-group-name" style={{ color: "#991b1b" }}>{g.group_name}</span>
+                        {g.arrival_time && <span className="checkin-group-meta" style={{ color: "#b91c1c" }}>צ׳ק-אין {g.arrival_time}</span>}
+                        <span className="checkin-group-meta" style={{ color: "#b91c1c" }}>👥 {p?.total_pax ?? g.total_pax}</span>
+                      </div>
+                      <span className="checkin-no-allocs">⚠ אין שיבוץ לינה מאושר</span>
                     </div>
                   );
                 }
+
                 return (
-                  <div key={g.id} style={{ marginBottom: "12px", padding: "10px 12px", background: "#f0fdfa", border: "1px solid #99f6e4", borderRadius: "8px" }}>
-                    <div style={{ fontWeight: "700", fontSize: "14px", color: "#0f766e", marginBottom: "4px" }}>
-                      {g.group_name}
-                      <span style={{ fontWeight: "400", fontSize: "12px", color: "#115e59", marginRight: "8px" }}>
-                        {g.arrival_time ? `· צ׳ק-אין ${g.arrival_time}` : ""} · 👥 {p?.total_pax ?? g.total_pax}
-                      </span>
+                  <div key={g.id} className="checkin-group-card">
+                    <div className="checkin-group-header">
+                      <span className="checkin-group-name">{g.group_name}</span>
+                      {g.arrival_time && (
+                        <>
+                          <span className="checkin-group-meta-sep">·</span>
+                          <span className="checkin-group-meta">צ׳ק-אין {g.arrival_time}</span>
+                        </>
+                      )}
+                      <span className="checkin-group-meta-sep">·</span>
+                      <span className="checkin-group-meta">👥 {p?.total_pax ?? g.total_pax}</span>
                     </div>
                     {Object.entries(byNeighborhood).map(([nid, items]) => {
                       const nhood = neighborhoodById[nid];
                       return (
-                        <div key={nid} style={{ marginBottom: "6px", paddingRight: "8px" }}>
-                          <div style={{ fontSize: "12px", fontWeight: "600", color: "#0d9488", marginBottom: "3px" }}>
+                        <div key={nid} className="checkin-nhood-block">
+                          <div className="checkin-nhood-title">
                             {nhood?.name || "שכונה"}
                           </div>
-                          <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                          <div className="checkin-tent-grid">
                             {items.map(a => (
-                              <div
-                                key={a.id}
-                                style={{
-                                  background: "white",
-                                  border: "1px solid #ccfbf1",
-                                  borderRadius: "6px",
-                                  padding: "3px 8px",
-                                  fontSize: "12px",
-                                  fontWeight: "600",
-                                  color: "#115e59",
-                                }}
-                              >
-                                {a.tentCode} · {a.allocated_pax}/{a.tentCapacity}
-                                {a.tentType === "VIP" && <span style={{ fontSize: "10px", color: "#94a3b8", marginRight: "4px" }}>VIP</span>}
-                                {a.notes && <div style={{ fontSize: "10px", color: "#94a3b8" }}>{a.notes}</div>}
+                              <div key={a.id} className="checkin-tent-card">
+                                <div className="checkin-tent-code">{a.tentCode}</div>
+                                <div className="checkin-tent-pax">{a.allocated_pax}/{a.tentCapacity}</div>
+                                {a.tentType === "VIP" && <span className="checkin-tent-vip">VIP</span>}
                               </div>
                             ))}
                           </div>
