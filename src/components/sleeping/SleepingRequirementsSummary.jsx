@@ -1,54 +1,49 @@
 /**
  * Displays sleeping requirements and allocation progress.
- * Counts allocated pax directly from SleepingAllocation records (by gender_group),
- * so BOYS tents inside MIXED neighborhoods correctly count toward boys, not a third "mixed" category.
+ * Now uses unified allocationCounts utility that counts ALL active allocations:
+ * students (STUDENT), VIP (STAFF + __vip_req_N__), alt tent (STAFF + __alt_tent__).
  */
+import { computeAllocationCounts } from "@/lib/allocationCounts";
+
 export default function SleepingRequirementsSummary({ profile, allocations, nhoodReservations = [], allTents = [], neighborhoods = [] }) {
   if (!profile) return null;
 
-  // Detect inconsistency: boys_count + girls_count must equal participant_count for LODGING groups
-  const profParticipants = Number(profile.participant_count) || 0;
-  // Use boys_count/girls_count as the authoritative gender split (set from GroupFormModal)
+  // ── Unified counts from actual SleepingAllocation records ──────────────
+  const counts = computeAllocationCounts(allocations, profile);
+
+  // ── Legacy gender-split display (students only) ────────────────────────
   const profBoys  = Number(profile.boys_count)  || 0;
   const profGirls = Number(profile.girls_count) || 0;
   const hasGenderData = profBoys + profGirls > 0;
+  const profParticipants = Number(profile.participant_count) || 0;
   const genderSum = profBoys + profGirls;
   const isInconsistent = profile.is_sleeping_group && hasGenderData && profParticipants > 0 && genderSum !== profParticipants;
-
-  // Only show gender split counters when split is defined AND consistent
   const hasGenderSplit = hasGenderData && !isInconsistent;
-  // beds_needed falls back to boys_count/girls_count if not explicitly set
-  const boysNeeded    = Number(profile.boys_beds_needed  ?? profile.boys_count)  || 0;
-  const girlsNeeded   = Number(profile.girls_beds_needed ?? profile.girls_count) || 0;
+
+  const boysNeeded  = Number(profile.boys_beds_needed  ?? profile.boys_count)  || 0;
+  const girlsNeeded = Number(profile.girls_beds_needed ?? profile.girls_count) || 0;
   const generalNeeded = !hasGenderData
     ? (Number(profile.participant_count) || Number(profile.total_pax) || 0)
     : 0;
 
-  // Count from actual allocation records — gender_group on each SleepingAllocation is the source of truth
   const activeStudentAllocs = (allocations || []).filter(
     a => a.status !== "CANCELLED" && a.allocation_type === "STUDENT"
   );
+  const allocatedBoys  = activeStudentAllocs.filter(a => a.gender_group === "BOYS").reduce((s, a) => s + (a.allocated_pax || 0), 0);
+  const allocatedGirls = activeStudentAllocs.filter(a => a.gender_group === "GIRLS").reduce((s, a) => s + (a.allocated_pax || 0), 0);
+  const allocatedMixed = activeStudentAllocs.filter(a => a.gender_group === "MIXED").reduce((s, a) => s + (a.allocated_pax || 0), 0);
 
-  const allocatedBoys    = activeStudentAllocs.filter(a => a.gender_group === "BOYS")
-    .reduce((s, a) => s + (a.allocated_pax || 0), 0);
-  const allocatedGirls   = activeStudentAllocs.filter(a => a.gender_group === "GIRLS")
-    .reduce((s, a) => s + (a.allocated_pax || 0), 0);
-  const allocatedMixed   = activeStudentAllocs.filter(a => a.gender_group === "MIXED")
-    .reduce((s, a) => s + (a.allocated_pax || 0), 0);
-  const allocatedGeneral = hasGenderSplit ? 0 : (allocatedBoys + allocatedGirls + allocatedMixed);
-
-  // For gender-split: boys/girls allocated = their own + any MIXED allocs (legacy) split proportionally
-  // Simpler and more correct: just show MIXED allocs as informational if they exist alongside boys/girls
   const remBoys    = boysNeeded  - allocatedBoys;
   const remGirls   = girlsNeeded - allocatedGirls;
-  const totalNeeded     = boysNeeded + girlsNeeded;
-  const totalAllocated  = allocatedBoys + allocatedGirls + (hasGenderSplit ? allocatedMixed : 0);
-  const remTotal   = totalNeeded - totalAllocated;
+  const totalNeeded    = boysNeeded + girlsNeeded;
+  const totalAllocated = allocatedBoys + allocatedGirls + (hasGenderSplit ? allocatedMixed : 0);
+  const remTotal  = totalNeeded - totalAllocated;
+  const allocatedGeneral = hasGenderSplit ? 0 : (allocatedBoys + allocatedGirls + allocatedMixed);
   const remGeneral = generalNeeded - allocatedGeneral;
 
   const activeNhoods = (nhoodReservations || []).filter(r => r.status === "ACTIVE");
 
-  const Counter = ({ label, required, allocated, remaining, blockComplete = false }) => {
+  const Counter = ({ label, required, allocated, remaining, blockComplete = false, sub = false }) => {
     const isComplete = remaining === 0 && !blockComplete;
     const isOver     = remaining < 0;
     const containerColor = isComplete
@@ -59,8 +54,8 @@ export default function SleepingRequirementsSummary({ profile, allocations, nhoo
     const mainColor = isComplete ? "text-green-700" : isOver ? "text-red-700" : "text-amber-700";
 
     return (
-      <div className={`rounded-xl border px-3 py-3 flex flex-col gap-1.5 ${containerColor}`} dir="rtl">
-        <span className="text-xs font-bold text-slate-700">{label}</span>
+      <div className={`rounded-xl border px-3 py-3 flex flex-col gap-1.5 ${containerColor} ${sub ? "opacity-80" : ""}`} dir="rtl">
+        <span className={`${sub ? "text-[10px]" : "text-xs"} font-bold text-slate-700`}>{label}</span>
         <div className="flex justify-between text-xs text-slate-500">
           <span>נדרש</span><span className="font-semibold text-slate-700">{required}</span>
         </div>
@@ -88,7 +83,7 @@ export default function SleepingRequirementsSummary({ profile, allocations, nhoo
 
   return (
     <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
-      <h3 className="text-sm font-semibold text-slate-700">דרישות לינה — נותרו לשיבוץ</h3>
+      <h3 className="text-sm font-semibold text-slate-700">דרישות לינה — סיכום שיבוץ</h3>
 
       {isInconsistent && (() => {
         const missing = profParticipants - genderSum;
@@ -126,6 +121,41 @@ export default function SleepingRequirementsSummary({ profile, allocations, nhoo
       {!hasGenderSplit && profile.is_sleeping_group && (
         <div className="text-xs text-slate-500 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">
           ℹ️ חלוקת בנים/בנות טרם הוגדרה — ניתן להשלים בעריכת הקבוצה.
+        </div>
+      )}
+
+      {/* ── Unified totals (ALL allocation types) ────────────────────────── */}
+      {counts.totalRequired > 0 && (
+        <div className={`rounded-xl border px-4 py-3 space-y-1 ${
+          counts.isComplete
+            ? "bg-emerald-50 border-emerald-300"
+            : "bg-amber-50 border-amber-300"
+        }`}>
+          <p className={`text-xs font-bold ${counts.isComplete ? "text-emerald-800" : "text-amber-800"}`}>
+            {counts.isComplete ? "✓ כל האנשים שובצו" : "שיבוץ חלקי"}
+          </p>
+          <div className="flex gap-4 text-[11px] text-slate-600">
+            <span>סה״כ נדרש: <strong>{counts.totalRequired}</strong></span>
+            <span>שובץ: <strong>{counts.totalAllocated}</strong></span>
+            {counts.totalRemaining > 0 && (
+              <span className="font-semibold text-amber-700">נותרו: {counts.totalRemaining}</span>
+            )}
+          </div>
+          {/* Breakdown */}
+          <div className="text-[10px] text-slate-500 space-y-0.5 pt-1">
+            {counts.studentAllocated > 0 && (
+              <p>חניכים: {counts.studentAllocated} / {counts.studentRequired} ({counts.studentTentCount} אוהלים)</p>
+            )}
+            {counts.vipAllocated > 0 && (
+              <p>VIP: {counts.vipAllocated} ({counts.vipTentCount} אוהלים)</p>
+            )}
+            {counts.altTentAllocated > 0 && (
+              <p>אוהל חילופי: {counts.altTentAllocated} ({counts.altTentCount} אוהלים)</p>
+            )}
+            {counts.otherStaffAllocated > 0 && (
+              <p>צוות אחר: {counts.otherStaffAllocated}</p>
+            )}
+          </div>
         </div>
       )}
 

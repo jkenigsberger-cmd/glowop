@@ -9,6 +9,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { computeAllocationCounts } from "@/lib/allocationCounts";
 
 import SleepingRequirementsSummary from "./SleepingRequirementsSummary";
 import StudentNeighborhoodPanel from "./StudentNeighborhoodPanel";
@@ -536,14 +537,35 @@ export default function SleepingAllocationTab({ groupId }) {
         const tentCount       = new Set(activeAllocs.map(a => a.tent_id)).size;
         const hasNhoodOnly    = myActiveNhoodRes.length > 0 && activeAllocs.length === 0;
 
+        // Unified counts for partial allocation warning
+        const unifiedCounts  = computeAllocationCounts(myAllocations, profile);
+        const isPartialAlloc = unifiedCounts.totalRequired > 0 && unifiedCounts.totalRemaining > 0;
+
         // A: All specific tents confirmed
         if (confirmedAllocs.length > 0 && draftAllocs.length === 0) {
           return (
-            <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-300 rounded-xl px-4 py-3">
-              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+            <div className={`flex items-center gap-3 rounded-xl px-4 py-3 ${
+              isPartialAlloc
+                ? "bg-amber-50 border border-amber-300"
+                : "bg-emerald-50 border border-emerald-300"
+            }`}>
+              {isPartialAlloc ? (
+                <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+              ) : (
+                <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+              )}
               <div className="flex-1">
-                <p className="text-sm font-semibold text-emerald-800">שיבוץ לפי אוהלים — מאושר</p>
-                <p className="text-xs text-emerald-600">{totalAssigned} משתתפים · {tentCount} אוהלים · {confirmedAllocs.length} שורות מאושרות</p>
+                <p className={`text-sm font-semibold ${isPartialAlloc ? "text-amber-800" : "text-emerald-800"}`}>
+                  {isPartialAlloc ? "שיבוץ חלקי — מאושר" : "שיבוץ לפי אוהלים — מאושר"}
+                </p>
+                <p className={`text-xs ${isPartialAlloc ? "text-amber-700" : "text-emerald-600"}`}>
+                  {totalAssigned} משתתפים · {tentCount} אוהלים · {confirmedAllocs.length} שורות מאושרות
+                </p>
+                {isPartialAlloc && (
+                  <p className="text-xs text-amber-700 font-medium mt-0.5">
+                    נותרו {unifiedCounts.totalRemaining} אנשים ללא שיבוץ
+                  </p>
+                )}
               </div>
             </div>
           );
@@ -569,6 +591,22 @@ export default function SleepingAllocationTab({ groupId }) {
                   )}
                 </div>
               </div>
+
+              {/* Partial allocation warning (soft — not blocking) */}
+              {isPartialAlloc && (
+                <div className="flex items-start gap-2 text-xs text-amber-700 bg-amber-100/60 border border-amber-300 rounded-lg px-3 py-2">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold">שיבוץ חלקי — נותרו {unifiedCounts.totalRemaining} אנשים ללא שיבוץ</p>
+                    <p className="text-[11px] mt-0.5">
+                      סה״כ נדרש: {unifiedCounts.totalRequired} · שובץ: {unifiedCounts.totalAllocated} · נותרו: {unifiedCounts.totalRemaining}
+                    </p>
+                    {unifiedCounts.vipAllocated > 0 && <span className="text-[10px]">VIP: {unifiedCounts.vipAllocated} · </span>}
+                    {unifiedCounts.altTentAllocated > 0 && <span className="text-[10px]">אוהל חילופי: {unifiedCounts.altTentAllocated} · </span>}
+                    {unifiedCounts.studentAllocated > 0 && <span className="text-[10px]">חניכים: {unifiedCounts.studentAllocated}</span>}
+                  </div>
+                </div>
+              )}
 
               {/* Shared neighborhood override — shown when backend returns needs_shared_override */}
               {pendingSharedOverride && (
@@ -620,12 +658,16 @@ export default function SleepingAllocationTab({ groupId }) {
               {!pendingSharedOverride && (
                 <RoleGate permission="CONFIRM_ALLOCATION">
                   <Button
-                    className="w-full gap-2 bg-emerald-700 hover:bg-emerald-800 text-white"
+                    className={`w-full gap-2 text-white ${
+                      isPartialAlloc
+                        ? "bg-amber-600 hover:bg-amber-700"
+                        : "bg-emerald-700 hover:bg-emerald-800"
+                    }`}
                     onClick={() => handleConfirmAllocations()}
                     disabled={saving}
                   >
                     <CheckCircle2 className="w-4 h-4" />
-                    {saving ? "מאשר..." : "אשר שיבוץ לינה"}
+                    {saving ? "מאשר..." : isPartialAlloc ? "אשר שיבוץ חלקי" : "אשר שיבוץ לינה"}
                   </Button>
                 </RoleGate>
               )}

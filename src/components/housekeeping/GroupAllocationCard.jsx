@@ -6,17 +6,24 @@ import RoleGate from "@/components/RoleGate";
 import { toast } from "sonner";
 import NeighborhoodMapCard from "./NeighborhoodMapCard";
 import NeighborhoodOnlyCard from "./NeighborhoodOnlyCard";
+import { computeAllocationCounts } from "@/lib/allocationCounts";
 
 const GENDER_LABEL = { BOYS: "בנים", GIRLS: "בנות", MEN: "גברים", WOMEN: "נשים", MIXED: "מעורב" };
 
 // ── Status helpers ─────────────────────────────────────────────────────────────
 
-function getStatus(allocations, draftAllocations, nhoodReservations) {
+function getStatus(allocations, draftAllocations, nhoodReservations, profile) {
   const confirmedCount = allocations.filter(a => a.status === "CONFIRMED").length;
   const draftCount     = draftAllocations.length;
   const nhoodCount     = nhoodReservations.length;
 
-  if (confirmedCount > 0 && draftCount === 0) return "confirmed";
+  if (confirmedCount > 0 && draftCount === 0) {
+    // Check if this is a partial allocation using unified counts
+    const allAllocs = [...allocations, ...draftAllocations];
+    const counts = computeAllocationCounts(allAllocs, profile);
+    if (counts.totalRemaining > 0) return "partial_confirmed";
+    return "confirmed";
+  }
   if (draftCount > 0)                          return "draft";
   if (nhoodCount > 0)                          return "neighborhood_only";
   return "none";
@@ -24,6 +31,7 @@ function getStatus(allocations, draftAllocations, nhoodReservations) {
 
 const STATUS_CONFIG = {
   confirmed:         { label: "שיבוץ לפי אוהלים מאושר",   badgeClass: "bg-emerald-100 text-emerald-700 border-emerald-300", icon: CheckCircle2, iconClass: "text-emerald-600" },
+  partial_confirmed: { label: "שיבוץ חלקי",              badgeClass: "bg-amber-100 text-amber-700 border-amber-300",     icon: AlertTriangle, iconClass: "text-amber-500"   },
   draft:             { label: "שיבוץ לפי אוהלים טרם אושר", badgeClass: "bg-amber-100 text-amber-700 border-amber-300",     icon: AlertTriangle, iconClass: "text-amber-500"   },
   neighborhood_only: { label: "שיבוץ אזורי בלבד",          badgeClass: "bg-blue-100 text-blue-700 border-blue-300",        icon: MapPin,        iconClass: "text-blue-500"    },
   none:              { label: "קבוצה ללא שיבוץ לינה",       badgeClass: "bg-red-100 text-red-700 border-red-300",          icon: AlertTriangle, iconClass: "text-red-500"      },
@@ -39,6 +47,7 @@ const TYPE_LABEL = { checkin: "CHECK IN", checkout: "CHECK OUT", occupied: "תפ
 // ── Card border color by status ────────────────────────────────────────────────
 const BORDER_BY_STATUS = {
   confirmed:         "border-emerald-200",
+  partial_confirmed: "border-amber-200",
   draft:             "border-amber-200",
   neighborhood_only: "border-blue-200",
   none:              "border-red-200",
@@ -74,7 +83,7 @@ export default function GroupAllocationCard({
   if (!group) return null;
 
   const profile    = profiles[0] || null;
-  const status     = getStatus(allocations, draftAllocations, nhoodReservations);
+  const status     = getStatus(allocations, draftAllocations, nhoodReservations, profile);
   const statusConf = STATUS_CONFIG[status];
   const StatusIcon = statusConf.icon;
 
@@ -147,8 +156,22 @@ export default function GroupAllocationCard({
         <div className="border-t border-slate-100 bg-slate-50/30 p-3 space-y-3">
 
           {/* A: CONFIRMED specific tents */}
-          {status === "confirmed" && (
+          {(status === "confirmed" || status === "partial_confirmed") && (
             <>
+              {/* Partial allocation warning */}
+              {status === "partial_confirmed" && (() => {
+                const allAllocs = [...allocations, ...draftAllocations];
+                const counts = computeAllocationCounts(allAllocs, profile);
+                return (
+                  <div className="flex items-start gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-300 rounded-lg px-3 py-2 mb-2">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-semibold">שיבוץ חלקי — חסרים {counts.totalRemaining} אנשים</p>
+                      <p className="text-[11px] mt-0.5">סה״כ שובץ: {counts.totalAllocated} / {counts.totalRequired}</p>
+                    </div>
+                  </div>
+                );
+              })()}
               {type === "checkin" && (
                 <RoleGate permission="MARK_TENT_READY">
                   <div className="flex justify-end">

@@ -1,12 +1,13 @@
 import { useState, useMemo } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
-import { BedDouble, Users, ChevronDown, ChevronUp, CheckCircle2, Clock, AlertCircle, Shield, Car } from "lucide-react";
+import { BedDouble, Users, ChevronDown, ChevronUp, CheckCircle2, Clock, AlertCircle, AlertTriangle, Shield, Car } from "lucide-react";
 import SearchBar from "@/components/search/SearchBar";
 import DateRangeFilter from "@/components/search/DateRangeFilter";
 import { Button } from "@/components/ui/button";
 import SleepingAllocationTab from "@/components/sleeping/SleepingAllocationTab";
 import ReviewAlertsBanner from "@/components/alerts/ReviewAlertsBanner";
+import { computeAllocationCounts } from "@/lib/allocationCounts";
 
 const TODAY = new Date().toISOString().slice(0, 10);
 
@@ -94,25 +95,48 @@ function VipTentGrid({ vipRows }) {
   );
 }
 
-function AllocationStatusBadge({ allocations }) {
+function AllocationStatusBadge({ allocations, profile }) {
   const active = allocations.filter(a => a.status !== "CANCELLED");
   const confirmed = active.filter(a => a.status === "CONFIRMED");
   const drafts = active.filter(a => a.status === "DRAFT");
 
+  // Use unified counts for smarter status detection
+  const counts = profile ? computeAllocationCounts(allocations, profile) : null;
+
+  // All confirmed + fully allocated
   if (confirmed.length > 0 && drafts.length === 0) {
+    if (counts && counts.totalRemaining > 0) {
+      return (
+        <span className="inline-flex items-center gap-1 text-xs bg-amber-50 text-amber-700 border border-amber-200 rounded-full px-2 py-0.5">
+          <AlertTriangle className="w-3 h-3" /> שיבוץ חלקי
+        </span>
+      );
+    }
     return (
       <span className="inline-flex items-center gap-1 text-xs bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5">
-        <CheckCircle2 className="w-3 h-3" /> שובץ ({confirmed.length})
+        <CheckCircle2 className="w-3 h-3" /> שובץ
       </span>
     );
   }
+
+  // Drafts exist
+  if (drafts.length > 0) {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs bg-amber-50 text-amber-700 border border-amber-200 rounded-full px-2 py-0.5">
+        <Clock className="w-3 h-3" /> טיוטה ({drafts.length})
+      </span>
+    );
+  }
+
+  // Has active allocations but no drafts/confirmed (shouldn't happen, but safety)
   if (active.length > 0) {
     return (
       <span className="inline-flex items-center gap-1 text-xs bg-amber-50 text-amber-700 border border-amber-200 rounded-full px-2 py-0.5">
-        <Clock className="w-3 h-3" /> שיבוץ חלקי ({active.length})
+        <Clock className="w-3 h-3" /> שיבוץ חלקי
       </span>
     );
   }
+
   return (
     <span className="inline-flex items-center gap-1 text-xs bg-slate-100 text-slate-600 border border-slate-200 rounded-full px-2 py-0.5">
       <AlertCircle className="w-3 h-3" /> ממתין לשיבוץ
@@ -138,7 +162,7 @@ function GroupAllocationCard({ profile, group, allocations }) {
           <div className="flex-1 min-w-0 space-y-1">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-semibold text-sm">{group.group_name}</span>
-              <AllocationStatusBadge allocations={allocations} />
+              <AllocationStatusBadge allocations={allocations} profile={profile} />
             </div>
             <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
               <span>{group.arrival_date} — {group.departure_date}</span>
