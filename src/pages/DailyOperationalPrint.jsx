@@ -65,6 +65,16 @@ export default function DailyOperationalPrint() {
     queryFn: () => base44.entities.SleepingAllocation.filter({ status: "CONFIRMED" }),
   });
 
+  const { data: tents = [] } = useQuery({
+    queryKey: ["tents-daily-print"],
+    queryFn: () => base44.entities.Tent.list(),
+  });
+
+  const { data: neighborhoods = [] } = useQuery({
+    queryKey: ["neighborhoods-daily-print"],
+    queryFn: () => base44.entities.Neighborhood.list("sort_order", 50),
+  });
+
   const { data: activitySpaces = [] } = useQuery({
     queryKey: ["activitySpaces-daily-print"],
     queryFn: () => base44.entities.ActivitySpace.list(),
@@ -73,13 +83,18 @@ export default function DailyOperationalPrint() {
   // maps
   const profileByGroupId = Object.fromEntries(profiles.map(p => [p.group_id, p]));
   const spaceById = Object.fromEntries(activitySpaces.map(s => [s.id, s]));
+  const tentById = Object.fromEntries(tents.map(t => [t.id, t]));
+  const neighborhoodById = Object.fromEntries(neighborhoods.map(n => [n.id, n]));
 
   const EXCLUDED = new Set(["CANCELLED", "COMPLETED", "ARCHIVED"]);
 
-  const arrivingToday   = groups.filter(g => !EXCLUDED.has(g.status) && g.arrival_date === dateParam);
-  const departingToday  = groups.filter(g => !EXCLUDED.has(g.status) && g.departure_date === dateParam);
+  // ★ Day-use groups must not appear as check-in/check-out — they appear only as באי יום
+  const arrivingToday   = groups.filter(g => !EXCLUDED.has(g.status) && g.group_type === "LODGING" && g.arrival_date === dateParam);
+  const departingToday  = groups.filter(g => !EXCLUDED.has(g.status) && g.group_type === "LODGING" && g.departure_date === dateParam);
+  const dayUseToday     = groups.filter(g => !EXCLUDED.has(g.status) && g.group_type === "DAY_USE" && g.arrival_date === dateParam);
   const sleepingTonight = groups.filter(g => {
     if (EXCLUDED.has(g.status)) return false;
+    if (g.group_type !== "LODGING") return false;
     const dep = g.departure_date?.trim() || null;
     return dep && g.arrival_date <= dateParam && dep > dateParam;
   });
@@ -216,6 +231,77 @@ export default function DailyOperationalPrint() {
           </div>
         </div>
 
+        {/* Check-in tents — tents that must be ready for arriving lodging groups */}
+        <div className="section">
+          <div className="section-header" style={{ background: "#0d9488" }}>🏕 אוהלים לצ׳ק-אין היום ({arrivingToday.length})</div>
+          <div className="section-body">
+            {arrivingToday.length === 0 ? <div className="empty-note">אין אוהלים למסירה היום</div> :
+              arrivingToday.map(g => {
+                const groupAllocs = allocations.filter(a => a.group_id === g.id && a.status === "CONFIRMED" && a.arrival_date <= dateParam && a.departure_date > dateParam);
+                const p = profileByGroupId[g.id];
+                // Group allocations by neighborhood
+                const byNeighborhood = {};
+                groupAllocs.forEach(a => {
+                  const tent = tentById[a.tent_id];
+                  const nid = tent?.neighborhood_id || "_unknown";
+                  if (!byNeighborhood[nid]) byNeighborhood[nid] = [];
+                  byNeighborhood[nid].push({ ...a, tentCode: tent?.code || "?", tentType: tent?.tent_type || "STANDARD", tentCapacity: tent?.tent_type === "VIP" ? 4 : (tent?.capacity || 8) });
+                });
+                if (groupAllocs.length === 0) {
+                  return (
+                    <div key={g.id} className="group-row">
+                      <span className="group-name">{g.group_name}</span>
+                      <span className="group-meta">{g.arrival_time ? `צ׳ק-אין ${g.arrival_time}` : "שעת הגעה לא ידועה"}</span>
+                      <span className="group-meta">👥 {p?.total_pax ?? g.total_pax}</span>
+                      <span style={{ color: "#dc2626", fontSize: "11px", fontWeight: "700" }}>⚠ אין שיבוץ לינה מאושר</span>
+                    </div>
+                  );
+                }
+                return (
+                  <div key={g.id} style={{ marginBottom: "12px", padding: "10px 12px", background: "#f0fdfa", border: "1px solid #99f6e4", borderRadius: "8px" }}>
+                    <div style={{ fontWeight: "700", fontSize: "14px", color: "#0f766e", marginBottom: "4px" }}>
+                      {g.group_name}
+                      <span style={{ fontWeight: "400", fontSize: "12px", color: "#115e59", marginRight: "8px" }}>
+                        {g.arrival_time ? `· צ׳ק-אין ${g.arrival_time}` : ""} · 👥 {p?.total_pax ?? g.total_pax}
+                      </span>
+                    </div>
+                    {Object.entries(byNeighborhood).map(([nid, items]) => {
+                      const nhood = neighborhoodById[nid];
+                      return (
+                        <div key={nid} style={{ marginBottom: "6px", paddingRight: "8px" }}>
+                          <div style={{ fontSize: "12px", fontWeight: "600", color: "#0d9488", marginBottom: "3px" }}>
+                            {nhood?.name || "שכונה"}
+                          </div>
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                            {items.map(a => (
+                              <div
+                                key={a.id}
+                                style={{
+                                  background: "white",
+                                  border: "1px solid #ccfbf1",
+                                  borderRadius: "6px",
+                                  padding: "3px 8px",
+                                  fontSize: "12px",
+                                  fontWeight: "600",
+                                  color: "#115e59",
+                                }}
+                              >
+                                {a.tentCode} · {a.allocated_pax}/{a.tentCapacity}
+                                {a.tentType === "VIP" && <span style={{ fontSize: "10px", color: "#94a3b8", marginRight: "4px" }}>VIP</span>}
+                                {a.notes && <div style={{ fontSize: "10px", color: "#94a3b8" }}>{a.notes}</div>}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })
+            }
+          </div>
+        </div>
+
         {/* Sleeping tonight */}
         <div className="section">
           <div className="section-header">🛏 לנים הלילה ({sleepingTonight.length})</div>
@@ -249,6 +335,29 @@ export default function DailyOperationalPrint() {
                   {g.contact_phone && <span className="group-meta">📞 {g.contact_phone}</span>}
                 </div>
               ))
+            }
+          </div>
+        </div>
+
+        {/* Day-use groups */}
+        <div className="section">
+          <div className="section-header" style={{ background: "#b45309" }}>☀️ באי יום ({dayUseToday.length})</div>
+          <div className="section-body">
+            {dayUseToday.length === 0 ? <div className="empty-note">אין באי יום</div> :
+              dayUseToday.map(g => {
+                const p = profileByGroupId[g.id];
+                return (
+                  <div key={g.id} className="group-row">
+                    <span className="group-name">{g.group_name}</span>
+                    <span className="group-meta">☀️ באי יום</span>
+                    {(p?.total_pax ?? g.total_pax) && <span className="group-meta">👥 {p?.total_pax ?? g.total_pax}</span>}
+                    {g.arrival_time && g.departure_time && (
+                      <span className="group-meta" dir="ltr">🕐 {g.arrival_time}–{g.departure_time}</span>
+                    )}
+                    {g.contact_phone && <span className="group-meta">📞 {g.contact_phone}</span>}
+                  </div>
+                );
+              })
             }
           </div>
         </div>

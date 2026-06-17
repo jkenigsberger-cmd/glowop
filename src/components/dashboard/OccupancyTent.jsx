@@ -19,7 +19,8 @@ export default function OccupancyTent({
   if (!tent) return null;
 
   const isAllocated = !!allocation && !!group;
-  const capacity = tent.capacity || 8;
+  // VIP tents always have max capacity 4; regular tents use stored capacity with fallback 8
+  const capacity = tent.tent_type === "VIP" ? 4 : (tent.capacity || 8);
   const pax = allocation?.allocated_pax || 0;
   const fillPct = capacity > 0 ? Math.min(100, Math.round((pax / capacity) * 100)) : 0;
 

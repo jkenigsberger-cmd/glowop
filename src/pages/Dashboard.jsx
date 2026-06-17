@@ -185,8 +185,9 @@ export default function Dashboard() {
     return dep && g.arrival_date <= selectedDate && dep > selectedDate;
   }), [groups, selectedDate]);
 
+  // ★ Only LODGING groups can check-out. Day-use groups are NOT departures.
   const departingToday = useMemo(() =>
-    groups.filter(g => !EXCLUDED.has(g.status) && g.departure_date === selectedDate),
+    groups.filter(g => !EXCLUDED.has(g.status) && g.group_type === "LODGING" && g.departure_date === selectedDate),
     [groups, selectedDate]
   );
 
@@ -220,7 +221,7 @@ export default function Dashboard() {
 
   const stats = {
     activeGroups:        lodgingGroups.length,
-    arrivingToday:       arrivingToday.filter(g => g.group_type !== "DAY_USE").length,
+    arrivingToday:       arrivingToday.filter(g => g.group_type === "LODGING").length,
     sleepingTonight:     sleepingTonight.length,
     departingToday:      departingToday.length,
     dayUseGroups:        dayUseGroups.length,
