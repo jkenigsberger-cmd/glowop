@@ -1,0 +1,22 @@
+{
+  "name": "CalendarSync",
+  "type": "object",
+  "properties": {
+    "group_schedule_item_id": {
+      "type": "string",
+      "description": "FK to GroupScheduleItem"
+    },
+    "calendar_event_id": {
+      "type": "string",
+      "description": "Google Calendar event ID"
+    },
+    "calendar_id": {
+      "type": "string",
+      "description": "Google Calendar ID (defaults to primary)"
+    }
+  },
+  "required": [
+    "group_schedule_item_id",
+    "calendar_event_id"
+  ]
+}
