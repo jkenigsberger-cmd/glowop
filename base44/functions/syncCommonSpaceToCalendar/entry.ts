@@ -1,5 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
+const KEREN_HADOR_CALENDAR_ID = 'c_d90deb3b0f276cded4ab5809199860a2b2e99c8ced3c62dc8432cae3261a5583@group.calendar.google.com';
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
@@ -29,7 +31,7 @@ Deno.serve(async (req) => {
           const accessToken = connection.accessToken;
 
           await fetch(
-            `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(sr.calendar_id || 'primary')}/events/${encodeURIComponent(sr.calendar_event_id)}`,
+            `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(sr.calendar_id || KEREN_HADOR_CALENDAR_ID)}/events/${encodeURIComponent(sr.calendar_event_id)}`,
             {
               method: 'DELETE',
               headers: { Authorization: `Bearer ${accessToken}` },
@@ -110,7 +112,7 @@ Deno.serve(async (req) => {
     if (syncRecords.length > 0) {
       // Update existing event
       const sr = syncRecords[0];
-      const calendarId = sr.calendar_id || 'primary';
+      const calendarId = sr.calendar_id || KEREN_HADOR_CALENDAR_ID;
 
       const res = await fetch(
         `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(sr.calendar_event_id)}`,
@@ -134,7 +136,7 @@ Deno.serve(async (req) => {
     } else {
       // Create new event
       const res = await fetch(
-        'https://www.googleapis.com/calendar/v3/calendars/primary/events',
+        `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(KEREN_HADOR_CALENDAR_ID)}/events`,
         {
           method: 'POST',
           headers: {
@@ -155,7 +157,7 @@ Deno.serve(async (req) => {
       await base44.asServiceRole.entities.CalendarSync.create({
         group_schedule_item_id: itemId,
         calendar_event_id: created.id,
-        calendar_id: 'primary',
+        calendar_id: KEREN_HADOR_CALENDAR_ID,
       });
 
       return Response.json({ ok: true, action: 'created_event', calendar_event_id: created.id });
