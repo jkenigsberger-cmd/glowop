@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { ChevronLeft, MapPin, AlertCircle } from "lucide-react";
+import { LogisticsBadges } from "@/components/schedule/LogisticsFields";
 
 export default function DashboardActivitiesToday({ activities, groupById, spaceById }) {
   if (activities.length === 0) {
@@ -40,11 +41,13 @@ export default function DashboardActivitiesToday({ activities, groupById, spaceB
                   </span>
                 )}
                 {item.requested_location && !space && (
-                  <span className="text-[10px] text-muted-foreground">בקשה: {item.requested_location}</span>
+                <span className="text-[10px] text-muted-foreground">בקשה: {item.requested_location}</span>
                 )}
-              </div>
-            </div>
-            <ChevronLeft className="w-4 h-4 text-muted-foreground shrink-0" />
+                </div>
+                <LogisticsBadges item={item} />
+                {item.notes && <p className="text-[10px] text-muted-foreground italic">{item.notes}</p>}
+                </div>
+                <ChevronLeft className="w-4 h-4 text-muted-foreground shrink-0" />
           </Link>
         );
       })}

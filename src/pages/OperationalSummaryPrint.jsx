@@ -3,6 +3,7 @@ import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
 import { format, parseISO, eachDayOfInterval, isWithinInterval } from "date-fns";
 import { he } from "date-fns/locale";
+import { formatActivityLogistics } from "@/components/schedule/LogisticsFields";
 
 // ── helpers ────────────────────────────────────────────────────────────────
 function safeJson(str, fallback) {
@@ -117,6 +118,7 @@ function MealCard({ meal, profileDiets }) {
 }
 
 function ActivityCard({ item, space }) {
+  const logistics = formatActivityLogistics(item);
   return (
     <div className="activity-card">
       <div className="activity-time" dir="ltr">{item.start_time}–{item.end_time}</div>
@@ -126,7 +128,8 @@ function ActivityCard({ item, space }) {
         <div className="activity-location">📍 {item.requested_location}</div>
       )}
       {item.pax > 0 && <div className="activity-pax">👥 {item.pax} משתתפים</div>}
-      {item.notes && <div className="activity-notes">{item.notes}</div>}
+      {logistics && <div className="activity-logistics">🔧 {logistics}</div>}
+      {item.notes && <div className="activity-notes">💬 {item.notes}</div>}
     </div>
   );
 }
@@ -721,6 +724,12 @@ export default function OperationalSummaryPrint() {
         .activity-notes {
           font-size: 11px;
           color: #94a3b8;
+          margin-top: 3px;
+        }
+        .activity-logistics {
+          font-size: 11px;
+          color: #1e40af;
+          font-weight: 600;
           margin-top: 3px;
         }
 
