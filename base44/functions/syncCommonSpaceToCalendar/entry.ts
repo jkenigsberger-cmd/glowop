@@ -25,7 +25,7 @@ Deno.serve(async (req) => {
         const sr = syncRecords[0];
 
         try {
-          const connection = await base44.asServiceRole.connectors.getWorkspaceConnection('6a3281d809ae1f33397f1663');
+          const connection = await base44.asServiceRole.connectors.getConnection('googlecalendar');
           const accessToken = connection.accessToken;
 
           await fetch(
@@ -104,7 +104,7 @@ Deno.serve(async (req) => {
       group_schedule_item_id: itemId,
     });
 
-    const connection = await base44.asServiceRole.connectors.getWorkspaceConnection('6a3281d809ae1f33397f1663');
+    const connection = await base44.asServiceRole.connectors.getConnection('googlecalendar');
     const accessToken = connection.accessToken;
 
     if (syncRecords.length > 0) {
