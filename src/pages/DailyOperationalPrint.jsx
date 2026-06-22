@@ -3,7 +3,6 @@ import { base44 } from "@/api/base44Client";
 import { format, parseISO } from "date-fns";
 import { he } from "date-fns/locale";
 import { Link, useSearchParams } from "react-router-dom";
-import { formatActivityLogistics } from "@/components/schedule/LogisticsFields";
 
 // ── helpers ────────────────────────────────────────────────────────────────
 function safeJson(str, fallback) {
@@ -171,8 +170,6 @@ export default function DailyOperationalPrint() {
         .activity-time { font-size: 12px; font-weight: 700; color: #1e40af; direction: ltr; display: inline-block; margin-bottom: 2px; }
         .activity-name { font-size: 14px; font-weight: 700; color: #1e293b; margin-bottom: 3px; }
         .activity-meta { font-size: 12px; color: #475569; }
-        .activity-logistics { font-size: 11px; color: #1e40af; font-weight: 600; margin-top: 3px; }
-        .activity-notes-print { font-size: 11px; color: #94a3b8; margin-top: 2px; font-style: italic; }
         .global-allergy-warning { background: #fef2f2; border: 2px solid #dc2626; border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; font-weight: 700; font-size: 14px; color: #dc2626; }
         .print-controls { display: flex; gap: 12px; margin-bottom: 20px; }
         .btn-print { background: #1e40af; color: white; border: none; border-radius: 8px; padding: 9px 20px; font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; }
@@ -459,10 +456,7 @@ export default function DailyOperationalPrint() {
                     {space && <div className="activity-meta">📍 {space.name}</div>}
                     {!space && item.requested_location && <div className="activity-meta">📍 {item.requested_location}</div>}
                     {item.pax > 0 && <div className="activity-meta">👥 {item.pax} משתתפים</div>}
-                    {formatActivityLogistics(item) && (
-                      <div className="activity-logistics">🔧 {formatActivityLogistics(item)}</div>
-                    )}
-                    {item.notes && <div className="activity-notes-print">💬 {item.notes}</div>}
+                    {item.notes && <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "3px" }}>{item.notes}</div>}
                   </div>
                 );
               })

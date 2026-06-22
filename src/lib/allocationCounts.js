@@ -72,9 +72,11 @@ export function computeAllocationCounts(allocations = [], profile = null) {
     studentRequired = profile.participant_count || profile.total_pax || 0;
   }
 
-  // Staff required = staff_count only
-  // (staff_alt_tent_pax is a subset of staff_count, not an additional group)
-  const staffRequired = profile.staff_count ?? 0;
+  // Staff required = staff_count + alt tent pax (alt tent is part of staff overflow)
+  const staffCount   = profile.staff_count ?? 0;
+  const altTentRequired = profile.staff_alt_tent_pax ?? 0;
+  // staffRequired = total staff that need beds (some in VIP, some in alt tent)
+  const staffRequired = staffCount + altTentRequired;
 
   const totalRequired = studentRequired + staffRequired;
 

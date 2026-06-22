@@ -1,7 +1,6 @@
 import { Link } from "react-router-dom";
 import { AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { LogisticsBadges } from "@/components/schedule/LogisticsFields";
 
 function timeToMinutes(t) {
   if (!t) return 0;
@@ -83,7 +82,6 @@ export default function SpaceDailyView({ spaces, itemsBySpace, date }) {
                         )}
                       </div>
                       <div className="text-xs text-slate-600">{item.activityName}</div>
-                      <LogisticsBadges item={item} />
                       {item.notes && (
                         <div className="text-xs text-slate-400 italic">{item.notes}</div>
                       )}

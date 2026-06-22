@@ -88,14 +88,12 @@ export default function SplitActivityEditModal({
 
   return (
     <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
-      <DialogContent className="max-w-lg max-h-[90vh] flex flex-col p-0" dir="rtl">
-        {/* Sticky header */}
-        <DialogHeader className="px-5 pt-5 pb-3 border-b border-slate-200 shrink-0">
+      <DialogContent className="max-w-lg" dir="rtl">
+        <DialogHeader>
           <DialogTitle>עריכת פעילות מפוצלת</DialogTitle>
         </DialogHeader>
 
-        {/* Scrollable body */}
-        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+        <div className="space-y-4 py-2">
           {/* Shared fields */}
           <div className="space-y-1">
             <Label>שם פעילות</Label>
@@ -177,8 +175,7 @@ export default function SplitActivityEditModal({
           )}
         </div>
 
-        {/* Sticky footer */}
-        <DialogFooter className="px-5 py-3 border-t border-slate-200 shrink-0 gap-2">
+        <DialogFooter className="gap-2">
           <Button variant="outline" onClick={onClose} disabled={submitting}>ביטול</Button>
           <Button onClick={handleSave} disabled={submitting || saving}>
             {submitting ? "שומר..." : "שמור שינויים"}

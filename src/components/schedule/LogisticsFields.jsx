@@ -36,22 +36,6 @@ export const LOGISTICS_BADGE_LABELS = {
   needs_chair_circle: "מעגל כיסאות",
 };
 
-/**
- * Returns a compact Hebrew string of logistics needs.
- * e.g. "מקרן · מסך · 24 כיסאות · לוח"
- * Returns null if nothing is set.
- */
-export function formatActivityLogistics(item) {
-  if (!item) return null;
-  const parts = [];
-  CHECKBOXES.forEach(({ key, label }) => {
-    if (item[key]) parts.push(LOGISTICS_BADGE_LABELS[key] || label);
-  });
-  if (item.chairs_count > 0) parts.push(`${item.chairs_count} כיסאות`);
-  if (item.logistics_other) parts.push(item.logistics_other);
-  return parts.length > 0 ? parts.join(" · ") : null;
-}
-
 /** Returns true if any logistics need is set */
 export function hasLogistics(item) {
   if (!item) return false;
