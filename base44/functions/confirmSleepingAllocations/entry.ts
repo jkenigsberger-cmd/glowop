@@ -46,14 +46,6 @@ Deno.serve(async (req) => {
     if (!group_id) {
       return Response.json({ success: false, error: 'חסר group_id', debug: { reasonCode: 'NO_GROUP_ID' } }, { status: 200 });
     }
-    if (!Array.isArray(draft_allocation_ids) || draft_allocation_ids.length === 0) {
-      return Response.json({
-        success: false,
-        error: 'אין הקצאות לאישור',
-        debug: { reasonCode: 'NO_DRAFT_IDS', received: draft_allocation_ids }
-      }, { status: 200 });
-    }
-
     // Validate: if shared override requested, reason is mandatory
     if (shared_neighborhood_allowed && !shared_neighborhood_reason?.trim()) {
       return Response.json({
@@ -63,20 +55,31 @@ Deno.serve(async (req) => {
       }, { status: 200 });
     }
 
-    // ── 1. Load draft allocations for this group ──────────────────────────────
+    // ── 1. Load ALL draft allocations for this group from DB (source of truth) ─
+    // We do NOT rely solely on frontend-supplied IDs — the frontend cache may be
+    // stale and miss VIP / alt-tent rows saved in the same session.
     const allGroupAllocations = await base44.asServiceRole.entities.SleepingAllocation.filter({ group_id });
-    const draftsToConfirm = allGroupAllocations.filter(a =>
-      draft_allocation_ids.includes(a.id) && a.status === 'DRAFT'
-    );
+    const allGroupDrafts = allGroupAllocations.filter(a => a.status === 'DRAFT');
 
-    if (draftsToConfirm.length === 0) {
+    // If frontend supplied IDs, use them as a hint; otherwise fall back to ALL group drafts.
+    // Either way, the final set is every DRAFT row that belongs to this group.
+    const requestedIds = Array.isArray(draft_allocation_ids) && draft_allocation_ids.length > 0
+      ? new Set(draft_allocation_ids)
+      : null;
+
+    // Always confirm ALL active DRAFT rows for this group (source of truth is DB, not frontend cache)
+    const finalDraftsToConfirm = allGroupDrafts;
+
+    console.log(`[confirmSleepingAllocations] total group drafts found in DB: ${finalDraftsToConfirm.length}`);
+    console.log(`[confirmSleepingAllocations] frontend requested IDs: ${draft_allocation_ids?.length ?? 0}`);
+
+    if (finalDraftsToConfirm.length === 0) {
       return Response.json({
         success: false,
-        error: 'שיבוץ לינה לא נמצא — ייתכן שכבר אושר, בוטל, או שה-ID שגוי',
+        error: 'לא נמצאו שיבוצי טיוטה לאישור — ייתכן שכבר אושרו או בוטלו',
         debug: {
-          reasonCode: 'NO_DRAFTS_MATCHED',
-          requested: draft_allocation_ids,
-          found: allGroupAllocations.map(a => ({ id: a.id, status: a.status }))
+          reasonCode: 'NO_DRAFTS_FOUND',
+          all_statuses: allGroupAllocations.map(a => ({ id: a.id, status: a.status, type: a.allocation_type }))
         }
       }, { status: 200 });
     }
@@ -84,8 +87,9 @@ Deno.serve(async (req) => {
     // ── 2. Load other groups' allocations for conflict checking ──────────────
     const allConfirmed = await base44.asServiceRole.entities.SleepingAllocation.filter({ status: 'CONFIRMED' });
     const allDrafts    = await base44.asServiceRole.entities.SleepingAllocation.filter({ status: 'DRAFT' });
+    const finalDraftIds = new Set(finalDraftsToConfirm.map(d => d.id));
     const otherActive  = [...allConfirmed, ...allDrafts].filter(a =>
-      a.group_id !== group_id && !draft_allocation_ids.includes(a.id)
+      a.group_id !== group_id && !finalDraftIds.has(a.id)
     );
 
     // ── 3. Load neighborhoods and tents ──────────────────────────────────────
@@ -108,7 +112,7 @@ Deno.serve(async (req) => {
     const errors = [];
     const neighborhoodConflictBlocked = []; // track nhood conflicts that need shared override
 
-    for (const draft of draftsToConfirm) {
+    for (const draft of finalDraftsToConfirm) {
       const tent = tentMap[draft.tent_id];
       if (!tent) {
         errors.push(`שיבוץ לינה לא נמצא — אוהל חסר (id: ${draft.tent_id})`);
@@ -151,7 +155,7 @@ Deno.serve(async (req) => {
       }
 
       // Rule 4: no mixed-gender within same tent in same batch
-      const genderConflict = draftsToConfirm.some(other =>
+      const genderConflict = finalDraftsToConfirm.some(other =>
         other.id !== draft.id &&
         other.tent_id === draft.tent_id &&
         other.gender_group !== draft.gender_group
@@ -179,7 +183,7 @@ Deno.serve(async (req) => {
       const approvedBy = user?.email || 'unknown';
 
       // Update all matching active NhoodReservations for this group that are in a shared context
-      const nhoodIdsInBatch = new Set(draftsToConfirm.map(d => d.neighborhood_id));
+      const nhoodIdsInBatch = new Set(finalDraftsToConfirm.map(d => d.neighborhood_id));
       for (const nhoodId of nhoodIdsInBatch) {
         const res = myNhoodReservations.find(r => r.neighborhood_id === nhoodId);
         if (res) {
@@ -196,18 +200,25 @@ Deno.serve(async (req) => {
 
     // ── 7. Confirm all drafts ─────────────────────────────────────────────────
     await Promise.all(
-      draftsToConfirm.map(draft =>
+      finalDraftsToConfirm.map(draft =>
         base44.asServiceRole.entities.SleepingAllocation.update(draft.id, { status: 'CONFIRMED' })
       )
     );
 
-    const confirmedIds = draftsToConfirm.map(d => d.id);
+    const confirmedIds = finalDraftsToConfirm.map(d => d.id);
     console.log('[confirmSleepingAllocations] confirmed IDs:', confirmedIds);
+
+    const typeBreakdown = {
+      student: finalDraftsToConfirm.filter(d => d.allocation_type === 'STUDENT').length,
+      staff:   finalDraftsToConfirm.filter(d => d.allocation_type === 'STAFF').length,
+    };
+    console.log('[confirmSleepingAllocations] breakdown:', typeBreakdown);
 
     return Response.json({
       success: true,
-      confirmed_count: draftsToConfirm.length,
+      confirmed_count: finalDraftsToConfirm.length,
       confirmed_ids: confirmedIds,
+      type_breakdown: typeBreakdown,
       message: 'שיבוץ הלינה אושר',
       shared_override_used: !!(shared_neighborhood_allowed && shared_neighborhood_reason),
     });

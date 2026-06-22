@@ -275,13 +275,11 @@ export default function SleepingAllocationTab({ groupId }) {
   };
 
   const handleConfirmAllocations = async ({ sharedAllowed = false, sharedReason = "" } = {}) => {
+    // Send locally-known draft IDs as a hint, but the backend will confirm ALL group drafts from DB.
     const draftIds = myAllocations.filter(a => a.status === "DRAFT").map(a => a.id);
-    if (draftIds.length === 0) {
-      toast.error("אין שיבוצי טיוטה לאישור — יש לבצע שיבוץ לפני האישור");
-      return;
-    }
     setSaving(true);
     try {
+      // draft_allocation_ids may be empty — backend loads all group drafts from DB directly
       const payload = { group_id: groupId, draft_allocation_ids: draftIds };
       if (sharedAllowed && sharedReason.trim()) {
         payload.shared_neighborhood_allowed = true;
