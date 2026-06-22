@@ -4,12 +4,8 @@ function datesOverlap(a1, a2, b1, b2) {
   return a1 < b2 && b1 < a2;
 }
 
-// VIP tents and accessible tents support operational override of up to 4 pax
-function getOperationalMaxPax(tent, allocation) {
-  const isVipTent       = tent.tent_type === 'VIP' || String(tent.code || '').match(/^8\d/);
-  const isAccessible    = tent.is_accessible === true;
-  const isStaffAlloc    = allocation.allocation_type === 'STAFF';
-  if (isVipTent || isAccessible || isStaffAlloc) return 4;
+// Capacity is always the physical tent capacity — allocation_type never overrides it.
+function getOperationalMaxPax(tent) {
   return tent.capacity || 8;
 }
 
@@ -122,7 +118,7 @@ Deno.serve(async (req) => {
       const isVip = neighborhood?.is_vip === true;
 
       // Rule 1: capacity
-      const operationalMax = getOperationalMaxPax(tent, draft);
+      const operationalMax = getOperationalMaxPax(tent);
       if (draft.allocated_pax > operationalMax) {
         errors.push(`אוהל ${tent.code}: כמות האנשים (${draft.allocated_pax}) גדולה מהמקסימום התפעולי (${operationalMax}).`);
       }
