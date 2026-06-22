@@ -192,13 +192,12 @@ Deno.serve(async (req) => {
     dbg.arrival_date   = arrival_date;
     dbg.departure_date = departure_date;
 
-    // Normalize to date-only (YYYY-MM-DD) — profile/group fields may contain ISO timestamps
-    arrival_date   = arrival_date.slice(0, 10);
-    departure_date = departure_date.slice(0, 10);
-
     if (!arrival_date || !departure_date) {
       return fail('DATES_MISSING', 'חסרים תאריכי הגעה או עזיבה לקבוצה', dbg);
     }
+    // Normalize to date-only (YYYY-MM-DD) — profile/group fields may contain ISO timestamps
+    arrival_date   = String(arrival_date).slice(0, 10);
+    departure_date = String(departure_date).slice(0, 10);
     if (!isValidDate(arrival_date) || !isValidDate(departure_date)) {
       return fail('DATES_INVALID', 'תאריכי השיבוץ אינם תקינים', dbg);
     }
