@@ -108,21 +108,44 @@ Deno.serve(async (req) => {
       return fail('PROFILE_NOT_FOUND', 'חסרים פרטי קבוצה או פרופיל תפעולי', dbg);
     }
 
-    let arrival_date   = profile.arrival_date   || null;
-    let departure_date = profile.departure_date || null;
-    if (!arrival_date || !departure_date) {
+    // ── Load Group for authoritative dates (Group is source of truth) ──────────
+    let group = null;
+    try {
       const groups = await base44.asServiceRole.entities.Group.filter({ id: group_id });
-      const group  = groups[0];
-      arrival_date   = arrival_date   || group?.arrival_date   || null;
-      departure_date = departure_date || group?.departure_date || null;
+      group = groups[0] || null;
+    } catch (e) {
+      console.error('[saveAltTentAllocation] Group.filter error:', e?.message);
     }
 
+    const groupArrivalRaw   = group?.arrival_date   || group?.check_in_date  || group?.start_date  || null;
+    const groupDepartureRaw = group?.departure_date || group?.check_out_date || group?.end_date    || null;
+    const profileArrivalRaw   = profile.arrival_date   || profile.check_in_date  || profile.start_date  || null;
+    const profileDepartureRaw = profile.departure_date || profile.check_out_date || profile.end_date    || null;
+
+    // Group dates preferred; profile dates only as fallback
+    let arrival_date   = groupArrivalRaw   || profileArrivalRaw   || null;
+    let departure_date = groupDepartureRaw || profileDepartureRaw || null;
+
     if (!arrival_date || !departure_date) return fail('DATES_MISSING', 'חסרים תאריכי הגעה/עזיבה', dbg);
-    // Normalize to date-only (YYYY-MM-DD) — profile/group fields may contain ISO timestamps
+    // Normalize to date-only (YYYY-MM-DD) — fields may contain ISO timestamps
+    const finalArrivalBeforeNormalize   = arrival_date;
+    const finalDepartureBeforeNormalize = departure_date;
     arrival_date   = String(arrival_date).slice(0, 10);
     departure_date = String(departure_date).slice(0, 10);
     if (!isValidDate(arrival_date) || !isValidDate(departure_date)) return fail('DATES_INVALID', 'תאריכי השיבוץ אינם תקינים', dbg);
-    if (departure_date <= arrival_date) return fail('DATES_ORDER', 'תאריך עזיבה חייב להיות אחרי תאריך הגעה', dbg);
+    if (departure_date <= arrival_date) return fail('DATES_ORDER', 'תאריך עזיבה חייב להיות אחרי תאריך הגעה', {
+      ...dbg,
+      group_id,
+      profile_id: operational_group_profile_id,
+      groupArrivalRaw,
+      groupDepartureRaw,
+      profileArrivalRaw,
+      profileDepartureRaw,
+      finalArrivalBeforeNormalize,
+      finalDepartureBeforeNormalize,
+      finalArrivalAfterNormalize: arrival_date,
+      finalDepartureAfterNormalize: departure_date,
+    });
 
     dbg.arrival_date   = arrival_date;
     dbg.departure_date = departure_date;
