@@ -39,6 +39,43 @@ function StatusBadge({ status }) {
   );
 }
 
+function DateNav({ selectedDate, onDateChange }) {
+  return (
+    <div className="flex items-center gap-2">
+      <button
+        onClick={() => onDateChange(addDays(selectedDate, -1))}
+        className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 hover:bg-slate-100 transition-colors"
+      >
+        <ChevronRight className="w-4 h-4" />
+      </button>
+      <div className="flex items-center gap-2">
+        <CalendarDays className="w-4 h-4 text-slate-400" />
+        <input
+          type="date"
+          value={selectedDate}
+          onChange={e => onDateChange(e.target.value)}
+          className="text-sm font-medium text-slate-800 border-0 bg-transparent focus:outline-none cursor-pointer"
+        />
+        <span className="text-sm text-slate-500 hidden sm:inline">{formatDate(selectedDate)}</span>
+      </div>
+      <button
+        onClick={() => onDateChange(addDays(selectedDate, 1))}
+        className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 hover:bg-slate-100 transition-colors"
+      >
+        <ChevronLeft className="w-4 h-4" />
+      </button>
+      {selectedDate !== todayStr() && (
+        <button
+          onClick={() => onDateChange(todayStr())}
+          className="text-xs text-primary border border-primary/30 rounded-full px-2.5 py-0.5 hover:bg-primary/5 transition-colors"
+        >
+          היום
+        </button>
+      )}
+    </div>
+  );
+}
+
 export default function MechinaSpaces() {
   const { role, internalUser } = useRoleContext();
   const isAdmin = ADMIN_ROLES.includes(role);
@@ -112,19 +149,21 @@ export default function MechinaSpaces() {
   };
 
   const handleSubmitted = () => {
-    // Refresh daily data and my requests
-    setSelectedDate(s => s); // trigger date effect
-    if (isMechinaUser && mechinaGroupId) {
-      base44.entities.CommonSpaceBookingRequest.filter({ mechina_group_id: mechinaGroupId })
-        .then(reqs => setMyRequests(reqs.sort((a, b) => (b.created_date || "").localeCompare(a.created_date || ""))));
-    }
-    if (isAdmin) {
-      base44.entities.CommonSpaceBookingRequest.filter({ status: "PENDING" })
-        .then(reqs => setMyRequests(reqs.sort((a, b) => (b.created_date || "").localeCompare(a.created_date || ""))));
-    }
-    // Re-fetch pending requests for the selected date
-    base44.entities.CommonSpaceBookingRequest.filter({ date: selectedDate, status: "PENDING" })
-      .then(setPendingRequests);
+    // Re-fetch daily pending and the requests list
+    const sortDesc = reqs => reqs.sort((a, b) => (b.created_date || "").localeCompare(a.created_date || ""));
+    Promise.all([
+      base44.entities.GroupScheduleItem.filter({ date: selectedDate, status: "ACTIVE" }),
+      base44.entities.CommonSpaceBookingRequest.filter({ date: selectedDate, status: "PENDING" }),
+      isMechinaUser && mechinaGroupId
+        ? base44.entities.CommonSpaceBookingRequest.filter({ mechina_group_id: mechinaGroupId })
+        : isAdmin
+          ? base44.entities.CommonSpaceBookingRequest.filter({ status: "PENDING" })
+          : Promise.resolve([]),
+    ]).then(([bookings, pending, requests]) => {
+      setActiveBookings(bookings.filter(b => b.activity_space_id));
+      setPendingRequests(pending);
+      setMyRequests(sortDesc(requests));
+    });
   };
 
   // ── Access denied ────────────────────────────────────────────────────────
@@ -140,42 +179,6 @@ export default function MechinaSpaces() {
   }
 
   const bookableSpaces = spaces.filter(s => s.is_bookable !== false);
-
-  // ── Shared: date navigator ───────────────────────────────────────────────
-  const DateNav = () => (
-    <div className="flex items-center gap-2">
-      <button
-        onClick={() => setSelectedDate(d => addDays(d, -1))}
-        className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 hover:bg-slate-100 transition-colors"
-      >
-        <ChevronRight className="w-4 h-4" />
-      </button>
-      <div className="flex items-center gap-2">
-        <CalendarDays className="w-4 h-4 text-slate-400" />
-        <input
-          type="date"
-          value={selectedDate}
-          onChange={e => setSelectedDate(e.target.value)}
-          className="text-sm font-medium text-slate-800 border-0 bg-transparent focus:outline-none cursor-pointer"
-        />
-        <span className="text-sm text-slate-500 hidden sm:inline">{formatDate(selectedDate)}</span>
-      </div>
-      <button
-        onClick={() => setSelectedDate(d => addDays(d, 1))}
-        className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 hover:bg-slate-100 transition-colors"
-      >
-        <ChevronLeft className="w-4 h-4" />
-      </button>
-      {selectedDate !== todayStr() && (
-        <button
-          onClick={() => setSelectedDate(todayStr())}
-          className="text-xs text-primary border border-primary/30 rounded-full px-2.5 py-0.5 hover:bg-primary/5 transition-colors"
-        >
-          היום
-        </button>
-      )}
-    </div>
-  );
 
   // ── MECHINA USER VIEW ────────────────────────────────────────────────────
   if (isMechinaUser) {
@@ -202,7 +205,7 @@ export default function MechinaSpaces() {
         </div>
 
         {/* Date navigator */}
-        <DateNav />
+        <DateNav selectedDate={selectedDate} onDateChange={setSelectedDate} />
 
         {/* Availability grid */}
         <section className="space-y-3">
@@ -297,7 +300,7 @@ export default function MechinaSpaces() {
       <section className="space-y-3">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <h2 className="text-base font-semibold text-slate-700">זמינות מרחבים</h2>
-          <DateNav />
+          <DateNav selectedDate={selectedDate} onDateChange={setSelectedDate} />
         </div>
         {loading ? (
           <div className="text-center py-10 text-slate-400 text-sm">טוען...</div>
