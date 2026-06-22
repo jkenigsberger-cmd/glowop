@@ -19,7 +19,8 @@
         "HOUSEKEEPING_MANAGER",
         "HOUSEKEEPING_STAFF",
         "KITCHEN",
-        "VIEWER"
+        "VIEWER",
+        "MECHINA_USER"
       ],
       "default": "VIEWER"
     },

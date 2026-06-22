@@ -1,0 +1,39 @@
+{
+  "name": "MechinaGroupAssignment",
+  "type": "object",
+  "properties": {
+    "user_id": {
+      "type": "string",
+      "description": "FK to User \u2014 the restricted Mechina user"
+    },
+    "user_email": {
+      "type": "string",
+      "description": "Email of the Mechina user \u2014 must match auth email"
+    },
+    "user_name": {
+      "type": "string",
+      "description": "Display name of the user"
+    },
+    "group_id": {
+      "type": "string",
+      "description": "FK to Group \u2014 the Mechina group this user manages"
+    },
+    "group_name": {
+      "type": "string",
+      "description": "Snapshot of group name for display"
+    },
+    "is_active": {
+      "type": "boolean",
+      "default": true,
+      "description": "Whether this assignment is currently active"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "user_email",
+    "group_id",
+    "is_active"
+  ]
+}

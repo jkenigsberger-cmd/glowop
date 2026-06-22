@@ -29,6 +29,7 @@ import CommonSpaces from "./pages/CommonSpaces.jsx";
 import OperationalSummaryPrint from "./pages/OperationalSummaryPrint.jsx";
 import DailyOperationalPrint from "./pages/DailyOperationalPrint.jsx";
 import UserManagement from "./pages/UserManagement.jsx";
+import MechinaSpaces from "./pages/MechinaSpaces.jsx";
 
 const AuthenticatedApp = () => {
   const [accessGranted, setAccessGranted] = useState(checkAccess());
@@ -71,6 +72,7 @@ const AuthenticatedApp = () => {
         <Route path="/common-spaces" element={<RouteGuard><CommonSpaces /></RouteGuard>} />
         <Route path="/kitchen-report" element={<RouteGuard><KitchenReport /></RouteGuard>} />
         <Route path="/cleaning-hours" element={<RouteGuard><CleaningHours /></RouteGuard>} />
+        <Route path="/mechina-spaces" element={<RouteGuard><MechinaSpaces /></RouteGuard>} />
         {/* Add your page Route elements here */}
         <Route path="*" element={<PageNotFound />} />
       </Routes>

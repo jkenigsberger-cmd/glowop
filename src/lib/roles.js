@@ -8,6 +8,7 @@ export const ROLES = {
   HOUSEKEEPING_STAFF: "HOUSEKEEPING_STAFF",
   KITCHEN: "KITCHEN",
   VIEWER: "VIEWER",
+  MECHINA_USER: "MECHINA_USER",
 };
 
 export const ROLE_LABELS = {
@@ -18,29 +19,32 @@ export const ROLE_LABELS = {
   HOUSEKEEPING_STAFF: "צוות משק בית",
   KITCHEN: "מטבח",
   VIEWER: "צופה",
+  MECHINA_USER: "משתמש מכינה",
 };
 
 // Navigation links each role can see
 // Format: { to, label, icon_name }
 export const ROLE_NAV_LINKS = {
-  SUPER_ADMIN: ["dashboard", "approved-groups", "calendar", "allocation", "common-spaces", "housekeeping", "kitchen", "maintenance", "admin"],
-  ADMIN:       ["dashboard", "approved-groups", "calendar", "allocation", "common-spaces", "housekeeping", "kitchen", "maintenance", "admin"],
-  OPERATIONS:  ["dashboard", "approved-groups", "calendar", "allocation", "common-spaces", "housekeeping", "kitchen", "maintenance"],
+  SUPER_ADMIN:          ["dashboard", "approved-groups", "calendar", "allocation", "common-spaces", "housekeeping", "kitchen", "maintenance", "admin", "mechina-spaces"],
+  ADMIN:                ["dashboard", "approved-groups", "calendar", "allocation", "common-spaces", "housekeeping", "kitchen", "maintenance", "admin", "mechina-spaces"],
+  OPERATIONS:           ["dashboard", "approved-groups", "calendar", "allocation", "common-spaces", "housekeeping", "kitchen", "maintenance", "mechina-spaces"],
   HOUSEKEEPING_MANAGER: ["dashboard", "calendar", "allocation", "housekeeping", "approved-groups"],
   HOUSEKEEPING_STAFF:   ["dashboard", "calendar", "housekeeping"],
   KITCHEN:              ["dashboard", "calendar", "kitchen"],
   VIEWER:               ["dashboard", "calendar"],
+  MECHINA_USER:         ["mechina-spaces"],
 };
 
 // Pages (route prefixes) each role can access
 export const ROLE_ALLOWED_ROUTES = {
   SUPER_ADMIN: "*", // all
-  ADMIN:       ["dashboard", "approved-groups", "calendar", "allocation", "common-spaces", "housekeeping", "kitchen", "kitchen-report", "maintenance", "admin", "groups", "inventory", "cleaning-hours"],
-  OPERATIONS:  ["dashboard", "approved-groups", "calendar", "allocation", "common-spaces", "housekeeping", "kitchen", "kitchen-report", "maintenance", "groups", "cleaning-hours"],
+  ADMIN:       ["dashboard", "approved-groups", "calendar", "allocation", "common-spaces", "housekeeping", "kitchen", "kitchen-report", "maintenance", "admin", "groups", "inventory", "cleaning-hours", "mechina-spaces"],
+  OPERATIONS:  ["dashboard", "approved-groups", "calendar", "allocation", "common-spaces", "housekeeping", "kitchen", "kitchen-report", "maintenance", "groups", "cleaning-hours", "mechina-spaces"],
   HOUSEKEEPING_MANAGER: ["dashboard", "calendar", "allocation", "housekeeping", "approved-groups", "cleaning-hours"],
   HOUSEKEEPING_STAFF:   ["dashboard", "calendar", "housekeeping"],
   KITCHEN:              ["dashboard", "calendar", "kitchen", "kitchen-report"],
   VIEWER:               ["dashboard", "calendar"],
+  MECHINA_USER:         ["mechina-spaces"],
 };
 
 // Permissions — what actions a role can perform
@@ -84,6 +88,11 @@ export const PERMISSIONS = {
 
   // Review alerts acknowledgement
   ACKNOWLEDGE_ALERT: ["SUPER_ADMIN", "ADMIN", "OPERATIONS", "KITCHEN", "HOUSEKEEPING_MANAGER", "HOUSEKEEPING_STAFF"],
+
+  // Mechina module
+  VIEW_MECHINA_MODULE:   ["SUPER_ADMIN", "ADMIN", "OPERATIONS", "MECHINA_USER"],
+  MANAGE_MECHINA_REQUESTS: ["SUPER_ADMIN", "ADMIN", "OPERATIONS"],
+  SUBMIT_MECHINA_REQUEST:  ["MECHINA_USER"],
 };
 
 export function hasPermission(role, permission) {

@@ -1,0 +1,119 @@
+{
+  "name": "CommonSpaceBookingRequest",
+  "type": "object",
+  "properties": {
+    "mechina_group_id": {
+      "type": "string",
+      "description": "FK to Group \u2014 the Mechina group making the request"
+    },
+    "requested_by_user_id": {
+      "type": "string",
+      "description": "FK to User \u2014 who submitted the request"
+    },
+    "requested_by_name": {
+      "type": "string"
+    },
+    "requested_by_email": {
+      "type": "string"
+    },
+    "space_id": {
+      "type": "string",
+      "description": "FK to ActivitySpace"
+    },
+    "space_name": {
+      "type": "string",
+      "description": "Snapshot of space name for display"
+    },
+    "date": {
+      "type": "string",
+      "format": "date"
+    },
+    "start_time": {
+      "type": "string",
+      "description": "HH:MM"
+    },
+    "end_time": {
+      "type": "string",
+      "description": "HH:MM"
+    },
+    "activity_title": {
+      "type": "string"
+    },
+    "participants_count": {
+      "type": "number"
+    },
+    "needs_projector": {
+      "type": "boolean",
+      "default": false
+    },
+    "needs_screen": {
+      "type": "boolean",
+      "default": false
+    },
+    "needs_microphone": {
+      "type": "boolean",
+      "default": false
+    },
+    "needs_sound": {
+      "type": "boolean",
+      "default": false
+    },
+    "needs_whiteboard": {
+      "type": "boolean",
+      "default": false
+    },
+    "needs_chair_circle": {
+      "type": "boolean",
+      "default": false
+    },
+    "chairs_count": {
+      "type": "number"
+    },
+    "logistics_other": {
+      "type": "string"
+    },
+    "notes": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "PENDING",
+        "APPROVED",
+        "REJECTED",
+        "CANCELLED",
+        "CHANGE_REQUESTED"
+      ],
+      "default": "PENDING"
+    },
+    "admin_decision_by_user_id": {
+      "type": "string",
+      "description": "FK to User \u2014 admin who decided"
+    },
+    "admin_decision_by_name": {
+      "type": "string"
+    },
+    "admin_decision_at": {
+      "type": "string",
+      "description": "ISO datetime of admin decision"
+    },
+    "admin_notes": {
+      "type": "string",
+      "description": "Admin notes \u2014 visible to admin only"
+    },
+    "approved_schedule_item_id": {
+      "type": "string",
+      "description": "FK to GroupScheduleItem \u2014 set when approved and real booking is created"
+    }
+  },
+  "required": [
+    "mechina_group_id",
+    "requested_by_email",
+    "space_id",
+    "date",
+    "start_time",
+    "end_time",
+    "activity_title",
+    "status"
+  ]
+}
