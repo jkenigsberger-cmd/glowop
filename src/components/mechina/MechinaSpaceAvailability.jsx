@@ -39,7 +39,7 @@ function TimeBlock({ label, color, startTime, endTime, title }) {
   );
 }
 
-export default function MechinaSpaceAvailability({ spaces, activeBookings, pendingRequests, isAdmin, onRequestNew }) {
+export default function MechinaSpaceAvailability({ spaces, activeBookings, pendingRequests, isAdmin, onRequestNew, allowCreateRequest }) {
   const TOTAL_HEIGHT = 600; // px total grid height
 
   return (
@@ -112,14 +112,16 @@ export default function MechinaSpaceAvailability({ spaces, activeBookings, pendi
                   />
                 ))}
 
-                {/* "New request" button — bottom of column */}
-                <button
-                  onClick={() => onRequestNew(space.id)}
-                  className="absolute bottom-2 left-0 right-0 mx-auto w-fit text-[10px] text-primary border border-primary/30 rounded-full px-2 py-0.5 bg-white hover:bg-primary/5 transition-colors z-10"
-                  style={{ position: "absolute" }}
-                >
-                  + בקשה
-                </button>
+                {/* "New request" button — bottom of column — Mechina users only */}
+                {allowCreateRequest && (
+                  <button
+                    onClick={() => onRequestNew(space.id)}
+                    className="absolute bottom-2 left-0 right-0 mx-auto w-fit text-[10px] text-primary border border-primary/30 rounded-full px-2 py-0.5 bg-white hover:bg-primary/5 transition-colors z-10"
+                    style={{ position: "absolute" }}
+                  >
+                    + בקשה
+                  </button>
+                )}
               </div>
             </div>
           );

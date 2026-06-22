@@ -222,6 +222,7 @@ export default function MechinaSpaces() {
               activeBookings={activeBookings}
               pendingRequests={pendingRequests}
               isAdmin={false}
+              allowCreateRequest={true}
               onRequestNew={handleRequestNew}
             />
           )}
@@ -314,6 +315,7 @@ export default function MechinaSpaces() {
             activeBookings={activeBookings}
             pendingRequests={pendingRequests}
             isAdmin={true}
+            allowCreateRequest={false}
             onRequestNew={handleRequestNew}
           />
         )}
