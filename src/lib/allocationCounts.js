@@ -61,22 +61,19 @@ export function computeAllocationCounts(allocations = [], profile = null) {
     };
   }
 
-  // Student required
-  const hasGenderSplit = ((profile.boys_count || 0) + (profile.girls_count || 0)) > 0;
-  let studentRequired;
-  if (hasGenderSplit) {
-    const boysNeeded  = profile.boys_beds_needed  ?? profile.boys_count  ?? 0;
-    const girlsNeeded = profile.girls_beds_needed ?? profile.girls_count ?? 0;
-    studentRequired   = boysNeeded + girlsNeeded;
-  } else {
-    studentRequired = profile.participant_count || profile.total_pax || 0;
-  }
+  // ── Student required ─────────────────────────────────────────────────
+  // Only use explicit bed counts from דרישות לינה.
+  // Never fall back to participant_count — that would double-count staff-only groups.
+  const boysRequired  = Number(profile.boys_beds_needed  ?? profile.boys_count  ?? 0) || 0;
+  const girlsRequired = Number(profile.girls_beds_needed ?? profile.girls_count ?? 0) || 0;
+  const studentRequired = boysRequired + girlsRequired;
 
-  // Staff required = staff_count + alt tent pax (alt tent is part of staff overflow)
-  const staffCount   = profile.staff_count ?? 0;
-  const altTentRequired = profile.staff_alt_tent_pax ?? 0;
-  // staffRequired = total staff that need beds (some in VIP, some in alt tent)
-  const staffRequired = staffCount + altTentRequired;
+  // ── Staff required ────────────────────────────────────────────────────
+  // staff_count is the total number of staff/VIP/adults who need beds.
+  // VIP tents and אוהל חילופי are WHERE they sleep — not extra people.
+  // staff_alt_tent_pax is the count of staff sleeping in alt tents (subset of staff_count).
+  // Do NOT add staff_alt_tent_pax on top of staff_count.
+  const staffRequired = Number(profile.staff_count ?? 0) || 0;
 
   const totalRequired = studentRequired + staffRequired;
 
