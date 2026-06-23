@@ -605,35 +605,35 @@ const CONTENT_CATALOG = [
 
 function ContentCatalogPage({ logoUrl, quoteNumber }) {
   return (
-    <div style={{ ...pageStyle, pageBreakBefore: "always" }}>
+    <div style={{ ...pageStyle, pageBreakBefore: "always", padding: "8mm 16mm 36mm 16mm" }}>
       <CompactHeader quoteNumber={quoteNumber} logoUrl={logoUrl} />
 
-      <div style={{ fontSize: 15, fontWeight: 700, fontFamily: HEADING_FONT, color: BLUE, borderBottom: `2px solid ${BLUE}`, paddingBottom: 6, marginBottom: 16 }}>
+      <div style={{ fontSize: 14, fontWeight: 700, fontFamily: HEADING_FONT, color: BLUE, borderBottom: `2px solid ${BLUE}`, paddingBottom: 4, marginBottom: 10 }}>
         אפשרויות תוכן וסדנאות
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px 20px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 14px" }}>
         {CONTENT_CATALOG.map((cat, ci) => (
           <div key={ci} style={{ pageBreakInside: "avoid", breakInside: "avoid", border: "1px solid #dde8f5", borderRadius: 6, overflow: "hidden" }}>
             {/* Category header */}
-            <div style={{ background: BLUE, color: "#fff", padding: "6px 10px" }}>
-              <div style={{ fontSize: 12, fontWeight: 700, fontFamily: HEADING_FONT }}>{cat.category}</div>
-              <div style={{ fontSize: 10.5, fontFamily: BODY_FONT, opacity: 0.88 }}>{cat.subtitle}</div>
+            <div style={{ background: BLUE, color: "#fff", padding: "4px 8px" }}>
+              <div style={{ fontSize: 11, fontWeight: 700, fontFamily: HEADING_FONT }}>{cat.category}</div>
+              <div style={{ fontSize: 9.5, fontFamily: BODY_FONT, opacity: 0.88 }}>{cat.subtitle}</div>
             </div>
 
-            <div style={{ padding: "8px 10px" }}>
+            <div style={{ padding: "5px 8px" }}>
               {cat.description && (
-                <div style={{ fontSize: 10.5, fontFamily: BODY_FONT, color: "#555", marginBottom: 6, lineHeight: 1.5 }}>{cat.description}</div>
+                <div style={{ fontSize: 9.5, fontFamily: BODY_FONT, color: "#555", marginBottom: 4, lineHeight: 1.4 }}>{cat.description}</div>
               )}
 
               {cat.workshops.length > 0 && (
                 <>
-                  <div style={{ fontSize: 10.5, fontWeight: 700, fontFamily: HEADING_FONT, color: BLUE, marginBottom: 4 }}>סדנאות</div>
+                  <div style={{ fontSize: 9.5, fontWeight: 700, fontFamily: HEADING_FONT, color: BLUE, marginBottom: 2 }}>סדנאות</div>
                   {cat.workshops.map((w, wi) => (
-                    <div key={wi} style={{ marginBottom: 4, paddingRight: 6, borderRight: `2px solid ${BLUE}` }}>
-                      <span style={{ fontSize: 11, fontWeight: 700, fontFamily: HEADING_FONT, color: "#1a1a1a" }}>{w.name}</span>
+                    <div key={wi} style={{ marginBottom: 3, paddingRight: 5, borderRight: `2px solid ${BLUE}` }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, fontFamily: HEADING_FONT, color: "#1a1a1a" }}>{w.name}</span>
                       {w.desc && (
-                        <div style={{ fontSize: 10, fontFamily: BODY_FONT, color: "#555", lineHeight: 1.4 }}>{w.desc}</div>
+                        <div style={{ fontSize: 9, fontFamily: BODY_FONT, color: "#555", lineHeight: 1.3 }}>{w.desc}</div>
                       )}
                     </div>
                   ))}
@@ -642,12 +642,12 @@ function ContentCatalogPage({ logoUrl, quoteNumber }) {
 
               {cat.lectures.length > 0 && (
                 <>
-                  <div style={{ fontSize: 10.5, fontWeight: 700, fontFamily: HEADING_FONT, color: "#1a7a4a", marginTop: cat.workshops.length > 0 ? 8 : 0, marginBottom: 4 }}>הרצאות</div>
+                  <div style={{ fontSize: 9.5, fontWeight: 700, fontFamily: HEADING_FONT, color: "#1a7a4a", marginTop: cat.workshops.length > 0 ? 5 : 0, marginBottom: 2 }}>הרצאות</div>
                   {cat.lectures.map((l, li) => (
-                    <div key={li} style={{ marginBottom: 3, paddingRight: 6, borderRight: "2px solid #1a7a4a" }}>
-                      <span style={{ fontSize: 11, fontWeight: 700, fontFamily: HEADING_FONT, color: "#1a1a1a" }}>{l.name}</span>
+                    <div key={li} style={{ marginBottom: 2, paddingRight: 5, borderRight: "2px solid #1a7a4a" }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, fontFamily: HEADING_FONT, color: "#1a1a1a" }}>{l.name}</span>
                       {l.presenter && (
-                        <span style={{ fontSize: 10, fontFamily: BODY_FONT, color: "#666" }}> — {l.presenter}</span>
+                        <span style={{ fontSize: 9, fontFamily: BODY_FONT, color: "#666" }}> — {l.presenter}</span>
                       )}
                     </div>
                   ))}
@@ -658,7 +658,7 @@ function ContentCatalogPage({ logoUrl, quoteNumber }) {
         ))}
       </div>
 
-      <div style={{ marginTop: 14, fontSize: 10, fontFamily: BODY_FONT, color: "#888", borderTop: "1px solid #e5e5e5", paddingTop: 8, lineHeight: 1.6 }}>
+      <div style={{ marginTop: 8, fontSize: 9.5, fontFamily: BODY_FONT, color: "#888", borderTop: "1px solid #e5e5e5", paddingTop: 6, lineHeight: 1.5 }}>
         כל הסדנאות וההרצאות מותאמות לצרכי הקבוצה ולגיל המשתתפים. לפרטים נוספים וסיוע בבניית תכנית — צרו קשר.
       </div>
       <LegalFooter />
