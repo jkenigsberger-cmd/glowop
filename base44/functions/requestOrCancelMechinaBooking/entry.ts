@@ -1,7 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 const ADMIN_ROLES = ["SUPER_ADMIN", "ADMIN", "OPERATIONS"];
-const ADMIN_EMAILS = ["office@boneh.co.il", "ops@boneh.co.il"];
+const ADMIN_EMAILS = ["hospitality@glow-glamping.com", "shelly.fleischman@gmail.com", "vered@keren-hador.com"];
 
 Deno.serve(async (req) => {
   try {
