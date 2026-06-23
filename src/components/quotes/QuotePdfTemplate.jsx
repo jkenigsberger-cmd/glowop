@@ -216,7 +216,7 @@ const BLUE = "#1a56a0";
 const pageStyle = {
   width: "210mm",
   minHeight: "297mm",
-  padding: "10mm 16mm 14mm 16mm",
+  padding: "10mm 16mm 36mm 16mm",
   boxSizing: "border-box",
   fontFamily: BODY_FONT,
   fontSize: 12,
@@ -226,6 +226,20 @@ const pageStyle = {
   position: "relative",
   color: "#1a1a1a",
 };
+
+function LegalFooter() {
+  return (
+    <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, direction: "rtl" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 14px", borderTop: "1px solid #dde8f5", fontSize: 9.5, fontFamily: BODY_FONT, color: "#555" }}>
+        <span style={{ fontWeight: 700, fontFamily: HEADING_FONT }}>בית הדור הבא - מקום לחוויות ישראליות</span>
+        <span style={{ direction: "ltr" }}>www.keren-hador.org • aharonsonhome@keren-hador.com</span>
+      </div>
+      <div style={{ background: BLUE, color: "#fff", padding: "5px 14px", fontSize: 9, fontFamily: BODY_FONT, textAlign: "center", lineHeight: 1.5 }}>
+        כל המסמכים שהועברו על ידי העמותה, הם רכושה הבלעדי של העמותה ואסור להעתיק ו/או להשתמש בהם, כולם או מקצתם, ללא הסכמת העמותה.
+      </div>
+    </div>
+  );
+}
 
 function CoverHeader({ quoteNumber, logoUrl }) {
   return (
@@ -372,7 +386,10 @@ function Page1({ d, logoUrl }) {
               }
               rows.push(
                 <tr key={i} style={{ background: isOperator ? "#f7fcf7" : (i % 2 === 0 ? "#fff" : "#f5f8ff") }}>
-                  <td style={{ ...tdBase }}>{item.name}</td>
+                  <td style={{ ...tdBase }}>
+                     <div style={{ fontWeight: 600 }}>{item.name}</div>
+                     {item.description && <div style={{ fontSize: 10, color: "#555", fontFamily: BODY_FONT, marginTop: 1 }}>{item.description}</div>}
+                   </td>
                   <td style={{ ...tdBase, textAlign: "center" }}>{item.qty}</td>
                   <td style={{ ...tdBase, textAlign: "center" }}>₪{fmt(item.unitPrice)}</td>
                   <td style={{ ...tdBase, textAlign: "left", fontWeight: 600, color: isNegative ? "#c00" : isSurcharge ? "#1a7a4a" : "#111" }}>
@@ -433,6 +450,7 @@ function Page1({ d, logoUrl }) {
           </div>
         </>
       )}
+      <LegalFooter />
     </div>
   );
 }
@@ -513,6 +531,7 @@ function Page2({ logoUrl, quoteNumber, footerUrl }) {
           />
         </div>
       </div>
+      <LegalFooter />
     </div>
   );
 }
@@ -642,6 +661,7 @@ function ContentCatalogPage({ logoUrl, quoteNumber }) {
       <div style={{ marginTop: 14, fontSize: 10, fontFamily: BODY_FONT, color: "#888", borderTop: "1px solid #e5e5e5", paddingTop: 8, lineHeight: 1.6 }}>
         כל הסדנאות וההרצאות מותאמות לצרכי הקבוצה ולגיל המשתתפים. לפרטים נוספים וסיוע בבניית תכנית — צרו קשר.
       </div>
+      <LegalFooter />
     </div>
   );
 }
@@ -651,9 +671,9 @@ export default function QuotePdfTemplate({ quote, group, logoUrl, footerUrl }) {
   const d = resolveData(quote, group);
   return (
     <div id="quote-pdf-root" style={{ background: "#fff" }}>
-      <ContentCatalogPage logoUrl={logoUrl} quoteNumber={d.quoteNumber} />
       <Page1 d={d} logoUrl={logoUrl} />
       <Page2 logoUrl={logoUrl} quoteNumber={d.quoteNumber} footerUrl={footerUrl} />
+      <ContentCatalogPage logoUrl={logoUrl} quoteNumber={d.quoteNumber} />
     </div>
   );
 }
