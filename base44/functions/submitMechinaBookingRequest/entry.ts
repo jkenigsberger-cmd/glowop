@@ -1,7 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 // Admin notification recipients — reused from sendFormNotification
-const ADMIN_EMAILS = ["vered@keren-hador.com", "hospitality@glow-glamping.com"];
+const ADMIN_EMAILS = ["hospitality@glow-glamping.com", "shelly.fleischman@gmail.com", "vered@keren-hador.com"];
 
 const ADMIN_ROLES = ["SUPER_ADMIN", "ADMIN", "OPERATIONS"];
 
