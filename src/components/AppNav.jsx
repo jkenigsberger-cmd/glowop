@@ -10,6 +10,7 @@ import { useRoleContext } from "@/lib/RoleContext";
 import { ROLE_NAV_LINKS, ROLE_LABELS } from "@/lib/roles";
 import { useAlertCounts } from "@/hooks/useAlertCounts";
 import GlobalSearch from "@/components/search/GlobalSearch";
+import MechinaPendingBadge from "@/components/mechina/MechinaPendingBadge";
 
 // Alert module mapping
 const LINK_ALERT_MODULE = {
@@ -47,9 +48,13 @@ function AlertBadge({ count, small }) {
   );
 }
 
+const ADMIN_ROLES_SET = new Set(["SUPER_ADMIN", "ADMIN", "OPERATIONS"]);
+
 // Desktop primary nav pill
-function NavPill({ to, label, icon: Icon, pathname, alertCount }) {
+function NavPill({ to, label, icon: Icon, pathname, alertCount, role }) {
   const active = isActive(to, pathname);
+  const isMechinaSpaces = to === "/mechina-spaces";
+  const isAdminRole = ADMIN_ROLES_SET.has(role);
   return (
     <Link
       to={to}
@@ -62,6 +67,7 @@ function NavPill({ to, label, icon: Icon, pathname, alertCount }) {
       <Icon className="w-3.5 h-3.5 shrink-0" />
       <span>{label}</span>
       {alertCount > 0 && <AlertBadge count={alertCount} small />}
+      {isMechinaSpaces && isAdminRole && <MechinaPendingBadge />}
     </Link>
   );
 }
@@ -126,8 +132,10 @@ function NavDropdown({ label, icon: Icon, items, pathname, alertCounts }) {
 }
 
 // Mobile drawer link
-function DrawerLink({ to, label, icon: Icon, pathname, onClick, alertCount }) {
+function DrawerLink({ to, label, icon: Icon, pathname, onClick, alertCount, role }) {
   const active = isActive(to, pathname);
+  const isMechinaSpaces = to === "/mechina-spaces";
+  const isAdminRole = ADMIN_ROLES_SET.has(role);
   return (
     <Link
       to={to}
@@ -138,6 +146,7 @@ function DrawerLink({ to, label, icon: Icon, pathname, onClick, alertCount }) {
       <Icon className="w-4 h-4 shrink-0" />
       <span className="flex-1">{label}</span>
       {alertCount > 0 && <AlertBadge count={alertCount} />}
+      {isMechinaSpaces && isAdminRole && <MechinaPendingBadge />}
     </Link>
   );
 }
@@ -214,6 +223,7 @@ export default function AppNav() {
                 {...link}
                 pathname={pathname}
                 alertCount={getCount(link.key)}
+                role={role}
               />
             ))}
 
@@ -338,6 +348,7 @@ export default function AppNav() {
                   pathname={pathname}
                   onClick={closeDrawer}
                   alertCount={getCount(link.key)}
+                  role={role}
                 />
               ))}
               {opsLinks.map(link => (

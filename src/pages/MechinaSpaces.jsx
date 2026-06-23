@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useRoleContext } from "@/lib/RoleContext";
-import { Building2, ChevronRight, ChevronLeft, CalendarDays, Plus, ListChecks, CheckCircle, XCircle } from "lucide-react";
+import { Building2, ChevronRight, ChevronLeft, CalendarDays, Plus, ListChecks, CheckCircle, XCircle, Ban } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import MechinaBookingRequestModal from "@/components/mechina/MechinaBookingRequestModal";
@@ -95,6 +95,9 @@ export default function MechinaSpaces() {
 
   const [selectedAssignmentId, setSelectedAssignmentId] = useState("");
   const [decisionModal, setDecisionModal] = useState(null); // { mode: "approve"|"reject", request }
+  const [approvedRequests, setApprovedRequests] = useState([]);
+  const [cancelConfirm, setCancelConfirm] = useState(null); // { request, isAdmin }
+  const [cancelReason, setCancelReason] = useState("");
 
   // Derived: selected assignment (for MECHINA_USER)
   const activeAssignments = assignments.filter(a => a.is_active);
@@ -149,22 +152,26 @@ export default function MechinaSpaces() {
       .then(reqs => setMyRequests(reqs.sort((a, b) => (b.created_date || "").localeCompare(a.created_date || ""))));
   }, [isMechinaUser, mechinaGroupId]);
 
-  // ── Load all pending for admin ───────────────────────────────────────────
+  // ── Load all pending + approved for admin ───────────────────────────────
   useEffect(() => {
     if (!isAdmin) return;
     base44.entities.CommonSpaceBookingRequest.filter({ status: "PENDING" })
       .then(reqs => setMyRequests(reqs.sort((a, b) => (b.created_date || "").localeCompare(a.created_date || ""))));
+    base44.entities.CommonSpaceBookingRequest.filter({ status: "APPROVED" })
+      .then(reqs => setApprovedRequests(reqs.sort((a, b) => (b.created_date || "").localeCompare(a.created_date || ""))));
   }, [isAdmin]);
 
   const reloadAdminData = async () => {
-    const [bookings, pending, allPending] = await Promise.all([
+    const [bookings, pending, allPending, approved] = await Promise.all([
       base44.entities.GroupScheduleItem.filter({ date: selectedDate, status: "ACTIVE" }),
       base44.entities.CommonSpaceBookingRequest.filter({ date: selectedDate, status: "PENDING" }),
       base44.entities.CommonSpaceBookingRequest.filter({ status: "PENDING" }),
+      base44.entities.CommonSpaceBookingRequest.filter({ status: "APPROVED" }),
     ]);
     setActiveBookings(bookings.filter(b => b.activity_space_id));
     setPendingRequests(pending);
     setMyRequests(allPending.sort((a, b) => (b.created_date || "").localeCompare(a.created_date || "")));
+    setApprovedRequests(approved.sort((a, b) => (b.created_date || "").localeCompare(a.created_date || "")));
   };
 
   const handleDecision = async (adminNotes) => {
@@ -175,6 +182,35 @@ export default function MechinaSpaces() {
     if (res.data?.success) {
       toast.success(mode === "approve" ? "הבקשה אושרה" : "הבקשה נדחתה");
       await reloadAdminData();
+    } else {
+      toast.error(res.data?.error || "שגיאה — נסה שוב");
+    }
+  };
+
+  const handleCancel = async () => {
+    const { request } = cancelConfirm;
+    const res = await base44.functions.invoke("cancelMechinaBookingRequest", {
+      request_id: request.id,
+      cancel_reason: cancelReason.trim() || undefined,
+    });
+    setCancelConfirm(null);
+    setCancelReason("");
+    if (res.data?.success) {
+      toast.success("הבקשה בוטלה");
+      if (isAdmin) {
+        await reloadAdminData();
+      } else {
+        // refresh mechina user's list + daily calendar
+        const sortDesc = arr => arr.sort((a, b) => (b.created_date || "").localeCompare(a.created_date || ""));
+        const [bookings, pending, requests] = await Promise.all([
+          base44.entities.GroupScheduleItem.filter({ date: selectedDate, status: "ACTIVE" }),
+          base44.entities.CommonSpaceBookingRequest.filter({ date: selectedDate, status: "PENDING" }),
+          base44.entities.CommonSpaceBookingRequest.filter({ mechina_group_id: mechinaGroupId }),
+        ]);
+        setActiveBookings(bookings.filter(b => b.activity_space_id));
+        setPendingRequests(pending);
+        setMyRequests(sortDesc(requests));
+      }
     } else {
       toast.error(res.data?.error || "שגיאה — נסה שוב");
     }
@@ -309,20 +345,59 @@ export default function MechinaSpaces() {
           ) : (
             <div className="space-y-2">
               {myRequests.map(req => (
-                <div key={req.id} className="bg-white border border-slate-200 rounded-xl px-4 py-3 flex items-center gap-3">
+                <div key={req.id} className="bg-white border border-slate-200 rounded-xl px-4 py-3 flex items-center gap-3 flex-wrap">
                   <div className="flex-1 space-y-0.5 min-w-0">
                     <p className="text-sm font-semibold text-slate-800 truncate">{req.activity_title}</p>
                     <p className="text-xs text-slate-500">{req.space_name} · {req.date} · {req.start_time}–{req.end_time}</p>
                     {(req.status === "REJECTED" || req.status === "CHANGE_REQUESTED") && req.admin_notes && (
                       <p className="text-xs text-slate-600 mt-1 bg-slate-50 rounded px-2 py-1">{req.admin_notes}</p>
                     )}
+                    {req.status === "APPROVED" && (
+                      <p className="text-xs text-slate-400 mt-0.5">לביטול בקשה מאושרת יש לפנות למנהל</p>
+                    )}
                   </div>
-                  <StatusBadge status={req.status} />
+                  <div className="flex items-center gap-2">
+                    <StatusBadge status={req.status} />
+                    {(req.status === "PENDING" || req.status === "CHANGE_REQUESTED") && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-slate-300 text-slate-600 hover:bg-slate-50 gap-1"
+                        onClick={() => { setCancelConfirm({ request: req }); setCancelReason(""); }}
+                      >
+                        <Ban className="w-3.5 h-3.5" /> בטל
+                      </Button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
           )}
         </section>
+
+        {/* Cancel confirm dialog */}
+        {cancelConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" dir="rtl">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full mx-4 p-6 space-y-4">
+              <h3 className="text-base font-semibold text-slate-800">ביטול בקשה</h3>
+              <p className="text-sm text-slate-600">האם לבטל את הבקשה עבור <span className="font-medium">{cancelConfirm.request.activity_title}</span>?</p>
+              <div className="space-y-1">
+                <label className="text-xs text-slate-500">סיבת ביטול (אופציונלי)</label>
+                <textarea
+                  value={cancelReason}
+                  onChange={e => setCancelReason(e.target.value)}
+                  placeholder="סיבת ביטול..."
+                  rows={2}
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary resize-none"
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" className="flex-1" onClick={() => { setCancelConfirm(null); setCancelReason(""); }}>ביטול</Button>
+                <Button className="flex-1 bg-slate-700 hover:bg-slate-800" onClick={handleCancel}>אשר ביטול</Button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Modal */}
         {modalOpen && mechinaGroupId && (
@@ -391,7 +466,14 @@ export default function MechinaSpaces() {
 
       {/* Pending requests list */}
       <section className="space-y-3">
-        <h2 className="text-base font-semibold text-slate-700">בקשות ממתינות לאישור</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-base font-semibold text-slate-700">בקשות ממתינות לאישור</h2>
+          {myRequests.length > 0 && (
+            <span className="inline-flex items-center justify-center min-w-[20px] h-5 rounded-full bg-red-500 text-white text-xs font-bold px-1.5 leading-none">
+              {myRequests.length}
+            </span>
+          )}
+        </div>
         {myRequests.length === 0 ? (
           <div className="border border-dashed border-slate-200 rounded-xl p-8 text-center bg-white">
             <ListChecks className="w-7 h-7 text-slate-300 mx-auto mb-2" />
@@ -426,12 +508,77 @@ export default function MechinaSpaces() {
                   >
                     <XCircle className="w-3.5 h-3.5" /> דחה
                   </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-slate-300 text-slate-600 hover:bg-slate-50 gap-1"
+                    onClick={() => { setCancelConfirm({ request: req }); setCancelReason(""); }}
+                  >
+                    <Ban className="w-3.5 h-3.5" /> בטל
+                  </Button>
                 </div>
               </div>
             ))}
           </div>
         )}
       </section>
+
+      {/* Approved requests section */}
+      <section className="space-y-3">
+        <h2 className="text-base font-semibold text-slate-700">בקשות מאושרות</h2>
+        {approvedRequests.length === 0 ? (
+          <div className="border border-dashed border-slate-200 rounded-xl p-6 text-center bg-white">
+            <p className="text-sm text-slate-400">אין בקשות מאושרות כרגע</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {approvedRequests.map(req => (
+              <div key={req.id} className="bg-white border border-emerald-200 rounded-xl px-4 py-3 flex items-center gap-3 flex-wrap">
+                <div className="flex-1 space-y-0.5 min-w-0">
+                  <p className="text-sm font-semibold text-slate-800 truncate">{req.activity_title}</p>
+                  <p className="text-xs text-slate-500">{req.space_name} · {req.date} · {req.start_time}–{req.end_time}</p>
+                  <p className="text-xs text-slate-400">{req.requested_by_name || req.requested_by_email}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <StatusBadge status={req.status} />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-slate-300 text-slate-600 hover:bg-slate-50 gap-1"
+                    onClick={() => { setCancelConfirm({ request: req }); setCancelReason(""); }}
+                  >
+                    <Ban className="w-3.5 h-3.5" /> בטל הזמנה
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Cancel confirm dialog */}
+      {cancelConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" dir="rtl">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full mx-4 p-6 space-y-4">
+            <h3 className="text-base font-semibold text-slate-800">ביטול בקשה</h3>
+            <p className="text-sm text-slate-600">האם לבטל את הבקשה עבור <span className="font-medium">{cancelConfirm.request.activity_title}</span>?</p>
+            <div className="space-y-1">
+              <label className="text-xs text-slate-500">סיבת ביטול (אופציונלי)</label>
+              <textarea
+                value={cancelReason}
+                onChange={e => setCancelReason(e.target.value)}
+                placeholder="סיבת ביטול..."
+                rows={2}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary resize-none"
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => { setCancelConfirm(null); setCancelReason(""); }}>ביטול</Button>
+              <Button className="flex-1 bg-slate-700 hover:bg-slate-800" onClick={handleCancel}>אשר ביטול</Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Decision modal */}
       {decisionModal && (
