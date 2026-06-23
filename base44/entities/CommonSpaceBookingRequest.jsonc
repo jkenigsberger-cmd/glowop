@@ -82,7 +82,8 @@
         "APPROVED",
         "REJECTED",
         "CANCELLED",
-        "CHANGE_REQUESTED"
+        "CHANGE_REQUESTED",
+        "CANCELLATION_REQUESTED"
       ],
       "default": "PENDING"
     },

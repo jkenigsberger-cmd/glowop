@@ -14,8 +14,11 @@ export default function MechinaPendingBadge() {
 
     const fetchCount = async () => {
       try {
-        const reqs = await base44.entities.CommonSpaceBookingRequest.filter({ status: "PENDING" });
-        if (!cancelled) setCount(reqs.length);
+        const [pending, cancellationReqs] = await Promise.all([
+          base44.entities.CommonSpaceBookingRequest.filter({ status: "PENDING" }),
+          base44.entities.CommonSpaceBookingRequest.filter({ status: "CANCELLATION_REQUESTED" }),
+        ]);
+        if (!cancelled) setCount(pending.length + cancellationReqs.length);
       } catch {
         // silently ignore
       }
