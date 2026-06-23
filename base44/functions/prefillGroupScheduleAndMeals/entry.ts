@@ -7,8 +7,8 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
 const MEAL_DEFAULTS = {
-  BREAKFAST: { start_time: '07:00', end_time: '09:00' },
-  LUNCH:     { start_time: '12:30', end_time: '13:30' },
+  BREAKFAST: { start_time: '08:00', end_time: '10:00' },
+  LUNCH:     { start_time: '12:45', end_time: '14:00' },
   DINNER:    { start_time: '18:30', end_time: '20:00' },
   OTHER:     { start_time: '12:00', end_time: '13:00' },
 };
