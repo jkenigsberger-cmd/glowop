@@ -91,9 +91,19 @@ export default function MechinaSpaces() {
   const [modalOpen, setModalOpen] = useState(false);
   const [preselectedSpaceId, setPreselectedSpaceId] = useState("");
 
-  // Derived: assigned mechina group (for MECHINA_USER)
-  const assignment = assignments[0];
+  const [selectedAssignmentId, setSelectedAssignmentId] = useState("");
+
+  // Derived: selected assignment (for MECHINA_USER)
+  const activeAssignments = assignments.filter(a => a.is_active);
+  const assignment = activeAssignments.find(a => a.id === selectedAssignmentId) || activeAssignments[0];
   const mechinaGroupId = assignment?.group_id || "";
+
+  // Auto-select first assignment when assignments load
+  useEffect(() => {
+    if (activeAssignments.length > 0 && !selectedAssignmentId) {
+      setSelectedAssignmentId(activeAssignments[0].id);
+    }
+  }, [assignments]);
 
   // ── Load spaces once ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -129,7 +139,7 @@ export default function MechinaSpaces() {
     }).catch(() => setLoading(false));
   }, [selectedDate]);
 
-  // ── Load my requests (mechina user) ─────────────────────────────────────
+  // ── Load my requests (mechina user) — re-fetch when selected group changes ─
   useEffect(() => {
     if (!isMechinaUser || !mechinaGroupId) return;
     base44.entities.CommonSpaceBookingRequest.filter({ mechina_group_id: mechinaGroupId })
@@ -204,12 +214,27 @@ export default function MechinaSpaces() {
         <div className="flex items-start justify-between flex-wrap gap-3">
           <div className="space-y-0.5">
             <h1 className="text-2xl font-heading font-semibold text-slate-800">בקשות מרחבים</h1>
-            {assignment ? (
+            {activeAssignments.length === 0 && (
+              <p className="text-sm text-amber-600">לא נמצאה מכינה מקושרת לחשבון זה. פנה למנהל המערכת.</p>
+            )}
+            {activeAssignments.length === 1 && (
               <p className="text-sm text-slate-500">
                 מכינה: <span className="font-semibold text-slate-700">{assignment.group_name || mechinaGroupId}</span>
               </p>
-            ) : (
-              <p className="text-sm text-amber-600">לא נמצאה מכינה מקושרת לחשבון זה. פנה למנהל המערכת.</p>
+            )}
+            {activeAssignments.length > 1 && (
+              <div className="flex items-center gap-2 mt-1">
+                <label className="text-sm text-slate-500">בחר מכינה:</label>
+                <select
+                  value={selectedAssignmentId}
+                  onChange={e => setSelectedAssignmentId(e.target.value)}
+                  className="border border-slate-200 rounded-lg px-2 py-1 text-sm text-slate-800 bg-white focus:outline-none focus:ring-1 focus:ring-primary"
+                >
+                  {activeAssignments.map(a => (
+                    <option key={a.id} value={a.id}>{a.group_name || a.group_id}</option>
+                  ))}
+                </select>
+              </div>
             )}
           </div>
           {mechinaGroupId && (

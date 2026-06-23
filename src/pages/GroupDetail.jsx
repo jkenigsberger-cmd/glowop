@@ -23,6 +23,7 @@ import GroupLifecycleActions from "@/components/groups/GroupLifecycleActions";
 import RoleGate from "@/components/RoleGate";
 import ReviewAlertsBanner from "@/components/alerts/ReviewAlertsBanner";
 import CoffeeCornerTab from "@/components/coffee/CoffeeCornerTab";
+import MechinaUsersSection from "@/components/mechina/MechinaUsersSection";
 
 export default function GroupDetail() {
   const { id } = useParams();
@@ -408,6 +409,11 @@ export default function GroupDetail() {
             <p className="text-sm text-amber-900">{group.internal_notes}</p>
           </section>
         )}
+
+        {/* Mechina Users — admin only */}
+        <RoleGate roles={["SUPER_ADMIN", "ADMIN", "OPERATIONS"]}>
+          <MechinaUsersSection groupId={id} groupName={group.group_name} />
+        </RoleGate>
 
         {/* Lifecycle Actions */}
         <GroupLifecycleActions
