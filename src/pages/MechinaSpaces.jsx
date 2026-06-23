@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useRoleContext } from "@/lib/RoleContext";
-import { Building2, ChevronRight, ChevronLeft, CalendarDays, Plus, ListChecks } from "lucide-react";
+import { Building2, ChevronRight, ChevronLeft, CalendarDays, Plus, ListChecks, CheckCircle, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 import MechinaBookingRequestModal from "@/components/mechina/MechinaBookingRequestModal";
 import MechinaSpaceAvailability from "@/components/mechina/MechinaSpaceAvailability";
+import MechinaDecisionModal from "@/components/mechina/MechinaDecisionModal";
 
 const ADMIN_ROLES = ["SUPER_ADMIN", "ADMIN", "OPERATIONS"];
 
@@ -92,6 +94,7 @@ export default function MechinaSpaces() {
   const [preselectedSpaceId, setPreselectedSpaceId] = useState("");
 
   const [selectedAssignmentId, setSelectedAssignmentId] = useState("");
+  const [decisionModal, setDecisionModal] = useState(null); // { mode: "approve"|"reject", request }
 
   // Derived: selected assignment (for MECHINA_USER)
   const activeAssignments = assignments.filter(a => a.is_active);
@@ -152,6 +155,30 @@ export default function MechinaSpaces() {
     base44.entities.CommonSpaceBookingRequest.filter({ status: "PENDING" })
       .then(reqs => setMyRequests(reqs.sort((a, b) => (b.created_date || "").localeCompare(a.created_date || ""))));
   }, [isAdmin]);
+
+  const reloadAdminData = async () => {
+    const [bookings, pending, allPending] = await Promise.all([
+      base44.entities.GroupScheduleItem.filter({ date: selectedDate, status: "ACTIVE" }),
+      base44.entities.CommonSpaceBookingRequest.filter({ date: selectedDate, status: "PENDING" }),
+      base44.entities.CommonSpaceBookingRequest.filter({ status: "PENDING" }),
+    ]);
+    setActiveBookings(bookings.filter(b => b.activity_space_id));
+    setPendingRequests(pending);
+    setMyRequests(allPending.sort((a, b) => (b.created_date || "").localeCompare(a.created_date || "")));
+  };
+
+  const handleDecision = async (adminNotes) => {
+    const { mode, request } = decisionModal;
+    const fnName = mode === "approve" ? "approveMechinaBookingRequest" : "rejectMechinaBookingRequest";
+    const res = await base44.functions.invoke(fnName, { request_id: request.id, admin_notes: adminNotes });
+    setDecisionModal(null);
+    if (res.data?.success) {
+      toast.success(mode === "approve" ? "הבקשה אושרה" : "הבקשה נדחתה");
+      await reloadAdminData();
+    } else {
+      toast.error(res.data?.error || "שגיאה — נסה שוב");
+    }
+  };
 
   const handleRequestNew = (spaceId = "") => {
     setPreselectedSpaceId(spaceId);
@@ -373,7 +400,7 @@ export default function MechinaSpaces() {
         ) : (
           <div className="space-y-2">
             {myRequests.map(req => (
-              <div key={req.id} className="bg-white border border-amber-200 rounded-xl px-4 py-3 flex items-center gap-3">
+              <div key={req.id} className="bg-white border border-amber-200 rounded-xl px-4 py-3 flex items-center gap-3 flex-wrap">
                 <div className="flex-1 space-y-0.5 min-w-0">
                   <p className="text-sm font-semibold text-slate-800 truncate">{req.activity_title}</p>
                   <p className="text-xs text-slate-500">
@@ -381,12 +408,41 @@ export default function MechinaSpaces() {
                   </p>
                   <p className="text-xs text-slate-400">{req.requested_by_name || req.requested_by_email}</p>
                 </div>
-                <StatusBadge status={req.status} />
+                <div className="flex items-center gap-2">
+                  <StatusBadge status={req.status} />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-emerald-300 text-emerald-700 hover:bg-emerald-50 gap-1"
+                    onClick={() => setDecisionModal({ mode: "approve", request: req })}
+                  >
+                    <CheckCircle className="w-3.5 h-3.5" /> אשר
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-red-300 text-red-600 hover:bg-red-50 gap-1"
+                    onClick={() => setDecisionModal({ mode: "reject", request: req })}
+                  >
+                    <XCircle className="w-3.5 h-3.5" /> דחה
+                  </Button>
+                </div>
               </div>
             ))}
           </div>
         )}
       </section>
+
+      {/* Decision modal */}
+      {decisionModal && (
+        <MechinaDecisionModal
+          open={!!decisionModal}
+          onClose={() => setDecisionModal(null)}
+          onConfirm={handleDecision}
+          mode={decisionModal.mode}
+          request={decisionModal.request}
+        />
+      )}
 
       {/* Modal for admin too */}
       {modalOpen && (
