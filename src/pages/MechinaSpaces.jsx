@@ -178,7 +178,23 @@ export default function MechinaSpaces() {
     );
   }
 
-  const bookableSpaces = spaces.filter(s => s.is_bookable !== false);
+  const SPACE_SORT_ORDER = [
+    "bunker_1", "bunker_2", "bunker_3", "bunker_4",
+    "bunker_6", "bunker_7", "bunker_8",
+    "ohel_moed", "outdoor_deck_lawn", "dining_hall",
+    "boulder_1", "boulder_2", "boulder_3", "boulder_4",
+    "boulder_5", "boulder_6", "boulder_7", "boulder_8",
+  ];
+
+  const bookableSpaces = spaces
+    .filter(s => s.is_bookable !== false && s.code !== "bunker_5")
+    .sort((a, b) => {
+      const ai = SPACE_SORT_ORDER.indexOf(a.code);
+      const bi = SPACE_SORT_ORDER.indexOf(b.code);
+      const aw = ai === -1 ? 999 : ai;
+      const bw = bi === -1 ? 999 : bi;
+      return aw - bw;
+    });
 
   // ── MECHINA USER VIEW ────────────────────────────────────────────────────
   if (isMechinaUser) {
