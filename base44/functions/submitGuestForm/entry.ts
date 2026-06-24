@@ -139,7 +139,7 @@ Deno.serve(async (req) => {
     const base44 = createClientFromRequest(req);
 
     const body = await req.json();
-    const { quote_id, group_id, ...fields } = body;
+    const { quote_id, group_id, form_link_token, ...fields } = body;
 
     if (!group_id) {
       return Response.json({ error: 'group_id is required' }, { status: 400 });
@@ -189,7 +189,31 @@ Deno.serve(async (req) => {
         return Response.json({ error: 'הקישור אינו פעיל עוד — פנו לצוות בית הדור הבא' }, { status: 403 });
       }
 
-      // Direct groups allow resubmission — no lock (admin can regenerate link to resubmit)
+      // ── Token validation for direct groups ──────────────────────────────────
+      const allLinks = await base44.asServiceRole.entities.GroupExternalFormLink.filter({ group_id });
+      const hasTokenSystem = allLinks.length > 0;
+
+      if (hasTokenSystem) {
+        // Token system is in use — require a valid ACTIVE token
+        if (!form_link_token) {
+          return Response.json({ error: 'הקישור אינו בתוקף. נא לבקש קישור חדש.' }, { status: 403 });
+        }
+        const activeLink = allLinks.find(l => l.token === form_link_token && l.status === 'ACTIVE');
+        if (!activeLink) {
+          return Response.json({ error: 'הקישור אינו בתוקף. נא לבקש קישור חדש.' }, { status: 403 });
+        }
+        // Prevent double-submission with the same token
+        const existingSubs = await base44.asServiceRole.entities.GuestFormSubmission.filter({ group_id });
+        const alreadySubmittedWithToken = existingSubs.find(
+          s => s.form_link_token === form_link_token && ['SUBMITTED', 'REVIEWED'].includes(s.status)
+        );
+        if (alreadySubmittedWithToken) {
+          return Response.json({
+            error: 'הקישור כבר שומש לשליחת הטופס. אם יש צורך בשינוי, בקשו קישור חדש מהצוות.'
+          }, { status: 409 });
+        }
+      }
+      // Legacy path (no token system yet): allow submission freely
     }
 
     const num = (v) => (v !== undefined && v !== null && v !== '' ? Number(v) : null);
@@ -197,9 +221,20 @@ Deno.serve(async (req) => {
 
     console.log('[submitGuestForm]', { group_id, isDirectGroup, quote_id: quote_id || null });
 
+    // Resolve token version number if present
+    let form_link_version = null;
+    if (form_link_token && isDirectGroup) {
+      try {
+        const links = await base44.asServiceRole.entities.GroupExternalFormLink.filter({ group_id });
+        const matchedLink = links.find(l => l.token === form_link_token);
+        if (matchedLink) form_link_version = matchedLink.version_number;
+      } catch { /* non-fatal */ }
+    }
+
     const submissionData = {
       group_id,
       ...(isDirectGroup ? {} : { quote_id }),
+      ...(form_link_token ? { form_link_token, form_link_version } : {}),
       contact_name:            fields.contact_name              || '',
       contact_phone:           fields.contact_phone             || '',
       contact_email:           fields.contact_email             || '',

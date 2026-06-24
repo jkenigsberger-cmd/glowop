@@ -86,6 +86,7 @@ export default function GuestForm() {
   const urlParams = new URLSearchParams(window.location.search);
   const quoteId = urlParams.get("quote") || urlParams.get("q");
   const directGroupId = urlParams.get("group"); // direct group link (no quote)
+  const formLinkToken = urlParams.get("token") || null; // token from regenerated link
 
   const [quoteData, setQuoteData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -129,7 +130,7 @@ export default function GuestForm() {
     }
 
     const fetchData = directGroupId
-      ? callFunction("getGroupPublicData", { group_id: directGroupId })
+      ? callFunction("getGroupPublicData", { group_id: directGroupId, token: formLinkToken })
       : callFunction("getQuotePublicData", { quote_id: quoteId });
 
     fetchData
@@ -250,8 +251,9 @@ export default function GuestForm() {
 
     try {
       const payload = {
-        quote_id:        directGroupId ? null : quoteId,
-        group_id:        resolvedGroupId,
+        quote_id:           directGroupId ? null : quoteId,
+        group_id:           resolvedGroupId,
+        form_link_token:    formLinkToken || null,
         contact_name:    details.contact_name,
         contact_phone:   details.contact_phone,
         contact_email:   details.contact_email,

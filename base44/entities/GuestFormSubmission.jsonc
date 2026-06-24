@@ -10,6 +10,14 @@
       "type": "string",
       "description": "FK to Group (operational reference)"
     },
+    "form_link_token": {
+      "type": "string",
+      "description": "Token from GroupExternalFormLink used to submit this form \u2014 null for legacy submissions"
+    },
+    "form_link_version": {
+      "type": "number",
+      "description": "Version number of the link used \u2014 null for legacy submissions"
+    },
     "contact_name": {
       "type": "string"
     },
@@ -108,7 +116,8 @@
       "enum": [
         "PENDING",
         "SUBMITTED",
-        "REVIEWED"
+        "REVIEWED",
+        "SUPERSEDED"
       ],
       "default": "PENDING"
     }

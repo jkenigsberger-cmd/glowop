@@ -106,14 +106,32 @@ export default function GroupDetail() {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  // Direct group link (no quote required)
+  // Regenerate + copy a new tokenized direct group link
   const [copiedDirectLink, setCopiedDirectLink] = useState(false);
-  const copyDirectGroupLink = () => {
-    const url = `${window.location.origin}/guest-form?group=${id}`;
-    navigator.clipboard.writeText(url);
-    setCopiedDirectLink(true);
-    setTimeout(() => setCopiedDirectLink(false), 2000);
-    toast.success("הקישור הועתק ללוח");
+  const [generatingLink, setGeneratingLink] = useState(false);
+
+  const { data: formLinks = [] } = useQuery({
+    queryKey: ["formLinks", id],
+    queryFn: () => base44.entities.GroupExternalFormLink.filter({ group_id: id }),
+    enabled: !!id,
+  });
+  const lastActiveLink = formLinks.filter(l => l.status === 'ACTIVE').sort((a, b) => (b.created_date || '').localeCompare(a.created_date || ''))[0];
+
+  const regenerateAndCopyLink = async () => {
+    setGeneratingLink(true);
+    try {
+      const res = await base44.functions.invoke("regenerateGuestFormLink", { group_id: id });
+      const { url } = res.data;
+      await navigator.clipboard.writeText(url);
+      setCopiedDirectLink(true);
+      setTimeout(() => setCopiedDirectLink(false), 3000);
+      toast.success("קישור חדש נוצר והועתק");
+      queryClient.invalidateQueries({ queryKey: ["formLinks", id] });
+    } catch (err) {
+      toast.error(err?.response?.data?.error || "יצירת הקישור נכשלה");
+    } finally {
+      setGeneratingLink(false);
+    }
   };
 
 
@@ -316,19 +334,29 @@ export default function GroupDetail() {
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold flex items-center gap-2"><ClipboardList className="w-4 h-4" /> טפסי קבלה</h2>
             <div className="flex items-center gap-2 flex-wrap justify-end">
-              {/* Direct group link — always available; always loads current group dates */}
+              {/* Regenerate tokenized direct group link */}
               <RoleGate permission="CREATE_GUEST_LINK">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={copyDirectGroupLink}
-                  className={`gap-1 transition-colors ${copiedDirectLink ? "border-green-400 text-green-600 bg-green-50" : "border-blue-300 text-blue-700 hover:bg-blue-50"}`}
-                >
-                  {copiedDirectLink
-                    ? <><Check className="w-3 h-3" /> הועתק!</>
-                    : <><Link2 className="w-3 h-3" /> {submissions.length > 0 ? "חדש קישור טופס" : "העתק קישור חיצוני"}</>
-                  }
-                </Button>
+                <div className="flex flex-col items-end gap-0.5">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={regenerateAndCopyLink}
+                    disabled={generatingLink}
+                    className={`gap-1 transition-colors ${copiedDirectLink ? "border-green-400 text-green-600 bg-green-50" : "border-blue-300 text-blue-700 hover:bg-blue-50"}`}
+                  >
+                    {copiedDirectLink
+                      ? <><Check className="w-3 h-3" /> הועתק!</>
+                      : generatingLink
+                        ? <><Link2 className="w-3 h-3" /> יוצר...</>
+                        : <><Link2 className="w-3 h-3" /> חדש קישור טופס</>
+                    }
+                  </Button>
+                  {lastActiveLink?.created_date && (
+                    <span className="text-xs text-muted-foreground">
+                      קישור אחרון: {format(new Date(lastActiveLink.created_date), "dd/MM/yyyy")}
+                    </span>
+                  )}
+                </div>
               </RoleGate>
               <RoleGate permission="EDIT_GROUP">
                 <Button size="sm" variant="outline" onClick={() => { setEditSubmission(null); setShowSubmissionForm(true); }} className="gap-1">

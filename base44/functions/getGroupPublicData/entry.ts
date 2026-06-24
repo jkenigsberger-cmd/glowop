@@ -11,7 +11,7 @@ Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     const body = await req.json();
-    const { group_id } = body;
+    const { group_id, token } = body;
 
     if (!group_id) {
       return Response.json({ error: 'group_id is required' }, { status: 400 });
@@ -34,13 +34,34 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'הקישור אינו פעיל עוד — פנו לצוות בית הדור הבא' }, { status: 403 });
     }
 
-    // Check if there's already a submitted/reviewed form for this group (direct-group path, no quote_id)
-    const existingSubs = await base44.asServiceRole.entities.GuestFormSubmission.filter({ group_id });
-    const hasSubmitted = existingSubs.some(s => ['SUBMITTED', 'REVIEWED'].includes(s.status) && !s.quote_id);
-    if (hasSubmitted) {
-      return Response.json({
-        error: 'השאלון כבר נשלח ולא ניתן לערוך אותו. אם יש צורך בשינוי, יש לפנות לצוות בית הדור הבא.'
-      }, { status: 409 });
+    // ── Token validation ─────────────────────────────────────────────────────
+    // Check if this group has any token-based links (i.e. new system is in use)
+    const allLinks = await base44.asServiceRole.entities.GroupExternalFormLink.filter({ group_id });
+    const hasTokenSystem = allLinks.length > 0;
+
+    if (hasTokenSystem) {
+      // Token system is in use for this group — require a valid token
+      if (!token) {
+        return Response.json({ error: 'הקישור אינו בתוקף. נא לבקש קישור חדש.' }, { status: 403 });
+      }
+      const activeLink = allLinks.find(l => l.token === token && l.status === 'ACTIVE');
+      if (!activeLink) {
+        return Response.json({ error: 'הקישור אינו בתוקף. נא לבקש קישור חדש.' }, { status: 403 });
+      }
+      // Check if this specific token was already submitted
+      const existingSubs = await base44.asServiceRole.entities.GuestFormSubmission.filter({ group_id });
+      const submittedWithThisToken = existingSubs.find(
+        s => s.form_link_token === token && ['SUBMITTED', 'REVIEWED'].includes(s.status)
+      );
+      if (submittedWithThisToken) {
+        return Response.json({
+          error: 'הקישור כבר שומש לשליחת הטופס. אם יש צורך בשינוי, בקשו קישור חדש מהצוות.'
+        }, { status: 409 });
+      }
+    } else {
+      // Legacy path — no token system in use yet for this group
+      // Allow access (backward compat), but once admin generates a new token, legacy links stop working
+      // No submission check here — submitGuestForm already allows direct-group resubmission
     }
 
     const group_type = group.group_type || 'LODGING';
@@ -68,6 +89,7 @@ Deno.serve(async (req) => {
       client_tax_id:     '',   // not stored on Group, never expose
       talks:             [],   // no quotes, no talks
       is_direct_group:   true, // flag for GuestForm UI
+      form_link_token:   token || null,
     });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });

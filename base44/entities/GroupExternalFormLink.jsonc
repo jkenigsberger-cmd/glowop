@@ -1,0 +1,43 @@
+{
+  "name": "GroupExternalFormLink",
+  "type": "object",
+  "properties": {
+    "group_id": {
+      "type": "string",
+      "description": "FK to Group"
+    },
+    "token": {
+      "type": "string",
+      "description": "Unique random token for this link"
+    },
+    "version_number": {
+      "type": "number",
+      "description": "Sequential version per group, starting at 1"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "ACTIVE",
+        "SUPERSEDED",
+        "CANCELLED"
+      ],
+      "default": "ACTIVE"
+    },
+    "created_by_user_id": {
+      "type": "string",
+      "description": "FK to User who generated this link"
+    },
+    "created_by_name": {
+      "type": "string"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "group_id",
+    "token",
+    "version_number",
+    "status"
+  ]
+}
