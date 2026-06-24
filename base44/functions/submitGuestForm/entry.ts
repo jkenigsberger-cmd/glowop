@@ -189,14 +189,7 @@ Deno.serve(async (req) => {
         return Response.json({ error: 'הקישור אינו פעיל עוד — פנו לצוות בית הדור הבא' }, { status: 403 });
       }
 
-      // Prevent duplicate submissions for direct groups (no quote_id)
-      const existingByGroup = await base44.asServiceRole.entities.GuestFormSubmission.filter({ group_id });
-      const lockedDirect = existingByGroup.find(s => ['SUBMITTED', 'REVIEWED'].includes(s.status) && !s.quote_id);
-      if (lockedDirect) {
-        return Response.json({
-          error: 'השאלון כבר נשלח ולא ניתן לערוך אותו. אם יש צורך בשינוי, יש לפנות לצוות בית הדור הבא.'
-        }, { status: 409 });
-      }
+      // Direct groups allow resubmission — no lock (admin can regenerate link to resubmit)
     }
 
     const num = (v) => (v !== undefined && v !== null && v !== '' ? Number(v) : null);
@@ -275,6 +268,31 @@ Deno.serve(async (req) => {
         }
       } else {
         console.warn('[submitGuestForm] skipping kitchen sync — missing activity_date or total_pax', { activity_date, total_pax });
+      }
+    }
+
+    // ── Cancel out-of-range meals for this group ─────────────────────────────
+    // When form is resubmitted after group dates changed, stale meals outside
+    // the new date range must be cancelled (not deleted).
+    if (groupForSync) {
+      try {
+        const allMeals = await base44.asServiceRole.entities.MealReservation.filter({ group_id });
+        const arrival   = groupForSync.arrival_date;
+        const departure = groupForSync.departure_date;
+        const toCancel  = allMeals.filter(m => {
+          if (m.status === 'CANCELLED') return false;
+          if (arrival   && m.date < arrival)   return true;
+          if (departure && m.date > departure) return true;
+          return false;
+        });
+        for (const m of toCancel) {
+          await base44.asServiceRole.entities.MealReservation.update(m.id, { status: 'CANCELLED' });
+        }
+        if (toCancel.length > 0) {
+          console.log(`[submitGuestForm] cancelled ${toCancel.length} out-of-range meals`);
+        }
+      } catch (cancelErr) {
+        console.warn('[submitGuestForm] out-of-range meal cancel failed (non-fatal):', cancelErr?.message);
       }
     }
 

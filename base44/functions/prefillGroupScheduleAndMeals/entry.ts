@@ -62,6 +62,11 @@ Deno.serve(async (req) => {
     if (!profile) return Response.json({ success: false, error: 'Profile not found' }, { status: 404 });
 
     const group_id = profile.group_id;
+
+    // Load group for date range validation
+    step = 'load_group';
+    const groupRecords = await base44.asServiceRole.entities.Group.filter({ id: group_id });
+    const group = groupRecords[0] || null;
     console.log('[prefillGroupScheduleAndMeals] group_id:', group_id);
 
     // Try to load GuestFormSubmission — NOT required
@@ -340,7 +345,31 @@ Deno.serve(async (req) => {
       }
     }
 
-    console.log(`[prefillGroupScheduleAndMeals] done: schedule +${scheduleCreated} ~${scheduleUpdated}, meals +${mealsCreated} ~${mealsUpdated}`);
+    // ── Cancel out-of-range meals (group dates may have been shortened) ────────
+    step = 'cancel_out_of_range';
+    let cancelledOutOfRange = 0;
+    if (group?.arrival_date || group?.departure_date) {
+      const allActiveMeals = await base44.asServiceRole.entities.MealReservation.filter({ group_id });
+      const outOfRange = allActiveMeals.filter(m => {
+        if (m.status === 'CANCELLED') return false;
+        if (group.arrival_date  && m.date < group.arrival_date)  return true;
+        if (group.departure_date && m.date > group.departure_date) return true;
+        return false;
+      });
+      for (const m of outOfRange) {
+        await base44.asServiceRole.entities.MealReservation.update(m.id, {
+          status: 'CANCELLED',
+          notes: (m.notes ? m.notes + '\n' : '') + 'בוטל — מחוץ לטווח תאריכי הקבוצה',
+        });
+        cancelledOutOfRange++;
+      }
+      if (cancelledOutOfRange > 0) {
+        console.log(`[prefillGroupScheduleAndMeals] cancelled ${cancelledOutOfRange} out-of-range meals`);
+        warnings.push(`OUT_OF_RANGE_CANCELLED:${cancelledOutOfRange}`);
+      }
+    }
+
+    console.log(`[prefillGroupScheduleAndMeals] done: schedule +${scheduleCreated} ~${scheduleUpdated}, meals +${mealsCreated} ~${mealsUpdated}, cancelled_out_of_range: ${cancelledOutOfRange}`);
 
     return Response.json({
       success: true,
@@ -348,7 +377,7 @@ Deno.serve(async (req) => {
       warnings,
       meal_conflicts: mealConflicts,
       schedule: { created: scheduleCreated, updated: scheduleUpdated },
-      meals: { created: mealsCreated, updated: mealsUpdated },
+      meals: { created: mealsCreated, updated: mealsUpdated, cancelled_out_of_range: cancelledOutOfRange },
     });
 
   } catch (error) {

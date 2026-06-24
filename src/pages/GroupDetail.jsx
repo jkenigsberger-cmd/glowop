@@ -24,6 +24,7 @@ import RoleGate from "@/components/RoleGate";
 import ReviewAlertsBanner from "@/components/alerts/ReviewAlertsBanner";
 import CoffeeCornerTab from "@/components/coffee/CoffeeCornerTab";
 import MechinaUsersSection from "@/components/mechina/MechinaUsersSection";
+import MealDateRangeWarning from "@/components/groups/MealDateRangeWarning";
 
 export default function GroupDetail() {
   const { id } = useParams();
@@ -231,6 +232,11 @@ export default function GroupDetail() {
 
         {activeTab === "overview" && <>
 
+        {/* Meal date range warning — shown when active meals exist outside current stay */}
+        <RoleGate permission="EDIT_GROUP">
+          <MealDateRangeWarning group={group} />
+        </RoleGate>
+
         {/* Summary Bar */}
         <div className="grid grid-cols-3 gap-3">
           <div className="bg-card border border-border rounded-xl px-4 py-3 text-center">
@@ -310,22 +316,20 @@ export default function GroupDetail() {
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold flex items-center gap-2"><ClipboardList className="w-4 h-4" /> טפסי קבלה</h2>
             <div className="flex items-center gap-2 flex-wrap justify-end">
-              {/* Direct group link button — only when no approved quote exists */}
-              {quotes.filter(q => q.status === "APPROVED").length === 0 && (
-                <RoleGate permission="CREATE_GUEST_LINK">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={copyDirectGroupLink}
-                    className={`gap-1 transition-colors ${copiedDirectLink ? "border-green-400 text-green-600 bg-green-50" : "border-blue-300 text-blue-700 hover:bg-blue-50"}`}
-                  >
-                    {copiedDirectLink
-                      ? <><Check className="w-3 h-3" /> הועתק!</>
-                      : <><Link2 className="w-3 h-3" /> העתק קישור חיצוני</>
-                    }
-                  </Button>
-                </RoleGate>
-              )}
+              {/* Direct group link — always available; always loads current group dates */}
+              <RoleGate permission="CREATE_GUEST_LINK">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={copyDirectGroupLink}
+                  className={`gap-1 transition-colors ${copiedDirectLink ? "border-green-400 text-green-600 bg-green-50" : "border-blue-300 text-blue-700 hover:bg-blue-50"}`}
+                >
+                  {copiedDirectLink
+                    ? <><Check className="w-3 h-3" /> הועתק!</>
+                    : <><Link2 className="w-3 h-3" /> {submissions.length > 0 ? "חדש קישור טופס" : "העתק קישור חיצוני"}</>
+                  }
+                </Button>
+              </RoleGate>
               <RoleGate permission="EDIT_GROUP">
                 <Button size="sm" variant="outline" onClick={() => { setEditSubmission(null); setShowSubmissionForm(true); }} className="gap-1">
                   <Plus className="w-3.5 h-3.5" /> טופס חדש

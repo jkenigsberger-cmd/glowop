@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import DietaryFields, { EMPTY_DIETS, parseDiets, mergeDiets } from "@/components/shared/DietaryFields";
 import { upsertReviewAlert } from "@/lib/reviewAlerts";
 import { syncExistingOperationalPaxForGroup } from "@/lib/syncOperationalPax";
+import MealSyncAfterDateChangeModal from "@/components/groups/MealSyncAfterDateChangeModal";
 
 // Fields that trigger pax-related alerts when changed
 const PAX_FIELDS = ["total_pax", "participant_count", "staff_count", "boys_count", "girls_count"];
@@ -41,6 +42,7 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
   const [saving, setSaving] = useState(false);
   const [allocationBlockError, setAllocationBlockError] = useState(null);
   const [genderConsistencyError, setGenderConsistencyError] = useState(null);
+  const [mealSyncData, setMealSyncData] = useState(null); // { outOfRangeMeals, newDeparture }
 
   // ── Derived values ────────────────────────────────────────────────────────
   const totalPax   = Number(form.total_pax   || 0);
@@ -305,10 +307,44 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
     queryClient.invalidateQueries({ queryKey: ["profiles_kitchen"] });
     queryClient.invalidateQueries({ queryKey: ["profiles_kitchenReport"] });
     queryClient.invalidateQueries({ queryKey: ["operationalProfile"] });
+
+    // ── Check for out-of-range meals after departure date shortening ────────
+    if (isEdit && payload.departure_date && group.departure_date) {
+      const oldDeparture = group.departure_date;
+      const newDeparture = payload.departure_date;
+      const newArrival   = payload.arrival_date || group.arrival_date;
+      if (newDeparture < oldDeparture || newArrival > (group.arrival_date || newArrival)) {
+        try {
+          const allMeals = await base44.entities.MealReservation.filter({ group_id: group.id });
+          const outOfRange = allMeals.filter(m => {
+            if (m.status === "CANCELLED") return false;
+            if (newArrival   && m.date < newArrival)    return true;
+            if (newDeparture && m.date > newDeparture)  return true;
+            return false;
+          });
+          if (outOfRange.length > 0) {
+            setMealSyncData({ outOfRangeMeals: outOfRange, newDeparture });
+            return; // modal handles onSaved
+          }
+        } catch { /* non-blocking */ }
+      }
+    }
+
     onSaved();
   };
 
   const isDayUse = form.group_type === "DAY_USE";
+
+  if (mealSyncData) {
+    return (
+      <MealSyncAfterDateChangeModal
+        groupId={group.id}
+        outOfRangeMeals={mealSyncData.outOfRangeMeals}
+        newDeparture={mealSyncData.newDeparture}
+        onClose={() => { setMealSyncData(null); onSaved(); }}
+      />
+    );
+  }
 
   return (
     <Dialog open onOpenChange={onClose}>
