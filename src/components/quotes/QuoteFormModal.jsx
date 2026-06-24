@@ -540,6 +540,8 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const [coffeeEnabled, setCoffeeEnabled] = useState(quote ? (quote.coffee_corner_pax > 0) : false);
+  const [prisaEnabled, setPrisaEnabled] = useState(quote ? (quote.includes_prisa === true) : false);
+  const PRISA_RATE = 2.5;
 
   // ── Quote type (for catalog organization) ────────────────────────────────────
   const deriveQuoteType = () => {
@@ -650,7 +652,8 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
   // New catalog totals
   const packageLinesTotal   = packageLines.reduce((s, r) => s + calcPackageLine(r), 0);
   const newAddonLinesTotal  = newAddonLines.reduce((s, r) => s + calcAddonLine(r), 0);
-  const subtotal            = studentLodgingTotal + adultLodgingTotal + workshopTotal + lectureTotal + coffeeTotal + addonTotal + adjustmentTotal + surchargeTotal + packageLinesTotal + newAddonLinesTotal;
+  const prisaTotal          = prisaEnabled ? Math.round(estimatedPax * PRISA_RATE) : 0;
+  const subtotal            = studentLodgingTotal + adultLodgingTotal + workshopTotal + lectureTotal + coffeeTotal + addonTotal + adjustmentTotal + surchargeTotal + packageLinesTotal + newAddonLinesTotal + prisaTotal;
   const discountAmount      = Math.round(subtotal * Number(form.discount_percent || 0) / 100);
   const total_price         = subtotal - discountAmount;
   const advance             = Math.round(total_price * 0.3);
@@ -701,6 +704,7 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
       staff_count: staffCount || undefined,
       participant_count: participantCount || undefined,
       coffee_corner_pax: coffeeEnabled ? staffCount : 0,
+      includes_prisa: prisaEnabled,
       discount_percent: Number(form.discount_percent || 0),
     };
     if (isEdit) await base44.entities.Quote.update(quote.id, quotePayload);
@@ -989,6 +993,23 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
                 </SectionCard>
               )}
 
+              {/* ── פריסה ── */}
+              <div className={`${CARD} px-5 py-4`}>
+                <div className={SEC_TITLE}><Tag className="w-4 h-4 text-primary" />פריסה</div>
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input type="checkbox" checked={prisaEnabled} onChange={e => setPrisaEnabled(e.target.checked)} className="w-4 h-4 accent-primary" />
+                  <span className="text-sm">פריסה — ₪2.5 למשתתף</span>
+                </label>
+                {prisaEnabled && (
+                  <div className="text-sm text-slate-500 mt-1">
+                    {estimatedPax > 0
+                      ? <>{estimatedPax} משתתפים × ₪2.5 = <span className="font-semibold text-slate-700">₪{prisaTotal.toLocaleString("he-IL")}</span></>
+                      : <span className="text-amber-600 text-xs">הזן סה״כ משתתפים לחישוב</span>
+                    }
+                  </div>
+                )}
+              </div>
+
               {addons.length > 0 && (
                 <SectionCard icon={Tag} title="תוספות חופשיות (ישן)" defaultOpen={true}>
                   <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 mb-2">
@@ -1097,6 +1118,7 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
                   {coffeeTotal         > 0 && <div className="flex justify-between"><span>פינת קפה</span><span className="font-medium text-slate-700">{fmtMoney(coffeeTotal)}</span></div>}
                   {(addonTotal + adjustmentTotal) !== 0 && <div className="flex justify-between"><span>התאמות</span><span className="font-medium text-slate-700">{fmtMoney(addonTotal + adjustmentTotal)}</span></div>}
                   {surchargeTotal > 0 && <div className="flex justify-between"><span>תוספת תשלום</span><span className="font-medium text-slate-700">{fmtMoney(surchargeTotal)}</span></div>}
+                  {prisaTotal     > 0 && <div className="flex justify-between"><span>פריסה</span><span className="font-medium text-slate-700">{fmtMoney(prisaTotal)}</span></div>}
                 </div>
               </div>
             )}

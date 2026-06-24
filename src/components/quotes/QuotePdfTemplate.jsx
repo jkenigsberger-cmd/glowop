@@ -150,6 +150,13 @@ function resolveData(quote, group) {
     }
   });
 
+  // פריסה — 2.5 ₪ per participant
+  const totalPaxForPrisa = Number(quote?.estimated_pax ?? group?.total_pax ?? 0);
+  if (quote?.includes_prisa && totalPaxForPrisa > 0) {
+    const prisaTotal = Math.round(totalPaxForPrisa * 2.5);
+    lineItems.push({ name: "פריסה", qty: totalPaxForPrisa, unitPrice: 2.5, total: prisaTotal, vatAmount: null });
+  }
+
   const subtotal    = Number(quote?.subtotal ?? 0);
   const discountPct = Number(quote?.discount_percent ?? 0);
   const discountAmt = Number(quote?.discount_amount ?? 0);

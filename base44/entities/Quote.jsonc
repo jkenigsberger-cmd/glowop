@@ -88,6 +88,11 @@
       "type": "number",
       "description": "Students / participants"
     },
+    "includes_prisa": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether \u05e4\u05e8\u05d9\u05e1\u05d4 (2.5 \u20aa per participant) is included in this quote"
+    },
     "package_lines": {
       "type": "string",
       "description": "JSON array \u2014 new catalog packages: [{package_id, option_id, quantity, unit_price, shirley_addon, price_overridden, notes}]"
