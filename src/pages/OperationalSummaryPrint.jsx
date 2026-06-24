@@ -116,7 +116,24 @@ function MealCard({ meal, profileDiets }) {
   );
 }
 
+const LOGISTICS_KEYS = [
+  { key: "needs_projector",    label: "מקרן" },
+  { key: "needs_screen",       label: "מסך" },
+  { key: "needs_microphone",   label: "מיקרופון" },
+  { key: "needs_sound",        label: "מערכת סאונד" },
+  { key: "needs_whiteboard",   label: "לוח" },
+  { key: "needs_chair_circle", label: "מעגל כיסאות" },
+];
+
+function activityEquipmentText(item) {
+  const parts = LOGISTICS_KEYS.filter(k => item[k.key]).map(k => k.label);
+  if (item.chairs_count > 0) parts.push(`כיסאות: ${item.chairs_count}`);
+  if (item.logistics_other) parts.push(item.logistics_other);
+  return parts.length > 0 ? parts.join(", ") : null;
+}
+
 function ActivityCard({ item, space }) {
+  const equipment = activityEquipmentText(item);
   return (
     <div className="activity-card">
       <div className="activity-time" dir="ltr">{item.start_time}–{item.end_time}</div>
@@ -126,6 +143,9 @@ function ActivityCard({ item, space }) {
         <div className="activity-location">📍 {item.requested_location}</div>
       )}
       {item.pax > 0 && <div className="activity-pax">👥 {item.pax} משתתפים</div>}
+      <div className="activity-equipment">
+        🔧 ציוד: {equipment || "אין ציוד מיוחד"}
+      </div>
       {item.notes && <div className="activity-notes">{item.notes}</div>}
     </div>
   );
@@ -717,6 +737,12 @@ export default function OperationalSummaryPrint() {
           font-size: 12px;
           color: #64748b;
           margin-top: 2px;
+        }
+        .activity-equipment {
+          font-size: 11px;
+          color: #1d4ed8;
+          font-weight: 600;
+          margin-top: 3px;
         }
         .activity-notes {
           font-size: 11px;

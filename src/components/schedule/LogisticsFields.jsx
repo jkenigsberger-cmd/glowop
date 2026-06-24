@@ -101,6 +101,17 @@ export default function LogisticsFields({ value, onChange, compact = false }) {
   );
 }
 
+/** Returns a plain-text equipment summary string, or null if nothing is needed */
+export function equipmentTextSummary(item) {
+  if (!item) return null;
+  const parts = CHECKBOXES
+    .filter(c => item[c.key])
+    .map(c => LOGISTICS_BADGE_LABELS[c.key]);
+  if (item.chairs_count > 0) parts.push(`כיסאות: ${item.chairs_count}`);
+  if (item.logistics_other) parts.push(item.logistics_other);
+  return parts.length > 0 ? parts.join(", ") : null;
+}
+
 /** Small display badges for logistics needs */
 export function LogisticsBadges({ item }) {
   if (!item) return null;
@@ -108,7 +119,7 @@ export function LogisticsBadges({ item }) {
     .filter(c => item[c.key])
     .map(c => LOGISTICS_BADGE_LABELS[c.key]);
 
-  if (item.chairs_count > 0) badges.push(`${item.chairs_count} כיסאות`);
+  if (item.chairs_count > 0) badges.push(`כיסאות: ${item.chairs_count}`);
   if (item.logistics_other) badges.push(item.logistics_other);
 
   if (badges.length === 0) return null;
@@ -121,5 +132,19 @@ export function LogisticsBadges({ item }) {
         </span>
       ))}
     </div>
+  );
+}
+
+/**
+ * One-line equipment summary for compact operational views.
+ * showEmpty: if true, shows "אין ציוד מיוחד" when nothing needed (good for reports).
+ */
+export function ActivityEquipmentLine({ item, showEmpty = false, className = "" }) {
+  const summary = equipmentTextSummary(item);
+  if (!summary && !showEmpty) return null;
+  return (
+    <p className={`text-xs ${summary ? "text-blue-700 font-medium" : "text-slate-400"} ${className}`}>
+      {summary ? `🔧 ציוד: ${summary}` : "ציוד: אין ציוד מיוחד"}
+    </p>
   );
 }

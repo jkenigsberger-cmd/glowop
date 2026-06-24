@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { ActivityEquipmentLine } from "@/components/schedule/LogisticsFields";
 
 moment.locale("he");
 
@@ -244,18 +245,19 @@ function GroupCard({ group, dateStr, meals, activities, spaces, alerts, defaultO
                         <span className="text-xs font-semibold text-slate-800 truncate">{a.activity_name}</span>
                       </div>
                       <div className="flex flex-wrap gap-x-3 gap-y-0.5">
-                        {space && <span className="text-xs text-purple-500">📍 {space.name || space.code}</span>}
-                        {a.pax > 0 && <span className="text-xs text-slate-400">{a.pax} 👤</span>}
-                        {a.notes && <span className="text-xs text-slate-400">{a.notes}</span>}
+                         {space && <span className="text-xs text-purple-500">📍 {space.name || space.code}</span>}
+                         {a.pax > 0 && <span className="text-xs text-slate-400">{a.pax} 👤</span>}
+                         {a.notes && <span className="text-xs text-slate-400">{a.notes}</span>}
+                       </div>
+                       <ActivityEquipmentLine item={a} />
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+                      );
+                      })}
+                      </div>
+                      </div>
+                      )}
 
-          {/* התראות */}
+                      {/* התראות */}
           {groupAlerts.length > 0 && (!highlightSection || highlightSection === "alerts") && (
             <div className="px-4 py-3">
               <p className="text-xs font-bold uppercase tracking-wide text-red-500 mb-2">התראות</p>
@@ -398,15 +400,16 @@ function GroupedFlatSection({ filter, groups, dateStr, meals, activities, spaces
                           <span className="text-xs font-semibold text-slate-800 truncate">{a.activity_name}</span>
                         </div>
                         <div className="flex flex-wrap gap-x-3 gap-y-0.5">
-                          {space && <span className="text-xs text-purple-500">📍 {space.name || space.code}</span>}
-                          {a.pax > 0 && <span className="text-xs text-slate-400">{a.pax} 👤</span>}
-                          {a.notes && <span className="text-xs text-slate-400">{a.notes}</span>}
+                           {space && <span className="text-xs text-purple-500">📍 {space.name || space.code}</span>}
+                           {a.pax > 0 && <span className="text-xs text-slate-400">{a.pax} 👤</span>}
+                           {a.notes && <span className="text-xs text-slate-400">{a.notes}</span>}
+                         </div>
+                         <ActivityEquipmentLine item={a} />
                         </div>
-                      </div>
-                    );
-                  })}
-                </>
-              )}
+                        );
+                        })}
+                        </>
+                        )}
 
               {/* alerts */}
               {groupAlerts.map(alert => (

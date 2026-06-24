@@ -16,6 +16,22 @@ function fmtDate(dateStr) {
 const MEAL_LABELS = { BREAKFAST: "ארוחת בוקר", LUNCH: "ארוחת צהריים", DINNER: "ארוחת ערב", OTHER: "אחר" };
 const GROUP_TYPE_LABELS = { LODGING: "לינה", DAY_USE: "יום כיף" };
 
+const LOGISTICS_KEYS = [
+  { key: "needs_projector",    label: "מקרן" },
+  { key: "needs_screen",       label: "מסך" },
+  { key: "needs_microphone",   label: "מיקרופון" },
+  { key: "needs_sound",        label: "מערכת סאונד" },
+  { key: "needs_whiteboard",   label: "לוח" },
+  { key: "needs_chair_circle", label: "מעגל כיסאות" },
+];
+
+function activityEquipmentText(item) {
+  const parts = LOGISTICS_KEYS.filter(k => item[k.key]).map(k => k.label);
+  if (item.chairs_count > 0) parts.push(`כיסאות: ${item.chairs_count}`);
+  if (item.logistics_other) parts.push(item.logistics_other);
+  return parts.length > 0 ? parts.join(", ") : null;
+}
+
 const DIET_LABELS = [
   { key: "vegetarian_count",      label: "צמחונים",                   critical: false },
   { key: "vegan_count",           label: "טבעונים",                   critical: false },
@@ -170,6 +186,7 @@ export default function DailyOperationalPrint() {
         .activity-time { font-size: 12px; font-weight: 700; color: #1e40af; direction: ltr; display: inline-block; margin-bottom: 2px; }
         .activity-name { font-size: 14px; font-weight: 700; color: #1e293b; margin-bottom: 3px; }
         .activity-meta { font-size: 12px; color: #475569; }
+        .activity-equipment { font-size: 11px; color: #1d4ed8; font-weight: 600; margin-top: 3px; }
         .global-allergy-warning { background: #fef2f2; border: 2px solid #dc2626; border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; font-weight: 700; font-size: 14px; color: #dc2626; }
         .print-controls { display: flex; gap: 12px; margin-bottom: 20px; }
         .btn-print { background: #1e40af; color: white; border: none; border-radius: 8px; padding: 9px 20px; font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; }
@@ -456,6 +473,7 @@ export default function DailyOperationalPrint() {
                     {space && <div className="activity-meta">📍 {space.name}</div>}
                     {!space && item.requested_location && <div className="activity-meta">📍 {item.requested_location}</div>}
                     {item.pax > 0 && <div className="activity-meta">👥 {item.pax} משתתפים</div>}
+                    <div className="activity-equipment">🔧 ציוד: {activityEquipmentText(item) || "אין ציוד מיוחד"}</div>
                     {item.notes && <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "3px" }}>{item.notes}</div>}
                   </div>
                 );
