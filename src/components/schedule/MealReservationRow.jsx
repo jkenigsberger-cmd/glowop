@@ -10,7 +10,7 @@ const MEAL_LABELS = { BREAKFAST: "ארוחת בוקר", LUNCH: "ארוחת צה�
 // Default times used when editing (same as sync defaults)
 const MEAL_DEFAULTS = {
   BREAKFAST: { start_time: "07:00", end_time: "09:00" },
-  LUNCH:     { start_time: "12:30", end_time: "13:30" },
+  LUNCH:     { start_time: "12:45", end_time: "14:00" },
   DINNER:    { start_time: "18:30", end_time: "20:00" },
   OTHER:     { start_time: "12:00", end_time: "13:00" },
 };
