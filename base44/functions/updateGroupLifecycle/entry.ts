@@ -68,6 +68,14 @@ Deno.serve(async (req) => {
       summary.neighborhoodReservations++;
     }
 
+    // Cancel CoffeeCornerRequests
+    const coffeeList = await base44.asServiceRole.entities.CoffeeCornerRequest.filter({ group_id });
+    const activeCoffee = coffeeList.filter(c => c.status === 'ACTIVE');
+    for (const c of activeCoffee) {
+      await base44.asServiceRole.entities.CoffeeCornerRequest.update(c.id, { status: 'CANCELLED' });
+      summary.coffeeRequests = (summary.coffeeRequests || 0) + 1;
+    }
+
     // Release OperationalHolds
     const holds = await base44.asServiceRole.entities.OperationalHold.filter({ group_id });
     const activeHolds = holds.filter(h => h.status === 'ACTIVE');

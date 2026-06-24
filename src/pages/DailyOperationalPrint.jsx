@@ -130,7 +130,12 @@ export default function DailyOperationalPrint() {
     .filter(m => m.meal_type !== "COFFEE_CORNER")
     .sort((a, b) => (a.start_time || "").localeCompare(b.start_time || ""));
   const sortedActivities = [...activities].sort((a, b) => (a.start_time || "").localeCompare(b.start_time || ""));
-  const sortedCoffee = [...coffeeRequests].sort((a, b) => (a.start_time || "").localeCompare(b.start_time || ""));
+
+  // Fix A: filter out orphan CoffeeCornerRequests whose parent Group no longer exists
+  const existingGroupIds = new Set(groups.map(g => g.id));
+  const sortedCoffee = [...coffeeRequests]
+    .filter(r => existingGroupIds.has(r.group_id))
+    .sort((a, b) => (a.start_time || "").localeCompare(b.start_time || ""));
 
   const generatedAt = format(new Date(), "dd/MM/yyyy HH:mm");
 

@@ -40,6 +40,7 @@ Deno.serve(async (req) => {
     profiles,
     submissions,
     quotes,
+    coffeeRequests,
   ] = await Promise.all([
     base44.asServiceRole.entities.GroupScheduleItem.list(),
     base44.asServiceRole.entities.MealReservation.list(),
@@ -49,6 +50,7 @@ Deno.serve(async (req) => {
     base44.asServiceRole.entities.OperationalGroupProfile.list(),
     base44.asServiceRole.entities.GuestFormSubmission.list(),
     base44.asServiceRole.entities.Quote.list(),
+    base44.asServiceRole.entities.CoffeeCornerRequest.list(),
   ]);
 
   const orphans = {
@@ -60,6 +62,8 @@ Deno.serve(async (req) => {
     profiles:                 profiles.filter(isOrphan),
     submissions:              submissions.filter(isOrphan),
     quotes:                   quotes.filter(isOrphan),
+    // CoffeeCornerRequests: cancel (not delete) orphan ACTIVE records
+    coffeeRequests:           coffeeRequests.filter(r => isOrphan(r) && r.status === 'ACTIVE'),
   };
 
   const totals = Object.fromEntries(
@@ -72,7 +76,7 @@ Deno.serve(async (req) => {
     return Response.json({ dry_run: true, orphans: totals });
   }
 
-  // Delete all orphans in parallel
+  // Delete all orphans in parallel; CoffeeCornerRequests are cancelled (not deleted)
   await Promise.all([
     ...orphans.scheduleItems.map(r => base44.asServiceRole.entities.GroupScheduleItem.delete(r.id)),
     ...orphans.mealReservations.map(r => base44.asServiceRole.entities.MealReservation.delete(r.id)),
@@ -82,6 +86,7 @@ Deno.serve(async (req) => {
     ...orphans.profiles.map(r => base44.asServiceRole.entities.OperationalGroupProfile.delete(r.id)),
     ...orphans.submissions.map(r => base44.asServiceRole.entities.GuestFormSubmission.delete(r.id)),
     ...orphans.quotes.map(r => base44.asServiceRole.entities.Quote.delete(r.id)),
+    ...orphans.coffeeRequests.map(r => base44.asServiceRole.entities.CoffeeCornerRequest.update(r.id, { status: 'CANCELLED' })),
   ]);
 
   return Response.json({ success: true, deleted: totals });
