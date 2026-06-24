@@ -445,7 +445,8 @@ const FILTER_TITLES = {
 // ── Main Modal ─────────────────────────────────────────────────────────────────
 export default function OperationalDaySummary({
   date, isOpen, onClose,
-  allGroups, allMeals, allActivities, allSpaces, allAlerts
+  allGroups, allMeals, allActivities, allSpaces, allAlerts,
+  allCoffeeRequests = [],
 }) {
   const [activeFilter, setActiveFilter] = useState("all");
 
@@ -473,9 +474,21 @@ export default function OperationalDaySummary({
     return { lodgingCheckins, lodgingCheckouts, dayUseGroups, staying, allGroupsOnDay };
   }, [allGroups, dateStr]);
 
+  // Build a set of group+date keys that have an active CoffeeCornerRequest
+  const activeCoffeeKeys = useMemo(() => {
+    const keys = new Set();
+    (allCoffeeRequests || []).forEach(r => { if (r.status === "ACTIVE") keys.add(`${r.group_id}|${r.date}`); });
+    return keys;
+  }, [allCoffeeRequests]);
+
   const dayMeals = useMemo(() =>
-    (allMeals || []).filter(m => m.status === "ACTIVE" && m.date === dateStr),
-    [allMeals, dateStr]
+    (allMeals || []).filter(m => {
+      if (m.status !== "ACTIVE" || m.date !== dateStr) return false;
+      // Filter out ghost COFFEE_CORNER MealReservations with no matching active CoffeeCornerRequest
+      if (m.meal_type === "COFFEE_CORNER" && !activeCoffeeKeys.has(`${m.group_id}|${m.date}`)) return false;
+      return true;
+    }),
+    [allMeals, dateStr, activeCoffeeKeys]
   );
 
   const dayActivities = useMemo(() =>

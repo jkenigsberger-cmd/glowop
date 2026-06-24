@@ -405,6 +405,10 @@ export default function Calendar() {
     queryKey: ["cal-alerts"],
     queryFn: () => base44.entities.OperationalReviewAlert.filter({ status: "OPEN" })
   });
+  const { data: coffeeRequests = [] } = useQuery({
+    queryKey: ["cal-coffee"],
+    queryFn: () => base44.entities.CoffeeCornerRequest.filter({ status: "ACTIVE" })
+  });
 
   const dates = useMemo(
     () => view === "week" ? getWeekDatesSunday(pivot) : getMonthDatesSunday(pivot),
@@ -513,7 +517,8 @@ export default function Calendar() {
         allMeals={meals}
         allActivities={scheduleItems}
         allSpaces={activitySpaces}
-        allAlerts={alerts} />
+        allAlerts={alerts}
+        allCoffeeRequests={coffeeRequests} />
       
     </div>);
 

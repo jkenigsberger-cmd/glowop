@@ -77,12 +77,22 @@ export default function Kitchen() {
       .sort((a, b) => (a.start_time || "").localeCompare(b.start_time || ""));
   }, [allCoffeeRequests, selectedDate]);
 
-  // Legacy COFFEE_CORNER from MealReservation (keep showing for backward compat)
+  // Legacy COFFEE_CORNER from MealReservation — only show if a matching active CoffeeCornerRequest exists
+  // This prevents ghost records from showing when the CoffeeCornerRequest was cancelled but MealReservation was not
   const dayCoffeeLegacy = useMemo(() => {
+    const activeCoffeeKey = new Set(
+      allCoffeeRequests
+        .filter(r => r.date === selectedDate)
+        .map(r => `${r.group_id}|${r.date}`)
+    );
     return allMeals
-      .filter(m => m.date === selectedDate && m.meal_type === "COFFEE_CORNER")
+      .filter(m =>
+        m.date === selectedDate &&
+        m.meal_type === "COFFEE_CORNER" &&
+        activeCoffeeKey.has(`${m.group_id}|${m.date}`)
+      )
       .sort((a, b) => (a.start_time || "").localeCompare(b.start_time || ""));
-  }, [allMeals, selectedDate]);
+  }, [allMeals, allCoffeeRequests, selectedDate]);
 
   const dayCoffeeCorners = useMemo(() => [...dayCoffeeRequests, ...dayCoffeeLegacy], [dayCoffeeRequests, dayCoffeeLegacy]);
 
