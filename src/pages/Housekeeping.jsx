@@ -583,13 +583,17 @@ export default function Housekeeping() {
             groups={groups.filter(g => g.status !== "CANCELLED")}
             selectedMonth={calendarMonth}
             onMonthChange={setCalendarMonth}
-            onGroupClick={g => navigate(`/groups/${g.id}`)}
+            onGroupClick={g => {
+              // Open housekeeping view for this group by switching to lodging tab and filtering
+              setActiveTab("lodging");
+              setSearchQuery(g.group_name);
+            }}
             getGroupLabel={(g, dateStr) => {
               const isArr = g.arrival_date === dateStr;
               const isDep = g.departure_date === dateStr;
-              if (isArr) return { label: "הגעה", color: "bg-emerald-100 text-emerald-800 border-emerald-200" };
-              if (isDep) return { label: "עזיבה", color: "bg-orange-100 text-orange-800 border-orange-200" };
-              return { label: "שוהה", color: "bg-blue-50 text-blue-700 border-blue-200" };
+              if (isArr) return { label: "הגעה · משק בית", color: "bg-emerald-100 text-emerald-800 border-emerald-200" };
+              if (isDep) return { label: "עזיבה · משק בית", color: "bg-orange-100 text-orange-800 border-orange-200" };
+              return { label: "שוהה · משק בית", color: "bg-blue-50 text-blue-700 border-blue-200" };
             }}
           />
         )}
