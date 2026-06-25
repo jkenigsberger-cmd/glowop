@@ -93,7 +93,7 @@ export default function SplitActivityEditModal({
           <DialogTitle>עריכת פעילות מפוצלת</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4 py-2">
+        <div className="max-h-[65vh] overflow-y-auto py-2 px-1 space-y-4">
           {/* Shared fields */}
           <div className="space-y-1">
             <Label>שם פעילות</Label>
