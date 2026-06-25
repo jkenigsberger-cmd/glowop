@@ -3,12 +3,13 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import {
   Wrench, Home, Droplets, Star, Layers,
-  ChevronLeft, ChevronRight, AlertCircle, RefreshCw, Settings
+  ChevronLeft, ChevronRight, AlertCircle, RefreshCw, Settings, List
 } from "lucide-react";
 import { useRoleContext } from "@/lib/RoleContext";
 import { hasPermission } from "@/lib/roles";
 import LocationManagerPanel from "@/components/maintenance/LocationManagerPanel";
 import LocationDetailComponent from "@/components/maintenance/LocationDetail";
+import OpenIssuesList from "@/components/maintenance/OpenIssuesList";
 import { Button } from "@/components/ui/button";
 
 // ── Section config ────────────────────────────────────────────────────────────
@@ -60,8 +61,33 @@ const SECTIONS = [
   },
 ];
 
+// ── Open issues summary alert ─────────────────────────────────────────────────
+function OpenIssuesBanner({ openIssues, onViewList }) {
+  if (!openIssues.length) return null;
+  const urgentCount = openIssues.filter(i => i.priority === "URGENT").length;
+  return (
+    <button
+      onClick={onViewList}
+      className={`w-full text-right flex items-center gap-3 px-4 py-3 rounded-xl border transition-colors
+        ${urgentCount > 0
+          ? "bg-red-50 border-red-300 text-red-800 hover:bg-red-100"
+          : "bg-amber-50 border-amber-200 text-amber-800 hover:bg-amber-100"
+        }`}
+    >
+      <AlertCircle className={`w-5 h-5 shrink-0 ${urgentCount > 0 ? "text-red-500" : "text-amber-500"}`} />
+      <div className="flex-1 min-w-0 text-right">
+        <p className="font-bold text-sm">יש {openIssues.length} תקלות פתוחות</p>
+        {urgentCount > 0 && (
+          <p className="text-xs mt-0.5">מתוכן {urgentCount} דחופות</p>
+        )}
+      </div>
+      <span className="text-xs font-semibold opacity-70 shrink-0">לצפייה ←</span>
+    </button>
+  );
+}
+
 // ── Section overview ──────────────────────────────────────────────────────────
-function SectionOverview({ locations, openIssues, onSelectSection, isAdmin, onSyncClick, syncing, syncResult, onManageLocations }) {
+function SectionOverview({ locations, openIssues, onSelectSection, onViewList, isAdmin, onSyncClick, syncing, syncResult, onManageLocations }) {
   return (
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3">
@@ -84,6 +110,9 @@ function SectionOverview({ locations, openIssues, onSelectSection, isAdmin, onSy
         )}
       </div>
 
+      {/* Open issues summary banner */}
+      <OpenIssuesBanner openIssues={openIssues} onViewList={onViewList} />
+
       {locations.length === 0 && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-4 text-sm text-amber-700 space-y-3">
           <div className="flex items-start gap-2">
@@ -98,12 +127,7 @@ function SectionOverview({ locations, openIssues, onSelectSection, isAdmin, onSy
             </div>
           </div>
           {isAdmin && (
-            <Button
-              size="sm"
-              onClick={onSyncClick}
-              disabled={syncing}
-              className="gap-2"
-            >
+            <Button size="sm" onClick={onSyncClick} disabled={syncing} className="gap-2">
               <RefreshCw className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`} />
               {syncing ? "מסנכרן..." : "סנכרן מיקומים קיימים"}
             </Button>
@@ -142,9 +166,9 @@ function SectionOverview({ locations, openIssues, onSelectSection, isAdmin, onSy
                   {count > 0 ? `${count} מיקומים` : "טרם הוגדרו מיקומים"}
                 </p>
                 {openCount > 0 && (
-                  <p className={`text-xs font-bold mt-0.5 ${urgentCount > 0 ? "text-red-600" : "opacity-80"}`}>
+                  <p className={`text-xs font-bold mt-0.5 ${urgentCount > 0 ? "text-red-600" : ""}`}>
                     {urgentCount > 0
-                      ? `${urgentCount} תקלה דחופה`
+                      ? `${urgentCount} תקלה דחופה · ${openCount} פתוחות`
                       : `${openCount} תקלות פתוחות`}
                   </p>
                 )}
@@ -166,7 +190,7 @@ function SectionOverview({ locations, openIssues, onSelectSection, isAdmin, onSy
 }
 
 // ── Location list for a section ───────────────────────────────────────────────
-function SectionView({ sectionKey, locations, onBack, onSelectLocation }) {
+function SectionView({ sectionKey, locations, openIssues, onBack, onSelectLocation }) {
   const sec = SECTIONS.find(s => s.key === sectionKey);
   if (!sec) return null;
 
@@ -203,6 +227,7 @@ function SectionView({ sectionKey, locations, onBack, onSelectLocation }) {
         <div className="space-y-3">
           {vipTents.map(tent => {
             const subs = subByParent[tent.id] || [];
+            const tentOpenCount = openIssues.filter(i => i.site_location_id === tent.id).length;
             return (
               <div key={tent.id} className="border border-purple-200 rounded-xl overflow-hidden">
                 <button
@@ -211,23 +236,32 @@ function SectionView({ sectionKey, locations, onBack, onSelectLocation }) {
                 >
                   <Star className="w-4 h-4 text-purple-600 shrink-0" />
                   <span className="font-semibold text-purple-800 flex-1">{tent.display_name}</span>
-                  <ChevronLeft className="w-4 h-4 text-purple-400" />
+                  {tentOpenCount > 0 && (
+                    <span className="text-xs bg-red-100 text-red-700 rounded-full px-2 py-0.5 font-bold shrink-0">{tentOpenCount}</span>
+                  )}
+                  <ChevronLeft className="w-4 h-4 text-purple-400 shrink-0" />
                 </button>
                 {subs.length > 0 && (
                   <div className="divide-y divide-purple-100">
-                    {subs.map(sub => (
-                      <button
-                        key={sub.id}
-                        onClick={() => onSelectLocation(sub)}
-                        className="w-full flex items-center gap-3 px-5 py-2.5 bg-white hover:bg-purple-50/50 transition-colors text-right"
-                      >
-                        <span className="text-xs text-purple-400 w-16 shrink-0">
-                          {sub.location_type === "VIP_BATHROOM" ? "שירותים" : "מקלחת"}
-                        </span>
-                        <span className="text-sm text-slate-700 flex-1">{sub.display_name}</span>
-                        <ChevronLeft className="w-3.5 h-3.5 text-slate-300" />
-                      </button>
-                    ))}
+                    {subs.map(sub => {
+                      const subOpenCount = openIssues.filter(i => i.site_location_id === sub.id).length;
+                      return (
+                        <button
+                          key={sub.id}
+                          onClick={() => onSelectLocation(sub)}
+                          className="w-full flex items-center gap-3 px-5 py-2.5 bg-white hover:bg-purple-50/50 transition-colors text-right"
+                        >
+                          <span className="text-xs text-purple-400 w-16 shrink-0">
+                            {sub.location_type === "VIP_BATHROOM" ? "שירותים" : "מקלחת"}
+                          </span>
+                          <span className="text-sm text-slate-700 flex-1">{sub.display_name}</span>
+                          {subOpenCount > 0 && (
+                            <span className="text-xs bg-red-100 text-red-700 rounded-full px-2 py-0.5 font-bold shrink-0">{subOpenCount}</span>
+                          )}
+                          <ChevronLeft className="w-3.5 h-3.5 text-slate-300 shrink-0" />
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -267,16 +301,25 @@ function SectionView({ sectionKey, locations, onBack, onSelectLocation }) {
             <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide px-1">{groupKey}</p>
           )}
           <div className="border border-border rounded-xl overflow-hidden divide-y divide-border bg-card">
-            {grouped[groupKey].map(loc => (
-              <button
-                key={loc.id}
-                onClick={() => onSelectLocation(loc)}
-                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 active:bg-slate-100 transition-colors text-right"
-              >
-                <span className="flex-1 text-sm font-medium">{loc.display_name}</span>
-                <ChevronLeft className="w-4 h-4 text-slate-300 shrink-0" />
-              </button>
-            ))}
+            {grouped[groupKey].map(loc => {
+              const locOpenCount = openIssues.filter(i => i.site_location_id === loc.id).length;
+              const locUrgent = openIssues.some(i => i.site_location_id === loc.id && i.priority === "URGENT");
+              return (
+                <button
+                  key={loc.id}
+                  onClick={() => onSelectLocation(loc)}
+                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 active:bg-slate-100 transition-colors text-right"
+                >
+                  <span className="flex-1 text-sm font-medium">{loc.display_name}</span>
+                  {locOpenCount > 0 && (
+                    <span className={`text-xs rounded-full px-2 py-0.5 font-bold shrink-0 ${locUrgent ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}>
+                      {locOpenCount}
+                    </span>
+                  )}
+                  <ChevronLeft className="w-4 h-4 text-slate-300 shrink-0" />
+                </button>
+              );
+            })}
           </div>
         </div>
       ))}
@@ -295,9 +338,9 @@ function EmptyLocations() {
 
 // ── Main export ───────────────────────────────────────────────────────────────
 export default function Maintenance() {
+  const [view, setView] = useState("main"); // "main" | "openList" | "manager"
   const [activeSection, setActiveSection] = useState(null);
   const [activeLocation, setActiveLocation] = useState(null);
-  const [showManager, setShowManager] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
@@ -312,14 +355,16 @@ export default function Maintenance() {
     staleTime: 60_000,
   });
 
-  // Fetch open issues for section-level counts
   const { data: openIssues = [] } = useQuery({
     queryKey: ["maintenanceIssuesOpen"],
-    queryFn: () => base44.entities.MaintenanceIssue.filter({ status: { $in: ["OPEN", "IN_PROGRESS", "WAITING_PARTS"] } }, "-created_date", 500),
+    queryFn: () => base44.entities.MaintenanceIssue.filter(
+      { status: { $in: ["OPEN", "IN_PROGRESS", "WAITING_PARTS"] } },
+      "-created_date",
+      500
+    ),
     staleTime: 30_000,
   });
 
-  // Fetch current user once
   useQuery({
     queryKey: ["currentUser"],
     queryFn: async () => {
@@ -348,20 +393,17 @@ export default function Maintenance() {
   }
 
   const handleBack = () => {
-    if (activeLocation) {
-      setActiveLocation(null);
-    } else if (showManager) {
-      setShowManager(false);
-    } else {
-      setActiveSection(null);
-    }
+    if (activeLocation) { setActiveLocation(null); return; }
+    if (activeSection) { setActiveSection(null); return; }
+    setView("main");
   };
 
-  if (showManager) {
+  // ── Manager view ──
+  if (view === "manager") {
     return (
       <div className="min-h-screen bg-background" dir="rtl">
         <div className="max-w-2xl mx-auto px-4 py-6 space-y-4">
-          <button onClick={handleBack} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
+          <button onClick={() => setView("main")} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
             <ChevronRight className="w-4 h-4" /> חזרה לתחזוקה
           </button>
           <LocationManagerPanel />
@@ -370,36 +412,91 @@ export default function Maintenance() {
     );
   }
 
-  return (
-    <div className="min-h-screen bg-background" dir="rtl">
-      <div className="max-w-2xl mx-auto px-4 py-6">
-        {!activeSection && (
-          <SectionOverview
-            locations={locations}
-            openIssues={openIssues}
-            onSelectSection={setActiveSection}
-            isAdmin={isAdmin}
-            onSyncClick={handleSync}
-            syncing={syncing}
-            syncResult={syncResult}
-            onManageLocations={() => setShowManager(true)}
-          />
-        )}
-        {activeSection && !activeLocation && (
-          <SectionView
-            sectionKey={activeSection}
-            locations={locations}
-            onBack={handleBack}
-            onSelectLocation={setActiveLocation}
-          />
-        )}
-        {activeLocation && (
+  // ── Open issues list view ──
+  if (view === "openList") {
+    const urgentCount = openIssues.filter(i => i.priority === "URGENT").length;
+    return (
+      <div className="min-h-screen bg-background" dir="rtl">
+        <div className="max-w-2xl mx-auto px-4 py-6 space-y-4">
+          <button onClick={() => setView("main")} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
+            <ChevronRight className="w-4 h-4" /> חזרה לתחזוקה
+          </button>
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-bold flex items-center gap-2">
+              <List className="w-5 h-5 text-primary" />
+              תקלות פתוחות
+            </h2>
+            {openIssues.length > 0 && (
+              <div className="flex items-center gap-2 text-xs font-semibold">
+                <span className="bg-red-100 text-red-700 rounded-full px-2.5 py-1">{openIssues.length} פתוחות</span>
+                {urgentCount > 0 && <span className="bg-red-500 text-white rounded-full px-2.5 py-1">{urgentCount} דחופות</span>}
+              </div>
+            )}
+          </div>
+          <OpenIssuesList canEdit={canEdit} />
+        </div>
+      </div>
+    );
+  }
+
+  // ── Location detail view ──
+  if (activeLocation) {
+    return (
+      <div className="min-h-screen bg-background" dir="rtl">
+        <div className="max-w-2xl mx-auto px-4 py-6">
           <LocationDetailComponent
             location={activeLocation}
             user={currentUser}
             canEdit={canEdit}
             onBack={handleBack}
           />
+        </div>
+      </div>
+    );
+  }
+
+  // ── Section drill-down ──
+  if (activeSection) {
+    return (
+      <div className="min-h-screen bg-background" dir="rtl">
+        <div className="max-w-2xl mx-auto px-4 py-6">
+          <SectionView
+            sectionKey={activeSection}
+            locations={locations}
+            openIssues={openIssues}
+            onBack={handleBack}
+            onSelectLocation={setActiveLocation}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // ── Main overview ──
+  return (
+    <div className="min-h-screen bg-background" dir="rtl">
+      <div className="max-w-2xl mx-auto px-4 py-6 space-y-4">
+        <SectionOverview
+          locations={locations}
+          openIssues={openIssues}
+          onSelectSection={setActiveSection}
+          onViewList={() => setView("openList")}
+          isAdmin={isAdmin}
+          onSyncClick={handleSync}
+          syncing={syncing}
+          syncResult={syncResult}
+          onManageLocations={() => setView("manager")}
+        />
+
+        {/* Quick link to open issues list */}
+        {openIssues.length > 0 && (
+          <button
+            onClick={() => setView("openList")}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-dashed border-primary/30 text-primary text-sm font-semibold hover:bg-primary/5 transition-colors"
+          >
+            <List className="w-4 h-4" />
+            צפה בכל התקלות הפתוחות ({openIssues.length})
+          </button>
         )}
       </div>
     </div>

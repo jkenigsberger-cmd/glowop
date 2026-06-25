@@ -9,6 +9,8 @@ import { revokeAccess } from "@/components/PilotAccessGate";
 import { useRoleContext } from "@/lib/RoleContext";
 import { ROLE_NAV_LINKS, ROLE_LABELS } from "@/lib/roles";
 import { useAlertCounts } from "@/hooks/useAlertCounts";
+import { useQuery } from "@tanstack/react-query";
+import { base44 } from "@/api/base44Client";
 import GlobalSearch from "@/components/search/GlobalSearch";
 import MechinaPendingBadge from "@/components/mechina/MechinaPendingBadge";
 
@@ -38,10 +40,11 @@ function isActive(linkTo, pathname) {
     : pathname === linkTo || pathname.startsWith(linkTo + "/");
 }
 
-function AlertBadge({ count, small }) {
+function AlertBadge({ count, small, urgent }) {
   if (!count || count < 1) return null;
+  const urgentClass = urgent ? "bg-red-600 animate-pulse" : "bg-red-500";
   return (
-    <span className={`inline-flex items-center justify-center bg-red-500 text-white font-bold rounded-full leading-none pointer-events-none
+    <span className={`inline-flex items-center justify-center ${urgentClass} text-white font-bold rounded-full leading-none pointer-events-none
       ${small ? "min-w-[14px] h-3.5 text-[9px] px-0.5" : "min-w-[16px] h-4 text-[10px] px-1"}`}>
       {count > 9 ? "9+" : count}
     </span>
@@ -73,11 +76,12 @@ function NavPill({ to, label, icon: Icon, pathname, alertCount, role }) {
 }
 
 // Dropdown menu
-function NavDropdown({ label, icon: Icon, items, pathname, alertCounts }) {
+function NavDropdown({ label, icon: Icon, items, pathname, alertCounts, urgentKeys = [] }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
   const totalBadge = items.reduce((s, it) => s + (alertCounts[it.key] || 0), 0);
+  const anyUrgent = items.some(it => urgentKeys.includes(it.key));
   const anyActive = items.some(it => isActive(it.to, pathname));
 
   // Close on outside click
@@ -99,7 +103,7 @@ function NavDropdown({ label, icon: Icon, items, pathname, alertCounts }) {
       >
         <Icon className="w-3.5 h-3.5 shrink-0" />
         <span>{label}</span>
-        {totalBadge > 0 && <AlertBadge count={totalBadge} small />}
+        {totalBadge > 0 && <AlertBadge count={totalBadge} small urgent={anyUrgent} />}
         <ChevronDown className={`w-3 h-3 shrink-0 transition-transform duration-150 ${open ? "rotate-180" : ""}`} />
       </button>
 
@@ -121,7 +125,7 @@ function NavDropdown({ label, icon: Icon, items, pathname, alertCounts }) {
               >
                 <item.icon className="w-3.5 h-3.5 shrink-0 text-slate-400" />
                 <span className="flex-1">{item.label}</span>
-                {cnt > 0 && <AlertBadge count={cnt} />}
+                {cnt > 0 && <AlertBadge count={cnt} urgent={urgentKeys.includes(item.key)} />}
               </Link>
             );
           })}
@@ -132,7 +136,7 @@ function NavDropdown({ label, icon: Icon, items, pathname, alertCounts }) {
 }
 
 // Mobile drawer link
-function DrawerLink({ to, label, icon: Icon, pathname, onClick, alertCount, role }) {
+function DrawerLink({ to, label, icon: Icon, pathname, onClick, alertCount, role, urgent = false }) {
   const active = isActive(to, pathname);
   const isMechinaSpaces = to === "/mechina-spaces";
   const isAdminRole = ADMIN_ROLES_SET.has(role);
@@ -145,7 +149,7 @@ function DrawerLink({ to, label, icon: Icon, pathname, onClick, alertCount, role
     >
       <Icon className="w-4 h-4 shrink-0" />
       <span className="flex-1">{label}</span>
-      {alertCount > 0 && <AlertBadge count={alertCount} />}
+      {alertCount > 0 && <AlertBadge count={alertCount} urgent={urgent} />}
       {isMechinaSpaces && isAdminRole && <MechinaPendingBadge />}
     </Link>
   );
@@ -195,8 +199,25 @@ export default function AppNav() {
   // Per-item alert count helper
   const getCount = (key) => alertCounts[LINK_ALERT_MODULE[key]] || 0;
 
-  // Ops badge counts
-  const opsBadgeMap = Object.fromEntries(opsLinks.map(l => [l.key, getCount(l.key)]));
+  // Maintenance open issues badge
+  const { data: maintenanceIssues = [] } = useQuery({
+    queryKey: ["maintenanceIssuesOpen"],
+    queryFn: () => base44.entities.MaintenanceIssue.filter(
+      { status: { $in: ["OPEN", "IN_PROGRESS", "WAITING_PARTS"] } },
+      "-created_date",
+      500
+    ),
+    staleTime: 60_000,
+    enabled: allowedKeys.includes("maintenance"),
+  });
+  const maintenanceOpenCount = maintenanceIssues.length;
+  const maintenanceUrgent = maintenanceIssues.some(i => i.priority === "URGENT");
+
+  // Ops badge counts — include maintenance count
+  const opsBadgeMap = Object.fromEntries(opsLinks.map(l => [
+    l.key,
+    l.key === "maintenance" ? maintenanceOpenCount : getCount(l.key)
+  ]));
   // Admin badge map — no alerts currently but structure is ready
   const adminBadgeMap = {};
 
@@ -235,6 +256,7 @@ export default function AppNav() {
                 items={opsLinks}
                 pathname={pathname}
                 alertCounts={opsBadgeMap}
+                urgentKeys={maintenanceUrgent ? ["maintenance"] : []}
               />
             )}
 
@@ -357,7 +379,8 @@ export default function AppNav() {
                   {...link}
                   pathname={pathname}
                   onClick={closeDrawer}
-                  alertCount={getCount(link.key)}
+                  alertCount={link.key === "maintenance" ? maintenanceOpenCount : getCount(link.key)}
+                  urgent={link.key === "maintenance" && maintenanceUrgent}
                 />
               ))}
             </div>
