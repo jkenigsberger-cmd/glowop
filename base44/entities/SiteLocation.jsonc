@@ -1,0 +1,82 @@
+{
+  "name": "SiteLocation",
+  "type": "object",
+  "properties": {
+    "location_type": {
+      "type": "string",
+      "enum": [
+        "NEIGHBORHOOD_TENT",
+        "BATHROOM",
+        "SHOWER",
+        "VIP_TENT",
+        "VIP_BATHROOM",
+        "VIP_SHOWER",
+        "COMMON_SPACE",
+        "OTHER"
+      ],
+      "description": "Type of physical maintenance location"
+    },
+    "source_entity_type": {
+      "type": "string",
+      "enum": [
+        "TENT",
+        "ACTIVITY_SPACE",
+        "MANUAL"
+      ],
+      "description": "Whether this location is backed by an existing entity or manually defined",
+      "default": "MANUAL"
+    },
+    "source_entity_id": {
+      "type": "string",
+      "description": "FK to Tent.id or ActivitySpace.id \u2014 set when source_entity_type is TENT or ACTIVITY_SPACE"
+    },
+    "parent_location_id": {
+      "type": "string",
+      "description": "FK to SiteLocation.id \u2014 used for VIP sub-locations (bathroom/shower inside a VIP tent)"
+    },
+    "name": {
+      "type": "string",
+      "description": "Internal/canonical name e.g. tent_12, bathroom_3"
+    },
+    "display_name": {
+      "type": "string",
+      "description": "Hebrew display name e.g. \u05d0\u05d5\u05d4\u05dc 12, \u05e9\u05d9\u05e8\u05d5\u05ea\u05d9\u05dd 3, \u05de\u05e7\u05dc\u05d7\u05ea VIP 1"
+    },
+    "section": {
+      "type": "string",
+      "description": "Section/area grouping e.g. \u05e9\u05db\u05d5\u05e0\u05d4 1, \u05d0\u05d6\u05d5\u05e8 \u05de\u05e8\u05db\u05d6\u05d9, VIP"
+    },
+    "neighborhood_number": {
+      "type": "number",
+      "description": "Neighborhood number \u2014 relevant for NEIGHBORHOOD_TENT"
+    },
+    "tent_number": {
+      "type": "string",
+      "description": "Tent code/number e.g. 11\u05d0, 12, 41 \u2014 relevant for NEIGHBORHOOD_TENT"
+    },
+    "location_number": {
+      "type": "number",
+      "description": "Sequential number \u2014 relevant for BATHROOM, SHOWER, VIP_TENT"
+    },
+    "sort_order": {
+      "type": "number",
+      "description": "Display sort order within a section",
+      "default": 0
+    },
+    "is_active": {
+      "type": "boolean",
+      "default": true,
+      "description": "Whether this location is currently active/in-use"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Admin notes about this location"
+    }
+  },
+  "required": [
+    "location_type",
+    "source_entity_type",
+    "display_name",
+    "is_active"
+  ]
+}
