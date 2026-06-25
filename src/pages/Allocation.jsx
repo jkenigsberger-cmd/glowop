@@ -448,7 +448,11 @@ export default function Allocation() {
             groups={sorted.map(p => groupById[p.group_id]).filter(Boolean)}
             selectedMonth={calendarMonth}
             onMonthChange={setCalendarMonth}
-            onGroupClick={g => navigate(`/groups/${g.id}`)}
+            onGroupClick={g => {
+              // Switch to list view and scroll/highlight that group's allocation card
+              setActiveView("list");
+              setSearchQuery(g.group_name);
+            }}
             getGroupLabel={(g, dateStr) => {
               const profile = profileByGroupId[g.id];
               const allocs = allocationsByGroupId[g.id] || [];

@@ -27,13 +27,14 @@ function fmtDateHeb(d) {
   return moment(d).format("dddd, D MMMM YYYY");
 }
 
-// ── Print styles injected once ────────────────────────────────────────────────
+// ── Print styles — always injected, not just on click ────────────────────────
 const PRINT_STYLE = `
 @media print {
-  body > *:not(#logistics-print-root) { display: none !important; }
-  #logistics-print-root { display: block !important; }
+  body > * { display: none !important; }
+  body > #logistics-print-portal { display: block !important; }
   @page { size: A4 portrait; margin: 15mm 14mm; }
   tr { page-break-inside: avoid; }
+  div[style*="page-break-inside"] { page-break-inside: avoid; }
 }
 `;
 
@@ -43,6 +44,22 @@ function injectPrintStyle() {
   s.id = "logistics-print-style";
   s.textContent = PRINT_STYLE;
   document.head.appendChild(s);
+}
+
+// Mount/unmount a direct <body> child portal for print
+function mountPrintPortal(html) {
+  let el = document.getElementById("logistics-print-portal");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "logistics-print-portal";
+    document.body.appendChild(el);
+  }
+  el.innerHTML = html;
+}
+
+function unmountPrintPortal() {
+  const el = document.getElementById("logistics-print-portal");
+  if (el) el.innerHTML = "";
 }
 
 // ── Filter controls ───────────────────────────────────────────────────────────
@@ -91,82 +108,6 @@ function FiltersBar({ from, setFrom, to, setTo, spaceId, setSpaceId, groupId, se
     </div>
   );
 }
-
-// ── Print template ────────────────────────────────────────────────────────────
-function PrintTemplate({ rows, from, to, fromLabel, toLabel }) {
-  const th = {
-    padding: "7px 8px",
-    background: "#1a56a0", color: "#fff", fontWeight: 700,
-    textAlign: "right", fontSize: 10, borderRight: "1px solid #1565b0",
-  };
-  const td = (extra = {}) => ({
-    padding: "6px 8px", borderBottom: "1px solid #e2e8f0",
-    fontSize: 10, verticalAlign: "top", ...extra,
-  });
-
-  // Group by date
-  const byDate = {};
-  rows.forEach(r => {
-    if (!byDate[r.date]) byDate[r.date] = [];
-    byDate[r.date].push(r);
-  });
-
-  return (
-    <div id="logistics-print-root" style={{ display: "none", direction: "rtl",
-      fontFamily: '"SimplerPro","Arial Hebrew",Arial,sans-serif', color: "#111" }}>
-
-      {/* Header */}
-      <div style={{ textAlign: "center", borderBottom: "2px solid #1a56a0", paddingBottom: 10, marginBottom: 16 }}>
-        <div style={{ fontSize: 18, fontWeight: 700, color: "#1a56a0", fontFamily: '"Kav16","Arial Hebrew",Arial,sans-serif' }}>
-          דוח לוגיסטיקה — מרחבי פעילות
-        </div>
-        <div style={{ fontSize: 11, color: "#555", marginTop: 4 }}>
-          {fromLabel && toLabel ? `${fromLabel} – ${toLabel}` : fromLabel || toLabel || "כל התאריכים"}
-        </div>
-        <div style={{ fontSize: 10, color: "#888", marginTop: 2 }}>הופק: {moment().format("DD/MM/YYYY HH:mm")}</div>
-      </div>
-
-      {rows.length === 0 && (
-        <p style={{ textAlign: "center", color: "#888", fontSize: 11 }}>אין נתונים בטווח שנבחר</p>
-      )}
-
-      {Object.entries(byDate).map(([date, dateRows]) => (
-        <div key={date} style={{ marginBottom: 18, pageBreakInside: "avoid" }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: "#1a56a0", borderBottom: "1px solid #cbd5e1", paddingBottom: 4, marginBottom: 8 }}>
-            {fmtDateHeb(date)}
-          </div>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr>
-                {["שעה", "מרחב / חדר", "קבוצה", "פעילות", "משתתפים", "ציוד נדרש", "הערות"].map(h => (
-                  <th key={h} style={th}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {dateRows.map((r, i) => (
-                <tr key={r.id} style={{ background: i % 2 === 0 ? "#fff" : "#f8fafc" }}>
-                  <td style={td({ whiteSpace: "nowrap" })}>{r.start_time}–{r.end_time}</td>
-                  <td style={td({ fontWeight: 600 })}>{r.spaceName}</td>
-                  <td style={td()}>{r.groupName}</td>
-                  <td style={td()}>{r.activity_name}</td>
-                  <td style={td({ textAlign: "center" })}>{r.pax || "—"}</td>
-                  <td style={td({ color: "#1e40af" })}>{r.equipment || "—"}</td>
-                  <td style={td({ color: "#555", fontSize: 9 })}>{r.notes || ""}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ))}
-
-      <div style={{ marginTop: 20, borderTop: "1px solid #e2e8f0", paddingTop: 8, fontSize: 9, color: "#999", textAlign: "left" }}>
-        סה״כ שורות: {rows.length}
-      </div>
-    </div>
-  );
-}
-
 // ── Main component ────────────────────────────────────────────────────────────
 export default function LogisticsReportTab() {
   const today = moment().format("YYYY-MM-DD");
@@ -228,11 +169,64 @@ export default function LogisticsReportTab() {
 
   const handlePrint = () => {
     injectPrintStyle();
-    // Show print root, print, then hide
-    const el = document.getElementById("logistics-print-root");
-    if (el) el.style.display = "block";
-    window.print();
-    if (el) el.style.display = "none";
+
+    // Build the print HTML string directly — avoids React portal timing issues
+    const th = `padding:7px 8px;background:#1a56a0;color:#fff;font-weight:700;text-align:right;font-size:10px;border-right:1px solid #1565b0;`;
+    const tdBase = `padding:6px 8px;border-bottom:1px solid #e2e8f0;font-size:10px;vertical-align:top;`;
+
+    const byDate = {};
+    rows.forEach(r => {
+      if (!byDate[r.date]) byDate[r.date] = [];
+      byDate[r.date].push(r);
+    });
+
+    const fromLabel = from ? fmtDate(from) : "";
+    const toLabel   = to   ? fmtDate(to)   : "";
+    const rangeText = fromLabel && toLabel ? `${fromLabel} – ${toLabel}` : fromLabel || toLabel || "כל התאריכים";
+
+    let html = `<div style="direction:rtl;font-family:'SimplerPro','Arial Hebrew',Arial,sans-serif;color:#111;">`;
+    // header
+    html += `<div style="text-align:center;border-bottom:2px solid #1a56a0;padding-bottom:10px;margin-bottom:16px;">
+      <div style="font-size:18px;font-weight:700;color:#1a56a0;">דוח לוגיסטיקה — מרחבי פעילות</div>
+      <div style="font-size:11px;color:#555;margin-top:4px;">${rangeText}</div>
+      <div style="font-size:10px;color:#888;margin-top:2px;">הופק: ${moment().format("DD/MM/YYYY HH:mm")}</div>
+    </div>`;
+
+    if (rows.length === 0) {
+      html += `<p style="text-align:center;color:#888;font-size:11px;">אין שימוש במרחבים בטווח התאריכים שנבחר</p>`;
+    } else {
+      Object.entries(byDate).forEach(([date, dateRows]) => {
+        html += `<div style="margin-bottom:18px;page-break-inside:avoid;">
+          <div style="font-size:12px;font-weight:700;color:#1a56a0;border-bottom:1px solid #cbd5e1;padding-bottom:4px;margin-bottom:8px;">${fmtDateHeb(date)}</div>
+          <table style="width:100%;border-collapse:collapse;">
+            <thead><tr>
+              ${["שעה","מרחב / חדר","קבוצה","פעילות","משתתפים","ציוד נדרש","הערות"].map(h => `<th style="${th}">${h}</th>`).join("")}
+            </tr></thead>
+            <tbody>`;
+        dateRows.forEach((r, i) => {
+          const bg = i % 2 === 0 ? "#fff" : "#f8fafc";
+          html += `<tr style="background:${bg};">
+            <td style="${tdBase}white-space:nowrap;">${r.start_time || ""}–${r.end_time || ""}</td>
+            <td style="${tdBase}font-weight:600;">${r.spaceName}</td>
+            <td style="${tdBase}">${r.groupName}</td>
+            <td style="${tdBase}">${r.activity_name}</td>
+            <td style="${tdBase}text-align:center;">${r.pax || "—"}</td>
+            <td style="${tdBase}color:#1e40af;">${r.equipment || "—"}</td>
+            <td style="${tdBase}color:#555;font-size:9px;">${r.notes || ""}</td>
+          </tr>`;
+        });
+        html += `</tbody></table></div>`;
+      });
+    }
+
+    html += `<div style="margin-top:20px;border-top:1px solid #e2e8f0;padding-top:8px;font-size:9px;color:#999;text-align:left;">סה״כ שורות: ${rows.length}</div>`;
+    html += `</div>`;
+
+    mountPrintPortal(html);
+    setTimeout(() => {
+      window.print();
+      unmountPrintPortal();
+    }, 100);
   };
 
   return (
@@ -311,14 +305,6 @@ export default function LogisticsReportTab() {
         </div>
       )}
 
-      {/* Hidden print template */}
-      <PrintTemplate
-        rows={rows}
-        from={from}
-        to={to}
-        fromLabel={from ? fmtDate(from) : ""}
-        toLabel={to ? fmtDate(to) : ""}
-      />
     </div>
   );
 }
