@@ -199,8 +199,9 @@ export default function KitchenReport() {
           body { background: white; font-size: 12px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           .kr-controls { display: none !important; }
           .kr-page { padding: 10px 14px; max-width: 100%; margin: 0; box-shadow: none; }
-          .kr-day-section { page-break-inside: avoid; }
-          .kr-section { page-break-inside: avoid; }
+          .kr-print-root { background: white !important; }
+          .kr-day-section { page-break-inside: avoid; break-inside: avoid; }
+          .kr-section { page-break-inside: avoid; break-inside: avoid; }
           @page { size: A4 portrait; margin: 15mm 12mm; }
         }
 
@@ -498,7 +499,7 @@ export default function KitchenReport() {
         Wrap everything in a div with a known class so the print CSS
         can target it and hide all sibling elements (AppNav, etc.)
       */}
-      <div className="kr-print-root" style={{ position: "fixed", inset: 0, overflowY: "auto", background: "#f8f9fa", zIndex: 9999 }}>
+      <div className="kr-print-root" style={{ background: "#f8f9fa", minHeight: "100vh" }}>
         <div className="kr-page" dir="rtl">
 
           {/* Controls */}
