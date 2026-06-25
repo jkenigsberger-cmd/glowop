@@ -1,10 +1,13 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import {
   Wrench, Home, Droplets, Star, Layers,
-  ChevronLeft, ChevronRight, AlertCircle
+  ChevronLeft, ChevronRight, AlertCircle, RefreshCw, Settings
 } from "lucide-react";
+import { useRoleContext } from "@/lib/RoleContext";
+import LocationManagerPanel from "@/components/maintenance/LocationManagerPanel";
+import { Button } from "@/components/ui/button";
 
 // ── Section config ────────────────────────────────────────────────────────────
 const SECTIONS = [
@@ -56,26 +59,62 @@ const SECTIONS = [
 ];
 
 // ── Section overview ──────────────────────────────────────────────────────────
-function SectionOverview({ locations, onSelectSection }) {
+function SectionOverview({ locations, onSelectSection, isAdmin, onSyncClick, syncing, syncResult, onManageLocations }) {
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-xl font-bold flex items-center gap-2">
-          <Wrench className="w-5 h-5 text-primary" />
-          תחזוקה
-        </h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          דיווח תקלות, מעקב תיקונים וסטטוס מתקנים
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold flex items-center gap-2">
+            <Wrench className="w-5 h-5 text-primary" />
+            תחזוקה
+          </h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            דיווח תקלות, מעקב תיקונים וסטטוס מתקנים
+          </p>
+        </div>
+        {isAdmin && (
+          <button
+            onClick={onManageLocations}
+            className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700 border border-slate-200 rounded-lg px-2.5 py-1.5 hover:bg-slate-50 transition-colors shrink-0"
+          >
+            <Settings className="w-3.5 h-3.5" /> ניהול מיקומים
+          </button>
+        )}
       </div>
 
       {locations.length === 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-700 flex items-start gap-2">
-          <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
-          <div>
-            <p className="font-semibold">טרם הוגדרו מיקומי תחזוקה</p>
-            <p className="text-xs mt-0.5">מנהל המערכת צריך להגדיר מיקומים (אוהלים, שירותים, מקלחות) מדף הניהול.</p>
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-4 text-sm text-amber-700 space-y-3">
+          <div className="flex items-start gap-2">
+            <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+            <div>
+              <p className="font-semibold">טרם הוגדרו מיקומי תחזוקה</p>
+              <p className="text-xs mt-0.5">
+                {isAdmin
+                  ? "לחץ על הכפתור למטה לסנכרון אוהלים ומרחבים קיימים."
+                  : "מנהל המערכת צריך להגדיר מיקומים (אוהלים, שירותים, מקלחות)."}
+              </p>
+            </div>
           </div>
+          {isAdmin && (
+            <Button
+              size="sm"
+              onClick={onSyncClick}
+              disabled={syncing}
+              className="gap-2"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`} />
+              {syncing ? "מסנכרן..." : "סנכרן מיקומים קיימים"}
+            </Button>
+          )}
+        </div>
+      )}
+
+      {syncResult && (
+        <div className={`rounded-xl px-4 py-3 text-sm border ${syncResult.success ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-red-50 border-red-200 text-red-800"}`}>
+          {syncResult.success ? syncResult.summary : `שגיאה: ${syncResult.error}`}
+          {syncResult.vip_message && (
+            <p className="text-xs mt-1 opacity-80">{syncResult.vip_message}</p>
+          )}
         </div>
       )}
 
@@ -104,6 +143,13 @@ function SectionOverview({ locations, onSelectSection }) {
           );
         })}
       </div>
+
+      {isAdmin && locations.length > 0 && (
+        <Button variant="outline" size="sm" onClick={onSyncClick} disabled={syncing} className="gap-2 w-full sm:w-auto">
+          <RefreshCw className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`} />
+          {syncing ? "מסנכרן..." : "סנכרן מחדש (אוהלים + מרחבים)"}
+        </Button>
+      )}
     </div>
   );
 }
@@ -285,12 +331,28 @@ function EmptyLocations() {
 export default function Maintenance() {
   const [activeSection, setActiveSection] = useState(null);
   const [activeLocation, setActiveLocation] = useState(null);
+  const [showManager, setShowManager] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState(null);
+  const qc = useQueryClient();
+  const { role } = useRoleContext();
+  const isAdmin = ["SUPER_ADMIN", "ADMIN", "OPERATIONS"].includes(role);
 
   const { data: locations = [], isLoading } = useQuery({
     queryKey: ["siteLocations"],
     queryFn: () => base44.entities.SiteLocation.filter({ is_active: true }),
     staleTime: 60_000,
   });
+
+  const handleSync = async () => {
+    setSyncing(true);
+    setSyncResult(null);
+    const res = await base44.functions.invoke("syncMaintenanceLocations", {});
+    const data = res.data;
+    setSyncResult(data);
+    setSyncing(false);
+    qc.invalidateQueries({ queryKey: ["siteLocations"] });
+  };
 
   if (isLoading) {
     return (
@@ -303,16 +365,40 @@ export default function Maintenance() {
   const handleBack = () => {
     if (activeLocation) {
       setActiveLocation(null);
+    } else if (showManager) {
+      setShowManager(false);
     } else {
       setActiveSection(null);
     }
   };
 
+  // Manager view
+  if (showManager) {
+    return (
+      <div className="min-h-screen bg-background" dir="rtl">
+        <div className="max-w-2xl mx-auto px-4 py-6 space-y-4">
+          <button onClick={handleBack} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
+            <ChevronRight className="w-4 h-4" /> חזרה לתחזוקה
+          </button>
+          <LocationManagerPanel />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background" dir="rtl">
       <div className="max-w-2xl mx-auto px-4 py-6">
         {!activeSection && (
-          <SectionOverview locations={locations} onSelectSection={setActiveSection} />
+          <SectionOverview
+            locations={locations}
+            onSelectSection={setActiveSection}
+            isAdmin={isAdmin}
+            onSyncClick={handleSync}
+            syncing={syncing}
+            syncResult={syncResult}
+            onManageLocations={() => setShowManager(true)}
+          />
         )}
         {activeSection && !activeLocation && (
           <SectionView
