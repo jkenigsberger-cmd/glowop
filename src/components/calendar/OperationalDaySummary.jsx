@@ -4,11 +4,12 @@ import moment from "moment";
 import "moment/locale/he";
 import {
   X, Users, UtensilsCrossed, CalendarDays, AlertTriangle,
-  ArrowDownCircle, ArrowUpCircle, Moon, ChevronDown, ChevronUp, ExternalLink, Sun
+  ArrowDownCircle, ArrowUpCircle, Moon, ChevronDown, ChevronUp, ExternalLink, Sun, Clock
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ActivityEquipmentLine } from "@/components/schedule/LogisticsFields";
+import ChronologicalDayView from "./ChronologicalDayView";
 
 moment.locale("he");
 
@@ -297,6 +298,7 @@ const FILTER_COLORS = {
   meals:      { inactive: "bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100",         active: "bg-amber-500 border-amber-500 text-white shadow-sm" },
   activities: { inactive: "bg-purple-50 border-purple-300 text-purple-700 hover:bg-purple-100",    active: "bg-purple-600 border-purple-600 text-white shadow-sm" },
   alerts:     { inactive: "bg-red-50 border-red-300 text-red-700 hover:bg-red-100",                active: "bg-red-600 border-red-600 text-white shadow-sm" },
+  chrono:     { inactive: "bg-slate-50 border-slate-300 text-slate-700 hover:bg-slate-100",        active: "bg-slate-800 border-slate-800 text-white shadow-sm" },
 };
 
 function FilterPill({ label, count, icon: Icon, active, onClick, filterKey }) {
@@ -440,6 +442,7 @@ const FILTER_TITLES = {
   meals:      "ארוחות היום",
   activities: "פעילויות בלו״ז היום",
   alerts:     "התראות היום",
+  chrono:     "סדר יום כרונולוגי",
 };
 
 // ── Main Modal ─────────────────────────────────────────────────────────────────
@@ -522,7 +525,7 @@ export default function OperationalDaySummary({
   }, [activeFilter, lodgingCheckins, lodgingCheckouts, dayUseGroups, allGroupsOnDay, dayMeals, dayActivities, dayAlerts]);
 
   // Group cards for all/checkins/checkouts/dayuse; flat sections for others
-  const useGroupCards = ["all", "checkins", "checkouts", "dayuse"].includes(activeFilter);
+  const useGroupCards = ["all", "checkins", "checkouts", "dayuse"].includes(activeFilter) && activeFilter !== "chrono";
 
   if (!isOpen || !date) return null;
 
@@ -579,6 +582,8 @@ export default function OperationalDaySummary({
                   active={activeFilter === "activities"} onClick={() => handleFilter("activities")} filterKey="activities" />
                 <FilterPill label="התראות" count={dayAlerts.length} icon={AlertTriangle}
                   active={activeFilter === "alerts"} onClick={() => handleFilter("alerts")} filterKey="alerts" />
+                <FilterPill label="סדר יום כרונולוגי" count={dayMeals.length + dayActivities.length + lodgingCheckins.length + lodgingCheckouts.length + dayUseGroups.length} icon={Clock}
+                  active={activeFilter === "chrono"} onClick={() => handleFilter("chrono")} filterKey="chrono" />
               </div>
             </>
           )}
@@ -593,7 +598,7 @@ export default function OperationalDaySummary({
 
         {/* ── Scrollable content ── */}
         <div className="overflow-y-auto flex-1 px-5 py-4 space-y-3">
-          {visibleGroups.length === 0 && (
+          {visibleGroups.length === 0 && activeFilter !== "chrono" && (
             <p className="text-sm text-slate-400 text-center py-8">אין נתונים להצגה</p>
           )}
 
@@ -616,7 +621,7 @@ export default function OperationalDaySummary({
             );
           })}
 
-          {!useGroupCards && (
+          {!useGroupCards && activeFilter !== "chrono" && (
             <GroupedFlatSection
               filter={activeFilter}
               groups={visibleGroups}
@@ -625,6 +630,17 @@ export default function OperationalDaySummary({
               activities={allActivities}
               spaces={allSpaces}
               alerts={allAlerts}
+            />
+          )}
+
+          {activeFilter === "chrono" && (
+            <ChronologicalDayView
+              dateStr={dateStr}
+              allGroups={allGroups}
+              allMeals={allMeals}
+              allActivities={allActivities}
+              allCoffeeRequests={allCoffeeRequests}
+              allSpaces={allSpaces}
             />
           )}
         </div>
