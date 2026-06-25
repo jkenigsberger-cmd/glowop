@@ -12,6 +12,7 @@ import { sortActivitySpaces } from "@/lib/activitySpaceUtils";
 import SpaceOverviewCard from "../components/spaces/SpaceOverviewCard.jsx";
 import SpaceDailyView from "../components/spaces/SpaceDailyView.jsx";
 import SpaceWeeklyGrid from "../components/spaces/SpaceWeeklyGrid.jsx";
+import LogisticsReportTab from "../components/spaces/LogisticsReportTab.jsx";
 
 moment.locale("he");
 
@@ -97,9 +98,10 @@ export default function CommonSpaces() {
   };
 
   const TABS = [
-    { id: "overview", label: "סקירה כללית" },
-    { id: "daily",    label: "יומי" },
-    { id: "weekly",   label: "שבועי" },
+    { id: "overview",  label: "סקירה כללית" },
+    { id: "daily",     label: "יומי" },
+    { id: "weekly",    label: "שבועי" },
+    { id: "logistics", label: "📋 דוח לוגיסטיקה" },
   ];
 
   return (
@@ -203,6 +205,9 @@ export default function CommonSpaces() {
             />
           </div>
         )}
+
+        {/* ── LOGISTICS REPORT TAB ─────────────────────────────────────────── */}
+        {tab === "logistics" && <LogisticsReportTab />}
 
         {/* ── WEEKLY TAB ───────────────────────────────────────────────────── */}
         {tab === "weekly" && (

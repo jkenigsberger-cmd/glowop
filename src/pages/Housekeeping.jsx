@@ -3,14 +3,16 @@ import { base44 } from "@/api/base44Client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
 import { he } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, BedDouble, Clock, Sun, Layout } from "lucide-react";
-import { Link } from "react-router-dom";
+import { ChevronLeft, ChevronRight, BedDouble, Clock, Sun, Layout, CalendarDays, X } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import GroupAllocationCard from "@/components/housekeeping/GroupAllocationCard";
 import DayUseGroupCard from "@/components/housekeeping/DayUseGroupCard";
 import CommonSpaceHKCard from "@/components/housekeeping/CommonSpaceHKCard";
 import ReviewAlertsBanner from "@/components/alerts/ReviewAlertsBanner";
 import SearchBar from "@/components/search/SearchBar";
+import OperationalMonthlyGroupCalendar from "@/components/calendar/OperationalMonthlyGroupCalendar";
+import moment from "moment";
 
 const TODAY = new Date().toISOString().slice(0, 10);
 const DAYS_AHEAD = 7;
@@ -20,6 +22,7 @@ const TABS = [
   { id: "dayuse",        label: "באי יום",             color: "teal"   },
   { id: "common_spaces", label: "מרחבים משותפים",      color: "purple" },
   { id: "all",           label: "הכל",                 color: "slate"  },
+  { id: "calendar",      label: "לוח שנה",             color: "indigo" },
 ];
 
 const TAB_COLORS = {
@@ -27,6 +30,7 @@ const TAB_COLORS = {
   teal:   { active: "bg-teal-600 text-white border-teal-600",   inactive: "bg-white text-teal-700 border-teal-200 hover:bg-teal-50"   },
   purple: { active: "bg-purple-600 text-white border-purple-600", inactive: "bg-white text-purple-700 border-purple-200 hover:bg-purple-50" },
   slate:  { active: "bg-slate-700 text-white border-slate-700", inactive: "bg-white text-slate-600 border-slate-200 hover:bg-slate-50" },
+  indigo: { active: "bg-indigo-600 text-white border-indigo-600", inactive: "bg-white text-indigo-700 border-indigo-200 hover:bg-indigo-50" },
 };
 
 function formatDateHebrew(dateStr) {
@@ -40,8 +44,11 @@ function formatDateHebrew(dateStr) {
 export default function Housekeeping() {
   const [startDate, setStartDate]   = useState(TODAY);
   const [searchQuery, setSearchQuery] = useState("");
+  const [dateFilter, setDateFilter]   = useState("");   // single date filter
   const [activeTab, setActiveTab]   = useState("lodging");
+  const [calendarMonth, setCalendarMonth] = useState(moment());
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const refetchAllocations = () => queryClient.invalidateQueries({ queryKey: ["sleepingAllocations"] });
 
   // ── Data fetching ─────────────────────────────────────────────────────────────
@@ -264,19 +271,26 @@ export default function Housekeeping() {
     });
   }, [dateRange, scheduleItems, activitySpaces]);
 
-  // ── Search filters ────────────────────────────────────────────────────────────
-  const matchGroupId = (gid) => {
-    if (!searchQuery) return true;
-    const q = searchQuery.trim().toLowerCase();
-    const g = groupsMap[gid];
-    if (!g) return false;
-    return [g.group_name, g.contact_name].some(f => f && f.toLowerCase().includes(q));
+  // ── Search + date filters ─────────────────────────────────────────────────────
+  const matchGroup = (g) => {
+    if (searchQuery) {
+      const q = searchQuery.trim().toLowerCase();
+      if (![g.group_name, g.contact_name].some(f => f && f.toLowerCase().includes(q))) return false;
+    }
+    if (dateFilter) {
+      const arr = g.arrival_date;
+      const dep = g.departure_date;
+      if (!arr) return false;
+      if (arr > dateFilter) return false;
+      if (dep && dep < dateFilter) return false;
+    }
+    return true;
   };
 
-  const matchGroup = (g) => {
-    if (!searchQuery) return true;
-    const q = searchQuery.trim().toLowerCase();
-    return [g.group_name, g.contact_name].some(f => f && f.toLowerCase().includes(q));
+  const matchGroupId = (gid) => {
+    const g = groupsMap[gid];
+    if (!g) return false;
+    return matchGroup(g);
   };
 
   // ── Card prop builders (unchanged) ────────────────────────────────────────────
@@ -503,13 +517,36 @@ export default function Housekeeping() {
 
       {/* ── Content ─────────────────────────────────────────────────────────────── */}
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 space-y-8">
-        {/* Search */}
-        <SearchBar
-          value={searchQuery}
-          onChange={setSearchQuery}
-          placeholder="חפש קבוצה לפי שם..."
-          className="max-w-sm"
-        />
+        {/* Search + date filter */}
+        <div className="flex flex-wrap items-end gap-3">
+          <SearchBar
+            value={searchQuery}
+            onChange={setSearchQuery}
+            placeholder="חפש קבוצה לפי שם..."
+            className="max-w-xs"
+          />
+          <div className="flex items-end gap-2">
+            <div className="space-y-1">
+              <label className="text-xs text-slate-500 flex items-center gap-1">
+                <CalendarDays className="w-3.5 h-3.5" /> סינון לפי תאריך
+              </label>
+              <input
+                type="date"
+                value={dateFilter}
+                onChange={e => setDateFilter(e.target.value)}
+                className="border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-1 focus:ring-primary/30 bg-white"
+              />
+            </div>
+            {(dateFilter || searchQuery) && (
+              <button
+                onClick={() => { setDateFilter(""); setSearchQuery(""); }}
+                className="flex items-center gap-1 text-xs text-slate-500 border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white hover:bg-slate-50 transition-colors mb-0.5"
+              >
+                <X className="w-3.5 h-3.5" /> נקה סינון
+              </button>
+            )}
+          </div>
+        </div>
 
         {/* Alerts (lodging & all) */}
         {(activeTab === "lodging" || activeTab === "all") && (
@@ -540,7 +577,24 @@ export default function Housekeeping() {
           </>
         )}
 
-        {/* ── הכל ───────────────────────────────────────────────────────────────── */}
+        {/* ── לוח שנה ───────────────────────────────────────────────────────────── */}
+        {activeTab === "calendar" && (
+          <OperationalMonthlyGroupCalendar
+            groups={groups.filter(g => g.status !== "CANCELLED")}
+            selectedMonth={calendarMonth}
+            onMonthChange={setCalendarMonth}
+            onGroupClick={g => navigate(`/groups/${g.id}`)}
+            getGroupLabel={(g, dateStr) => {
+              const isArr = g.arrival_date === dateStr;
+              const isDep = g.departure_date === dateStr;
+              if (isArr) return { label: "הגעה", color: "bg-emerald-100 text-emerald-800 border-emerald-200" };
+              if (isDep) return { label: "עזיבה", color: "bg-orange-100 text-orange-800 border-orange-200" };
+              return { label: "שוהה", color: "bg-blue-50 text-blue-700 border-blue-200" };
+            }}
+          />
+        )}
+
+        {/* ── הכל ───────────────────────────────────────────────────────────── */}
         {(activeTab === "all") && (
           <div className="space-y-10">
             {dateRange.map(date => {

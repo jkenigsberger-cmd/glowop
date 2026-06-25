@@ -1,13 +1,16 @@
 import { useState, useMemo } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
-import { BedDouble, Users, ChevronDown, ChevronUp, CheckCircle2, Clock, AlertCircle, AlertTriangle, Shield, Car } from "lucide-react";
+import { BedDouble, Users, ChevronDown, ChevronUp, CheckCircle2, Clock, AlertCircle, AlertTriangle, Shield, Car, CalendarDays } from "lucide-react";
 import SearchBar from "@/components/search/SearchBar";
 import DateRangeFilter from "@/components/search/DateRangeFilter";
 import { Button } from "@/components/ui/button";
 import SleepingAllocationTab from "@/components/sleeping/SleepingAllocationTab";
 import ReviewAlertsBanner from "@/components/alerts/ReviewAlertsBanner";
 import { computeAllocationCounts } from "@/lib/allocationCounts";
+import OperationalMonthlyGroupCalendar from "@/components/calendar/OperationalMonthlyGroupCalendar";
+import { useNavigate } from "react-router-dom";
+import moment from "moment";
 
 const TODAY = new Date().toISOString().slice(0, 10);
 
@@ -228,7 +231,10 @@ export default function Allocation() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStart, setFilterStart] = useState(null);
   const [filterEnd, setFilterEnd] = useState(null);
-  const [statusFilter, setStatusFilter] = useState(null); // null | "all" | "allocated" | "pending"
+  const [statusFilter, setStatusFilter] = useState(null);
+  const [activeView, setActiveView] = useState("list"); // "list" | "calendar"
+  const [calendarMonth, setCalendarMonth] = useState(moment());
+  const navigate = useNavigate();
 
   const { data: groups = [], isLoading: loadingGroups } = useQuery({
     queryKey: ["groups"],
@@ -332,7 +338,7 @@ export default function Allocation() {
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 space-y-6">
 
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
             <h1 className="text-xl font-bold flex items-center gap-2">
               <BedDouble className="w-5 h-5 text-primary" />
@@ -342,15 +348,29 @@ export default function Allocation() {
               קבוצות מוכנות לשיבוץ פיזי — דרישות לינה הושלמו
             </p>
           </div>
-          <div className="flex gap-2 text-xs">
-            <span className="bg-muted border border-border rounded-full px-3 py-1 font-medium">
+          <div className="flex items-center gap-2">
+            <span className="bg-muted border border-border rounded-full px-3 py-1 text-xs font-medium">
               {pendingCount} ממתינות · {fullyAllocated} שובצו
             </span>
+            <div className="flex gap-1 bg-slate-100 rounded-lg p-0.5">
+              <button
+                onClick={() => setActiveView("list")}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${activeView === "list" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+              >
+                רשימה
+              </button>
+              <button
+                onClick={() => setActiveView("calendar")}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1 ${activeView === "calendar" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+              >
+                <CalendarDays className="w-3.5 h-3.5" /> לוח שנה
+              </button>
+            </div>
           </div>
         </div>
 
         {/* Allocation review alerts */}
-        <ReviewAlertsBanner module="ALLOCATION" />
+        {activeView === "list" && <ReviewAlertsBanner module="ALLOCATION" />}
 
         {/* Stats strip — clickable filters */}
         <div className="grid grid-cols-3 gap-3">
@@ -422,26 +442,61 @@ export default function Allocation() {
           />
         </div>
 
-        {/* Queue */}
-        {filteredSorted.length === 0 ? (
-          <div className="text-center py-16 border-2 border-dashed border-slate-200 rounded-xl text-muted-foreground text-sm">
-            {statusFilter ? "לא נמצאו קבוצות בסטטוס זה" : (searchQuery || filterStart || filterEnd ? "לא נמצאו תוצאות" : "אין קבוצות הממתינות לשיבוץ כרגע")}
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {filteredSorted.map(profile => {
-              const group = groupById[profile.group_id];
-              if (!group) return null;
-              return (
-                <GroupAllocationCard
-                  key={profile.id}
-                  profile={profile}
-                  group={group}
-                  allocations={allocationsByGroupId[group.id] || []}
-                />
-              );
-            })}
-          </div>
+        {/* ── Calendar view ─────────────────────────────────────────────────── */}
+        {activeView === "calendar" && (
+          <OperationalMonthlyGroupCalendar
+            groups={sorted.map(p => groupById[p.group_id]).filter(Boolean)}
+            selectedMonth={calendarMonth}
+            onMonthChange={setCalendarMonth}
+            onGroupClick={g => navigate(`/groups/${g.id}`)}
+            getGroupLabel={(g, dateStr) => {
+              const profile = profileByGroupId[g.id];
+              const allocs = allocationsByGroupId[g.id] || [];
+              const active = allocs.filter(a => a.status !== "CANCELLED");
+              const confirmed = active.filter(a => a.status === "CONFIRMED");
+              const counts = profile ? computeAllocationCounts(allocs, profile) : null;
+              const isArr = g.arrival_date === dateStr;
+              const isDep = g.departure_date === dateStr;
+
+              let label, color;
+              if (confirmed.length > 0 && active.length === confirmed.length && (!counts || counts.totalRemaining === 0)) {
+                label = "שובץ";
+                color = "bg-emerald-100 text-emerald-800 border-emerald-200";
+              } else if (active.length > 0) {
+                label = "שיבוץ חלקי";
+                color = "bg-amber-100 text-amber-800 border-amber-200";
+              } else {
+                label = "ממתין לשיבוץ";
+                color = "bg-slate-100 text-slate-600 border-slate-200";
+              }
+              if (isArr) { label = `הגעה · ${label}`; }
+              else if (isDep) { label = `עזיבה · ${label}`; }
+              return { label, color };
+            }}
+          />
+        )}
+
+        {activeView === "list" && (
+          filteredSorted.length === 0 ? (
+            <div className="text-center py-16 border-2 border-dashed border-slate-200 rounded-xl text-muted-foreground text-sm">
+              {statusFilter ? "לא נמצאו קבוצות בסטטוס זה" : (searchQuery || filterStart || filterEnd ? "לא נמצאו תוצאות" : "אין קבוצות הממתינות לשיבוץ כרגע")}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filteredSorted.map(profile => {
+                const group = groupById[profile.group_id];
+                if (!group) return null;
+                return (
+                  <GroupAllocationCard
+                    key={profile.id}
+                    profile={profile}
+                    group={group}
+                    allocations={allocationsByGroupId[group.id] || []}
+                  />
+                );
+              })}
+            </div>
+          )
         )}
 
       </div>
