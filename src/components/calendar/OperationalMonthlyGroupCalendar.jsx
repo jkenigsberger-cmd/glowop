@@ -10,7 +10,7 @@
  */
 import moment from "moment";
 import "moment/locale/he";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, ArrowDownToLine, ArrowUpFromLine, Moon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 moment.locale("he");
@@ -44,47 +44,80 @@ function groupsForDate(groups, dateStr) {
   });
 }
 
+// Icon + color config per event type
+function getEventStyle(isArr, isDep) {
+  if (isArr) return {
+    icon: ArrowDownToLine,
+    dot: "bg-emerald-500",
+    chip: "bg-emerald-50 text-emerald-800 border-emerald-300",
+    iconColor: "text-emerald-600",
+  };
+  if (isDep) return {
+    icon: ArrowUpFromLine,
+    dot: "bg-orange-500",
+    chip: "bg-orange-50 text-orange-800 border-orange-300",
+    iconColor: "text-orange-600",
+  };
+  return {
+    icon: Moon,
+    dot: "bg-blue-400",
+    chip: "bg-blue-50 text-blue-700 border-blue-200",
+    iconColor: "text-blue-500",
+  };
+}
+
 function DayCell({ dateStr, inMonth, groups, onGroupClick, getGroupLabel }) {
   const isToday = dateStr === TODAY;
   const dayGroups = groupsForDate(groups, dateStr);
+  const MAX_VISIBLE = 3;
+  const overflow = dayGroups.length - MAX_VISIBLE;
 
   return (
-    <div className={`min-h-[90px] border-b border-r border-slate-200 p-1.5 ${
-      inMonth ? "bg-white" : "bg-slate-50/60"
-    } ${isToday ? "ring-2 ring-inset ring-primary/30" : ""}`}>
+    <div className={`min-h-[80px] border-b border-r border-slate-200 p-1 ${
+      inMonth ? "bg-white" : "bg-slate-50/40"
+    } ${isToday ? "bg-primary/5 ring-2 ring-inset ring-primary/40" : ""}`}>
+
       {/* Day number */}
-      <div className={`text-xs font-semibold mb-1 w-6 h-6 flex items-center justify-center rounded-full ${
-        isToday ? "bg-primary text-white" : inMonth ? "text-slate-700" : "text-slate-300"
+      <div className={`text-xs font-bold mb-1 w-6 h-6 flex items-center justify-center rounded-full leading-none ${
+        isToday ? "bg-primary text-white shadow-sm" : inMonth ? "text-slate-700" : "text-slate-300"
       }`}>
         {moment(dateStr).date()}
       </div>
 
-      {/* Group chips */}
+      {/* Group chips — icon-first, minimal text */}
       <div className="space-y-0.5">
-        {dayGroups.slice(0, 4).map(g => {
-          const cfg = getGroupLabel ? getGroupLabel(g, dateStr) : null;
+        {dayGroups.slice(0, MAX_VISIBLE).map(g => {
           const isArr = g.arrival_date === dateStr;
           const isDep = g.departure_date === dateStr;
-          const label = cfg?.label || (isArr ? "הגעה" : isDep ? "עזיבה" : "שוהה");
-          const color = cfg?.color || (isArr ? "bg-emerald-100 text-emerald-800 border-emerald-200"
-            : isDep ? "bg-orange-100 text-orange-800 border-orange-200"
-            : "bg-blue-50 text-blue-700 border-blue-200");
+          const style = getEventStyle(isArr, isDep);
+          const Icon = style.icon;
+          // Custom label/color override from parent
+          const cfg = getGroupLabel ? getGroupLabel(g, dateStr) : null;
+          const chipColor = cfg?.color || style.chip;
 
           return (
             <button
               key={g.id}
               onClick={() => onGroupClick(g)}
-              className={`w-full text-right text-[10px] font-medium px-1.5 py-0.5 rounded border ${color} hover:opacity-80 transition-opacity truncate leading-tight`}
+              className={`w-full flex items-center gap-0.5 text-right text-[9px] font-semibold px-1 py-0.5 rounded border ${chipColor} active:opacity-60 transition-opacity`}
               title={g.group_name}
+              style={{ minHeight: '20px' }}
             >
-              <span className="opacity-60">[{label}] </span>
-              {g.group_name}
-              {g.total_pax ? <span className="opacity-50 mr-0.5"> ·{g.total_pax}</span> : null}
+              <Icon className={`w-2.5 h-2.5 shrink-0 ${style.iconColor}`} />
+              <span className="truncate leading-tight">{g.group_name}</span>
             </button>
           );
         })}
-        {dayGroups.length > 4 && (
-          <p className="text-[9px] text-slate-400 pr-1">+{dayGroups.length - 4} נוספות</p>
+        {overflow > 0 && (
+          <div className="flex items-center gap-0.5 px-1">
+            {dayGroups.slice(MAX_VISIBLE).map((g, i) => {
+              const isArr = g.arrival_date === dateStr;
+              const isDep = g.departure_date === dateStr;
+              const style = getEventStyle(isArr, isDep);
+              return <span key={i} className={`w-2 h-2 rounded-full ${style.dot} shrink-0`} title={g.group_name} />;
+            })}
+            <span className="text-[9px] text-slate-400 leading-none">+{overflow}</span>
+          </div>
         )}
       </div>
     </div>
@@ -159,14 +192,14 @@ export default function OperationalMonthlyGroupCalendar({
 
       {/* Legend */}
       <div className="flex flex-wrap gap-3 text-xs text-slate-500 px-1">
-        <span className="flex items-center gap-1">
-          <span className="w-3 h-3 rounded border bg-emerald-100 border-emerald-200 inline-block" /> הגעה
+        <span className="flex items-center gap-1.5">
+          <ArrowDownToLine className="w-3 h-3 text-emerald-600" /> הגעה
         </span>
-        <span className="flex items-center gap-1">
-          <span className="w-3 h-3 rounded border bg-orange-100 border-orange-200 inline-block" /> עזיבה
+        <span className="flex items-center gap-1.5">
+          <ArrowUpFromLine className="w-3 h-3 text-orange-600" /> עזיבה
         </span>
-        <span className="flex items-center gap-1">
-          <span className="w-3 h-3 rounded border bg-blue-50 border-blue-200 inline-block" /> שוהה
+        <span className="flex items-center gap-1.5">
+          <Moon className="w-3 h-3 text-blue-500" /> שוהה
         </span>
       </div>
     </div>
