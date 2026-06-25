@@ -6,7 +6,9 @@ import {
   ChevronLeft, ChevronRight, AlertCircle, RefreshCw, Settings
 } from "lucide-react";
 import { useRoleContext } from "@/lib/RoleContext";
+import { hasPermission } from "@/lib/roles";
 import LocationManagerPanel from "@/components/maintenance/LocationManagerPanel";
+import LocationDetailComponent from "@/components/maintenance/LocationDetail";
 import { Button } from "@/components/ui/button";
 
 // ── Section config ────────────────────────────────────────────────────────────
@@ -59,7 +61,7 @@ const SECTIONS = [
 ];
 
 // ── Section overview ──────────────────────────────────────────────────────────
-function SectionOverview({ locations, onSelectSection, isAdmin, onSyncClick, syncing, syncResult, onManageLocations }) {
+function SectionOverview({ locations, openIssues, onSelectSection, isAdmin, onSyncClick, syncing, syncResult, onManageLocations }) {
   return (
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3">
@@ -121,6 +123,8 @@ function SectionOverview({ locations, onSelectSection, isAdmin, onSyncClick, syn
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {SECTIONS.map(sec => {
           const count = locations.filter(l => sec.types.includes(l.location_type)).length;
+          const openCount = openIssues.filter(i => sec.types.includes(i.location_type)).length;
+          const urgentCount = openIssues.filter(i => sec.types.includes(i.location_type) && i.priority === "URGENT").length;
           const Icon = sec.icon;
           return (
             <button
@@ -137,6 +141,13 @@ function SectionOverview({ locations, onSelectSection, isAdmin, onSyncClick, syn
                 <p className="text-xs font-semibold mt-1.5 opacity-80">
                   {count > 0 ? `${count} מיקומים` : "טרם הוגדרו מיקומים"}
                 </p>
+                {openCount > 0 && (
+                  <p className={`text-xs font-bold mt-0.5 ${urgentCount > 0 ? "text-red-600" : "opacity-80"}`}>
+                    {urgentCount > 0
+                      ? `${urgentCount} תקלה דחופה`
+                      : `${openCount} תקלות פתוחות`}
+                  </p>
+                )}
               </div>
               <ChevronLeft className="w-5 h-5 opacity-40 shrink-0" />
             </button>
@@ -273,51 +284,6 @@ function SectionView({ sectionKey, locations, onBack, onSelectLocation }) {
   );
 }
 
-// ── Location detail (Phase 2 placeholder) ────────────────────────────────────
-function LocationDetail({ location, onBack }) {
-  const sec = SECTIONS.find(s => s.types.includes(location.location_type));
-
-  return (
-    <div className="space-y-4">
-      <button onClick={onBack} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
-        <ChevronRight className="w-4 h-4" /> חזרה
-      </button>
-
-      <div className="bg-card border border-border rounded-xl p-4 space-y-1">
-        <div className="flex items-center gap-3">
-          {sec && (
-            <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${sec.iconBg} shrink-0`}>
-              <sec.icon className="w-4 h-4" />
-            </div>
-          )}
-          <div>
-            <h2 className="font-bold text-base leading-tight">{location.display_name}</h2>
-            {location.section && (
-              <p className="text-xs text-muted-foreground">{location.section}</p>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Issue list — Phase 2 */}
-      <div className="border-2 border-dashed border-slate-200 rounded-xl p-6 text-center space-y-2">
-        <Wrench className="w-8 h-8 text-slate-300 mx-auto" />
-        <p className="text-sm font-semibold text-slate-400">עדיין אין תקלות רשומות למיקום זה</p>
-        <p className="text-xs text-slate-400">דיווח תקלות יתווסף בשלב הבא</p>
-        <div className="mt-3">
-          <button
-            disabled
-            className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 text-primary/50 rounded-lg text-sm font-semibold cursor-not-allowed"
-          >
-            + פתח תקלה חדשה
-            <span className="text-[10px] bg-amber-100 text-amber-600 rounded-full px-2 py-0.5">בקרוב</span>
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function EmptyLocations() {
   return (
     <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-5 text-center space-y-1">
@@ -334,27 +300,46 @@ export default function Maintenance() {
   const [showManager, setShowManager] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null);
   const qc = useQueryClient();
   const { role } = useRoleContext();
   const isAdmin = ["SUPER_ADMIN", "ADMIN", "OPERATIONS"].includes(role);
+  const canEdit = hasPermission(role, "CREATE_MAINTENANCE_ISSUE");
 
-  const { data: locations = [], isLoading } = useQuery({
+  const { data: locations = [], isLoading: locLoading } = useQuery({
     queryKey: ["siteLocations"],
     queryFn: () => base44.entities.SiteLocation.filter({ is_active: true }),
     staleTime: 60_000,
+  });
+
+  // Fetch open issues for section-level counts
+  const { data: openIssues = [] } = useQuery({
+    queryKey: ["maintenanceIssuesOpen"],
+    queryFn: () => base44.entities.MaintenanceIssue.filter({ status: { $in: ["OPEN", "IN_PROGRESS", "WAITING_PARTS"] } }, "-created_date", 500),
+    staleTime: 30_000,
+  });
+
+  // Fetch current user once
+  useQuery({
+    queryKey: ["currentUser"],
+    queryFn: async () => {
+      const u = await base44.auth.me();
+      setCurrentUser(u);
+      return u;
+    },
+    staleTime: Infinity,
   });
 
   const handleSync = async () => {
     setSyncing(true);
     setSyncResult(null);
     const res = await base44.functions.invoke("syncMaintenanceLocations", {});
-    const data = res.data;
-    setSyncResult(data);
+    setSyncResult(res.data);
     setSyncing(false);
     qc.invalidateQueries({ queryKey: ["siteLocations"] });
   };
 
-  if (isLoading) {
+  if (locLoading) {
     return (
       <div className="flex items-center justify-center min-h-[40vh]">
         <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -372,7 +357,6 @@ export default function Maintenance() {
     }
   };
 
-  // Manager view
   if (showManager) {
     return (
       <div className="min-h-screen bg-background" dir="rtl">
@@ -392,6 +376,7 @@ export default function Maintenance() {
         {!activeSection && (
           <SectionOverview
             locations={locations}
+            openIssues={openIssues}
             onSelectSection={setActiveSection}
             isAdmin={isAdmin}
             onSyncClick={handleSync}
@@ -409,7 +394,12 @@ export default function Maintenance() {
           />
         )}
         {activeLocation && (
-          <LocationDetail location={activeLocation} onBack={handleBack} />
+          <LocationDetailComponent
+            location={activeLocation}
+            user={currentUser}
+            canEdit={canEdit}
+            onBack={handleBack}
+          />
         )}
       </div>
     </div>

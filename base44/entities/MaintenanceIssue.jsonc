@@ -1,0 +1,117 @@
+{
+  "name": "MaintenanceIssue",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "\u05db\u05d5\u05ea\u05e8\u05ea \u05d4\u05ea\u05e7\u05dc\u05d4"
+    },
+    "description": {
+      "type": "string",
+      "description": "\u05ea\u05d9\u05d0\u05d5\u05e8 \u05de\u05e4\u05d5\u05e8\u05d8"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "\u05d7\u05e9\u05de\u05dc",
+        "\u05d0\u05d9\u05e0\u05e1\u05d8\u05dc\u05e6\u05d9\u05d4",
+        "\u05de\u05d6\u05d2\u05df",
+        "\u05de\u05d9\u05d8\u05d4",
+        "\u05d3\u05dc\u05ea / \u05d7\u05dc\u05d5\u05df",
+        "\u05e9\u05d9\u05e8\u05d5\u05ea\u05d9\u05dd",
+        "\u05de\u05e7\u05dc\u05d7\u05ea",
+        "\u05de\u05e7\u05e8\u05e8",
+        "\u05ea\u05d0\u05d5\u05e8\u05d4",
+        "\u05e6\u05d9\u05d5\u05d3 \u05e9\u05d1\u05d5\u05e8",
+        "\u05d1\u05d8\u05d9\u05d7\u05d5\u05ea",
+        "\u05d0\u05d7\u05e8"
+      ],
+      "description": "\u05e7\u05d8\u05d2\u05d5\u05e8\u05d9\u05d9\u05ea \u05d4\u05ea\u05e7\u05dc\u05d4"
+    },
+    "priority": {
+      "type": "string",
+      "enum": [
+        "LOW",
+        "MEDIUM",
+        "HIGH",
+        "URGENT"
+      ],
+      "default": "MEDIUM",
+      "description": "\u05d3\u05d7\u05d9\u05e4\u05d5\u05ea: LOW=\u05e0\u05de\u05d5\u05db\u05d4, MEDIUM=\u05d1\u05d9\u05e0\u05d5\u05e0\u05d9\u05ea, HIGH=\u05d2\u05d1\u05d5\u05d4\u05d4, URGENT=\u05d3\u05d7\u05d5\u05e3"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "OPEN",
+        "IN_PROGRESS",
+        "WAITING_PARTS",
+        "DONE",
+        "CANCELLED"
+      ],
+      "default": "OPEN",
+      "description": "\u05e1\u05d8\u05d8\u05d5\u05e1: OPEN=\u05e4\u05ea\u05d5\u05d7, IN_PROGRESS=\u05d1\u05d8\u05d9\u05e4\u05d5\u05dc, WAITING_PARTS=\u05de\u05de\u05ea\u05d9\u05df \u05dc\u05d7\u05dc\u05e7\u05d9\u05dd, DONE=\u05d1\u05d5\u05e6\u05e2, CANCELLED=\u05d1\u05d5\u05d8\u05dc"
+    },
+    "site_location_id": {
+      "type": "string",
+      "description": "FK to SiteLocation"
+    },
+    "location_type": {
+      "type": "string",
+      "description": "snapshot of SiteLocation.location_type"
+    },
+    "location_name": {
+      "type": "string",
+      "description": "snapshot of SiteLocation.display_name"
+    },
+    "location_section": {
+      "type": "string",
+      "description": "snapshot of SiteLocation.section"
+    },
+    "related_group_id": {
+      "type": "string",
+      "description": "FK to Group (optional)"
+    },
+    "related_group_name": {
+      "type": "string",
+      "description": "snapshot of Group.group_name (optional)"
+    },
+    "reported_by_user_id": {
+      "type": "string",
+      "description": "FK to User"
+    },
+    "reported_by_name": {
+      "type": "string",
+      "description": "display name of reporter"
+    },
+    "assigned_to_user_id": {
+      "type": "string",
+      "description": "FK to User (optional)"
+    },
+    "assigned_to_name": {
+      "type": "string",
+      "description": "display name of assignee (optional)"
+    },
+    "photo_urls": {
+      "type": "string",
+      "description": "JSON array of photo URLs"
+    },
+    "internal_notes": {
+      "type": "string",
+      "description": "\u05d4\u05e2\u05e8\u05d5\u05ea \u05e4\u05e0\u05d9\u05de\u05d9\u05d5\u05ea"
+    },
+    "closed_date": {
+      "type": "string",
+      "description": "ISO datetime \u2014 set when DONE or CANCELLED"
+    }
+  },
+  "required": [
+    "title",
+    "category",
+    "priority",
+    "status",
+    "site_location_id",
+    "location_name",
+    "reported_by_user_id",
+    "reported_by_name"
+  ]
+}

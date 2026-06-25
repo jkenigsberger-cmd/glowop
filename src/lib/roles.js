@@ -28,8 +28,9 @@ export const ROLE_NAV_LINKS = {
   SUPER_ADMIN:          ["dashboard", "approved-groups", "calendar", "allocation", "common-spaces", "housekeeping", "kitchen", "maintenance", "admin", "mechina-spaces"],
   ADMIN:                ["dashboard", "approved-groups", "calendar", "allocation", "common-spaces", "housekeeping", "kitchen", "maintenance", "admin", "mechina-spaces"],
   OPERATIONS:           ["dashboard", "approved-groups", "calendar", "allocation", "common-spaces", "housekeeping", "kitchen", "maintenance", "mechina-spaces"],
-  HOUSEKEEPING_MANAGER: ["dashboard", "calendar", "allocation", "housekeeping", "approved-groups"],
+  HOUSEKEEPING_MANAGER: ["dashboard", "calendar", "allocation", "housekeeping", "approved-groups", "maintenance"],
   HOUSEKEEPING_STAFF:   ["dashboard", "calendar", "housekeeping"],
+  HOUSEKEEPING_MANAGER: ["dashboard", "calendar", "allocation", "housekeeping", "approved-groups", "maintenance"],
   KITCHEN:              ["dashboard", "calendar", "kitchen"],
   VIEWER:               ["dashboard", "calendar"],
   MECHINA_USER:         ["mechina-spaces"],
@@ -40,7 +41,7 @@ export const ROLE_ALLOWED_ROUTES = {
   SUPER_ADMIN: "*", // all
   ADMIN:       ["dashboard", "approved-groups", "calendar", "allocation", "common-spaces", "housekeeping", "kitchen", "kitchen-report", "maintenance", "admin", "groups", "inventory", "cleaning-hours", "mechina-spaces"],
   OPERATIONS:  ["dashboard", "approved-groups", "calendar", "allocation", "common-spaces", "housekeeping", "kitchen", "kitchen-report", "maintenance", "groups", "cleaning-hours", "mechina-spaces"],
-  HOUSEKEEPING_MANAGER: ["dashboard", "calendar", "allocation", "housekeeping", "approved-groups", "cleaning-hours"],
+  HOUSEKEEPING_MANAGER: ["dashboard", "calendar", "allocation", "housekeeping", "approved-groups", "cleaning-hours", "maintenance"],
   HOUSEKEEPING_STAFF:   ["dashboard", "calendar", "housekeeping"],
   KITCHEN:              ["dashboard", "calendar", "kitchen", "kitchen-report"],
   VIEWER:               ["dashboard", "calendar"],
@@ -85,6 +86,10 @@ export const PERMISSIONS = {
 
   // Reports / PDFs
   GENERATE_REPORTS:  ["SUPER_ADMIN", "ADMIN", "OPERATIONS", "HOUSEKEEPING_MANAGER"],
+
+  // Maintenance
+  CREATE_MAINTENANCE_ISSUE: ["SUPER_ADMIN", "ADMIN", "OPERATIONS", "HOUSEKEEPING_MANAGER", "HOUSEKEEPING_STAFF"],
+  CLOSE_MAINTENANCE_ISSUE:  ["SUPER_ADMIN", "ADMIN", "OPERATIONS", "HOUSEKEEPING_MANAGER"],
 
   // Review alerts acknowledgement
   ACKNOWLEDGE_ALERT: ["SUPER_ADMIN", "ADMIN", "OPERATIONS", "KITCHEN", "HOUSEKEEPING_MANAGER", "HOUSEKEEPING_STAFF"],
