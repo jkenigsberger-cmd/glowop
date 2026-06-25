@@ -1,45 +1,46 @@
 /**
  * MechinaSpaceAvailability
  * Visual daily availability grid for common spaces.
- * Shows ACTIVE GroupScheduleItem bookings and PENDING CommonSpaceBookingRequest blocks.
- * Column = space, row = hour from 06:00–23:00.
  *
- * UI improvements:
- * - Sticky time axis on the right (RTL) — remains visible during horizontal scroll
- * - Sticky header row for space names
- * - Deterministic group colors by hashing group_id
- * - Per-date group legend
- * - Richer event cards: group name + time + status
+ * Time axis implementation:
+ * - The time labels are NOT a grid column.
+ * - They are a position:sticky overlay INSIDE the overflow-x-auto container,
+ *   pinned to the right edge of the visible viewport via `right: 0`.
+ * - This means: no matter how far the user scrolls horizontally,
+ *   the hour labels remain visible at the right edge of the scroll container.
+ * - The spaces grid has padding-right equal to the axis width so the
+ *   rightmost space column is never hidden under the labels.
  */
 
-const HOUR_START = 6;
-const HOUR_END   = 23;
-const HOURS      = Array.from({ length: HOUR_END - HOUR_START + 1 }, (_, i) => HOUR_START + i);
-const TOTAL_HEIGHT = 680; // px total grid height
+const HOUR_START   = 6;
+const HOUR_END     = 23;
+const HOURS        = Array.from({ length: HOUR_END - HOUR_START + 1 }, (_, i) => HOUR_START + i);
+const TOTAL_HEIGHT = 680; // px — total grid body height
+const AXIS_WIDTH   = 52;  // px — floating time axis width
+const COL_WIDTH    = 140; // px — each space column width
+const HEADER_H     = 40;  // px — space name header height
 
 // ── Deterministic color palette ───────────────────────────────────────────────
 const COLOR_PALETTE = [
-  { bg: "#dbeafe", border: "#3b82f6", text: "#1e3a8a" }, // blue
-  { bg: "#dcfce7", border: "#22c55e", text: "#14532d" }, // green
-  { bg: "#fce7f3", border: "#ec4899", text: "#831843" }, // pink
-  { bg: "#ede9fe", border: "#8b5cf6", text: "#3b0764" }, // violet
-  { bg: "#ffedd5", border: "#f97316", text: "#7c2d12" }, // orange
-  { bg: "#cffafe", border: "#06b6d4", text: "#164e63" }, // cyan
-  { bg: "#fef9c3", border: "#eab308", text: "#713f12" }, // yellow
-  { bg: "#fce4ec", border: "#e91e63", text: "#880e4f" }, // rose
-  { bg: "#e8f5e9", border: "#4caf50", text: "#1b5e20" }, // lime
-  { bg: "#ede7f6", border: "#673ab7", text: "#311b92" }, // deep-purple
-  { bg: "#e3f2fd", border: "#1565c0", text: "#0d47a1" }, // deep-blue
-  { bg: "#fff3e0", border: "#ef6c00", text: "#bf360c" }, // deep-orange
+  { bg: "#dbeafe", border: "#3b82f6", text: "#1e3a8a" },
+  { bg: "#dcfce7", border: "#22c55e", text: "#14532d" },
+  { bg: "#fce7f3", border: "#ec4899", text: "#831843" },
+  { bg: "#ede9fe", border: "#8b5cf6", text: "#3b0764" },
+  { bg: "#ffedd5", border: "#f97316", text: "#7c2d12" },
+  { bg: "#cffafe", border: "#06b6d4", text: "#164e63" },
+  { bg: "#fef9c3", border: "#eab308", text: "#713f12" },
+  { bg: "#fce4ec", border: "#e91e63", text: "#880e4f" },
+  { bg: "#e8f5e9", border: "#4caf50", text: "#1b5e20" },
+  { bg: "#ede7f6", border: "#673ab7", text: "#311b92" },
+  { bg: "#e3f2fd", border: "#1565c0", text: "#0d47a1" },
+  { bg: "#fff3e0", border: "#ef6c00", text: "#bf360c" },
 ];
 
-function hashGroupId(group_id) {
-  if (!group_id) return 0;
-  let hash = 0;
-  for (let i = 0; i < group_id.length; i++) {
-    hash = (hash * 31 + group_id.charCodeAt(i)) >>> 0;
-  }
-  return hash % COLOR_PALETTE.length;
+function hashGroupId(id) {
+  if (!id) return 0;
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  return h % COLOR_PALETTE.length;
 }
 
 export function getMechinaColor(group_id) {
@@ -53,25 +54,29 @@ function toMinutes(t) {
   return h * 60 + m;
 }
 
+function pct(hour) {
+  return ((hour - HOUR_START) / (HOUR_END + 1 - HOUR_START)) * 100;
+}
+
 function blockStyle(startTime, endTime) {
   const gridStart = HOUR_START * 60;
   const total     = (HOUR_END + 1 - HOUR_START) * 60;
-  const s         = toMinutes(startTime) - gridStart;
-  const e         = toMinutes(endTime)   - gridStart;
-  const top       = Math.max(0, (s / total) * 100);
-  const height    = Math.max(2, ((e - s) / total) * 100);
-  return { top: `${top}%`, height: `${height}%` };
+  const s = toMinutes(startTime) - gridStart;
+  const e = toMinutes(endTime)   - gridStart;
+  return {
+    top:    `${Math.max(0, (s / total) * 100)}%`,
+    height: `${Math.max(2, ((e - s) / total) * 100)}%`,
+  };
 }
 
 // ── TimeBlock ─────────────────────────────────────────────────────────────────
 function TimeBlock({ groupId, groupName, startTime, endTime, statusLabel, title }) {
   const color = getMechinaColor(groupId);
-  const style = blockStyle(startTime, endTime);
   return (
     <div
       className="absolute right-0 left-0 mx-0.5 rounded overflow-hidden flex flex-col justify-start px-1.5 py-1 cursor-default"
       style={{
-        ...style,
+        ...blockStyle(startTime, endTime),
         position: "absolute",
         zIndex: 2,
         backgroundColor: color.bg,
@@ -80,14 +85,9 @@ function TimeBlock({ groupId, groupName, startTime, endTime, statusLabel, title 
       }}
       title={title}
     >
-      {groupName && (
-        <span className="text-[10px] font-bold leading-tight truncate">{groupName}</span>
-      )}
+      {groupName && <span className="text-[10px] font-bold leading-tight truncate">{groupName}</span>}
       <span className="text-[9px] leading-tight opacity-80 font-medium">{startTime}–{endTime}</span>
-      <span
-        className="text-[9px] leading-tight font-semibold mt-0.5 truncate"
-        style={{ color: color.border }}
-      >
+      <span className="text-[9px] leading-tight font-semibold mt-0.5 truncate" style={{ color: color.border }}>
         {statusLabel}
       </span>
     </div>
@@ -98,55 +98,117 @@ function TimeBlock({ groupId, groupName, startTime, endTime, statusLabel, title 
 export default function MechinaSpaceAvailability({
   spaces, activeBookings, pendingRequests,
   isAdmin, onRequestNew, allowCreateRequest,
-  groupMap = {},  // optional: map of group_id → { group_name }
+  groupMap = {},
 }) {
-  const COLUMN_WIDTH = 140;
-  const TIME_COL_WIDTH = 48;
+  const gridWidth = COL_WIDTH * spaces.length;
 
-  // Collect groups that appear on this date for the legend
+  // Legend: groups visible on this date
   const legendGroups = (() => {
-    const seen = new Map(); // group_id → name
+    const seen = new Map();
     activeBookings.forEach(b => {
-      if (b.group_id && !seen.has(b.group_id)) {
-        const name = groupMap[b.group_id]?.group_name || b.group_id;
-        seen.set(b.group_id, name);
-      }
+      if (b.group_id && !seen.has(b.group_id))
+        seen.set(b.group_id, groupMap[b.group_id]?.group_name || b.group_id);
     });
     pendingRequests.forEach(r => {
       const gid = r.mechina_group_id || r.group_id;
-      if (gid && !seen.has(gid)) {
-        const name = groupMap[gid]?.group_name || r.requested_by_name || gid;
-        seen.set(gid, name);
-      }
+      if (gid && !seen.has(gid))
+        seen.set(gid, groupMap[gid]?.group_name || r.requested_by_name || gid);
     });
     return Array.from(seen.entries()).map(([id, name]) => ({ id, name }));
   })();
 
   return (
     <div>
-      {/* Scroll container — horizontal scroll only */}
-      <div className="overflow-x-auto border border-slate-200 rounded-xl bg-white">
+      {/*
+        ── Scroll container ─────────────────────────────────────────────────────
+        overflow-x: auto  → horizontal scroll lives here
+        position: relative → so the sticky child is pinned inside THIS box
+      */}
+      <div
+        className="border border-slate-200 rounded-xl bg-white"
+        style={{ overflowX: "auto", position: "relative" }}
+      >
+        {/*
+          ── Floating time axis ──────────────────────────────────────────────────
+          position: sticky + right: 0 means: this element sticks to the RIGHT
+          edge of the VISIBLE scroll container viewport, regardless of how far
+          the user has scrolled horizontally.
+
+          It is NOT part of the spaces grid — it is an absolutely-positioned
+          overlay on top of the grid, anchored to the scroll viewport.
+
+          pointer-events: none so clicks pass through to booking blocks below.
+        */}
         <div
           style={{
-            display: "grid",
-            gridTemplateColumns: `${COLUMN_WIDTH * spaces.length}px ${TIME_COL_WIDTH}px`,
-            minWidth: COLUMN_WIDTH * spaces.length + TIME_COL_WIDTH,
+            position: "sticky",
+            right: 0,
+            top: 0,
+            width: AXIS_WIDTH,
+            height: HEADER_H + TOTAL_HEIGHT,
+            zIndex: 20,
+            float: "right",           // keeps it in flow so the grid doesn't overlap
+            backgroundColor: "rgba(255,255,255,0.92)",
+            borderLeft: "1px solid #e2e8f0",
+            pointerEvents: "none",
+            flexShrink: 0,
           }}
         >
-          {/* ── Space columns (left side, scrolls) ── */}
-          <div style={{ display: "grid", gridTemplateColumns: `repeat(${spaces.length}, ${COLUMN_WIDTH}px)` }}>
-            {/* Header row */}
+          {/* Header placeholder — aligns with space name headers */}
+          <div style={{ height: HEADER_H, borderBottom: "1px solid #e2e8f0", background: "rgba(248,250,252,0.95)" }} />
+
+          {/* Hour labels */}
+          <div style={{ position: "relative", height: TOTAL_HEIGHT }}>
+            {HOURS.map(h => (
+              <div
+                key={h}
+                style={{
+                  position: "absolute",
+                  top: `${pct(h)}%`,
+                  transform: "translateY(-50%)",
+                  width: "100%",
+                  textAlign: "center",
+                  fontSize: 10,
+                  color: "#94a3b8",
+                  fontWeight: 500,
+                  lineHeight: 1,
+                }}
+              >
+                {String(h).padStart(2, "0")}:00
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/*
+          ── Spaces grid ─────────────────────────────────────────────────────────
+          The grid has padding-right = AXIS_WIDTH so the last column is never
+          hidden under the floating time axis.
+        */}
+        <div
+          style={{
+            width: gridWidth,
+            minWidth: gridWidth,
+            paddingRight: AXIS_WIDTH,
+            boxSizing: "content-box",
+          }}
+        >
+          {/* Space name headers */}
+          <div style={{ display: "grid", gridTemplateColumns: `repeat(${spaces.length}, ${COL_WIDTH}px)` }}>
             {spaces.map(space => (
               <div
                 key={space.id}
-                className="h-10 flex flex-col items-center justify-center px-1 border-b border-r border-slate-200 bg-slate-50"
+                style={{ height: HEADER_H }}
+                className="flex flex-col items-center justify-center px-1 border-b border-r border-slate-200 bg-slate-50"
               >
                 <p className="text-xs font-semibold text-slate-700 text-center leading-tight">{space.name}</p>
                 {space.capacity && <p className="text-[10px] text-slate-400">{space.capacity} איש</p>}
               </div>
             ))}
+          </div>
 
-            {/* Grid body */}
+          {/* Space columns body */}
+          <div style={{ display: "grid", gridTemplateColumns: `repeat(${spaces.length}, ${COL_WIDTH}px)` }}>
             {spaces.map(space => {
               const spaceBookings = activeBookings.filter(b => b.activity_space_id === space.id);
               const spacePending  = pendingRequests.filter(r => r.space_id === space.id);
@@ -157,40 +219,39 @@ export default function MechinaSpaceAvailability({
                   className="relative border-r border-slate-200 bg-white overflow-hidden"
                   style={{ height: TOTAL_HEIGHT }}
                 >
-                  {/* Hour grid lines */}
+                  {/* Hour grid lines — faint horizontal rules */}
                   {HOURS.map(h => (
                     <div
                       key={h}
-                      className="absolute w-full border-t border-slate-100"
-                      style={{ top: `${((h - HOUR_START) / (HOUR_END + 1 - HOUR_START)) * 100}%` }}
+                      className="absolute w-full"
+                      style={{
+                        top: `${pct(h)}%`,
+                        borderTop: h % 2 === 0 ? "1px solid #e2e8f0" : "1px solid #f1f5f9",
+                      }}
                     />
                   ))}
 
-                  {/* ACTIVE bookings — תפוס */}
-                  {spaceBookings.map(b => {
-                    const name = groupMap[b.group_id]?.group_name || (isAdmin ? b.activity_name : null);
-                    return (
-                      <TimeBlock
-                        key={b.id}
-                        groupId={b.group_id}
-                        groupName={name}
-                        startTime={b.start_time}
-                        endTime={b.end_time}
-                        statusLabel="תפוס"
-                        title={isAdmin ? `${b.activity_name} (${b.start_time}–${b.end_time})` : "תפוס"}
-                      />
-                    );
-                  })}
+                  {/* ACTIVE bookings */}
+                  {spaceBookings.map(b => (
+                    <TimeBlock
+                      key={b.id}
+                      groupId={b.group_id}
+                      groupName={groupMap[b.group_id]?.group_name || (isAdmin ? b.activity_name : null)}
+                      startTime={b.start_time}
+                      endTime={b.end_time}
+                      statusLabel="תפוס"
+                      title={isAdmin ? `${b.activity_name} (${b.start_time}–${b.end_time})` : "תפוס"}
+                    />
+                  ))}
 
-                  {/* PENDING requests — ממתין לאישור */}
+                  {/* PENDING requests */}
                   {spacePending.map(r => {
-                    const gid  = r.mechina_group_id || r.group_id;
-                    const name = groupMap[gid]?.group_name || r.requested_by_name || null;
+                    const gid = r.mechina_group_id || r.group_id;
                     return (
                       <TimeBlock
                         key={r.id}
                         groupId={gid}
-                        groupName={name}
+                        groupName={groupMap[gid]?.group_name || r.requested_by_name || null}
                         startTime={r.start_time}
                         endTime={r.end_time}
                         statusLabel="ממתין לאישור"
@@ -199,11 +260,12 @@ export default function MechinaSpaceAvailability({
                     );
                   })}
 
-                  {/* "New request" button — Mechina users only */}
+                  {/* New request button */}
                   {allowCreateRequest && (
                     <button
                       onClick={() => onRequestNew(space.id)}
-                      className="absolute bottom-2 left-0 right-0 mx-auto w-fit text-[10px] text-primary border border-primary/30 rounded-full px-2 py-0.5 bg-white hover:bg-primary/5 transition-colors z-10"
+                      className="absolute bottom-2 left-0 right-0 mx-auto w-fit text-[10px] text-primary border border-primary/30 rounded-full px-2 py-0.5 bg-white hover:bg-primary/5 transition-colors"
+                      style={{ zIndex: 10, pointerEvents: "auto" }}
                     >
                       + בקשה
                     </button>
@@ -212,52 +274,17 @@ export default function MechinaSpaceAvailability({
               );
             })}
           </div>
-
-          {/* ── Sticky time axis — right side (RTL), does NOT scroll horizontally ── */}
-          <div
-            style={{
-              position: "sticky",
-              right: 0,
-              zIndex: 10,
-              backgroundColor: "white",
-              borderLeft: "1px solid #e2e8f0",
-              width: TIME_COL_WIDTH,
-            }}
-          >
-            {/* Header placeholder to align with column headers */}
-            <div className="h-10 border-b border-slate-200 bg-slate-50" />
-
-            {/* Hour labels */}
-            <div style={{ height: TOTAL_HEIGHT, position: "relative" }}>
-              {HOURS.map(h => (
-                <div
-                  key={h}
-                  className="absolute w-full text-[10px] text-slate-400 text-center"
-                  style={{
-                    top: `${((h - HOUR_START) / (HOUR_END + 1 - HOUR_START)) * 100}%`,
-                    transform: "translateY(-50%)",
-                    paddingRight: 2,
-                  }}
-                >
-                  {String(h).padStart(2, "0")}:00
-                </div>
-              ))}
-            </div>
-          </div>
         </div>
       </div>
 
-      {/* ── Legend ───────────────────────────────────────────────────────── */}
+      {/* Legend */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-3 px-1">
-        {/* Status legend */}
         <span className="flex items-center gap-1.5 text-xs text-slate-500">
           <span className="w-3 h-3 rounded inline-block bg-white border-2 border-slate-200" /> פנוי
         </span>
         <span className="flex items-center gap-1.5 text-xs text-slate-500">
           <span className="w-3 h-3 rounded inline-block" style={{ background: "#fef3c7", border: "2px solid #f59e0b" }} /> ממתין לאישור
         </span>
-
-        {/* Per-group color chips (only groups on this date) */}
         {legendGroups.length > 0 && (
           <>
             <span className="text-xs text-slate-300 select-none">|</span>
@@ -265,10 +292,7 @@ export default function MechinaSpaceAvailability({
               const c = getMechinaColor(id);
               return (
                 <span key={id} className="flex items-center gap-1.5 text-xs" style={{ color: c.text }}>
-                  <span
-                    className="w-3 h-3 rounded inline-block"
-                    style={{ backgroundColor: c.bg, border: `2px solid ${c.border}` }}
-                  />
+                  <span className="w-3 h-3 rounded inline-block" style={{ backgroundColor: c.bg, border: `2px solid ${c.border}` }} />
                   {name}
                 </span>
               );
