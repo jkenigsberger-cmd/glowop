@@ -136,6 +136,7 @@ export default function MechinaSpaces() {
 
   const [selectedDate, setSelectedDate] = useState(todayStr());
   const [spaces, setSpaces] = useState([]);
+  const [groups, setGroups] = useState([]);
   const [activeBookings, setActiveBookings] = useState([]);
   const [pendingRequests, setPendingRequests] = useState([]);
   const [myRequests, setMyRequests] = useState([]);          // admin: PENDING list; mechina: own requests
@@ -150,6 +151,7 @@ export default function MechinaSpaces() {
   const [actionModal, setActionModal] = useState(null);      // { type: "cancel"|"request_cancel", request }
   const [resolveCancellationModal, setResolveCancellationModal] = useState(null); // request
 
+  const groupMap = Object.fromEntries(groups.map(g => [g.id, g]));
   const activeAssignments = assignments.filter(a => a.is_active);
   const assignment = activeAssignments.find(a => a.id === selectedAssignmentId) || activeAssignments[0];
   const mechinaGroupId = assignment?.group_id || "";
@@ -161,6 +163,7 @@ export default function MechinaSpaces() {
   }, [assignments]);
 
   useEffect(() => { base44.entities.ActivitySpace.list().then(setSpaces); }, []);
+  useEffect(() => { base44.entities.Group.list().then(setGroups); }, []);
 
   useEffect(() => {
     if (!isMechinaUser || !internalUser?.email) return;
@@ -327,7 +330,7 @@ export default function MechinaSpaces() {
             <div className="text-center py-10 text-slate-400 text-sm">טוען...</div>
           ) : (
             <MechinaSpaceAvailability spaces={bookableSpaces} activeBookings={activeBookings}
-              pendingRequests={pendingRequests} isAdmin={false} allowCreateRequest={true} onRequestNew={handleRequestNew} />
+              pendingRequests={pendingRequests} isAdmin={false} allowCreateRequest={true} onRequestNew={handleRequestNew} groupMap={groupMap} />
           )}
         </section>
 
@@ -431,7 +434,7 @@ export default function MechinaSpaces() {
           <div className="text-center py-10 text-slate-400 text-sm">טוען...</div>
         ) : (
           <MechinaSpaceAvailability spaces={bookableSpaces} activeBookings={activeBookings}
-            pendingRequests={pendingRequests} isAdmin={true} allowCreateRequest={false} onRequestNew={handleRequestNew} />
+            pendingRequests={pendingRequests} isAdmin={true} allowCreateRequest={false} onRequestNew={handleRequestNew} groupMap={groupMap} />
         )}
       </section>
 
