@@ -24,7 +24,8 @@ export default function SharedGroupSelector({ currentGroupId, selectedGroups, on
     return allGroups.filter(g => {
       if (g.id === currentGroupId) return false;
       if (selectedGroups.some(s => s.id === g.id)) return false;
-      const relevant = ["CONFIRMED", "PENDING_APPROVAL", "DRAFT"].includes(g.status);
+      // Only include active/relevant groups — exclude cancelled, completed, archived
+      const relevant = ["CONFIRMED", "PENDING_APPROVAL"].includes(g.status);
       if (!relevant) return false;
       return !q || (g.group_name || "").toLowerCase().includes(q);
     });

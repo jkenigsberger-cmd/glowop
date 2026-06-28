@@ -8,13 +8,29 @@ const VALID_SPACE_CODES = new Set([
   'boulder_5', 'boulder_6', 'boulder_8',
 ]);
 
+// Roles allowed to manage activities (mirrors roles.js MANAGE_ACTIVITIES)
+const MANAGE_ACTIVITIES_ROLES = new Set(['SUPER_ADMIN', 'ADMIN', 'OPERATIONS']);
+
 function timeToMinutes(t) {
   const [h, m] = t.split(':').map(Number);
   return h * 60 + m;
 }
 
+// Fetch groups by ids safely — no $in, loop of .get()
+async function fetchGroupsByIds(base44, ids) {
+  const results = [];
+  for (const id of ids) {
+    try {
+      const g = await base44.asServiceRole.entities.Group.get(id);
+      if (g) results.push(g);
+    } catch { /* not found — skip */ }
+  }
+  return results;
+}
+
 // Recompute shared_activity snapshot for all items sharing a shared_activity_id.
 // If only 1 item remains, clears shared metadata from it.
+// Uses filter by shared_activity_id (a simple equality filter, not $in).
 async function recomputeSharedSnapshot(base44, sharedActivityId) {
   if (!sharedActivityId) return;
   const linked = await base44.asServiceRole.entities.GroupScheduleItem.filter({
@@ -36,9 +52,9 @@ async function recomputeSharedSnapshot(base44, sharedActivityId) {
     return;
   }
 
-  // Fetch group names
+  // Fetch group names — safe loop, no $in
   const groupIds = [...new Set(linked.map(i => i.group_id))];
-  const groups = await base44.asServiceRole.entities.Group.filter({ id: { $in: groupIds } });
+  const groups = await fetchGroupsByIds(base44, groupIds);
   const groupNameMap = Object.fromEntries(groups.map(g => [g.id, g.group_name]));
 
   const ids = linked.map(i => i.group_id);
@@ -57,14 +73,14 @@ Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
 
+    // ── Auth & permission check ───────────────────────────────────────────────
     let user = null;
-    try {
-      user = await base44.auth.me();
-    } catch (authErr) {
-      console.warn('[saveGroupScheduleItem] auth.me() threw (non-fatal):', authErr?.message);
-    }
+    try { user = await base44.auth.me(); } catch { /* unauthenticated */ }
     if (!user) {
-      console.warn('[saveGroupScheduleItem] no authenticated user — proceeding with service role only');
+      return Response.json({ success: false, error: 'נדרשת התחברות' }, { status: 401 });
+    }
+    if (!MANAGE_ACTIVITIES_ROLES.has(user.role)) {
+      return Response.json({ success: false, error: 'אין הרשאה לניהול פעילויות' }, { status: 403 });
     }
 
     const body = await req.json();
@@ -105,6 +121,7 @@ Deno.serve(async (req) => {
       status,
     } = body;
 
+    // ── Input validation ──────────────────────────────────────────────────────
     if (!group_id || !operational_group_profile_id) {
       return Response.json({ success: false, error: 'חסרים פרטי קבוצה או פרופיל תפעולי' }, { status: 400 });
     }
@@ -121,11 +138,14 @@ Deno.serve(async (req) => {
       return Response.json({ success: false, error: 'שעת הסיום חייבת להיות אחרי שעת ההתחלה' }, { status: 400 });
     }
 
-    // Validate date is within group booking window
-    const groups = await base44.asServiceRole.entities.Group.filter({ id: group_id });
-    const group = groups[0];
-    if (group && group.arrival_date && group.departure_date) {
-      if (date < group.arrival_date || date > group.departure_date) {
+    // ── Validate date is within primary group booking window ─────────────────
+    let primaryGroup = null;
+    try { primaryGroup = await base44.asServiceRole.entities.Group.get(group_id); } catch {}
+    if (!primaryGroup) {
+      return Response.json({ success: false, error: 'הקבוצה לא נמצאה' }, { status: 404 });
+    }
+    if (primaryGroup.arrival_date && primaryGroup.departure_date) {
+      if (date < primaryGroup.arrival_date || date > primaryGroup.departure_date) {
         return Response.json({ success: false, error: 'לא ניתן לקבוע פעילות מחוץ לתאריכי הקבוצה' }, { status: 400 });
       }
     }
@@ -137,7 +157,9 @@ Deno.serve(async (req) => {
     // (linked clones of the same activity must not block each other)
     const excludeSharedId = shared_activity_id || null;
 
-    // Conflict check helper — used for both single and shared creation
+    // ── Conflict check helper ─────────────────────────────────────────────────
+    // excludeItemId: the item being edited (don't conflict with itself)
+    // excludeSharedActivityId: items in same shared activity don't conflict with each other
     const checkConflict = async (spaceId, excludeItemId, excludeSharedActivityId) => {
       if (!spaceId || status === 'CANCELLED') return null;
 
@@ -206,7 +228,7 @@ Deno.serve(async (req) => {
       status: status || 'ACTIVE',
     };
 
-    // ── CASE: Editing existing item with shared_activity_id ──────────────────
+    // ── CASE: Editing existing item with edit_scope ───────────────────────────
     if (id && edit_scope) {
       let currentItem = null;
       try { currentItem = await base44.asServiceRole.entities.GroupScheduleItem.get(id); } catch {}
@@ -215,7 +237,6 @@ Deno.serve(async (req) => {
       const currentSharedId = currentItem.shared_activity_id;
 
       if (edit_scope === 'one') {
-        // Check if we need to unlink (main shared fields changed)
         const sharedFieldsChanged = unlink_from_shared;
 
         const conflictErr = await checkConflict(resolvedSpaceId, id, sharedFieldsChanged ? null : currentSharedId);
@@ -250,7 +271,7 @@ Deno.serve(async (req) => {
       }
 
       if (edit_scope === 'all' && currentSharedId) {
-        // Conflict check once for unrelated items
+        // Conflict check — exclude own shared_activity_id so linked items don't block each other
         const conflictErr = await checkConflict(resolvedSpaceId, null, currentSharedId);
         if (conflictErr) return Response.json({ success: false, error: conflictErr }, { status: 409 });
 
@@ -275,14 +296,14 @@ Deno.serve(async (req) => {
         return Response.json({ success: true, updated_all: true, count: allLinked.length });
       }
 
-      // Fallback: normal update
+      // Fallback: normal update (edit_scope present but no sharedId)
       const conflictErr = await checkConflict(resolvedSpaceId, id, currentSharedId);
       if (conflictErr) return Response.json({ success: false, error: conflictErr }, { status: 409 });
       const result = await base44.asServiceRole.entities.GroupScheduleItem.update(id, basePayload);
       return Response.json({ success: true, item: result });
     }
 
-    // ── CASE: Normal single item save (no extra groups) ──────────────────────
+    // ── CASE: Normal single item save (no extra groups) ───────────────────────
     if (!extra_group_ids || extra_group_ids.length === 0) {
       if (resolvedSpaceId && status !== 'CANCELLED') {
         const conflictErr = await checkConflict(resolvedSpaceId, id || null, excludeSharedId);
@@ -325,26 +346,58 @@ Deno.serve(async (req) => {
       return Response.json({ success: true, item: result });
     }
 
-    // ── CASE: Shared activity — create for current group + extra groups ───────
-    // Validate conflict once (shared items won't block each other since we use the same sharedId)
+    // ── CASE: Shared activity — create for current group + extra groups ────────
+    // ── Phase 1: Validate ALL groups and profiles before creating anything ────
+    const allGroupIds = [group_id, ...extra_group_ids];
+
+    // Fetch all groups safely (no $in)
+    const allGroups = await fetchGroupsByIds(base44, allGroupIds);
+    const groupMap = Object.fromEntries(allGroups.map(g => [g.id, g]));
+
+    // Validate every group exists and date is within its stay
+    for (const gid of allGroupIds) {
+      const g = groupMap[gid];
+      if (!g) {
+        return Response.json({ success: false, error: `הקבוצה לא נמצאה: ${gid}` }, { status: 404 });
+      }
+      if (g.arrival_date && g.departure_date) {
+        if (date < g.arrival_date || date > g.departure_date) {
+          return Response.json({
+            success: false,
+            error: `הקבוצה ${g.group_name} אינה נמצאת באתר בתאריך הפעילות`,
+          }, { status: 400 });
+        }
+      }
+    }
+
+    // Fetch operational profiles for extra groups — safe loop, no $in
+    // Never fall back to primary group's profile
+    const profileMap = {};
+    for (const extraGroupId of extra_group_ids) {
+      const profiles = await base44.asServiceRole.entities.OperationalGroupProfile.filter({
+        group_id: extraGroupId,
+      });
+      const profile = profiles[0];
+      if (!profile) {
+        const groupName = groupMap[extraGroupId]?.group_name || extraGroupId;
+        return Response.json({
+          success: false,
+          error: `לא נמצא פרופיל תפעולי לקבוצה: ${groupName}`,
+        }, { status: 400 });
+      }
+      profileMap[extraGroupId] = profile;
+    }
+
+    // ── Phase 2: Conflict check before creating any record ────────────────────
     const newSharedId = crypto.randomUUID();
 
     if (resolvedSpaceId) {
-      const conflictErr = await checkConflict(resolvedSpaceId, null, newSharedId);
+      // newSharedId doesn't exist yet — pass null so no items are excluded
+      const conflictErr = await checkConflict(resolvedSpaceId, null, null);
       if (conflictErr) return Response.json({ success: false, error: conflictErr }, { status: 409 });
     }
 
-    // Fetch extra groups' operational profiles
-    const allGroupIds = [group_id, ...extra_group_ids];
-    const allGroups = await base44.asServiceRole.entities.Group.filter({ id: { $in: allGroupIds } });
-    const groupMap = Object.fromEntries(allGroups.map(g => [g.id, g]));
-
-    // Get operational profiles for extra groups
-    const extraProfiles = await base44.asServiceRole.entities.OperationalGroupProfile.filter({
-      group_id: { $in: extra_group_ids },
-    });
-    const profileMap = Object.fromEntries(extraProfiles.map(p => [p.group_id, p]));
-
+    // ── Phase 3: Create all records with rollback on any failure ──────────────
     const createdIds = [];
     try {
       // Create primary group item
@@ -356,13 +409,13 @@ Deno.serve(async (req) => {
       });
       createdIds.push(primaryItem.id);
 
-      // Create clones for extra groups
+      // Create clones for extra groups — each gets its own validated profile
       for (const extraGroupId of extra_group_ids) {
-        const extraProfile = profileMap[extraGroupId];
+        const extraProfile = profileMap[extraGroupId]; // guaranteed to exist from Phase 1
         const clonePayload = {
           ...basePayload,
           group_id: extraGroupId,
-          operational_group_profile_id: extraProfile?.id || operational_group_profile_id,
+          operational_group_profile_id: extraProfile.id, // no fallback — profile is required
           shared_activity_id: newSharedId,
           shared_activity_created_from_group_id: group_id,
           is_shared_activity: true,
@@ -371,7 +424,7 @@ Deno.serve(async (req) => {
         createdIds.push(cloneItem.id);
       }
 
-      // Compute snapshots
+      // Compute group name snapshots
       const groupNames = allGroupIds.map(gid => groupMap[gid]?.group_name || gid);
       for (const createdId of createdIds) {
         await base44.asServiceRole.entities.GroupScheduleItem.update(createdId, {
