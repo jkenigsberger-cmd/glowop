@@ -53,6 +53,27 @@
       "type": "number",
       "description": "Total number of spaces in the split group. Nullable."
     },
+    "shared_activity_id": {
+      "type": "string",
+      "description": "UUID shared by all GroupScheduleItems that represent the same shared activity across multiple groups. Nullable."
+    },
+    "shared_activity_created_from_group_id": {
+      "type": "string",
+      "description": "FK to Group \u2014 the group from which this shared activity was originally created. Nullable."
+    },
+    "shared_activity_group_ids": {
+      "type": "string",
+      "description": "JSON array of all group_ids participating in this shared activity \u2014 display snapshot only. Nullable."
+    },
+    "shared_activity_group_names": {
+      "type": "string",
+      "description": "JSON array of all group_names participating in this shared activity \u2014 display snapshot only. Nullable."
+    },
+    "is_shared_activity": {
+      "type": "boolean",
+      "description": "True when this item is part of a shared activity across multiple groups.",
+      "default": false
+    },
     "pax": {
       "type": "number"
     },

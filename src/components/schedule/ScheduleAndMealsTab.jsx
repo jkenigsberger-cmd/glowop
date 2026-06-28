@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, RefreshCw, CalendarDays, UtensilsCrossed, GitBranch, X, Shuffle } from "lucide-react";
+import { Plus, RefreshCw, CalendarDays, UtensilsCrossed, GitBranch, X, Shuffle, Users } from "lucide-react";
 import { ACTIVITY_CATALOG, catalogItemLabel } from "@/lib/activityCatalog.js";
 import LogisticsFields, { LOGISTICS_DEFAULTS } from "./LogisticsFields";
 import { toast } from "sonner";
@@ -15,6 +15,7 @@ import MealReservationRow from "./MealReservationRow";
 import QuoteTalksPanel, { extractQuoteTalks } from "./QuoteTalksPanel";
 import DietaryFields, { EMPTY_DIETS, parseDiets, mergeDiets } from "@/components/shared/DietaryFields";
 import RoleGate from "@/components/RoleGate";
+import SharedGroupSelector from "./SharedGroupSelector";
 
 const MEAL_LABELS = { BREAKFAST: "ארוחת בוקר", LUNCH: "ארוחת צהריים", DINNER: "ארוחת ערב", OTHER: "אחר" };
 
@@ -45,6 +46,8 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [addingSchedule, setAddingSchedule] = useState(false);
+  const [sharedEnabled, setSharedEnabled] = useState(false);
+  const [extraGroups, setExtraGroups] = useState([]);
   const [addingMeal, setAddingMeal] = useState(false);
   const [newMeal, setNewMeal] = useState(() => EMPTY_MEAL());
   const [newMealDiets, setNewMealDiets] = useState(() => mergeDiets(parseDiets(profile?.special_diets)));
@@ -199,7 +202,13 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
         return res.data.error;
       }
       invalidate();
-      toast.success("פעילות נשמרה");
+      if (res.data?.updated_all) {
+        toast.success("הפעילות עודכנה בכל הקבוצות המשויכות");
+      } else if (res.data?.unlinked) {
+        toast.success("הפעילות עודכנה ונותקה מהפעילות המשותפת");
+      } else {
+        toast.success("פעילות נשמרה");
+      }
       return null;
     } catch (err) {
       invalidate();
@@ -209,11 +218,38 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
     }
   };
 
-  const handleCancelScheduleItem = async (id) => {
-    if (!window.confirm("לבטל פעילות זו?")) return;
-    await base44.entities.GroupScheduleItem.update(id, { status: "CANCELLED" });
+  const handleCancelScheduleItem = async (id, scope = "one") => {
+    const isSharedDelete = scope === "all";
+    const msg = isSharedDelete
+      ? "לבטל פעילות זו מכל הקבוצות המשויכות?"
+      : "לבטל פעילות זו?";
+    if (!window.confirm(msg)) return;
+
+    if (isSharedDelete) {
+      // Use deleteGroupScheduleItem backend function for all-scope
+      const res = await base44.functions.invoke("deleteGroupScheduleItem", { id, delete_scope: "all" });
+      if (res.data?.success) {
+        toast.success("הפעילות נמחקה מכל הקבוצות המשויכות");
+      } else {
+        toast.error(res.data?.error || "שגיאה בביטול");
+      }
+    } else {
+      // Check if this item has a shared_activity_id — need backend recompute
+      const items = await base44.entities.GroupScheduleItem.filter({ id });
+      const item = items[0];
+      if (item?.shared_activity_id) {
+        const res = await base44.functions.invoke("deleteGroupScheduleItem", { id, delete_scope: "one" });
+        if (res.data?.success) {
+          toast.success("הפעילות נמחקה מהקבוצה הזו בלבד");
+        } else {
+          toast.error(res.data?.error || "שגיאה בביטול");
+        }
+      } else {
+        await base44.entities.GroupScheduleItem.update(id, { status: "CANCELLED" });
+        toast.success("פעילות בוטלה");
+      }
+    }
     invalidate();
-    toast.success("פעילות בוטלה");
   };
 
   // Save edits for a split activity group — update each row via saveGroupScheduleItem
@@ -254,10 +290,12 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
     setNewScheduleError(null);
     setSplitEnabled(false);
     setSplitRows([emptySplitRow(), emptySplitRow()]);
+    setSharedEnabled(false);
+    setExtraGroups([]);
     setNewSchedule(makeEmptySchedule());
   };
 
-  // Single-space save
+  // Single-space save (with optional shared groups)
   const handleAddSchedule = async () => {
     setNewScheduleError(null);
     if (!newSchedule.activity_name.trim()) {
@@ -272,15 +310,23 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
     }
     setSaving(true);
     try {
-      const res = await base44.functions.invoke("saveGroupScheduleItem", {
+      const payload = {
         ...newSchedule,
         group_id: groupId,
         operational_group_profile_id: profileId,
         source: "manual",
         status: "ACTIVE",
-      });
+      };
+      if (sharedEnabled && extraGroups.length > 0) {
+        payload.extra_group_ids = extraGroups.map(g => g.id);
+      }
+      const res = await base44.functions.invoke("saveGroupScheduleItem", payload);
       if (res.data?.error) { setNewScheduleError(res.data.error); return; }
-      toast.success("פעילות נוספה");
+      if (res.data?.group_count > 1) {
+        toast.success(`נוצרה פעילות משותפת ל-${res.data.group_count} קבוצות`);
+      } else {
+        toast.success("פעילות נוספה");
+      }
       resetAddActivityForm();
       invalidate();
     } catch (err) {
@@ -747,6 +793,23 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
                   </span>
                 </label>
               </div>
+
+              {/* ── Shared activity toggle ── */}
+              {!splitEnabled && (
+                <div className="col-span-2">
+                  <label className="flex items-center gap-2 cursor-pointer select-none w-fit">
+                    <input
+                      type="checkbox"
+                      checked={sharedEnabled}
+                      onChange={e => { setSharedEnabled(e.target.checked); if (!e.target.checked) setExtraGroups([]); }}
+                      className="w-4 h-4 accent-violet-600"
+                    />
+                    <span className="flex items-center gap-1 text-xs text-violet-700 font-medium">
+                      <Users className="w-3 h-3" /> לשייך לעוד קבוצות?
+                    </span>
+                  </label>
+                </div>
+              )}
             </div>
 
             {/* Split rows */}
@@ -831,6 +894,20 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
               </div>
             )}
 
+            {/* Shared group selector */}
+            {sharedEnabled && !splitEnabled && (
+              <div className="border border-violet-200 rounded-lg p-3 bg-violet-50/40 space-y-2">
+                <p className="text-xs font-semibold text-violet-700 flex items-center gap-1">
+                  <Users className="w-3.5 h-3.5" /> שיוך לקבוצות נוספות
+                </p>
+                <SharedGroupSelector
+                  currentGroupId={groupId}
+                  selectedGroups={extraGroups}
+                  onChange={setExtraGroups}
+                />
+              </div>
+            )}
+
             {newScheduleError && (
               <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{newScheduleError}</p>
             )}
@@ -874,6 +951,7 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
                   activitySpaces={activitySpaces}
                   quoteActivities={[]}
                   groupDateRange={{ arrivalDate, departureDate }}
+                  groupName={group?.group_name || ""}
                   onSave={handleSaveScheduleItem}
                   onCancel={handleCancelScheduleItem}
                   onDuplicate={handleDuplicateActivity}
@@ -897,6 +975,7 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
                   activitySpaces={activitySpaces}
                   quoteActivities={[]}
                   groupDateRange={{ arrivalDate, departureDate }}
+                  groupName={group?.group_name || ""}
                   onSave={handleSaveScheduleItem}
                   onCancel={() => {}}
                   saving={saving}
