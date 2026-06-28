@@ -186,7 +186,7 @@ export default function MechinaSpaces() {
   useEffect(() => {
     if (!isMechinaUser || !mechinaGroupId) return;
     base44.entities.CommonSpaceBookingRequest.filter({ mechina_group_id: mechinaGroupId })
-      .then(reqs => setMyRequests(sortDesc(reqs)));
+      .then(reqs => setMyRequests(sortChron(reqs)));
   }, [isMechinaUser, mechinaGroupId]);
 
   useEffect(() => {
@@ -194,7 +194,11 @@ export default function MechinaSpaces() {
     reloadAdminData();
   }, [isAdmin]);
 
-  const sortDesc = arr => [...arr].sort((a, b) => (b.created_date || "").localeCompare(a.created_date || ""));
+  const sortChron = arr => [...arr].sort((a, b) => {
+    const da = `${a.date || ""}T${a.start_time || ""}`;
+    const db = `${b.date || ""}T${b.start_time || ""}`;
+    return da.localeCompare(db);
+  });
 
   const reloadAdminData = async () => {
     const [bookings, pending, allPending, approved, cancellationReqs] = await Promise.all([
@@ -206,9 +210,9 @@ export default function MechinaSpaces() {
     ]);
     setActiveBookings(bookings.filter(b => b.activity_space_id));
     setPendingRequests(pending);
-    setMyRequests(sortDesc(allPending));
-    setApprovedRequests(sortDesc(approved));
-    setCancellationRequests(sortDesc(cancellationReqs));
+    setMyRequests(sortChron(allPending));
+    setApprovedRequests(sortChron(approved));
+    setCancellationRequests(sortChron(cancellationReqs));
   };
 
   const reloadMechinaData = async () => {
@@ -219,7 +223,7 @@ export default function MechinaSpaces() {
     ]);
     setActiveBookings(bookings.filter(b => b.activity_space_id));
     setPendingRequests(pending);
-    setMyRequests(sortDesc(requests));
+    setMyRequests(sortChron(requests));
   };
 
   const handleDecision = async (adminNotes) => {
