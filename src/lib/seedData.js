@@ -109,14 +109,14 @@ export const TENTS_SEED = [
     is_accessible: true,
     working_status: "WORKING",
   },
-  // VIP — tents 80-89, 3 beds each, private bathroom + shower
+  // VIP — tents 80-89, 4 beds each, private bathroom + shower
   ...[80, 81, 82, 83, 84, 85, 86, 87, 88, 89].map((n) => ({
     neighborhoodCode: "VIP",
     code: String(n),
     tent_number: String(n),
     sub_label: null,
     tent_type: "VIP",
-    capacity: 3,
+    capacity: 4,
     has_private_bathroom: true,
     has_private_shower: true,
     is_accessible: false,
@@ -190,7 +190,7 @@ export function generateBedsForTents(tents) {
     } else if (code === "72") {
       structure = singleBeds(3);
     } else if (nc === "VIP") {
-      structure = singleBeds(3);
+      structure = singleBeds(4);
     }
 
     if (structure) {

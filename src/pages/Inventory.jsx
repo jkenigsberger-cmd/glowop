@@ -73,7 +73,7 @@ export default function Inventory() {
             <div className="hidden sm:flex items-center gap-2 text-xs text-muted-foreground">
               <span className="bg-muted px-2 py-1 rounded">{neighborhoods.length}/8 שכונות</span>
               <span className="bg-muted px-2 py-1 rounded">{tents.length}/51 אוהלים</span>
-              <span className="bg-muted px-2 py-1 rounded">{beds.length}/335 מיטות</span>
+              <span className="bg-muted px-2 py-1 rounded">{beds.length}/345 מיטות</span>
             </div>
             {isAdmin && <SeedButton onSeeded={refetchAll} />}
           </div>

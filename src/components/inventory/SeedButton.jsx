@@ -48,7 +48,7 @@ export default function SeedButton({ onSeeded }) {
                 <ul className="list-disc list-inside space-y-0.5 mr-2">
                   <li>8 שכונות</li>
                   <li>51 אוהלים</li>
-                  <li>335 מיטות</li>
+                  <li>345 מיטות</li>
                   <li>6 אזורי שירותים</li>
                   <li>46 מתקנים</li>
                   <li>9 מרחבי פעילות</li>
