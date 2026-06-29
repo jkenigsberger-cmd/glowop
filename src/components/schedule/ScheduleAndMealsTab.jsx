@@ -124,9 +124,15 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
     queryFn: () => base44.entities.ActivitySpace.list(),
   });
 
-  const invalidate = () => {
+  const [lastSharedResult, setLastSharedResult] = useState(null);
+
+  const invalidate = (broadSchedule = false) => {
     queryClient.invalidateQueries({ queryKey: ["groupScheduleItems", groupId] });
     queryClient.invalidateQueries({ queryKey: ["mealReservations", groupId] });
+    // When a shared activity is created, invalidate ALL schedule queries so other groups refresh
+    if (broadSchedule) {
+      queryClient.invalidateQueries({ queryKey: ["groupScheduleItems"] });
+    }
   };
 
   // Duplicate an existing activity — opens the add form prefilled (date/time cleared)
@@ -293,6 +299,7 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
     setSharedEnabled(false);
     setExtraGroups([]);
     setNewSchedule(makeEmptySchedule());
+    // Keep lastSharedResult visible after form closes
   };
 
   // Single-space save (with optional shared groups)
@@ -308,8 +315,16 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
       setNewScheduleError("שעת הסיום חייבת להיות אחרי שעת ההתחלה");
       return;
     }
+    // Validate shared: checkbox on but no group selected
+    if (sharedEnabled && extraGroups.length === 0) {
+      setNewScheduleError("יש לבחור לפחות קבוצה אחת לשיוך");
+      return;
+    }
+
     setSaving(true);
+    setLastSharedResult(null);
     try {
+      const isShared = sharedEnabled && extraGroups.length > 0;
       const payload = {
         ...newSchedule,
         group_id: groupId,
@@ -317,21 +332,36 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
         source: "manual",
         status: "ACTIVE",
       };
-      if (sharedEnabled && extraGroups.length > 0) {
+      if (isShared) {
         payload.extra_group_ids = extraGroups.map(g => g.id);
       }
+
       const res = await base44.functions.invoke("saveGroupScheduleItem", payload);
-      if (res.data?.error) { setNewScheduleError(res.data.error); return; }
-      if (res.data?.group_count > 1) {
-        toast.success(`נוצרה פעילות משותפת ל-${res.data.group_count} קבוצות`);
+      const data = res.data;
+
+      // Surface any backend error — success:false or explicit error field
+      if (!data?.success || data?.error) {
+        setNewScheduleError(data?.error || "השמירה נכשלה. נסה שוב.");
+        return;
+      }
+
+      if (data?.group_count > 1) {
+        toast.success(`נוצרה פעילות משותפת ל-${data.group_count} קבוצות`);
+        setLastSharedResult({
+          groupCount: data.group_count,
+          createdCount: data.created_count,
+          sharedActivityId: data.shared_activity_id,
+        });
+        invalidate(true); // broad invalidation so Group B refreshes
       } else {
         toast.success("פעילות נוספה");
+        invalidate();
       }
       resetAddActivityForm();
-      invalidate();
     } catch (err) {
+      const errMsg = err?.response?.data?.error || err?.message || "השמירה נכשלה. הנתונים רועננו, נסה שוב.";
+      setNewScheduleError(errMsg);
       invalidate();
-      setNewScheduleError(err?.response?.data?.error || err?.message || "השמירה נכשלה. הנתונים רועננו, נסה שוב.");
     } finally {
       setSaving(false);
     }
@@ -610,6 +640,21 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
           onScheduleChanged={invalidate}
           onOpenActivityForm={openActivityForm}
         />
+      )}
+
+      {/* ── Shared activity result panel (temporary debug info) ─────────────── */}
+      {lastSharedResult && (
+        <div className="bg-violet-50 border border-violet-200 rounded-xl px-4 py-3 text-xs text-violet-800 space-y-1 relative">
+          <button
+            type="button"
+            onClick={() => setLastSharedResult(null)}
+            className="absolute top-2 left-2 text-violet-400 hover:text-violet-700"
+          ><X className="w-3.5 h-3.5" /></button>
+          <p className="font-semibold">✓ פעילות משותפת נוצרה:</p>
+          <p>• קבוצות: {lastSharedResult.groupCount}</p>
+          <p>• רשומות שנוצרו: {lastSharedResult.createdCount}</p>
+          <p className="font-mono text-[10px] text-violet-500">מזהה שיתוף: {lastSharedResult.sharedActivityId}</p>
+        </div>
       )}
 
       {/* ── Schedule Section ─────────────────────────────────────────────────── */}
@@ -919,7 +964,9 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
                 </Button>
               ) : (
                 <Button size="sm" onClick={handleAddSchedule} disabled={saving}>
-                  {saving ? "שומר..." : "הוסף"}
+                  {saving
+                    ? (sharedEnabled && extraGroups.length > 0 ? "שומר פעילות משותפת..." : "שומר...")
+                    : "הוסף"}
                 </Button>
               )}
             </div>

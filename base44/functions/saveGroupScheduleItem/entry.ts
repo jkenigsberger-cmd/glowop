@@ -438,6 +438,7 @@ Deno.serve(async (req) => {
         shared_activity_id: newSharedId,
         created_count: createdIds.length,
         group_count: allGroupIds.length,
+        created_ids: createdIds,
       });
 
     } catch (err) {
