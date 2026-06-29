@@ -3,6 +3,7 @@ import { base44 } from "@/api/base44Client";
 import { format, parseISO } from "date-fns";
 import { he } from "date-fns/locale";
 import { Link, useSearchParams } from "react-router-dom";
+import { PRISA_TYPE_LABELS, PRISA_SLOT_LABELS, PRISA_SLOT_ORDER } from "@/lib/prisaLabels";
 
 // ── helpers ────────────────────────────────────────────────────────────────
 function safeJson(str, fallback) {
@@ -76,6 +77,12 @@ export default function DailyOperationalPrint() {
     enabled: !!dateParam,
   });
 
+  const { data: prisaRequests = [] } = useQuery({
+    queryKey: ["prisa-daily-print", dateParam],
+    queryFn: () => base44.entities.PrisaRequest.filter({ date: dateParam, status: "ACTIVE" }),
+    enabled: !!dateParam,
+  });
+
   const { data: allocations = [] } = useQuery({
     queryKey: ["allocs-daily-print"],
     queryFn: () => base44.entities.SleepingAllocation.filter({ status: "CONFIRMED" }),
@@ -136,6 +143,15 @@ export default function DailyOperationalPrint() {
   const sortedCoffee = [...coffeeRequests]
     .filter(r => existingGroupIds.has(r.group_id))
     .sort((a, b) => (a.start_time || "").localeCompare(b.start_time || ""));
+
+  const sortedPrisa = [...prisaRequests]
+    .filter(r => existingGroupIds.has(r.group_id))
+    .sort((a, b) => (PRISA_SLOT_ORDER[a.pickup_slot] ?? 99) - (PRISA_SLOT_ORDER[b.pickup_slot] ?? 99));
+
+  const prisaSlotTotals = sortedPrisa.reduce((acc, r) => {
+    acc[r.pickup_slot] = (acc[r.pickup_slot] || 0) + (Number(r.effective_quantity) || 0);
+    return acc;
+  }, {});
 
   const generatedAt = format(new Date(), "dd/MM/yyyy HH:mm");
 
@@ -459,6 +475,38 @@ export default function DailyOperationalPrint() {
                 );
               })
             }
+          </div>
+        </div>
+
+        {/* פריסה */}
+        <div className="section">
+          <div className="section-header" style={{ background: "#9a3412" }}>🥪 פריסה ({sortedPrisa.length})</div>
+          <div className="section-body">
+            {sortedPrisa.length === 0 ? <div className="empty-note">אין פריסה מתוכננת</div> : (
+              <>
+                <div style={{ fontSize: "12px", color: "#9a3412", fontWeight: "700", marginBottom: "8px" }}>
+                  {Object.entries(prisaSlotTotals).map(([slot, total]) => (
+                    <span key={slot} style={{ marginLeft: "12px" }}>
+                      {PRISA_SLOT_LABELS[slot] || slot}: {total} להכנה
+                    </span>
+                  ))}
+                </div>
+                {sortedPrisa.map(req => {
+                  const g = groups.find(x => x.id === req.group_id);
+                  return (
+                    <div key={req.id} style={{ background: "#fff7ed", border: "1px solid #fed7aa", borderRight: "4px solid #9a3412", borderRadius: "0 8px 8px 0", padding: "8px 12px", marginBottom: "6px" }}>
+                      <div style={{ fontSize: "12px", fontWeight: "700", color: "#9a3412", marginBottom: "2px" }}>
+                        {PRISA_SLOT_LABELS[req.pickup_slot] || req.pickup_slot}
+                      </div>
+                      {g && <div style={{ fontSize: "14px", fontWeight: "700", color: "#1e293b", marginBottom: "3px" }}>{g.group_name}</div>}
+                      <div style={{ fontSize: "12px", color: "#475569" }}>כמות: {req.quantity} · סוג: {PRISA_TYPE_LABELS[req.type] || req.type}</div>
+                      <div style={{ fontSize: "13px", color: "#9a3412", fontWeight: "700" }}>להכנה: {req.effective_quantity}</div>
+                      {req.notes && <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "3px" }}>💬 {req.notes}</div>}
+                    </div>
+                  );
+                })}
+              </>
+            )}
           </div>
         </div>
 

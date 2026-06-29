@@ -3,7 +3,8 @@ import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
 import { format, addDays, subDays, parseISO } from "date-fns";
 import { he } from "date-fns/locale";
-import { ChevronRight, ChevronLeft, UtensilsCrossed, CalendarDays, FileText, X, Coffee, List } from "lucide-react";
+import { ChevronRight, ChevronLeft, UtensilsCrossed, CalendarDays, FileText, X, Coffee, List, Sandwich } from "lucide-react";
+import { PRISA_TYPE_LABELS, PRISA_SLOT_LABELS, PRISA_SLOT_ORDER } from "@/lib/prisaLabels";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import KitchenMealCard from "@/components/kitchen/KitchenMealCard";
@@ -33,6 +34,12 @@ export default function Kitchen() {
   const { data: allCoffeeRequests = [], isLoading: loadingCoffee } = useQuery({
     queryKey: ["coffeeCornerRequests_kitchen"],
     queryFn: () => base44.entities.CoffeeCornerRequest.filter({ status: "ACTIVE" }),
+  });
+
+  // Load PrisaRequests separately
+  const { data: allPrisaRequests = [], isLoading: loadingPrisa } = useQuery({
+    queryKey: ["prisaRequests_kitchen"],
+    queryFn: () => base44.entities.PrisaRequest.filter({ status: "ACTIVE" }),
   });
 
   // Load groups + profiles in parallel
@@ -95,6 +102,13 @@ export default function Kitchen() {
   }, [allMeals, allCoffeeRequests, selectedDate]);
 
   const dayCoffeeCorners = useMemo(() => [...dayCoffeeRequests, ...dayCoffeeLegacy], [dayCoffeeRequests, dayCoffeeLegacy]);
+
+  // PrisaRequests for selected date
+  const dayPrisaRequests = useMemo(() => {
+    return allPrisaRequests
+      .filter(r => r.date === selectedDate)
+      .sort((a, b) => (PRISA_SLOT_ORDER[a.pickup_slot] ?? 99) - (PRISA_SLOT_ORDER[b.pickup_slot] ?? 99));
+  }, [allPrisaRequests, selectedDate]);
 
   // Group meals by meal type
   const mealsByType = useMemo(() => {
@@ -265,11 +279,11 @@ export default function Kitchen() {
           {/* Kitchen review alerts */}
           <ReviewAlertsBanner module="KITCHEN" />
 
-          {loadingMeals || loadingCoffee ? (
+          {loadingMeals || loadingCoffee || loadingPrisa ? (
             <div className="flex justify-center py-16">
               <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
             </div>
-          ) : dayMeals.length === 0 && dayCoffeeCorners.length === 0 ? (
+          ) : dayMeals.length === 0 && dayCoffeeCorners.length === 0 && dayPrisaRequests.length === 0 ? (
             <div className="text-center py-16 space-y-2">
               <CalendarDays className="w-10 h-10 text-muted-foreground mx-auto opacity-40" />
               <p className="text-slate-500 font-medium">אין ארוחות מתוכננות ליום זה</p>
@@ -357,6 +371,45 @@ export default function Kitchen() {
                     ))}
                     {dayCoffeeLegacy.map(meal => (
                       <KitchenCoffeeCard key={meal.id} meal={meal} group={groupMap[meal.group_id]} />
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {/* פריסה — separate section near Coffee Corner */}
+              {dayPrisaRequests.length > 0 && (
+                <section className="space-y-3">
+                  <div className="flex items-center justify-between rounded-xl border px-4 py-2.5 bg-orange-100 text-orange-800 border-orange-200">
+                    <div className="flex items-center gap-2 font-bold text-base">
+                      <Sandwich className="w-5 h-5" />
+                      פריסה
+                    </div>
+                    <div className="flex items-center gap-3 text-sm font-medium">
+                      <span>{dayPrisaRequests.length} קבוצות</span>
+                      <span className="opacity-60">·</span>
+                      <span>{dayPrisaRequests.reduce((s, r) => s + (Number(r.effective_quantity) || 0), 0)} להכנה</span>
+                    </div>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    {dayPrisaRequests.map(req => (
+                      <div key={req.id} className="bg-orange-50 border border-orange-200 rounded-2xl p-4 space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <p className="font-semibold text-slate-800 text-sm">{groupMap[req.group_id]?.group_name || "קבוצה לא ידועה"}</p>
+                            <p className="text-xs text-orange-700 font-medium mt-0.5">{PRISA_SLOT_LABELS[req.pickup_slot] || req.pickup_slot}</p>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className="text-2xl font-bold text-orange-700">{req.effective_quantity}</p>
+                            <p className="text-[10px] text-orange-600">להכנה</p>
+                          </div>
+                        </div>
+                        <p className="text-xs text-slate-500">
+                          כמות: {req.quantity} · סוג: {PRISA_TYPE_LABELS[req.type] || req.type}
+                        </p>
+                        {req.notes && (
+                          <p className="text-xs text-slate-500 border-t border-orange-100 pt-2">{req.notes}</p>
+                        )}
+                      </div>
                     ))}
                   </div>
                 </section>

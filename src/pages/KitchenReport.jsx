@@ -4,6 +4,7 @@ import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
 import { format, parseISO, eachDayOfInterval } from "date-fns";
 import { he } from "date-fns/locale";
+import { PRISA_TYPE_LABELS, PRISA_SLOT_LABELS, PRISA_SLOT_ORDER } from "@/lib/prisaLabels";
 
 // ── constants ──────────────────────────────────────────────────────────────
 const MEAL_ORDER  = { BREAKFAST: 0, LUNCH: 1, DINNER: 2, OTHER: 3 };
@@ -105,6 +106,11 @@ export default function KitchenReport() {
     queryFn: () => base44.entities.CoffeeCornerRequest.filter({ status: "ACTIVE" }),
   });
 
+  const { data: allPrisaRequests = [] } = useQuery({
+    queryKey: ["prisaRequests_kitchenReport"],
+    queryFn: () => base44.entities.PrisaRequest.filter({ status: "ACTIVE" }),
+  });
+
   const { data: groups = [] } = useQuery({
     queryKey: ["groups_kitchenReport"],
     queryFn: () => base44.entities.Group.list(),
@@ -140,6 +146,17 @@ export default function KitchenReport() {
         return (a.start_time || "").localeCompare(b.start_time || "");
       });
   }, [allCoffeeRequests, startDate, endDate]);
+
+  // PrisaRequests in date range
+  const rangePrisa = useMemo(() => {
+    if (!startDate) return [];
+    return allPrisaRequests
+      .filter(r => r.date >= startDate && r.date <= endDate)
+      .sort((a, b) => {
+        if (a.date !== b.date) return a.date.localeCompare(b.date);
+        return (PRISA_SLOT_ORDER[a.pickup_slot] ?? 99) - (PRISA_SLOT_ORDER[b.pickup_slot] ?? 99);
+      });
+  }, [allPrisaRequests, startDate, endDate]);
 
   // ── aggregate totals ──────────────────────────────────────────────────────
   const totals = useMemo(() => {
@@ -525,9 +542,9 @@ export default function KitchenReport() {
           </div>
 
           {/* Empty state */}
-          {rangeMeals.length === 0 && rangeCoffee.length === 0 ? (
+          {rangeMeals.length === 0 && rangeCoffee.length === 0 && rangePrisa.length === 0 ? (
             <div className="kr-no-data">
-              לא נמצאו ארוחות או פינות קפה בטווח התאריכים שנבחר
+              לא נמצאו ארוחות, פינות קפה או פריסה בטווח התאריכים שנבחר
             </div>
           ) : (
             <>
@@ -761,6 +778,41 @@ export default function KitchenReport() {
                           <td style={{ fontWeight: 600 }}>{r.pax || "—"}</td>
                           <td>{r.coffee_corner_type || "פינת קפה רגילה"}</td>
                           <td>{r.location_name_snapshot || "—"}</td>
+                          <td style={{ color: "#64748b" }}>{r.notes || "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Section 5b — פריסה */}
+              {rangePrisa.length > 0 && (
+                <div className="kr-section">
+                  <div className="kr-section-title" style={{ color: "#9a3412", borderBottomColor: "#fed7aa" }}>
+                    🥪 פריסה
+                  </div>
+                  <table className="kr-verify-table">
+                    <thead>
+                      <tr>
+                        <th>תאריך</th>
+                        <th>זמן איסוף</th>
+                        <th>קבוצה</th>
+                        <th>כמות</th>
+                        <th>סוג</th>
+                        <th>להכנה</th>
+                        <th>הערות</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rangePrisa.map(r => (
+                        <tr key={r.id}>
+                          <td>{fmtShort(r.date)}</td>
+                          <td>{PRISA_SLOT_LABELS[r.pickup_slot] || r.pickup_slot}</td>
+                          <td>{groupMap[r.group_id]?.group_name || "—"}</td>
+                          <td>{r.quantity}</td>
+                          <td>{PRISA_TYPE_LABELS[r.type] || r.type}</td>
+                          <td style={{ fontWeight: 700, fontSize: 14, color: "#9a3412" }}>{r.effective_quantity}</td>
                           <td style={{ color: "#64748b" }}>{r.notes || "—"}</td>
                         </tr>
                       ))}

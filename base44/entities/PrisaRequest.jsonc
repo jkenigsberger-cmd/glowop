@@ -1,0 +1,78 @@
+{
+  "name": "PrisaRequest",
+  "type": "object",
+  "properties": {
+    "group_id": {
+      "type": "string",
+      "description": "FK to Group"
+    },
+    "operational_group_profile_id": {
+      "type": "string",
+      "description": "FK to OperationalGroupProfile"
+    },
+    "date": {
+      "type": "string",
+      "format": "date"
+    },
+    "quantity": {
+      "type": "number",
+      "description": "Base requested quantity"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "REGULAR",
+        "DOUBLE"
+      ],
+      "default": "REGULAR",
+      "description": "REGULAR=\u05e8\u05d2\u05d9\u05dc, DOUBLE=\u05db\u05e4\u05d5\u05dc"
+    },
+    "pickup_slot": {
+      "type": "string",
+      "enum": [
+        "AFTER_BREAKFAST",
+        "AFTER_LUNCH",
+        "AFTER_DINNER"
+      ],
+      "description": "AFTER_BREAKFAST=\u05d0\u05d7\u05e8\u05d9 \u05d0\u05e8\u05d5\u05d7\u05ea \u05d1\u05d5\u05e7\u05e8, AFTER_LUNCH=\u05d0\u05d7\u05e8\u05d9 \u05d0\u05e8\u05d5\u05d7\u05ea \u05e6\u05d4\u05e8\u05d9\u05d9\u05dd, AFTER_DINNER=\u05d0\u05d7\u05e8\u05d9 \u05d0\u05e8\u05d5\u05d7\u05ea \u05e2\u05e8\u05d1"
+    },
+    "effective_quantity": {
+      "type": "number",
+      "description": "Final amount kitchen must prepare. REGULAR=quantity, DOUBLE=quantity*2"
+    },
+    "notes": {
+      "type": "string"
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "MANUAL",
+        "QUOTE"
+      ],
+      "default": "MANUAL"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "ACTIVE",
+        "CANCELLED"
+      ],
+      "default": "ACTIVE"
+    },
+    "cancelled_date": {
+      "type": "string",
+      "description": "ISO datetime \u2014 set when cancelled"
+    }
+  },
+  "required": [
+    "group_id",
+    "operational_group_profile_id",
+    "date",
+    "quantity",
+    "type",
+    "pickup_slot",
+    "effective_quantity",
+    "source",
+    "status"
+  ]
+}

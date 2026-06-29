@@ -41,6 +41,7 @@ Deno.serve(async (req) => {
     submissions,
     quotes,
     coffeeRequests,
+    prisaRequests,
   ] = await Promise.all([
     base44.asServiceRole.entities.GroupScheduleItem.list(),
     base44.asServiceRole.entities.MealReservation.list(),
@@ -51,6 +52,7 @@ Deno.serve(async (req) => {
     base44.asServiceRole.entities.GuestFormSubmission.list(),
     base44.asServiceRole.entities.Quote.list(),
     base44.asServiceRole.entities.CoffeeCornerRequest.list(),
+    base44.asServiceRole.entities.PrisaRequest.list(),
   ]);
 
   const orphans = {
@@ -64,6 +66,8 @@ Deno.serve(async (req) => {
     quotes:                   quotes.filter(isOrphan),
     // CoffeeCornerRequests: cancel (not delete) orphan ACTIVE records
     coffeeRequests:           coffeeRequests.filter(r => isOrphan(r) && r.status === 'ACTIVE'),
+    // PrisaRequests: cancel (not delete) orphan ACTIVE records
+    prisaRequests:            prisaRequests.filter(r => isOrphan(r) && r.status === 'ACTIVE'),
   };
 
   const totals = Object.fromEntries(
@@ -87,6 +91,7 @@ Deno.serve(async (req) => {
     ...orphans.submissions.map(r => base44.asServiceRole.entities.GuestFormSubmission.delete(r.id)),
     ...orphans.quotes.map(r => base44.asServiceRole.entities.Quote.delete(r.id)),
     ...orphans.coffeeRequests.map(r => base44.asServiceRole.entities.CoffeeCornerRequest.update(r.id, { status: 'CANCELLED' })),
+    ...orphans.prisaRequests.map(r => base44.asServiceRole.entities.PrisaRequest.update(r.id, { status: 'CANCELLED', cancelled_date: new Date().toISOString() })),
   ]);
 
   return Response.json({ success: true, deleted: totals });

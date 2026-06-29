@@ -76,6 +76,14 @@ Deno.serve(async (req) => {
       summary.coffeeRequests = (summary.coffeeRequests || 0) + 1;
     }
 
+    // Cancel PrisaRequests
+    const prisaList = await base44.asServiceRole.entities.PrisaRequest.filter({ group_id });
+    const activePrisa = prisaList.filter(p => p.status === 'ACTIVE');
+    for (const p of activePrisa) {
+      await base44.asServiceRole.entities.PrisaRequest.update(p.id, { status: 'CANCELLED', cancelled_date: now });
+      summary.prisaRequests = (summary.prisaRequests || 0) + 1;
+    }
+
     // Release OperationalHolds
     const holds = await base44.asServiceRole.entities.OperationalHold.filter({ group_id });
     const activeHolds = holds.filter(h => h.status === 'ACTIVE');
