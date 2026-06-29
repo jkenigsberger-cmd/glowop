@@ -10,6 +10,7 @@ import "moment/locale/he";
 import { Printer, Filter, X, Clock, MapPin, Users, Wrench, FileText, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { equipmentTextSummary } from "@/components/schedule/LogisticsFields";
+import { mergeSharedActivities } from "@/lib/mergeSharedActivities";
 
 moment.locale("he");
 
@@ -116,6 +117,89 @@ function FiltersBar({ from, setFrom, to, setTo, spaceId, setSpaceId, groupId, se
 // ── Single activity card (screen) ─────────────────────────────────────────────
 function ActivityCard({ row }) {
   const equipment = row.equipment || "אין ציוד מיוחד";
+
+  if (row.isShared) {
+    return (
+      <div className="bg-white border-2 border-violet-400 rounded-xl p-4 space-y-3 shadow-sm">
+        {/* Shared badge */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="bg-violet-600 text-white text-[10px] font-bold px-2.5 py-1 rounded-full">
+            פעילות משותפת
+          </span>
+          <span className="text-[10px] text-violet-500 font-medium">
+            מאוחד מ-{row.linkedGroups.length} קבוצות
+          </span>
+          {row.mismatched && (
+            <span className="text-[10px] bg-amber-100 text-amber-700 border border-amber-300 px-2 py-0.5 rounded-full font-bold">
+              ⚠ פעילות משותפת עם נתונים לא תואמים
+            </span>
+          )}
+        </div>
+
+        {/* Time + space */}
+        <div className="flex items-center gap-3 flex-wrap">
+          <span className="flex items-center gap-1.5 bg-violet-600 text-white text-xs font-bold px-3 py-1.5 rounded-full">
+            <Clock className="w-3.5 h-3.5" />
+            {row.start_time || "?"} – {row.end_time || "?"}
+          </span>
+          <span className="flex items-center gap-1.5 bg-violet-100 text-violet-800 text-xs font-semibold px-3 py-1.5 rounded-full border border-violet-200">
+            <MapPin className="w-3.5 h-3.5" />
+            {row.spaceName}
+          </span>
+        </div>
+
+        {/* Activity name */}
+        <div>
+          <span className="text-xs text-slate-400 block">פעילות</span>
+          <span className="font-semibold text-slate-800">{row.activity_name}</span>
+        </div>
+
+        {/* Total pax — prominent */}
+        <div className="bg-violet-50 border border-violet-200 rounded-lg px-3 py-2">
+          <div className="flex items-center gap-2">
+            <Users className="w-4 h-4 text-violet-600" />
+            <span className="text-sm font-bold text-violet-800">
+              סה״כ משתתפים: {row.totalPax}
+            </span>
+            {row.missingPax && (
+              <span className="text-[10px] text-amber-600">⚠ חסר מספר משתתפים לאחת הקבוצות</span>
+            )}
+          </div>
+        </div>
+
+        {/* Linked groups */}
+        <div>
+          <span className="text-xs text-slate-400 block mb-1">קבוצות משויכות:</span>
+          <ul className="space-y-0.5">
+            {row.linkedGroups.map(g => (
+              <li key={g.groupId} className="flex items-center gap-2 text-xs text-slate-700">
+                <span className="w-1.5 h-1.5 rounded-full bg-violet-400 shrink-0" />
+                <span className="font-medium">{g.groupName}</span>
+                {g.pax > 0 && <span className="text-slate-400">— {g.pax} משתתפים</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {/* Equipment */}
+        <div className="flex items-start gap-2">
+          <Wrench className="w-3.5 h-3.5 text-violet-500 mt-0.5 shrink-0" />
+          <span className={`text-xs ${row.equipment ? "text-violet-700 font-medium" : "text-slate-400"}`}>
+            {equipment}
+          </span>
+        </div>
+
+        {/* Notes */}
+        {row.notes && (
+          <div className="flex items-start gap-2 border-t border-slate-100 pt-2">
+            <FileText className="w-3.5 h-3.5 text-slate-400 mt-0.5 shrink-0" />
+            <span className="text-xs text-slate-500">{row.notes}</span>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="bg-white border border-purple-100 rounded-xl p-4 space-y-3 shadow-sm">
       {/* Time + space */}
@@ -199,13 +283,24 @@ export default function LogisticsReportTab() {
   }, [scheduleItems, groups]);
 
   const rows = useMemo(() => {
-    return scheduleItems
+    // Enrich all items first, then apply group filter awareness for shared activities
+    const enriched = scheduleItems
       .filter(i => {
         if (!i.activity_space_id) return false;
         if (from && i.date < from) return false;
         if (to   && i.date > to)   return false;
         if (spaceId && i.activity_space_id !== spaceId) return false;
-        if (groupId && i.group_id !== groupId) return false;
+        // For groupId filter: include if it's this group, or if it's a shared
+        // activity that includes this group (so we don't split the merged card)
+        if (groupId) {
+          if (i.group_id !== groupId) {
+            if (!i.shared_activity_id) return false;
+            try {
+              const ids = JSON.parse(i.shared_activity_group_ids || "[]");
+              if (!ids.includes(groupId)) return false;
+            } catch { return false; }
+          }
+        }
         return true;
       })
       .map(i => ({
@@ -213,7 +308,10 @@ export default function LogisticsReportTab() {
         spaceName: spaceById[i.activity_space_id]?.name || "—",
         groupName: groupById[i.group_id]?.group_name || "—",
         equipment: equipmentTextSummary(i),
-      }))
+      }));
+
+    // Merge shared activities, then sort
+    return mergeSharedActivities(enriched)
       .sort((a, b) => a.date.localeCompare(b.date) || (a.start_time || "").localeCompare(b.start_time || ""));
   }, [scheduleItems, from, to, spaceId, groupId, spaceById, groupById]);
 
@@ -268,15 +366,30 @@ export default function LogisticsReportTab() {
           const bg = i % 2 === 0 ? "#fff" : "#faf5ff";
           const equip = r.equipment || "אין ציוד מיוחד";
           const equipColor = r.equipment ? PURPLE : "#9ca3af";
-          html += `<tr style="background:${bg};">
-            <td style="${tdBase}font-weight:700;white-space:nowrap;color:${PURPLE};">${r.start_time || ""}–${r.end_time || ""}</td>
-            <td style="${tdBase}font-weight:600;color:#1e1b4b;">${r.spaceName}</td>
-            <td style="${tdBase}">${r.groupName}</td>
-            <td style="${tdBase}">${r.activity_name}</td>
-            <td style="${tdBase}text-align:center;">${r.pax || "—"}</td>
-            <td style="${tdBase}color:${equipColor};">${equip}</td>
-            <td style="${tdBase}color:#6b7280;font-size:9px;">${r.notes || ""}</td>
-          </tr>`;
+
+          if (r.isShared) {
+            const groupList = r.linkedGroups.map(g => `${g.groupName}${g.pax ? ` (${g.pax})` : ""}`).join(", ");
+            const sharedLabel = `<span style="background:#7c3aed;color:#fff;font-size:8px;font-weight:700;padding:1px 5px;border-radius:8px;margin-left:4px;">משותפת</span>`;
+            html += `<tr style="background:${bg};border-right:3px solid #7c3aed;">
+              <td style="${tdBase}font-weight:700;white-space:nowrap;color:#7c3aed;">${r.start_time || ""}–${r.end_time || ""}</td>
+              <td style="${tdBase}font-weight:600;color:#1e1b4b;">${r.spaceName}</td>
+              <td style="${tdBase}font-size:9px;">${groupList}${sharedLabel}</td>
+              <td style="${tdBase}">${r.activity_name}</td>
+              <td style="${tdBase}text-align:center;font-weight:700;color:#7c3aed;">${r.totalPax || "—"}</td>
+              <td style="${tdBase}color:${equipColor};">${equip}</td>
+              <td style="${tdBase}color:#6b7280;font-size:9px;">${r.notes || ""}</td>
+            </tr>`;
+          } else {
+            html += `<tr style="background:${bg};">
+              <td style="${tdBase}font-weight:700;white-space:nowrap;color:${PURPLE};">${r.start_time || ""}–${r.end_time || ""}</td>
+              <td style="${tdBase}font-weight:600;color:#1e1b4b;">${r.spaceName}</td>
+              <td style="${tdBase}">${r.groupName}</td>
+              <td style="${tdBase}">${r.activity_name}</td>
+              <td style="${tdBase}text-align:center;">${r.pax || "—"}</td>
+              <td style="${tdBase}color:${equipColor};">${equip}</td>
+              <td style="${tdBase}color:#6b7280;font-size:9px;">${r.notes || ""}</td>
+            </tr>`;
+          }
         });
         html += `</tbody></table></div>`;
       });
@@ -329,6 +442,11 @@ export default function LogisticsReportTab() {
       {rows.length > 0 && (
         <p className="text-xs text-purple-600 font-medium">
           {rows.length} פעילויות בטווח הנבחר
+          {rows.some(r => r.isShared) && (
+            <span className="mr-2 text-violet-500">
+              (כולל {rows.filter(r => r.isShared).length} משותפות)
+            </span>
+          )}
         </p>
       )}
 

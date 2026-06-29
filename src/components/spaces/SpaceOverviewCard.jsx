@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { ChevronDown, ChevronUp, AlertTriangle, CheckCircle2, Clock } from "lucide-react";
+import { ChevronDown, ChevronUp, AlertTriangle, CheckCircle2, Clock, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import moment from "moment";
+import { mergeSharedActivities } from "@/lib/mergeSharedActivities";
 
 function timeToMinutes(t) {
   if (!t) return 0;
@@ -49,8 +50,9 @@ export default function SpaceOverviewCard({ space, items, onSelectDay }) {
   });
   const hasConflict = conflicts.length > 0;
 
-  const upcomingItems = items
-    .filter((i) => i.date >= today)
+  const upcomingItems = mergeSharedActivities(
+    items.filter((i) => i.date >= today)
+  )
     .sort((a, b) => a.date === b.date ? a.start_time.localeCompare(b.start_time) : a.date.localeCompare(b.date))
     .slice(0, 8);
 
@@ -126,21 +128,41 @@ export default function SpaceOverviewCard({ space, items, onSelectDay }) {
             <p className="text-xs text-slate-400 italic">אין הזמנות</p>
           )}
           {upcomingItems.map((item) => (
-            <div key={item.id} className="flex items-start justify-between gap-2 text-xs border-b border-slate-50 pb-1.5 last:border-0 last:pb-0">
+            <div key={item.id} className={cn(
+              "flex items-start justify-between gap-2 text-xs border-b border-slate-50 pb-1.5 last:border-0 last:pb-0",
+              item.isShared && "bg-violet-50 rounded-lg px-2 py-1 border border-violet-100"
+            )}>
               <div className="space-y-0.5">
-                <div className="font-semibold text-slate-700">{item.groupName}</div>
-                <div className="text-slate-500">{item.activityName}</div>
-                {item.pax && <div className="text-slate-400">{item.pax} 👤</div>}
+                {item.isShared ? (
+                  <>
+                    <div className="flex items-center gap-1">
+                      <span className="text-[9px] bg-violet-600 text-white font-bold px-1.5 py-0.5 rounded-full">משותפת</span>
+                    </div>
+                    <div className="font-semibold text-violet-700">{item.activity_name || item.activityName}</div>
+                    <div className="flex items-center gap-1 text-violet-600 font-bold">
+                      <Users className="w-2.5 h-2.5" /> {item.totalPax} סה״כ
+                    </div>
+                    <div className="text-slate-400">{item.linkedGroups.map(g => g.groupName).join(", ")}</div>
+                  </>
+                ) : (
+                  <>
+                    <div className="font-semibold text-slate-700">{item.groupName}</div>
+                    <div className="text-slate-500">{item.activityName || item.activity_name}</div>
+                    {item.pax > 0 && <div className="text-slate-400">{item.pax} 👤</div>}
+                  </>
+                )}
               </div>
               <div className="text-right shrink-0 space-y-0.5">
                 <div className="text-slate-500">{moment(item.date).format("DD/MM")}</div>
                 <div className="text-slate-400">{item.start_time}–{item.end_time}</div>
-                <Link
-                  to={`/groups/${item.groupId}`}
-                  className="text-primary hover:underline text-[10px]"
-                >
-                  קבוצה ↗
-                </Link>
+                {!item.isShared && (
+                  <Link
+                    to={`/groups/${item.groupId || item.group_id}`}
+                    className="text-primary hover:underline text-[10px]"
+                  >
+                    קבוצה ↗
+                  </Link>
+                )}
               </div>
             </div>
           ))}

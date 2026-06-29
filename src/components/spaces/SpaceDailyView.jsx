@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { mergeSharedActivities } from "@/lib/mergeSharedActivities";
 
 function timeToMinutes(t) {
   if (!t) return 0;
@@ -33,10 +34,12 @@ export default function SpaceDailyView({ spaces, itemsBySpace, date }) {
   return (
     <div className="space-y-4" dir="rtl">
       {spaces.map((space) => {
-        const dayItems = (itemsBySpace[space.id] || []).sort((a, b) =>
+        const rawDayItems = (itemsBySpace[space.id] || []).sort((a, b) =>
           a.start_time.localeCompare(b.start_time)
         );
-        if (dayItems.length === 0) return null;
+        if (rawDayItems.length === 0) return null;
+
+        const dayItems = mergeSharedActivities(rawDayItems);
 
         return (
           <div key={space.id} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -54,46 +57,70 @@ export default function SpaceDailyView({ spaces, itemsBySpace, date }) {
             {/* Bookings list */}
             <div className="divide-y divide-slate-100">
               {dayItems.map((item) => {
-                const conflict = isConflicting(item, dayItems);
+                const conflict = !item.isShared && isConflicting(item, rawDayItems);
                 return (
                   <div
                     key={item.id}
                     className={cn(
                       "px-4 py-3 flex items-start justify-between gap-3",
-                      conflict ? "bg-red-50" : "bg-white"
+                      item.isShared ? "bg-violet-50 border-r-2 border-violet-400" : conflict ? "bg-red-50" : "bg-white"
                     )}
                   >
                     {/* Time */}
-                    <div className="text-sm font-bold text-slate-700 shrink-0 min-w-[80px]">
+                    <div className={cn("text-sm font-bold shrink-0 min-w-[80px]", item.isShared ? "text-violet-700" : "text-slate-700")}>
                       {item.start_time}–{item.end_time}
                     </div>
 
                     {/* Details */}
                     <div className="flex-1 space-y-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-semibold text-slate-800 text-sm">{item.groupName}</span>
-                        {item.pax && (
-                          <span className="text-xs text-slate-400">{item.pax} 👤</span>
-                        )}
-                        {conflict && (
-                          <span className="flex items-center gap-1 text-[10px] bg-red-100 text-red-700 border border-red-200 px-2 py-0.5 rounded-full font-bold">
-                            <AlertTriangle className="w-2.5 h-2.5" /> חפיפה
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-xs text-slate-600">{item.activityName}</div>
-                      {item.notes && (
-                        <div className="text-xs text-slate-400 italic">{item.notes}</div>
+                      {item.isShared ? (
+                        <>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[10px] bg-violet-600 text-white font-bold px-2 py-0.5 rounded-full">פעילות משותפת</span>
+                            <span className="text-[10px] text-violet-500">מאוחד מ-{item.linkedGroups.length} קבוצות</span>
+                          </div>
+                          <div className="text-xs font-semibold text-slate-800">{item.activity_name || item.activityName}</div>
+                          <div className="flex items-center gap-1 text-xs font-bold text-violet-700">
+                            <Users className="w-3 h-3" /> סה״כ: {item.totalPax} משתתפים
+                          </div>
+                          <ul className="space-y-0.5">
+                            {item.linkedGroups.map(g => (
+                              <li key={g.groupId} className="text-xs text-slate-500">
+                                · {g.groupName}{g.pax ? ` — ${g.pax}` : ""}
+                              </li>
+                            ))}
+                          </ul>
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-semibold text-slate-800 text-sm">{item.groupName}</span>
+                            {item.pax && (
+                              <span className="text-xs text-slate-400">{item.pax} 👤</span>
+                            )}
+                            {conflict && (
+                              <span className="flex items-center gap-1 text-[10px] bg-red-100 text-red-700 border border-red-200 px-2 py-0.5 rounded-full font-bold">
+                                <AlertTriangle className="w-2.5 h-2.5" /> חפיפה
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs text-slate-600">{item.activityName || item.activity_name}</div>
+                          {item.notes && (
+                            <div className="text-xs text-slate-400 italic">{item.notes}</div>
+                          )}
+                        </>
                       )}
                     </div>
 
-                    {/* Link */}
-                    <Link
-                      to={`/groups/${item.groupId}`}
-                      className="text-xs text-primary hover:underline shrink-0 mt-0.5"
-                    >
-                      קבוצה ↗
-                    </Link>
+                    {/* Link — only for non-shared (shared has no single group to link to) */}
+                    {!item.isShared && (
+                      <Link
+                        to={`/groups/${item.groupId || item.group_id}`}
+                        className="text-xs text-primary hover:underline shrink-0 mt-0.5"
+                      >
+                        קבוצה ↗
+                      </Link>
+                    )}
                   </div>
                 );
               })}
