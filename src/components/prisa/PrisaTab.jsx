@@ -33,7 +33,7 @@ export default function PrisaTab({ groupId, profile, group }) {
   const minDate = arrivalDate;
   const maxDate = groupType === "DAY_USE" ? arrivalDate : (departureDate || arrivalDate);
 
-  const { data: requests = [] } = useQuery({
+  const { data: requests = [], isError: prisaError } = useQuery({
     queryKey: ["prisaRequests", groupId],
     queryFn: () => base44.entities.PrisaRequest.filter({ group_id: groupId }),
     enabled: !!groupId,
@@ -127,6 +127,20 @@ export default function PrisaTab({ groupId, profile, group }) {
 
   return (
     <div className="space-y-4" dir="rtl">
+      {/* Temporary published-build marker — confirms the new פריסה bundle is live */}
+      <RoleGate roles={["SUPER_ADMIN", "ADMIN", "OPERATIONS"]}>
+        <p className="text-[10px] text-emerald-600 bg-emerald-50 border border-emerald-200 rounded px-2 py-0.5 w-fit">
+          פריסה build active · PRISA_BUILD_ACTIVE_v1
+        </p>
+      </RoleGate>
+
+      {/* Visible error handling — do not fail silently if the entity query fails */}
+      {prisaError && (
+        <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+          שגיאה בטעינת פריסה
+        </p>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <h3 className="font-semibold flex items-center gap-2 text-slate-800">
