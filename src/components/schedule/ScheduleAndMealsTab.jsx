@@ -111,6 +111,7 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
     queryKey: ["groupScheduleItems", groupId],
     queryFn: () => base44.entities.GroupScheduleItem.filter({ group_id: groupId }),
     enabled: !!groupId,
+    staleTime: 30_000,
   });
 
   const { data: mealItems = [] } = useQuery({
@@ -126,12 +127,12 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
 
   const [lastSharedResult, setLastSharedResult] = useState(null);
 
-  const invalidate = (broadSchedule = false) => {
+  const invalidate = (extraGroupIds = []) => {
     queryClient.invalidateQueries({ queryKey: ["groupScheduleItems", groupId] });
     queryClient.invalidateQueries({ queryKey: ["mealReservations", groupId] });
-    // When a shared activity is created, invalidate ALL schedule queries so other groups refresh
-    if (broadSchedule) {
-      queryClient.invalidateQueries({ queryKey: ["groupScheduleItems"] });
+    // Invalidate only the specific extra groups that received clones, not all schedule queries
+    for (const gid of extraGroupIds) {
+      queryClient.invalidateQueries({ queryKey: ["groupScheduleItems", gid] });
     }
   };
 
@@ -352,7 +353,8 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
           createdCount: data.created_count,
           sharedActivityId: data.shared_activity_id,
         });
-        invalidate(true); // broad invalidation so Group B refreshes
+        // Invalidate only the specific extra groups that received clones
+        invalidate(extraGroups.map(g => g.id));
       } else {
         toast.success("פעילות נוספה");
         invalidate();
