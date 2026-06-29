@@ -111,7 +111,7 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
     queryKey: ["groupScheduleItems", groupId],
     queryFn: () => base44.entities.GroupScheduleItem.filter({ group_id: groupId }),
     enabled: !!groupId,
-    staleTime: 30_000,
+    staleTime: 10_000,
   });
 
   const { data: mealItems = [] } = useQuery({

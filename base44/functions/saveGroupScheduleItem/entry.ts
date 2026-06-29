@@ -381,10 +381,13 @@ Deno.serve(async (req) => {
         return Response.json({ success: false, error: `הקבוצה לא נמצאה: ${gid}` }, { status: 404 });
       }
       if (g.arrival_date && g.departure_date) {
-        if (date < g.arrival_date || date > g.departure_date) {
+        // Defensive: handle inverted dates by using min/max
+        const stayStart = g.arrival_date < g.departure_date ? g.arrival_date : g.departure_date;
+        const stayEnd   = g.arrival_date < g.departure_date ? g.departure_date : g.arrival_date;
+        if (date < stayStart || date > stayEnd) {
           return Response.json({
             success: false,
-            error: `הקבוצה ${g.group_name} אינה נמצאת באתר בתאריך הפעילות`,
+            error: `הקבוצה "${g.group_name}" אינה נמצאת באתר בתאריך ${date} (שהות: ${stayStart} עד ${stayEnd})`,
           }, { status: 400 });
         }
       }
