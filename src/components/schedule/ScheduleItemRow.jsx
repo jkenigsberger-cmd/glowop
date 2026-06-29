@@ -8,6 +8,7 @@ import RoleGate from "@/components/RoleGate";
 import { ACTIVITY_CATALOG, catalogItemLabel } from "@/lib/activityCatalog.js";
 import LogisticsFields, { LogisticsBadges, LOGISTICS_DEFAULTS, pickLogistics } from "./LogisticsFields";
 import SharedActivityBadge from "./SharedActivityBadge";
+import SharedGroupSelector from "./SharedGroupSelector";
 
 const LOCATION_OPTIONS = ["כיתה", "מתחם חוץ", "מחוץ לחווה", "אחר"];
 
@@ -100,6 +101,10 @@ export default function ScheduleItemRow({
   const [error, setError] = useState(null);
   const [customName, setCustomName] = useState(false);
 
+  // Convert-to-shared state (only for non-shared items in edit mode)
+  const [convertSharedEnabled, setConvertSharedEnabled] = useState(false);
+  const [convertExtraGroups, setConvertExtraGroups] = useState([]);
+
   // Shared activity dialogs
   const [editScopeDialog, setEditScopeDialog] = useState(false);
   const [unlinkDialog, setUnlinkDialog] = useState(false);
@@ -144,6 +149,20 @@ export default function ScheduleItemRow({
       return;
     }
 
+    // Converting a normal activity to shared
+    if (!isShared && convertSharedEnabled) {
+      if (convertExtraGroups.length === 0) {
+        setError("יש לבחור לפחות קבוצה אחת לשיוך");
+        return;
+      }
+      const err = await onSave({ ...form, extra_group_ids: convertExtraGroups.map(g => g.id) });
+      if (err) { setError(err); return; }
+      setEditing(false);
+      setConvertSharedEnabled(false);
+      setConvertExtraGroups([]);
+      return;
+    }
+
     // If this is a shared activity, we need to ask scope
     if (isShared) {
       setPendingSaveForm(form);
@@ -183,6 +202,8 @@ export default function ScheduleItemRow({
     setEditing(false);
     setError(null);
     setCustomName(false);
+    setConvertSharedEnabled(false);
+    setConvertExtraGroups([]);
   };
 
   const handleStartEdit = () => {
@@ -313,6 +334,32 @@ export default function ScheduleItemRow({
           <div className="border border-blue-100 rounded-lg p-3 bg-blue-50/30">
             <LogisticsFields value={form} onChange={patch => setForm(f => ({ ...f, ...patch }))} />
           </div>
+
+          {/* Convert to shared — only for non-shared items */}
+          {!isShared && (
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 cursor-pointer select-none w-fit">
+                <input
+                  type="checkbox"
+                  checked={convertSharedEnabled}
+                  onChange={e => { setConvertSharedEnabled(e.target.checked); if (!e.target.checked) setConvertExtraGroups([]); }}
+                  className="w-4 h-4 accent-violet-600"
+                />
+                <span className="flex items-center gap-1 text-xs text-violet-700 font-medium">
+                  <Users className="w-3 h-3" /> לשייך לעוד קבוצות?
+                </span>
+              </label>
+              {convertSharedEnabled && (
+                <div className="border border-violet-200 rounded-lg p-3 bg-violet-50/40">
+                  <SharedGroupSelector
+                    currentGroupId={item.group_id}
+                    selectedGroups={convertExtraGroups}
+                    onChange={setConvertExtraGroups}
+                  />
+                </div>
+              )}
+            </div>
+          )}
 
           {error && (
             <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>

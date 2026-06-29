@@ -248,6 +248,106 @@ Deno.serve(async (req) => {
       status: status || 'ACTIVE',
     };
 
+    // ── CASE: Convert normal item to shared (id + extra_group_ids, no edit_scope) ──
+    if (id && extra_group_ids && extra_group_ids.length > 0 && !edit_scope) {
+      let currentItem = null;
+      try { currentItem = await base44.asServiceRole.entities.GroupScheduleItem.get(id); } catch {}
+      if (!currentItem) return Response.json({ success: false, error: 'הפעילות לא נמצאה' }, { status: 404 });
+
+      // Only convert if not already shared
+      if (currentItem.shared_activity_id) {
+        return Response.json({ success: false, error: 'הפעילות כבר משותפת — ערוך דרך edit_scope' }, { status: 400 });
+      }
+
+      const allGroupIds = [group_id, ...extra_group_ids];
+
+      // Phase 1: Validate all groups and profiles
+      const allGroups = await fetchGroupsByIds(base44, allGroupIds);
+      const groupMap = Object.fromEntries(allGroups.map(g => [g.id, g]));
+
+      for (const gid of allGroupIds) {
+        const g = groupMap[gid];
+        if (!g) return Response.json({ success: false, error: `הקבוצה לא נמצאה: ${gid}` }, { status: 404 });
+        if (g.arrival_date && g.departure_date) {
+          const stayStart = g.arrival_date < g.departure_date ? g.arrival_date : g.departure_date;
+          const stayEnd   = g.arrival_date < g.departure_date ? g.departure_date : g.arrival_date;
+          if (date < stayStart || date > stayEnd) {
+            return Response.json({
+              success: false,
+              error: `הקבוצה "${g.group_name}" אינה נמצאת באתר בתאריך ${date} (שהות: ${stayStart} עד ${stayEnd})`,
+            }, { status: 400 });
+          }
+        }
+      }
+
+      const profileMap = {};
+      for (const extraGroupId of extra_group_ids) {
+        const profiles = await base44.asServiceRole.entities.OperationalGroupProfile.filter({ group_id: extraGroupId });
+        const profile = profiles[0];
+        if (!profile) {
+          const groupName = groupMap[extraGroupId]?.group_name || extraGroupId;
+          return Response.json({ success: false, error: `לא נמצא פרופיל תפעולי לקבוצה: ${groupName}` }, { status: 400 });
+        }
+        profileMap[extraGroupId] = profile;
+      }
+
+      // Phase 2: Conflict check (exclude current item from conflict)
+      if (resolvedSpaceId) {
+        const newSharedIdTemp = 'temp-convert';
+        const conflictErr = await checkConflict(resolvedSpaceId, id, null);
+        if (conflictErr) return Response.json({ success: false, error: conflictErr }, { status: 409 });
+      }
+
+      // Phase 3: Create shared activity
+      const newSharedId = crypto.randomUUID();
+      const groupNames = allGroupIds.map(gid => groupMap[gid]?.group_name || gid);
+      const sharedMeta = {
+        shared_activity_id: newSharedId,
+        shared_activity_created_from_group_id: group_id,
+        is_shared_activity: true,
+        shared_activity_group_ids: JSON.stringify(allGroupIds),
+        shared_activity_group_names: JSON.stringify(groupNames),
+      };
+
+      const createdIds = [id];
+      try {
+        // Update the existing item
+        await base44.asServiceRole.entities.GroupScheduleItem.update(id, { ...basePayload, ...sharedMeta });
+
+        // Create clones for extra groups
+        for (const extraGroupId of extra_group_ids) {
+          const extraProfile = profileMap[extraGroupId];
+          const clone = await base44.asServiceRole.entities.GroupScheduleItem.create({
+            ...basePayload,
+            group_id: extraGroupId,
+            operational_group_profile_id: extraProfile.id,
+            ...sharedMeta,
+          });
+          createdIds.push(clone.id);
+        }
+
+        return Response.json({
+          success: true,
+          converted_to_shared: true,
+          shared_activity_id: newSharedId,
+          group_count: allGroupIds.length,
+          created_count: createdIds.length,
+          created_ids: createdIds,
+        });
+      } catch (err) {
+        // Rollback clones (don't cancel the original)
+        for (const cid of createdIds.slice(1)) {
+          await base44.asServiceRole.entities.GroupScheduleItem.update(cid, { status: 'CANCELLED' }).catch(() => {});
+        }
+        // Revert original
+        await base44.asServiceRole.entities.GroupScheduleItem.update(id, {
+          shared_activity_id: null, shared_activity_created_from_group_id: null,
+          is_shared_activity: false, shared_activity_group_ids: null, shared_activity_group_names: null,
+        }).catch(() => {});
+        return Response.json({ success: false, error: 'המרת הפעילות למשותפת נכשלה. כל הרשומות שנוצרו בוטלו.' }, { status: 500 });
+      }
+    }
+
     // ── CASE: Editing existing item with edit_scope ───────────────────────────
     if (id && edit_scope) {
       let currentItem = null;

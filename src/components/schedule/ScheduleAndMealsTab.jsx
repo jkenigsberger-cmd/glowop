@@ -204,16 +204,23 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
     setSaving(true);
     try {
       const res = await base44.functions.invoke("saveGroupScheduleItem", { ...form });
-      if (res.data?.error) {
+      const data = res.data;
+      if (!data?.success || data?.error) {
         invalidate();
-        return res.data.error;
+        return data?.error || "השמירה נכשלה. נסה שוב.";
       }
-      invalidate();
-      if (res.data?.updated_all) {
+      if (data?.converted_to_shared) {
+        const extraIds = form.extra_group_ids || [];
+        invalidate(extraIds);
+        toast.success(`נוצרה פעילות משותפת ל-${data.group_count} קבוצות`);
+      } else if (data?.updated_all) {
+        invalidate();
         toast.success("הפעילות עודכנה בכל הקבוצות המשויכות");
-      } else if (res.data?.unlinked) {
+      } else if (data?.unlinked) {
+        invalidate();
         toast.success("הפעילות עודכנה ונותקה מהפעילות המשותפת");
       } else {
+        invalidate();
         toast.success("פעילות נשמרה");
       }
       return null;
