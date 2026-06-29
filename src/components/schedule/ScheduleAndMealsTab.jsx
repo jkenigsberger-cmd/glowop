@@ -2,7 +2,6 @@ import { useState, useMemo } from "react";
 import { base44 } from "@/api/base44Client";
 import { sortActivitySpaces, getActivitySpaceDisplayName } from "@/lib/activitySpaceUtils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useSharedActivityDetails } from "@/hooks/useSharedActivityDetails";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -125,16 +124,6 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
     queryKey: ["activitySpaces"],
     queryFn: () => base44.entities.ActivitySpace.list(),
   });
-
-  // Load all groups for name resolution in shared activity display
-  const { data: allGroups = [] } = useQuery({
-    queryKey: ["allGroups"],
-    queryFn: () => base44.entities.Group.list(),
-    staleTime: 60_000,
-  });
-
-  // Fetch linked shared activity details for all shared items in this group's schedule
-  const sharedActivityDetails = useSharedActivityDetails(scheduleItems, allGroups);
 
   const [lastSharedResult, setLastSharedResult] = useState(null);
 
@@ -1023,7 +1012,6 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
                   onCancel={handleCancelScheduleItem}
                   onDuplicate={handleDuplicateActivity}
                   saving={saving}
-                  sharedDetails={entry.item.shared_activity_id ? sharedActivityDetails[entry.item.shared_activity_id] : null}
                 />
               )
             )}
@@ -1047,7 +1035,6 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
                   onSave={handleSaveScheduleItem}
                   onCancel={() => {}}
                   saving={saving}
-                  sharedDetails={item.shared_activity_id ? sharedActivityDetails[item.shared_activity_id] : null}
                 />
               ))}
             </div>

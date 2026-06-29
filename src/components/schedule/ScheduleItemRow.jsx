@@ -95,7 +95,6 @@ export default function ScheduleItemRow({
   onCancel,
   onDuplicate,
   saving,
-  sharedDetails = null,
 }) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ ...LOGISTICS_DEFAULTS, ...item });
@@ -398,125 +397,6 @@ export default function ScheduleItemRow({
   const space = activitySpaces.find(s => s.id === item.activity_space_id);
   const isSplit = !!item.split_group_id;
 
-  // ── Action buttons (shared between normal and shared view) ────────────────
-  const actionButtons = item.status !== "CANCELLED" ? (
-    <RoleGate permission="MANAGE_ACTIVITIES">
-      <div className="flex gap-1 shrink-0">
-        <Button size="sm" variant="ghost" onClick={handleStartEdit} className="h-7 w-7 p-0" title="עריכה">
-          <Pencil className="w-3.5 h-3.5" />
-        </Button>
-        {onDuplicate && (
-          <Button size="sm" variant="ghost" onClick={() => onDuplicate(item)}
-            className="h-7 w-7 p-0 text-blue-500 hover:text-blue-700" title="שכפל פעילות">
-            <Copy className="w-3.5 h-3.5" />
-          </Button>
-        )}
-        <Button size="sm" variant="ghost" onClick={handleDeleteClick}
-          className="h-7 w-7 p-0 text-red-400 hover:text-red-600" title="בטל">
-          <Trash2 className="w-3.5 h-3.5" />
-        </Button>
-      </div>
-    </RoleGate>
-  ) : null;
-
-  // ── Rich shared activity view ─────────────────────────────────────────────
-  if (isShared && sharedDetails) {
-    const { groups, totalPax, missingPax } = sharedDetails;
-    const thisGroupPax = item.pax != null ? Number(item.pax) : null;
-    const otherGroups = groups.filter(g => g.group_id !== item.group_id);
-
-    return (
-      <>
-        <div className={`border-2 border-violet-300 bg-violet-50 rounded-xl overflow-hidden ${item.status === "CANCELLED" ? "opacity-50" : ""}`}>
-          {/* Header band */}
-          <div className="bg-violet-600 text-white px-4 py-2 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Users className="w-3.5 h-3.5" />
-              <span className="text-xs font-bold tracking-wide">פעילות משותפת</span>
-              {item.status === "CANCELLED" && (
-                <span className="text-xs bg-red-400 text-white rounded px-1.5 py-0.5">בוטל</span>
-              )}
-            </div>
-            {actionButtons}
-          </div>
-
-          {/* Body */}
-          <div className="px-4 py-3 space-y-3">
-            {/* Activity name + time + location */}
-            <div className="space-y-1">
-              <p className="text-sm font-semibold text-slate-800">{item.activity_name}</p>
-              <p className="text-xs text-slate-500">
-                {item.date} · {item.start_time}–{item.end_time}
-              </p>
-              {space && (
-                <span className="inline-flex items-center gap-1 text-xs text-violet-700 font-medium">
-                  <MapPin className="w-3 h-3" /> {space.name}
-                </span>
-              )}
-              {item.requested_location && !space && (
-                <span className="text-xs text-slate-400">📍 {item.requested_location}</span>
-              )}
-            </div>
-
-            {/* Pax breakdown */}
-            <div className="grid grid-cols-2 gap-2">
-              <div className="bg-white rounded-lg px-3 py-2 border border-violet-200">
-                <p className="text-[10px] text-violet-500 font-medium mb-0.5">קבוצה זו</p>
-                <p className="text-sm font-bold text-slate-800">
-                  {thisGroupPax != null ? `${thisGroupPax} משתתפים` : <span className="text-amber-600 text-xs">לא הוגדר</span>}
-                </p>
-              </div>
-              <div className="bg-violet-600 rounded-lg px-3 py-2">
-                <p className="text-[10px] text-violet-200 font-medium mb-0.5">סה״כ בפעילות</p>
-                <p className="text-sm font-bold text-white">
-                  {totalPax != null ? `${totalPax} משתתפים` : <span className="text-violet-200 text-xs">חסר נתון</span>}
-                </p>
-              </div>
-            </div>
-
-            {/* Missing pax warning */}
-            {missingPax && (
-              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5">
-                ⚠️ חסר מספר משתתפים לאחת הקבוצות
-              </p>
-            )}
-
-            {/* Linked groups */}
-            {otherGroups.length > 0 && (
-              <div>
-                <p className="text-[10px] text-slate-500 font-medium mb-1">משותף עם:</p>
-                <ul className="space-y-1">
-                  {otherGroups.map(g => (
-                    <li key={g.group_id} className="flex items-center justify-between text-xs bg-white border border-violet-100 rounded-lg px-3 py-1.5">
-                      <span className="font-medium text-slate-700">{g.group_name}</span>
-                      <span className="text-slate-500">
-                        {g.pax != null ? `${g.pax} משתתפים` : <span className="text-amber-600">לא הוגדר</span>}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {/* Logistics & notes */}
-            <LogisticsBadges item={item} />
-            {item.notes && <p className="text-xs text-slate-400 italic">{item.notes}</p>}
-          </div>
-        </div>
-
-        {deleteScopeDialog && (
-          <DeleteScopeDialog
-            linkedGroupNames={getLinkedGroupNames()}
-            currentGroupName={groupName}
-            onScope={handleDeleteScope}
-            onClose={() => setDeleteScopeDialog(false)}
-          />
-        )}
-      </>
-    );
-  }
-
-  // ── Normal activity view ──────────────────────────────────────────────────
   return (
     <>
       <div className={`bg-card border rounded-xl px-4 py-3 flex items-start gap-3 ${item.status === "CANCELLED" ? "opacity-50" : "border-border"}`}>
@@ -530,9 +410,6 @@ export default function ScheduleItemRow({
               <span className="text-xs bg-purple-50 text-purple-600 border border-purple-200 rounded px-1.5 py-0.5">
                 {item.split_index}/{item.split_total} מרחבים
               </span>
-            )}
-            {isShared && (
-              <span className="text-xs bg-violet-100 text-violet-700 border border-violet-200 rounded px-1.5 py-0.5">משותפת</span>
             )}
             {item.status === "CANCELLED" && (
               <span className="text-xs bg-red-50 text-red-600 border border-red-200 rounded px-1.5 py-0.5">בוטל</span>
@@ -554,7 +431,25 @@ export default function ScheduleItemRow({
           {item.notes && <p className="text-xs text-muted-foreground italic mt-0.5">{item.notes}</p>}
           <SharedActivityBadge item={item} currentGroupId={item.group_id} />
         </div>
-        {actionButtons}
+        {item.status !== "CANCELLED" && (
+          <RoleGate permission="MANAGE_ACTIVITIES">
+            <div className="flex gap-1 shrink-0">
+              <Button size="sm" variant="ghost" onClick={handleStartEdit} className="h-7 w-7 p-0" title="עריכה">
+                <Pencil className="w-3.5 h-3.5" />
+              </Button>
+              {onDuplicate && (
+                <Button size="sm" variant="ghost" onClick={() => onDuplicate(item)}
+                  className="h-7 w-7 p-0 text-blue-500 hover:text-blue-700" title="שכפל פעילות">
+                  <Copy className="w-3.5 h-3.5" />
+                </Button>
+              )}
+              <Button size="sm" variant="ghost" onClick={handleDeleteClick}
+                className="h-7 w-7 p-0 text-red-400 hover:text-red-600" title="בטל">
+                <Trash2 className="w-3.5 h-3.5" />
+              </Button>
+            </div>
+          </RoleGate>
+        )}
       </div>
 
       {deleteScopeDialog && (
