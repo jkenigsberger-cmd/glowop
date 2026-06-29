@@ -91,6 +91,7 @@ export default function ScheduleItemRow({
   quoteActivities = [],
   groupDateRange = {},
   groupName = "",
+  sharedDetails,
   onSave,
   onCancel,
   onDuplicate,
@@ -429,7 +430,7 @@ export default function ScheduleItemRow({
           </div>
           <LogisticsBadges item={item} />
           {item.notes && <p className="text-xs text-muted-foreground italic mt-0.5">{item.notes}</p>}
-          <SharedActivityBadge item={item} currentGroupId={item.group_id} />
+          <SharedActivityBadge item={item} currentGroupId={item.group_id} sharedDetails={sharedDetails} />
         </div>
         {item.status !== "CANCELLED" && (
           <RoleGate permission="MANAGE_ACTIVITIES">

@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import { sortActivitySpaces, getActivitySpaceDisplayName } from "@/lib/activitySpaceUtils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -126,6 +126,54 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
   });
 
   const [lastSharedResult, setLastSharedResult] = useState(null);
+
+  // ── Shared activity details: fetch linked items + group names for each unique shared_activity_id ──
+  const [sharedDetailsMap, setSharedDetailsMap] = useState({}); // keyed by shared_activity_id
+
+  useEffect(() => {
+    const activeSharedItems = scheduleItems.filter(
+      i => i.status === "ACTIVE" && i.shared_activity_id
+    );
+    const uniqueSharedIds = [...new Set(activeSharedItems.map(i => i.shared_activity_id))];
+    if (uniqueSharedIds.length === 0) return;
+
+    let cancelled = false;
+    (async () => {
+      const newMap = {};
+      for (const sharedId of uniqueSharedIds) {
+        try {
+          const linked = await base44.entities.GroupScheduleItem.filter({
+            shared_activity_id: sharedId,
+            status: "ACTIVE",
+          });
+
+          // Resolve group names — fetch each group individually (no $in)
+          const uniqueGroupIds = [...new Set(linked.map(l => l.group_id))];
+          const groupNameMap = {};
+          for (const gid of uniqueGroupIds) {
+            try {
+              const rows = await base44.entities.Group.filter({ id: gid });
+              if (rows[0]) groupNameMap[gid] = rows[0].group_name;
+            } catch {}
+          }
+
+          const totalPax = linked.reduce((sum, l) => sum + (Number(l.pax) || 0), 0);
+          const linkedGroups = linked
+            .filter(l => l.group_id !== groupId)
+            .map(l => ({
+              groupId: l.group_id,
+              groupName: groupNameMap[l.group_id] || l.group_id,
+              pax: Number(l.pax) || 0,
+            }));
+
+          newMap[sharedId] = { totalPax, linkedGroups };
+        } catch {}
+      }
+      if (!cancelled) setSharedDetailsMap(newMap);
+    })();
+
+    return () => { cancelled = true; };
+  }, [scheduleItems, groupId]);
 
   const invalidate = (extraGroupIds = []) => {
     queryClient.invalidateQueries({ queryKey: ["groupScheduleItems", groupId] });
@@ -1008,6 +1056,7 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
                   quoteActivities={[]}
                   groupDateRange={{ arrivalDate, departureDate }}
                   groupName={group?.group_name || ""}
+                  sharedDetails={entry.item.shared_activity_id ? sharedDetailsMap[entry.item.shared_activity_id] : undefined}
                   onSave={handleSaveScheduleItem}
                   onCancel={handleCancelScheduleItem}
                   onDuplicate={handleDuplicateActivity}

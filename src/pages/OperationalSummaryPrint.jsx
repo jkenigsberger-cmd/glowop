@@ -134,6 +134,21 @@ function activityEquipmentText(item) {
 
 function ActivityCard({ item, space }) {
   const equipment = activityEquipmentText(item);
+
+  // Parse shared activity snapshot
+  const isShared = !!(item.is_shared_activity || item.shared_activity_id);
+  let otherGroups = [];
+  let totalPax = 0;
+  if (isShared) {
+    try {
+      const ids   = item.shared_activity_group_ids   ? JSON.parse(item.shared_activity_group_ids)   : [];
+      const names = item.shared_activity_group_names ? JSON.parse(item.shared_activity_group_names) : [];
+      otherGroups = ids
+        .map((id, i) => ({ id, name: names[i] || id }))
+        .filter(g => g.id !== item.group_id);
+    } catch {}
+  }
+
   return (
     <div className="activity-card">
       <div className="activity-time" dir="ltr">{item.start_time}–{item.end_time}</div>
@@ -147,6 +162,19 @@ function ActivityCard({ item, space }) {
         🔧 ציוד: {equipment || "אין ציוד מיוחד"}
       </div>
       {item.notes && <div className="activity-notes">{item.notes}</div>}
+      {isShared && (
+        <div className="activity-shared">
+          <span className="shared-label">🔗 פעילות משותפת</span>
+          {item.pax > 0 && (
+            <span className="shared-line">קבוצה זו: <strong>{item.pax}</strong></span>
+          )}
+          {otherGroups.length > 0 && (
+            <span className="shared-line">
+              משותף עם: {otherGroups.map(g => g.name).join(", ")}
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -748,6 +776,25 @@ export default function OperationalSummaryPrint() {
           font-size: 11px;
           color: #94a3b8;
           margin-top: 3px;
+        }
+        .activity-shared {
+          margin-top: 5px;
+          padding: 4px 8px;
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
+          border-radius: 4px;
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+        }
+        .shared-label {
+          font-size: 11px;
+          font-weight: 700;
+          color: #475569;
+        }
+        .shared-line {
+          font-size: 11px;
+          color: #64748b;
         }
 
         /* ── Print Controls ──────────────────────────────────────────── */
