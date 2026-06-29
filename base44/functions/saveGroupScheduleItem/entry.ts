@@ -11,6 +11,25 @@ const VALID_SPACE_CODES = new Set([
 // Roles allowed to manage activities (mirrors roles.js MANAGE_ACTIVITIES)
 const MANAGE_ACTIVITIES_ROLES = new Set(['SUPER_ADMIN', 'ADMIN', 'OPERATIONS']);
 
+async function resolveEffectiveRole(base44, user) {
+  try {
+    const internalUsers = await base44.asServiceRole.entities.InternalUser.filter({ email: user.email });
+    const internalUser = internalUsers[0];
+    const effectiveRole = internalUser?.role || user.role;
+    console.log('[saveGroupScheduleItem] auth debug:', {
+      email: user.email,
+      platformRole: user.role,
+      internalRole: internalUser?.role ?? null,
+      effectiveRole,
+      allowed: MANAGE_ACTIVITIES_ROLES.has(effectiveRole),
+    });
+    return effectiveRole;
+  } catch (e) {
+    console.warn('[saveGroupScheduleItem] could not load InternalUser, falling back to platform role:', e?.message);
+    return user.role;
+  }
+}
+
 function timeToMinutes(t) {
   const [h, m] = t.split(':').map(Number);
   return h * 60 + m;
@@ -79,7 +98,8 @@ Deno.serve(async (req) => {
     if (!user) {
       return Response.json({ success: false, error: 'נדרשת התחברות' }, { status: 401 });
     }
-    if (!MANAGE_ACTIVITIES_ROLES.has(user.role)) {
+    const effectiveRole = await resolveEffectiveRole(base44, user);
+    if (!MANAGE_ACTIVITIES_ROLES.has(effectiveRole)) {
       return Response.json({ success: false, error: 'אין הרשאה לניהול פעילויות' }, { status: 403 });
     }
 
