@@ -95,6 +95,26 @@ export default function PostStayTab({ groupId, profile, group }) {
     staleTime: STALE,
   });
 
+  // ActivitySpaces — used to resolve internal codes (e.g. bunker_8) to real names (חדר תקווה)
+  const { data: spaces = [] } = useQuery({
+    queryKey: ["activitySpaces"],
+    queryFn: () => base44.entities.ActivitySpace.list(),
+    enabled: !!report?.include_activities,
+    staleTime: STALE,
+  });
+
+  // Resolve a client-facing place name for each activity — never expose internal codes
+  const resolvedActivities = useMemo(() => {
+    const byId = {};
+    const byCode = {};
+    spaces.forEach((s) => { byId[s.id] = s; byCode[s.code] = s; });
+    return activities.map((a) => {
+      const space = byId[a.activity_space_id] || byCode[a.activity_space_code];
+      const location_display = space?.display_name || space?.name || space?.hebrew_name || a.requested_location || "";
+      return { ...a, location_display };
+    });
+  }, [activities, spaces]);
+
   const participantCount = profile?.total_pax || group?.total_pax || 0;
   const activityNames = useMemo(() => [...new Set(activities.map((a) => a.activity_name).filter(Boolean))], [activities]);
   const visibleIncidents = useMemo(() => incidents.filter((i) => i.client_visible), [incidents]);
@@ -242,7 +262,7 @@ export default function PostStayTab({ groupId, profile, group }) {
         <div className="hidden print:block">
           <ReportPreview
             group={group} report={current} participantCount={participantCount}
-            activities={activities} meals={meals} coffee={coffee} prisa={prisa}
+            activities={resolvedActivities} meals={meals} coffee={coffee} prisa={prisa}
             visibleIncidents={visibleIncidents} forPrint
           />
         </div>
@@ -345,7 +365,7 @@ export default function PostStayTab({ groupId, profile, group }) {
               <div className="border border-border rounded-xl overflow-hidden">
                 <ReportPreview
                   group={group} report={current} participantCount={participantCount}
-                  activities={activities} meals={meals} coffee={coffee} prisa={prisa}
+                  activities={resolvedActivities} meals={meals} coffee={coffee} prisa={prisa}
                   visibleIncidents={visibleIncidents}
                 />
               </div>

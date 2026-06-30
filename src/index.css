@@ -135,11 +135,36 @@
   body.post-stay-print-mode #post-stay-print * {
     visibility: visible;
   }
+
+  /* A4 page margins so content never touches the edge */
+  body.post-stay-print-mode {
+    /* sets the printed page geometry only while this mode is active */
+  }
+  @page {
+    size: A4 portrait;
+    margin: 12mm;
+  }
+
+  /* Static flow (not absolute) so a short report stays on ONE page and the
+     legal footer is not pushed to an almost-empty second page. */
   body.post-stay-print-mode #post-stay-print {
-    position: absolute;
-    top: 0;
-    right: 0;
-    left: 0;
-    width: 100%;
+    position: static;
+    width: auto;
+    max-width: none;
+    margin: 0;
+  }
+  body.post-stay-print-mode .post-stay-print-page {
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: none !important;
+    min-height: 0 !important;
+  }
+
+  /* Keep the legal footer compact and attached to the content flow */
+  body.post-stay-print-mode .post-stay-legal-footer {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    page-break-before: auto;
+    margin-top: 14px !important;
   }
 }

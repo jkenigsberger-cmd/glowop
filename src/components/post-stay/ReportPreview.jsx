@@ -46,7 +46,7 @@ function BrandHeader({ group }) {
 // Official legal footer / blue bar — identical text & style to the quote PDF
 function LegalFooter() {
   return (
-    <div style={{ direction: "rtl", marginTop: 28 }}>
+    <div className="post-stay-legal-footer" style={{ direction: "rtl", marginTop: 28 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 4px", borderTop: "1px solid #dde8f5", fontSize: 9.5, fontFamily: BODY_FONT, color: "#555", marginBottom: 6 }}>
         <span style={{ fontWeight: 700, fontFamily: HEADING_FONT }}>בית הדור הבא - מקום לחוויות ישראליות</span>
         <span style={{ direction: "ltr" }}>www.keren-hador.org • aharonsonhome@keren-hador.com</span>
@@ -71,7 +71,7 @@ function SectionTitle({ children }) {
 export default function ReportPreview({ group, report, participantCount, activities, meals, coffee, prisa, visibleIncidents, forPrint = false }) {
   return (
     <div id={forPrint ? "post-stay-print" : undefined} dir="rtl" style={{ background: "#fff", color: "#1a1a1a", fontFamily: BODY_FONT }}>
-      <div className={forPrint ? "" : "p-1"} style={forPrint ? { padding: "12mm 14mm", maxWidth: "210mm", margin: "0 auto" } : { padding: 20 }}>
+      <div className={forPrint ? "post-stay-print-page" : "p-1"} style={forPrint ? { padding: "0", maxWidth: "210mm", margin: "0 auto" } : { padding: 20 }}>
         <BrandHeader group={group} />
 
         {/* Thank you */}
@@ -100,7 +100,7 @@ export default function ReportPreview({ group, report, participantCount, activit
                 <li key={a.id} style={{ display: "flex", gap: 8 }}>
                   <span style={{ color: "#999", flexShrink: 0 }}>{fmt(a.date)} {a.start_time || ""}</span>
                   <strong>{a.activity_name}</strong>
-                  {a.activity_space_code && <span style={{ color: "#777" }}>· {a.activity_space_code}</span>}
+                  {a.location_display && <span style={{ color: "#777" }}>· {a.location_display}</span>}
                   {a.is_shared_activity && <span style={{ fontSize: 11, color: BLUE }}>פעילות משותפת</span>}
                 </li>
               ))}
