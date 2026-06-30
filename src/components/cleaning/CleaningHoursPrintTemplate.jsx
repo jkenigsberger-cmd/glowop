@@ -116,7 +116,7 @@ export default function CleaningHoursPrintTemplate({ shifts, holidays = [], from
       `}</style>
 
       <div className="hp-head">
-        <div className="hp-title">דוח שעות עובדות ניקיון — חישוב 150%</div>
+        <div className="hp-title">דוח שעות עבודה ניקיון</div>
         <div className="hp-period">מתאריך {fmtDate(from)} עד תאריך {fmtDate(to)}</div>
       </div>
 
