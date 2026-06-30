@@ -12,7 +12,7 @@ const BLUE = "#1a56a0";
 // Official foundation header — mirrors the quote document identity
 function BrandHeader({ group }) {
   return (
-    <div style={{ direction: "rtl", marginBottom: 18 }}>
+    <div className="post-stay-header" style={{ direction: "rtl", marginBottom: 18 }}>
       {/* Top identity row */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 10, color: "#555", marginBottom: 10 }}>
         <span style={{ fontWeight: 700, fontFamily: HEADING_FONT }}>בית הדור הבא - מקום לחוויות ישראליות</span>
@@ -51,7 +51,14 @@ function LegalFooter() {
         <span style={{ fontWeight: 700, fontFamily: HEADING_FONT }}>בית הדור הבא - מקום לחוויות ישראליות</span>
         <span style={{ direction: "ltr" }}>www.keren-hador.org • aharonsonhome@keren-hador.com</span>
       </div>
-      <div style={{ background: BLUE, color: "#fff", padding: "6px 14px", fontSize: 9, fontFamily: BODY_FONT, textAlign: "center", lineHeight: 1.5, borderRadius: 4 }}>
+      <div
+        className="post-stay-legal-bar"
+        style={{
+          background: BLUE, color: "#fff", padding: "6px 14px", fontSize: 9,
+          fontFamily: BODY_FONT, textAlign: "center", lineHeight: 1.5, borderRadius: 4,
+          WebkitPrintColorAdjust: "exact", printColorAdjust: "exact",
+        }}
+      >
         כל המסמכים שהועברו על ידי העמותה, הם רכושה הבלעדי של העמותה ואסור להעתיק ו/או להשתמש בהם, כולם או מקצתם, ללא הסכמת העמותה.
       </div>
     </div>
@@ -162,7 +169,7 @@ export default function ReportPreview({ group, report, participantCount, activit
                     {photos.length > 0 && (
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 6 }}>
                         {photos.map((url) => (
-                          <img key={url} src={url} alt="" style={{ width: 120, height: 120, objectFit: "cover", borderRadius: 4, border: "1px solid #f0e0c0" }} />
+                          <img key={url} src={url} alt="" className="post-stay-incident-photo" style={{ width: 120, height: 120, objectFit: "cover", borderRadius: 4, border: "1px solid #f0e0c0" }} />
                         ))}
                         <p style={{ width: "100%", fontSize: 11, color: "#777", margin: 0 }}>מצורפת תמונה לתיעוד.</p>
                       </div>
@@ -175,14 +182,17 @@ export default function ReportPreview({ group, report, participantCount, activit
           </div>
         )}
 
-        {/* Return invitation */}
-        {report?.return_invitation_text && (
-          <p style={{ fontSize: 13, lineHeight: 1.7, whiteSpace: "pre-line", marginTop: 16, fontWeight: 600 }}>{report.return_invitation_text}</p>
-        )}
+        {/* Closing block — invitation + signature + legal footer kept together so
+            they never split onto a near-empty second page */}
+        <div className="post-stay-closing">
+          {report?.return_invitation_text && (
+            <p style={{ fontSize: 13, lineHeight: 1.7, whiteSpace: "pre-line", marginTop: 16, fontWeight: 600 }}>{report.return_invitation_text}</p>
+          )}
 
-        <p style={{ fontSize: 12.5, marginTop: 20 }}>בברכה,<br />צוות בית הדור הבא</p>
+          <p style={{ fontSize: 12.5, marginTop: 20 }}>בברכה,<br />צוות בית הדור הבא</p>
 
-        <LegalFooter />
+          <LegalFooter />
+        </div>
       </div>
     </div>
   );

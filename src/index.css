@@ -128,6 +128,13 @@
    Scoped to body.post-stay-print-mode so it never affects other print pages
    (kitchen report, daily report, housekeeping, logistics, etc.) */
 @media print {
+  /* A4 geometry with professional, compact margins */
+  @page {
+    size: A4 portrait;
+    margin: 10mm 12mm;
+  }
+
+  /* Hide everything except the post-stay print container */
   body.post-stay-print-mode * {
     visibility: hidden;
   }
@@ -136,35 +143,58 @@
     visibility: visible;
   }
 
-  /* A4 page margins so content never touches the edge */
-  body.post-stay-print-mode {
-    /* sets the printed page geometry only while this mode is active */
-  }
-  @page {
-    size: A4 portrait;
-    margin: 12mm;
-  }
-
-  /* Static flow (not absolute) so a short report stays on ONE page and the
-     legal footer is not pushed to an almost-empty second page. */
+  /* Static flow (not absolute) and no top offset, so the document starts at the
+     very top of the printable area instead of inheriting the app page position. */
   body.post-stay-print-mode #post-stay-print {
     position: static;
-    width: auto;
+    width: 100%;
     max-width: none;
     margin: 0;
+    padding: 0;
   }
   body.post-stay-print-mode .post-stay-print-page {
-    padding: 0 !important;
     margin: 0 !important;
+    padding: 0 !important;
     max-width: none !important;
     min-height: 0 !important;
+    font-size: 11px;
+    line-height: 1.35;
   }
 
-  /* Keep the legal footer compact and attached to the content flow */
-  body.post-stay-print-mode .post-stay-legal-footer {
+  /* Compact header — no extra top whitespace above the logo/title */
+  body.post-stay-print-mode .post-stay-header {
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+  }
+
+  /* Smaller incident photos so a single image doesn't push the closing to page 2 */
+  body.post-stay-print-mode .post-stay-incident-photo {
+    width: 90px !important;
+    height: 90px !important;
+    max-width: 90px !important;
+    max-height: 90px !important;
+    object-fit: cover;
+  }
+
+  /* Keep the closing block (invitation + signature + legal footer) together,
+     but allow a natural break before it only when truly needed — never force one. */
+  body.post-stay-print-mode .post-stay-closing {
     break-inside: avoid;
     page-break-inside: avoid;
     page-break-before: auto;
     margin-top: 14px !important;
+  }
+
+  /* Ensure the blue legal bar prints with its background color (not grey text) */
+  body.post-stay-print-mode .post-stay-legal-footer {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    margin-top: 12px !important;
+  }
+  body.post-stay-print-mode .post-stay-legal-bar {
+    background: #1a56a0 !important;
+    color: #ffffff !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 }
