@@ -8,6 +8,7 @@ import { he } from "date-fns/locale";
 import CleaningShiftForm from "@/components/cleaning/CleaningShiftForm";
 import CleaningShiftRow from "@/components/cleaning/CleaningShiftRow";
 import CleaningSummary from "@/components/cleaning/CleaningSummary";
+import HousekeepingHolidayManager from "@/components/cleaning/HousekeepingHolidayManager";
 import CleaningHoursPrintTemplate from "@/components/cleaning/CleaningHoursPrintTemplate";
 import ReactDOM from "react-dom";
 import RoleGate from "@/components/RoleGate";
@@ -56,6 +57,11 @@ export default function CleaningHours() {
     queryFn: () => base44.entities.CleaningWorkShift.list("-date", 500),
   });
 
+  const { data: holidays = [] } = useQuery({
+    queryKey: ["housekeepingHolidays"],
+    queryFn: () => base44.entities.HousekeepingHoliday.list("-date", 200),
+  });
+
   const refetch = () => queryClient.invalidateQueries({ queryKey: ["cleaningWorkShifts"] });
 
   const activeShifts = useMemo(() => shifts.filter(s => s.status === "ACTIVE"), [shifts]);
@@ -95,7 +101,7 @@ export default function CleaningHours() {
     document.body.appendChild(container);
 
     ReactDOM.render(
-      <CleaningHoursPrintTemplate shifts={shifts} from={range.from} to={range.to} />,
+      <CleaningHoursPrintTemplate shifts={shifts} holidays={holidays} from={range.from} to={range.to} />,
       container,
       () => {
         const style = document.createElement("style");
@@ -144,8 +150,11 @@ export default function CleaningHours() {
           </div>
         )}
 
+        {/* Holiday manager — editors only */}
+        {canEdit && <HousekeepingHolidayManager user={user} />}
+
         {/* Summary + date range + print */}
-        <CleaningSummary shifts={shifts} onPrint={handlePrint} />
+        <CleaningSummary shifts={shifts} holidays={holidays} onPrint={handlePrint} />
 
         {/* Daily log */}
         {sortedDates.length === 0 ? (

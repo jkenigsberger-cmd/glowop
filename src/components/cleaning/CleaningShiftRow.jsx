@@ -1,7 +1,10 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Pencil, X, CheckCircle } from "lucide-react";
 import CleaningShiftForm from "./CleaningShiftForm";
+import PremiumBadges from "./PremiumBadges";
+import { calculateCleaningPayrollBreakdown } from "@/lib/cleaningPayrollCalculator";
 import { base44 } from "@/api/base44Client";
 
 const SHIFT_LABELS = { MORNING: "בוקר", EVENING: "ערב", OTHER: "אחר" };
@@ -91,6 +94,15 @@ export default function CleaningShiftRow({ shift, canEdit, onRefresh }) {
   // Derive open/closed from data
   const isOpen = !!shift.start_time && !shift.end_time?.trim();
 
+  // Calculated 150% rate badge (uses active holiday dates — already cached by the page)
+  const { data: holidays = [] } = useQuery({
+    queryKey: ["housekeepingHolidays"],
+    queryFn: () => base44.entities.HousekeepingHoliday.list("-date", 200),
+  });
+  const breakdown = isOpen
+    ? null
+    : calculateCleaningPayrollBreakdown(shift, holidays.filter((h) => h.is_active).map((h) => h.date));
+
   const handleCancel = async () => {
     setCancelling(true);
     await base44.entities.CleaningWorkShift.update(shift.id, {
@@ -168,6 +180,9 @@ export default function CleaningShiftRow({ shift, canEdit, onRefresh }) {
           <span className="text-primary font-semibold text-xs">
             סה״כ שעות: {isOpen ? "—" : fmtMins(shift.total_worker_minutes)}
           </span>
+
+          {/* Calculated rate badge */}
+          {breakdown && <PremiumBadges breakdown={breakdown} />}
 
           {shift.notes && <span className="text-slate-400 text-xs">({shift.notes})</span>}
         </div>

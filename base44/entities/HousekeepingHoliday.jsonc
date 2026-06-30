@@ -1,0 +1,38 @@
+{
+  "name": "HousekeepingHoliday",
+  "type": "object",
+  "properties": {
+    "date": {
+      "type": "string",
+      "format": "date",
+      "description": "YYYY-MM-DD \u2014 date marked as a 150% holiday for all housekeeping shifts"
+    },
+    "label": {
+      "type": "string",
+      "description": "Holiday name e.g. \u05e4\u05e1\u05d7, \u05d9\u05d5\u05dd \u05d4\u05e2\u05e6\u05de\u05d0\u05d5\u05ea"
+    },
+    "is_active": {
+      "type": "boolean",
+      "default": true,
+      "description": "When false, the holiday is ignored in the calculation"
+    },
+    "rate_multiplier": {
+      "type": "number",
+      "default": 1.5,
+      "description": "Premium multiplier \u2014 MVP always 1.5"
+    },
+    "notes": {
+      "type": "string"
+    },
+    "created_by": {
+      "type": "string"
+    },
+    "updated_by": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "date",
+    "is_active"
+  ]
+}
