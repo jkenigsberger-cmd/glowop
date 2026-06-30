@@ -176,14 +176,19 @@ export default function PostStayTab({ groupId, profile, group }) {
 
   const handlePrint = () => {
     document.body.classList.add("post-stay-print-mode");
+
+    let cleaned = false;
     const cleanup = () => {
+      if (cleaned) return;
+      cleaned = true;
       document.body.classList.remove("post-stay-print-mode");
       window.removeEventListener("afterprint", cleanup);
     };
+
     window.addEventListener("afterprint", cleanup);
-    // Fallback in case afterprint doesn't fire
-    setTimeout(cleanup, 1000);
-    window.print();
+    setTimeout(() => window.print(), 50);
+    // Long fallback so the class isn't removed before the print preview finishes preparing
+    setTimeout(cleanup, 15000);
   };
 
   const setField = (key, value) => setDraft((d) => ({ ...(d || report), [key]: value }));
