@@ -51,38 +51,48 @@ export default function PostStayTab({ groupId, profile, group }) {
   const canActUnlocked = departed || isCompleted;
 
   // ── Data ────────────────────────────────────────────────────────────
+  const STALE = 5 * 60 * 1000; // 5 min — these rarely change once the group has departed
+
   const { data: reports = [], isLoading } = useQuery({
     queryKey: ["postStayReport", groupId],
     queryFn: () => base44.entities.PostStayReport.filter({ group_id: groupId }),
     enabled: !!groupId,
+    staleTime: STALE,
   });
   const report = reports.find((r) => r.status !== "CANCELLED") || null;
 
   const { data: incidents = [] } = useQuery({
     queryKey: ["postStayIncidents", groupId],
     queryFn: () => base44.entities.PostStayIncident.filter({ group_id: groupId, status: "ACTIVE" }),
-    enabled: !!groupId,
+    enabled: !!groupId && !!report,
+    staleTime: STALE,
   });
 
+  // Summary-source queries — only fetched when their include flag is on, to avoid firing
+  // many simultaneous requests (which triggers the API rate limit).
   const { data: activities = [] } = useQuery({
     queryKey: ["postStayActivities", groupId],
     queryFn: () => base44.entities.GroupScheduleItem.filter({ group_id: groupId, status: "ACTIVE" }, "date"),
-    enabled: !!groupId,
+    enabled: !!groupId && !!report?.include_activities,
+    staleTime: STALE,
   });
   const { data: meals = [] } = useQuery({
     queryKey: ["postStayMeals", groupId],
     queryFn: () => base44.entities.MealReservation.filter({ group_id: groupId, status: "ACTIVE" }),
-    enabled: !!groupId,
+    enabled: !!groupId && !!report?.include_meals,
+    staleTime: STALE,
   });
   const { data: coffee = [] } = useQuery({
     queryKey: ["postStayCoffee", groupId],
     queryFn: () => base44.entities.CoffeeCornerRequest.filter({ group_id: groupId, status: "ACTIVE" }),
-    enabled: !!groupId,
+    enabled: !!groupId && !!report?.include_coffee_corner,
+    staleTime: STALE,
   });
   const { data: prisa = [] } = useQuery({
     queryKey: ["postStayPrisa", groupId],
     queryFn: () => base44.entities.PrisaRequest.filter({ group_id: groupId, status: "ACTIVE" }),
-    enabled: !!groupId,
+    enabled: !!groupId && !!report?.include_prisa,
+    staleTime: STALE,
   });
 
   const participantCount = profile?.total_pax || group?.total_pax || 0;
