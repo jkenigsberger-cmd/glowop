@@ -131,7 +131,7 @@
   /* A4 geometry with professional, compact margins */
   @page {
     size: A4 portrait;
-    margin: 10mm 12mm;
+    margin: 8mm 10mm;
   }
 
   /* Hide everything except the post-stay print container */
@@ -143,10 +143,14 @@
     visibility: visible;
   }
 
-  /* Static flow (not absolute) and no top offset, so the document starts at the
-     very top of the printable area instead of inheriting the app page position. */
+  /* Anchor the print container to the TOP of the printable area. Absolute removes
+     it from the app layout flow, so the hidden (visibility:hidden) app content above
+     no longer pushes it down — eliminating the huge top whitespace. */
   body.post-stay-print-mode #post-stay-print {
-    position: static;
+    position: absolute;
+    top: 0;
+    right: 0;
+    left: 0;
     width: 100%;
     max-width: none;
     margin: 0;
@@ -157,39 +161,41 @@
     padding: 0 !important;
     max-width: none !important;
     min-height: 0 !important;
-    font-size: 11px;
-    line-height: 1.35;
+    font-size: 10.5px;
+    line-height: 1.28;
   }
 
-  /* Compact header — no extra top whitespace above the logo/title */
+  /* Compact header — small logo, tight spacing, no top whitespace */
   body.post-stay-print-mode .post-stay-header {
     margin-top: 0 !important;
     padding-top: 0 !important;
+    margin-bottom: 8px !important;
+  }
+  body.post-stay-print-mode .post-stay-header img {
+    height: 56px !important;
+    margin-bottom: 6px !important;
   }
 
   /* Smaller incident photos so a single image doesn't push the closing to page 2 */
   body.post-stay-print-mode .post-stay-incident-photo {
-    width: 90px !important;
-    height: 90px !important;
-    max-width: 90px !important;
-    max-height: 90px !important;
+    width: 75px !important;
+    height: 75px !important;
+    max-width: 75px !important;
+    max-height: 75px !important;
     object-fit: cover;
   }
 
-  /* Keep the closing block (invitation + signature + legal footer) together,
-     but allow a natural break before it only when truly needed — never force one. */
+  /* Closing block stays compact, but is NOT forced together — break-inside:avoid on
+     the whole block was jumping it to page 2. Only the legal footer keeps it. */
   body.post-stay-print-mode .post-stay-closing {
-    break-inside: avoid;
-    page-break-inside: avoid;
-    page-break-before: auto;
-    margin-top: 14px !important;
+    margin-top: 8px !important;
   }
 
   /* Ensure the blue legal bar prints with its background color (not grey text) */
   body.post-stay-print-mode .post-stay-legal-footer {
     break-inside: avoid;
     page-break-inside: avoid;
-    margin-top: 12px !important;
+    margin-top: 10px !important;
   }
   body.post-stay-print-mode .post-stay-legal-bar {
     background: #1a56a0 !important;
