@@ -9,6 +9,9 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- Isolated print root for the post-stay (סיכום שהייה) A4 document.
+         Lives OUTSIDE #root so print CSS can hide the app entirely. -->
+    <div id="post-stay-print-root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

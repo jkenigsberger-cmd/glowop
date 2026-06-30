@@ -124,83 +124,167 @@
   }
 }
 
-/* Post-stay (סיכום שהייה) print/export — show ONLY the client report.
-   Scoped to body.post-stay-print-mode so it never affects other print pages
-   (kitchen report, daily report, housekeeping, logistics, etc.) */
+/* ============================================================================
+   Post-stay (סיכום שהייה) — isolated A4 print document.
+
+   Architecture: the print document is rendered through a portal into
+   #post-stay-print-root, which lives OUTSIDE the React app (#root) directly
+   under <body>. On screen the print root is hidden. During print we add
+   body.post-stay-print-mode, which hides the whole app with display:none and
+   shows ONLY the isolated A4 paper. Nothing from the app layout can leak in.
+
+   Everything is scoped so other print pages (kitchen, daily, housekeeping,
+   logistics, quote) are completely unaffected.
+   ============================================================================ */
+
+/* The isolated print root is hidden on screen at all times */
+#post-stay-print-root {
+  display: none;
+}
+
 @media print {
-  /* A4 geometry with professional, compact margins */
-  @page {
-    size: A4 portrait;
-    margin: 8mm 10mm;
-  }
-
-  /* Hide everything except the post-stay print container */
-  body.post-stay-print-mode * {
-    visibility: hidden;
-  }
-  body.post-stay-print-mode #post-stay-print,
-  body.post-stay-print-mode #post-stay-print * {
-    visibility: visible;
-  }
-
-  /* Anchor the print container to the TOP of the printable area. Absolute removes
-     it from the app layout flow, so the hidden (visibility:hidden) app content above
-     no longer pushes it down — eliminating the huge top whitespace. */
-  body.post-stay-print-mode #post-stay-print {
-    position: absolute;
-    top: 0;
-    right: 0;
-    left: 0;
-    width: 100%;
-    max-width: none;
-    margin: 0;
-    padding: 0;
-  }
-  body.post-stay-print-mode .post-stay-print-page {
+  /* Toggle the app off / the A4 document on — only in post-stay print mode */
+  body.post-stay-print-mode {
     margin: 0 !important;
     padding: 0 !important;
-    max-width: none !important;
-    min-height: 0 !important;
-    font-size: 10.5px;
-    line-height: 1.28;
+    background: #fff !important;
+  }
+  body.post-stay-print-mode #root {
+    display: none !important;
+  }
+  body.post-stay-print-mode #post-stay-print-root {
+    display: block !important;
+  }
+  /* Outside post-stay print mode the print root stays hidden (other reports print normally) */
+  body:not(.post-stay-print-mode) #post-stay-print-root {
+    display: none !important;
   }
 
-  /* Compact header — small logo, tight spacing, no top whitespace */
-  body.post-stay-print-mode .post-stay-header {
-    margin-top: 0 !important;
-    padding-top: 0 !important;
-    margin-bottom: 8px !important;
+  /* Zero @page margin — real paper margins are drawn inside .post-stay-a4-page,
+     which gives stable, professional letterhead spacing. */
+  body.post-stay-print-mode {
+    /* page geometry below */
   }
-  body.post-stay-print-mode .post-stay-header img {
-    height: 56px !important;
-    margin-bottom: 6px !important;
-  }
+}
 
-  /* Smaller incident photos so a single image doesn't push the closing to page 2 */
-  body.post-stay-print-mode .post-stay-incident-photo {
-    width: 75px !important;
-    height: 75px !important;
-    max-width: 75px !important;
-    max-height: 75px !important;
-    object-fit: cover;
-  }
+@page {
+  size: A4 portrait;
+  margin: 0;
+}
 
-  /* Closing block stays compact, but is NOT forced together — break-inside:avoid on
-     the whole block was jumping it to page 2. Only the legal footer keeps it. */
-  body.post-stay-print-mode .post-stay-closing {
-    margin-top: 8px !important;
-  }
+/* ── The A4 paper itself ──────────────────────────────────────────────── */
+.post-stay-a4-page {
+  width: 210mm;
+  min-height: 297mm;
+  box-sizing: border-box;
+  padding: 14mm 16mm 12mm 16mm;
+  margin: 0 auto;
+  background: #fff;
+  color: #1a1a1a;
+  direction: rtl;
+  display: flex;
+  flex-direction: column;
+  font-family: "SimplerPro", "Arial Hebrew", Arial, sans-serif;
+  font-size: 10.5px;
+  line-height: 1.32;
+}
 
-  /* Ensure the blue legal bar prints with its background color (not grey text) */
-  body.post-stay-print-mode .post-stay-legal-footer {
-    break-inside: avoid;
-    page-break-inside: avoid;
-    margin-top: 10px !important;
+/* Letterhead */
+.psp-header { margin-bottom: 10px; }
+.psp-contact-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 9px;
+  color: #555;
+  margin-bottom: 8px;
+}
+.psp-org { font-weight: 700; font-family: "Kav16", "Arial Hebrew", Arial, sans-serif; }
+.psp-ltr { direction: ltr; }
+.psp-title-block {
+  text-align: center;
+  border-bottom: 2px solid #1a56a0;
+  padding-bottom: 8px;
+}
+.psp-logo { height: 54px; width: auto; display: block; margin: 0 auto 6px auto; }
+.psp-title {
+  font-size: 17px; font-weight: 700; color: #1a56a0;
+  font-family: "Kav16", "Arial Hebrew", Arial, sans-serif; letter-spacing: -0.4px;
+}
+.psp-group-name { font-size: 12px; color: #333; margin-top: 2px; }
+.psp-dates { font-size: 10px; color: #777; margin-top: 1px; }
+
+/* Main body grows to push footer to the bottom on short reports */
+.post-stay-a4-page .psp-main { flex: 1; }
+
+.psp-paragraph { font-size: 11px; line-height: 1.45; white-space: pre-line; margin: 0 0 10px 0; }
+.psp-mb { margin-bottom: 6px; }
+.psp-mt { margin-top: 8px; }
+.psp-muted { font-size: 10.5px; color: #555; margin: 0; }
+
+/* Sections — compact cards that never touch the paper edge (they sit in padding) */
+.psp-section {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px solid #dbe7f3;
+  border-radius: 6px;
+}
+.psp-section--accent { background: #f5f8ff; }
+.psp-section--warn { background: #fffaf0; border-color: #f0e0c0; }
+.psp-section-title {
+  font-size: 12px; font-weight: 700; color: #1a56a0;
+  font-family: "Kav16", "Arial Hebrew", Arial, sans-serif;
+  border-bottom: 1px solid #dde8f5; padding-bottom: 3px; margin: 0 0 6px 0;
+}
+.psp-list { font-size: 10.8px; line-height: 1.6; list-style: none; padding: 0; margin: 0; }
+
+/* Activities table */
+.psp-table { width: 100%; border-collapse: collapse; font-size: 10.5px; }
+.psp-table td { padding: 3px 4px; vertical-align: top; border-bottom: 1px solid #eef3fa; }
+.psp-td-time { color: #888; white-space: nowrap; width: 26%; }
+.psp-td-name { font-weight: 600; width: 42%; }
+.psp-td-loc { color: #555; width: 32%; }
+.psp-shared { color: #1a56a0; font-weight: 400; }
+
+/* Incidents */
+.psp-incident-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
+.psp-incident { page-break-inside: avoid; break-inside: avoid; }
+.psp-incident-text { font-size: 11px; line-height: 1.5; margin: 0; }
+.psp-photos { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 5px; }
+.psp-photo {
+  width: 68px; height: 68px; object-fit: cover; border-radius: 4px; border: 1px solid #f0e0c0;
+}
+
+/* Footer pinned to bottom */
+.post-stay-a4-page .psp-footer { margin-top: auto; padding-top: 10px; }
+.psp-invitation { font-size: 11px; line-height: 1.5; white-space: pre-line; font-weight: 600; margin: 0 0 10px 0; }
+.psp-signature { font-size: 10.8px; margin: 0 0 12px 0; }
+.psp-footer-contact {
+  display: flex; justify-content: space-between; align-items: center;
+  border-top: 1px solid #dde8f5; padding-top: 4px;
+  font-size: 9px; color: #555; margin-bottom: 5px;
+}
+.psp-legal-bar {
+  background: #1a56a0;
+  color: #fff;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 8.5px;
+  line-height: 1.35;
+  text-align: center;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+/* Print-time: ensure colors render and there is no scaling */
+@media print {
+  .post-stay-a4-page {
+    margin: 0 auto;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
-  body.post-stay-print-mode .post-stay-legal-bar {
-    background: #1a56a0 !important;
-    color: #ffffff !important;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
+  .psp-section--accent, .psp-section--warn, .psp-legal-bar {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 }

@@ -12,6 +12,7 @@ import {
 import RoleGate from "@/components/RoleGate";
 import IncidentEditor from "@/components/post-stay/IncidentEditor";
 import ReportPreview from "@/components/post-stay/ReportPreview";
+import PostStayPrintDocument from "@/components/post-stay/PostStayPrintDocument";
 import {
   REPORT_STATUS_LABELS, REPORT_STATUS_STYLES,
   DEFAULT_THANK_YOU, DEFAULT_RETURN_INVITATION, buildCopyMessage,
@@ -257,18 +258,16 @@ export default function PostStayTab({ groupId, profile, group }) {
 
   return (
     <RoleGate permission="MANAGE_POST_STAY" fallback={<p className="text-sm text-muted-foreground text-center py-8">אין לך הרשאה לסיכום שהייה</p>}>
-      <div dir="rtl" className="space-y-4">
-        {/* Print-only view */}
-        <div className="hidden print:block">
-          <ReportPreview
-            group={group} report={current} participantCount={participantCount}
-            activities={resolvedActivities} meals={meals} coffee={coffee} prisa={prisa}
-            visibleIncidents={visibleIncidents} forPrint
-          />
-        </div>
+      {/* Isolated A4 print document — rendered via portal under <body>, outside #root.
+          Hidden on screen; shown only during browser print (post-stay-print-mode). */}
+      <PostStayPrintDocument
+        group={group} report={current} participantCount={participantCount}
+        activities={resolvedActivities} meals={meals} coffee={coffee} prisa={prisa}
+        visibleIncidents={visibleIncidents}
+      />
 
-        {/* Everything below hidden when printing */}
-        <div className="print:hidden space-y-4">
+      <div dir="rtl" className="space-y-4">
+        <div className="space-y-4">
           {!canActUnlocked && (
             <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800">
               <AlertTriangle className="w-4 h-4 shrink-0" />
@@ -307,6 +306,7 @@ export default function PostStayTab({ groupId, profile, group }) {
               </Button>
               <Button size="sm" variant="outline" onClick={handlePrint} className="gap-1"><Printer className="w-3.5 h-3.5" /> הדפס / יצוא</Button>
             </div>
+            <p className="text-[11px] text-slate-400 mt-2">להדפסה מיטבית: A4, אנכי, רקע גרפי מופעל</p>
           </div>
 
           {/* Two columns: editor | preview */}
