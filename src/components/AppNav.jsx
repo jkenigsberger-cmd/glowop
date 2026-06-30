@@ -3,7 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, CheckSquare, CalendarDays, BedDouble,
   UtensilsCrossed, Wrench, ShieldAlert, Layers, Lock,
-  Menu, X, Users, Search, ChevronDown, Settings, BookMarked
+  Menu, X, Users, Search, ChevronDown, Settings, BookMarked, LogOut
 } from "lucide-react";
 import { revokeAccess } from "@/components/PilotAccessGate";
 import { useRoleContext } from "@/lib/RoleContext";
@@ -176,6 +176,11 @@ export default function AppNav() {
 
   const closeDrawer = () => setDrawerOpen(false);
 
+  // Cerrar sesión — borra la sesión y redirige al login para poder cambiar de cuenta
+  const handleLogout = async () => {
+    await base44.auth.logout();
+  };
+
   const allowedKeys = role ? (ROLE_NAV_LINKS[role] || []) : [];
   const showAdmin = allowedKeys.includes("admin");
   const showUserManagement = role === "SUPER_ADMIN";
@@ -307,6 +312,15 @@ export default function AppNav() {
             >
               <Lock className="w-3.5 h-3.5" />
             </button>
+
+            {/* Logout */}
+            <button
+              onClick={handleLogout}
+              title="התנתקות"
+              className="flex items-center justify-center w-7 h-7 rounded-full text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+            </button>
           </div>
         </div>
       </header>
@@ -402,13 +416,20 @@ export default function AppNav() {
               </div>
             )}
 
-            <div className="shrink-0 px-3 pb-3">
+            <div className="shrink-0 px-3 pb-3 space-y-0.5">
               <button
                 onClick={() => { revokeAccess(); window.location.reload(); }}
                 className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium text-slate-500 hover:text-red-600 hover:bg-red-50 transition-colors"
               >
                 <Lock className="w-4 h-4" />
                 נעילת מערכת
+              </button>
+              <button
+                onClick={handleLogout}
+                className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium text-slate-500 hover:text-red-600 hover:bg-red-50 transition-colors"
+              >
+                <LogOut className="w-4 h-4" />
+                התנתקות
               </button>
             </div>
           </div>
