@@ -25,6 +25,7 @@ import Maintenance from "./pages/Maintenance.jsx";
 import Allocation from "./pages/Allocation.jsx";
 import KitchenReport from "./pages/KitchenReport.jsx";
 import CleaningHours from "./pages/CleaningHours.jsx";
+import CleaningReport from "./pages/CleaningReport.jsx";
 import CommonSpaces from "./pages/CommonSpaces.jsx";
 import OperationalSummaryPrint from "./pages/OperationalSummaryPrint.jsx";
 import DailyOperationalPrint from "./pages/DailyOperationalPrint.jsx";
@@ -72,6 +73,7 @@ const AuthenticatedApp = () => {
         <Route path="/common-spaces" element={<RouteGuard><CommonSpaces /></RouteGuard>} />
         <Route path="/kitchen-report" element={<RouteGuard><KitchenReport /></RouteGuard>} />
         <Route path="/cleaning-hours" element={<RouteGuard><CleaningHours /></RouteGuard>} />
+        <Route path="/cleaning-report" element={<RouteGuard><CleaningReport /></RouteGuard>} />
         <Route path="/mechina-spaces" element={<RouteGuard><MechinaSpaces /></RouteGuard>} />
         {/* Add your page Route elements here */}
         <Route path="*" element={<PageNotFound />} />

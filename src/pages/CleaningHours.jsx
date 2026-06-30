@@ -1,19 +1,19 @@
+/**
+ * Housekeeping hours — DEFAULT operational screen.
+ * Simple daily shift management only: add shift, unified chronological list,
+ * per-day totals. The monthly report opens separately via "הצג דוח".
+ */
 import { useState, useMemo } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Plus, Clock } from "lucide-react";
+import { Plus, Clock, FileBarChart } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { he } from "date-fns/locale";
 import CleaningShiftForm from "@/components/cleaning/CleaningShiftForm";
 import CleaningShiftRow from "@/components/cleaning/CleaningShiftRow";
-import CleaningSummary from "@/components/cleaning/CleaningSummary";
-import HousekeepingHolidayManager from "@/components/cleaning/HousekeepingHolidayManager";
-import CleaningHoursPrintTemplate from "@/components/cleaning/CleaningHoursPrintTemplate";
-import ReactDOM from "react-dom";
-import RoleGate from "@/components/RoleGate";
 
-const SHIFT_LABELS = { MORNING: "בוקר", EVENING: "ערב", OTHER: "אחר" };
 const CAN_EDIT_ROLES = ["SUPER_ADMIN", "ADMIN", "OPERATIONS", "HOUSEKEEPING_MANAGER"];
 
 function fmtMins(mins) {
@@ -26,18 +26,10 @@ function formatDateHebrew(dateStr) {
   catch { return dateStr; }
 }
 
-function getMonthRange() {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, "0");
-  const last = new Date(y, now.getMonth() + 1, 0).getDate();
-  return { from: `${y}-${m}-01`, to: `${y}-${m}-${last}` };
-}
-
 export default function CleaningHours() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [showForm, setShowForm] = useState(false);
-  const [printRange, setPrintRange] = useState(getMonthRange());
 
   const { data: user } = useQuery({
     queryKey: ["me"],
@@ -57,25 +49,20 @@ export default function CleaningHours() {
     queryFn: () => base44.entities.CleaningWorkShift.list("-date", 500),
   });
 
-  const { data: holidays = [] } = useQuery({
-    queryKey: ["housekeepingHolidays"],
-    queryFn: () => base44.entities.HousekeepingHoliday.list("-date", 200),
-  });
-
   const refetch = () => queryClient.invalidateQueries({ queryKey: ["cleaningWorkShifts"] });
 
   const activeShifts = useMemo(() => shifts.filter(s => s.status === "ACTIVE"), [shifts]);
 
-  // Group by date descending
+  // One unified chronological list, grouped by date (newest first) with per-day totals.
+  // Within a day, rows are sorted by start time — never split by named/unnamed/extra worker.
   const byDate = useMemo(() => {
     const map = {};
     activeShifts.forEach(s => {
       if (!map[s.date]) map[s.date] = [];
       map[s.date].push(s);
     });
-    // Sort each day by shift_type then start_time
     Object.values(map).forEach(rows => rows.sort((a, b) =>
-      a.shift_type.localeCompare(b.shift_type) || a.start_time.localeCompare(b.start_time)
+      a.start_time.localeCompare(b.start_time)
     ));
     return map;
   }, [activeShifts]);
@@ -94,50 +81,28 @@ export default function CleaningHours() {
     refetch();
   };
 
-  const handlePrint = (range) => {
-    setPrintRange(range);
-    const container = document.createElement("div");
-    container.id = "cleaning-print-container";
-    document.body.appendChild(container);
-
-    ReactDOM.render(
-      <CleaningHoursPrintTemplate shifts={shifts} holidays={holidays} from={range.from} to={range.to} />,
-      container,
-      () => {
-        const style = document.createElement("style");
-        style.innerHTML = `
-          @media print {
-            body > *:not(#cleaning-print-container) { display: none !important; }
-            #cleaning-print-container { display: block !important; }
-          }
-        `;
-        document.head.appendChild(style);
-        window.print();
-        setTimeout(() => {
-          document.body.removeChild(container);
-          document.head.removeChild(style);
-        }, 600);
-      }
-    );
-  };
-
   return (
     <div className="min-h-screen bg-background" dir="rtl">
       {/* Header */}
       <div className="border-b border-border bg-card sticky top-12 sm:top-0 z-10">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <Clock className="w-5 h-5 text-primary" />
             <div>
               <h1 className="text-xl font-bold">שעות עובדות ניקיון</h1>
-              <p className="text-xs text-muted-foreground mt-0.5">רישום שעות משמרות ניקיון לפי תאריך</p>
+              <p className="text-xs text-muted-foreground mt-0.5">רישום וניהול משמרות ניקיון לפי תאריך</p>
             </div>
           </div>
-          {canEdit && (
-            <Button size="sm" onClick={() => setShowForm(v => !v)} className="gap-1">
-              <Plus className="w-4 h-4" /> רשום כניסת עובדת
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" onClick={() => navigate("/cleaning-report")} className="gap-1">
+              <FileBarChart className="w-4 h-4" /> הצג דוח
             </Button>
-          )}
+            {canEdit && (
+              <Button size="sm" onClick={() => setShowForm(v => !v)} className="gap-1">
+                <Plus className="w-4 h-4" /> הוסף משמרת
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -150,13 +115,7 @@ export default function CleaningHours() {
           </div>
         )}
 
-        {/* Holiday manager — editors only */}
-        {canEdit && <HousekeepingHolidayManager user={user} />}
-
-        {/* Summary + date range + print */}
-        <CleaningSummary shifts={shifts} holidays={holidays} onPrint={handlePrint} />
-
-        {/* Daily log */}
+        {/* Daily operational log — unified chronological list */}
         {sortedDates.length === 0 ? (
           <div className="text-center py-16 text-muted-foreground">
             <Clock className="w-10 h-10 mx-auto mb-3 opacity-20" />

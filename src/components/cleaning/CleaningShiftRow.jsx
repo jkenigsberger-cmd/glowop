@@ -146,10 +146,10 @@ export default function CleaningShiftRow({ shift, canEdit, onRefresh }) {
         isOpen ? "bg-amber-50 border-amber-200" : "bg-white border-slate-200"
       }`}>
         <div className="flex flex-wrap items-center gap-3 text-sm min-w-0">
-          {/* Worker name */}
-          {shift.label && (
-            <span className="font-semibold text-slate-800">{shift.label}</span>
-          )}
+          {/* Worker label — always shown, with neutral fallback when no name */}
+          <span className={`font-semibold ${shift.label?.trim() ? "text-slate-800" : "text-slate-400"}`}>
+            {shift.label?.trim() || "ללא שם"}
+          </span>
           <span className="text-slate-500 text-xs">{SHIFT_LABELS[shift.shift_type]}</span>
           {shift.workers_count > 1 && (
             <span className="text-slate-500 text-xs">{shift.workers_count} עובדות</span>
