@@ -119,9 +119,11 @@ export default function IncidentEditor({ groupId, reportId, incidents, onChanged
   };
 
   const handleCancel = async (inc) => {
-    if (!window.confirm("למחוק אירוע זה?")) return;
-    await base44.entities.PostStayIncident.delete(inc.id);
-    toast.success("האירוע נמחק");
+    if (!window.confirm("להסיר אירוע זה מהסיכום?")) return;
+    // Soft-cancel for audit/evidence — never hard-delete from the UI.
+    // The active list query filters status: "ACTIVE", so it disappears from list + client preview.
+    await base44.entities.PostStayIncident.update(inc.id, { status: "CANCELLED" });
+    toast.success("האירוע הוסר מהסיכום");
     onChanged?.();
   };
 

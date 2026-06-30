@@ -174,7 +174,17 @@ export default function PostStayTab({ groupId, profile, group }) {
     toast.success("ההודעה הועתקה");
   };
 
-  const handlePrint = () => window.print();
+  const handlePrint = () => {
+    document.body.classList.add("post-stay-print-mode");
+    const cleanup = () => {
+      document.body.classList.remove("post-stay-print-mode");
+      window.removeEventListener("afterprint", cleanup);
+    };
+    window.addEventListener("afterprint", cleanup);
+    // Fallback in case afterprint doesn't fire
+    setTimeout(cleanup, 1000);
+    window.print();
+  };
 
   const setField = (key, value) => setDraft((d) => ({ ...(d || report), [key]: value }));
   const editing = !!draft;

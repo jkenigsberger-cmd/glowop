@@ -124,16 +124,18 @@
   }
 }
 
-/* Post-stay (סיכום שהייה) print/export — show ONLY the client report */
+/* Post-stay (סיכום שהייה) print/export — show ONLY the client report.
+   Scoped to body.post-stay-print-mode so it never affects other print pages
+   (kitchen report, daily report, housekeeping, logistics, etc.) */
 @media print {
-  body * {
+  body.post-stay-print-mode * {
     visibility: hidden;
   }
-  #post-stay-print,
-  #post-stay-print * {
+  body.post-stay-print-mode #post-stay-print,
+  body.post-stay-print-mode #post-stay-print * {
     visibility: visible;
   }
-  #post-stay-print {
+  body.post-stay-print-mode #post-stay-print {
     position: absolute;
     top: 0;
     right: 0;
