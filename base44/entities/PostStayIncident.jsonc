@@ -1,0 +1,102 @@
+{
+  "name": "PostStayIncident",
+  "type": "object",
+  "properties": {
+    "group_id": {
+      "type": "string",
+      "description": "FK to Group"
+    },
+    "post_stay_report_id": {
+      "type": "string",
+      "description": "FK to PostStayReport"
+    },
+    "date": {
+      "type": "string",
+      "format": "date"
+    },
+    "location_type": {
+      "type": "string",
+      "enum": [
+        "TENT",
+        "BATHROOM",
+        "SHOWER",
+        "COMMON_SPACE",
+        "DINING_ROOM",
+        "OTHER"
+      ],
+      "default": "TENT"
+    },
+    "location_name": {
+      "type": "string"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "DAMAGE",
+        "SMOKING",
+        "EXTRA_CLEANING",
+        "MISSING_ITEM",
+        "RULE_VIOLATION",
+        "OTHER"
+      ],
+      "default": "OTHER"
+    },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "LOW",
+        "MEDIUM",
+        "HIGH"
+      ],
+      "default": "LOW"
+    },
+    "title": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "photo_urls": {
+      "type": "string",
+      "description": "JSON array of uploaded photo URLs"
+    },
+    "client_visible": {
+      "type": "boolean",
+      "default": false,
+      "description": "true \u2192 appears in client preview/export; false \u2192 internal only"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "ACTIVE",
+        "RESOLVED",
+        "CANCELLED"
+      ],
+      "default": "ACTIVE"
+    },
+    "source_type": {
+      "type": "string",
+      "enum": [
+        "MANUAL",
+        "MAINTENANCE_OPTIONAL_FUTURE"
+      ],
+      "default": "MANUAL"
+    },
+    "source_maintenance_issue_id": {
+      "type": "string",
+      "description": "Optional, nullable \u2014 reserved for future maintenance linking"
+    },
+    "created_by": {
+      "type": "string"
+    },
+    "updated_by": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "group_id",
+    "post_stay_report_id",
+    "category",
+    "status"
+  ]
+}

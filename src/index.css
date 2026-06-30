@@ -123,3 +123,21 @@
     font-weight: 600;
   }
 }
+
+/* Post-stay (סיכום שהייה) print/export — show ONLY the client report */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #post-stay-print,
+  #post-stay-print * {
+    visibility: visible;
+  }
+  #post-stay-print {
+    position: absolute;
+    top: 0;
+    right: 0;
+    left: 0;
+    width: 100%;
+  }
+}

@@ -38,6 +38,8 @@ Deno.serve(async (req) => {
       neighborhoodReservations,
       coffeeRequests,
       prisaRequests,
+      postStayReports,
+      postStayIncidents,
     ] = await Promise.all([
       base44.asServiceRole.entities.Quote.filter({ group_id }),
       base44.asServiceRole.entities.GuestFormSubmission.filter({ group_id }),
@@ -49,6 +51,8 @@ Deno.serve(async (req) => {
       base44.asServiceRole.entities.NeighborhoodReservation.filter({ group_id }),
       base44.asServiceRole.entities.CoffeeCornerRequest.filter({ group_id }),
       base44.asServiceRole.entities.PrisaRequest.filter({ group_id }),
+      base44.asServiceRole.entities.PostStayReport.filter({ group_id }),
+      base44.asServiceRole.entities.PostStayIncident.filter({ group_id }),
     ]);
     console.log(`[deleteGroup v3] related: quotes=${quotes.length} submissions=${submissions.length} profiles=${profiles.length} holds=${holds.length} allocations=${allocations.length} schedule=${scheduleItems.length} meals=${mealReservations.length} neighborhoods=${neighborhoodReservations.length}`);
 
@@ -65,6 +69,8 @@ Deno.serve(async (req) => {
       ...submissions.map(r => base44.asServiceRole.entities.GuestFormSubmission.delete(r.id)),
       ...coffeeRequests.map(r => base44.asServiceRole.entities.CoffeeCornerRequest.delete(r.id)),
       ...prisaRequests.map(r => base44.asServiceRole.entities.PrisaRequest.delete(r.id)),
+      ...postStayIncidents.map(r => base44.asServiceRole.entities.PostStayIncident.delete(r.id)),
+      ...postStayReports.map(r => base44.asServiceRole.entities.PostStayReport.delete(r.id)),
     ]);
     console.log('[deleteGroup v3] related records deleted');
 
@@ -86,6 +92,8 @@ Deno.serve(async (req) => {
         neighborhoodReservations: neighborhoodReservations.length,
         coffeeRequests: coffeeRequests.length,
         prisaRequests: prisaRequests.length,
+        postStayReports: postStayReports.length,
+        postStayIncidents: postStayIncidents.length,
       },
     });
 

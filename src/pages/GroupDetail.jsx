@@ -23,6 +23,7 @@ import GroupLifecycleActions from "@/components/groups/GroupLifecycleActions";
 import RoleGate from "@/components/RoleGate";
 import ReviewAlertsBanner from "@/components/alerts/ReviewAlertsBanner";
 import CoffeeAndPrisaTab from "@/components/coffee/CoffeeAndPrisaTab";
+import PostStayTab from "@/components/post-stay/PostStayTab";
 import MechinaUsersSection from "@/components/mechina/MechinaUsersSection";
 import MealDateRangeWarning from "@/components/groups/MealDateRangeWarning";
 
@@ -212,6 +213,7 @@ export default function GroupDetail() {
             { key: "schedule", label: "📅 לוח זמנים וארוחות" },
             { key: "coffee", label: "☕ קפה / פריסה" },
             { key: "sleeping", label: "🛏️ דרישות לינה" },
+            { key: "post-stay", label: "📝 סיכום שהייה" },
           ].map(tab => (
             <button
               key={tab.key}
@@ -231,6 +233,7 @@ export default function GroupDetail() {
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 space-y-6">
 
         {activeTab === "sleeping" && <SleepingRequirementsTab groupId={id} profile={operationalProfile} group={group} />}
+        {activeTab === "post-stay" && <PostStayTab groupId={id} profile={operationalProfile} group={group} />}
         {activeTab === "coffee" && (
           <CoffeeAndPrisaTab
             groupId={id}

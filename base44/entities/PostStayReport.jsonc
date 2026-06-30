@@ -1,0 +1,100 @@
+{
+  "name": "PostStayReport",
+  "type": "object",
+  "properties": {
+    "group_id": {
+      "type": "string",
+      "description": "FK to Group"
+    },
+    "operational_group_profile_id": {
+      "type": "string",
+      "description": "FK to OperationalGroupProfile (optional)"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "DRAFT",
+        "READY",
+        "SENT",
+        "CANCELLED"
+      ],
+      "default": "DRAFT"
+    },
+    "report_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Date of the report / closing inspection"
+    },
+    "generated_date": {
+      "type": "string",
+      "description": "ISO datetime when first generated"
+    },
+    "sent_date": {
+      "type": "string",
+      "description": "ISO datetime when marked SENT"
+    },
+    "thank_you_text": {
+      "type": "string"
+    },
+    "return_invitation_text": {
+      "type": "string"
+    },
+    "summary_notes": {
+      "type": "string",
+      "description": "Client-visible extra summary notes"
+    },
+    "internal_notes": {
+      "type": "string",
+      "description": "Internal only \u2014 never shown to client"
+    },
+    "include_activities": {
+      "type": "boolean",
+      "default": true
+    },
+    "include_meals": {
+      "type": "boolean",
+      "default": false
+    },
+    "include_coffee_corner": {
+      "type": "boolean",
+      "default": false
+    },
+    "include_prisa": {
+      "type": "boolean",
+      "default": false
+    },
+    "include_sleeping_summary": {
+      "type": "boolean",
+      "default": false
+    },
+    "include_incidents": {
+      "type": "boolean",
+      "default": true
+    },
+    "recipient_name": {
+      "type": "string"
+    },
+    "recipient_email": {
+      "type": "string"
+    },
+    "recipient_phone": {
+      "type": "string"
+    },
+    "created_by": {
+      "type": "string",
+      "description": "Email of admin who created"
+    },
+    "updated_by": {
+      "type": "string",
+      "description": "Email of admin who last updated"
+    },
+    "last_generated_snapshot_date": {
+      "type": "string",
+      "description": "ISO datetime \u2014 snapshot of group data used at generation time, for change-detection warning"
+    }
+  },
+  "required": [
+    "group_id",
+    "status"
+  ]
+}
