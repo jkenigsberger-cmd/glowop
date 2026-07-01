@@ -40,7 +40,7 @@ const ALL_LINKS = [
   { key: "housekeeping",    to: "/housekeeping",    label: "משק בית",          icon: BedDouble,       group: "ops" },
   { key: "kitchen",         to: "/kitchen",         label: "מטבח",             icon: UtensilsCrossed, group: "ops" },
   { key: "maintenance",     to: "/maintenance",     label: "תחזוקה",           icon: Wrench,          group: "ops" },
-  { key: "mechina-spaces",  to: "/mechina-spaces",  label: "בקשות מרחבים",     icon: BookMarked,      group: "ops" },
+  { key: "mechina-spaces",  to: "/mechina-spaces",  label: "בקשות מרחבים",     icon: BookMarked,      group: "primary" },
 ];
 
 function isActive(linkTo, pathname) {
@@ -195,11 +195,11 @@ export default function AppNav() {
   const showUserManagement = role === "SUPER_ADMIN";
 
   // Primary links: main daily-use modules kept in the top bar
-  const PRIMARY_KEYS = ["dashboard", "approved-groups", "calendar", "allocation", "common-spaces"];
+  const PRIMARY_KEYS = ["dashboard", "approved-groups", "calendar", "allocation", "common-spaces", "mechina-spaces"];
   const primaryLinks = ALL_LINKS.filter(l => PRIMARY_KEYS.includes(l.key) && allowedKeys.includes(l.key));
 
-  // Ops dropdown: housekeeping, kitchen, maintenance, mechina requests
-  const OPS_KEYS = ["housekeeping", "kitchen", "maintenance", "mechina-spaces"];
+  // Ops dropdown: housekeeping, kitchen, maintenance
+  const OPS_KEYS = ["housekeeping", "kitchen", "maintenance"];
   const opsLinks = ALL_LINKS.filter(l => OPS_KEYS.includes(l.key) && allowedKeys.includes(l.key));
 
   // Admin dropdown items (not from ALL_LINKS — separate)
