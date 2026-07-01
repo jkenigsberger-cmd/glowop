@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import ScheduleItemRow from "./ScheduleItemRow";
 import SplitActivityGroup from "./SplitActivityGroup";
 import MealReservationRow from "./MealReservationRow";
+import DuplicateMealModal from "./DuplicateMealModal";
 import QuoteTalksPanel, { extractQuoteTalks } from "./QuoteTalksPanel";
 import DietaryFields, { EMPTY_DIETS, parseDiets, mergeDiets } from "@/components/shared/DietaryFields";
 import RoleGate from "@/components/RoleGate";
@@ -53,6 +54,7 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
   const [newMealDiets, setNewMealDiets] = useState(() => mergeDiets(parseDiets(profile?.special_diets)));
   const [newMealError, setNewMealError] = useState(null);
   const [newScheduleError, setNewScheduleError] = useState(null);
+  const [duplicateSourceMeal, setDuplicateSourceMeal] = useState(null);
 
   // Split state
   const [splitEnabled, setSplitEnabled] = useState(false);
@@ -536,7 +538,7 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
     if (mealMaxDate && newMeal.date > mealMaxDate) { setNewMealError("תאריך הארוחה חייב להיות בטווח שהות הקבוצה"); return; }
     if (!newMeal.pax || Number(newMeal.pax) <= 0) { setNewMealError("חסרה כמות משתתפים"); return; }
     setSaving(true);
-    await base44.entities.MealReservation.create({
+    const createdMeal = await base44.entities.MealReservation.create({
       ...newMeal,
       pax: Number(newMeal.pax),
       special_diets_summary: JSON.stringify(newMealDiets),
@@ -552,6 +554,8 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
     setAddingMeal(false);
     invalidate();
     toast.success("ארוחה נוספה");
+    // Offer to duplicate this manual meal to other stay dates
+    setDuplicateSourceMeal(createdMeal);
   };
 
   const setNewMealType = (v) => {
@@ -1244,6 +1248,17 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
           </details>
         )}
       </section>
+
+      {/* Duplicate manual meal to other stay dates */}
+      <DuplicateMealModal
+        open={!!duplicateSourceMeal}
+        sourceMeal={duplicateSourceMeal}
+        arrivalDate={arrivalDate}
+        departureDate={departureDate}
+        existingMeals={mealItems}
+        onClose={() => setDuplicateSourceMeal(null)}
+        onDone={invalidate}
+      />
     </div>
   );
 }
