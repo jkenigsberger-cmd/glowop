@@ -19,6 +19,7 @@
         "HOUSEKEEPING_MANAGER",
         "HOUSEKEEPING_STAFF",
         "KITCHEN",
+        "MAINTENANCE",
         "VIEWER",
         "MECHINA_USER"
       ],

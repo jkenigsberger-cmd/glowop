@@ -5,8 +5,9 @@ import { queryClientInstance } from '@/lib/query-client'
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import AppNav from './components/AppNav';
+import { Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
-import { RoleProvider } from '@/lib/RoleContext';
+import { RoleProvider, useRoleContext } from '@/lib/RoleContext';
 import RouteGuard from '@/components/RouteGuard';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import PilotAccessGate, { checkAccess, revokeAccess } from "@/components/PilotAccessGate";
@@ -32,6 +33,14 @@ import DailyOperationalPrint from "./pages/DailyOperationalPrint.jsx";
 import UserManagement from "./pages/UserManagement.jsx";
 import MechinaSpaces from "./pages/MechinaSpaces.jsx";
 
+// Landing page resolver — MAINTENANCE users go straight to the maintenance module,
+// everyone else sees the Dashboard.
+const HomeLanding = () => {
+  const { role } = useRoleContext();
+  if (role === "MAINTENANCE") return <Navigate to="/maintenance" replace />;
+  return <Dashboard />;
+};
+
 const AuthenticatedApp = () => {
   const [accessGranted, setAccessGranted] = useState(checkAccess());
   const { isLoadingPublicSettings } = useAuth(); // Auth loading handled by RouteGuard
@@ -55,7 +64,7 @@ const AuthenticatedApp = () => {
     <RoleProvider>
       <AppNav />
       <Routes>
-        <Route path="/" element={<RouteGuard><Dashboard /></RouteGuard>} />
+        <Route path="/" element={<RouteGuard><HomeLanding /></RouteGuard>} />
         <Route path="/inventory" element={<RouteGuard><Inventory /></RouteGuard>} />
         <Route path="/groups" element={<RouteGuard><Groups /></RouteGuard>} />
         <Route path="/groups/:id" element={<RouteGuard><GroupDetail /></RouteGuard>} />

@@ -7,6 +7,7 @@ export const ROLES = {
   HOUSEKEEPING_MANAGER: "HOUSEKEEPING_MANAGER",
   HOUSEKEEPING_STAFF: "HOUSEKEEPING_STAFF",
   KITCHEN: "KITCHEN",
+  MAINTENANCE: "MAINTENANCE",
   VIEWER: "VIEWER",
   MECHINA_USER: "MECHINA_USER",
 };
@@ -18,6 +19,7 @@ export const ROLE_LABELS = {
   HOUSEKEEPING_MANAGER: "מנהל משק בית",
   HOUSEKEEPING_STAFF: "צוות משק בית",
   KITCHEN: "מטבח",
+  MAINTENANCE: "עובד תחזוקה",
   VIEWER: "צופה",
   MECHINA_USER: "משתמש מכינה",
 };
@@ -32,6 +34,7 @@ export const ROLE_NAV_LINKS = {
   HOUSEKEEPING_STAFF:   ["dashboard", "calendar", "housekeeping"],
   HOUSEKEEPING_MANAGER: ["dashboard", "calendar", "allocation", "housekeeping", "approved-groups", "maintenance"],
   KITCHEN:              ["dashboard", "calendar", "kitchen"],
+  MAINTENANCE:          ["maintenance"],
   VIEWER:               ["dashboard", "calendar"],
   MECHINA_USER:         ["mechina-spaces"],
 };
@@ -44,6 +47,7 @@ export const ROLE_ALLOWED_ROUTES = {
   HOUSEKEEPING_MANAGER: ["dashboard", "calendar", "allocation", "housekeeping", "approved-groups", "cleaning-hours", "maintenance"],
   HOUSEKEEPING_STAFF:   ["dashboard", "calendar", "housekeeping"],
   KITCHEN:              ["dashboard", "calendar", "kitchen", "kitchen-report"],
+  MAINTENANCE:          ["maintenance"],
   VIEWER:               ["dashboard", "calendar"],
   MECHINA_USER:         ["mechina-spaces"],
 };
@@ -91,8 +95,8 @@ export const PERMISSIONS = {
   MANAGE_POST_STAY:  ["SUPER_ADMIN", "ADMIN", "OPERATIONS"],
 
   // Maintenance
-  CREATE_MAINTENANCE_ISSUE: ["SUPER_ADMIN", "ADMIN", "OPERATIONS", "HOUSEKEEPING_MANAGER", "HOUSEKEEPING_STAFF"],
-  CLOSE_MAINTENANCE_ISSUE:  ["SUPER_ADMIN", "ADMIN", "OPERATIONS", "HOUSEKEEPING_MANAGER"],
+  CREATE_MAINTENANCE_ISSUE: ["SUPER_ADMIN", "ADMIN", "OPERATIONS", "HOUSEKEEPING_MANAGER", "HOUSEKEEPING_STAFF", "MAINTENANCE"],
+  CLOSE_MAINTENANCE_ISSUE:  ["SUPER_ADMIN", "ADMIN", "OPERATIONS", "HOUSEKEEPING_MANAGER", "MAINTENANCE"],
 
   // Review alerts acknowledgement
   ACKNOWLEDGE_ALERT: ["SUPER_ADMIN", "ADMIN", "OPERATIONS", "KITCHEN", "HOUSEKEEPING_MANAGER", "HOUSEKEEPING_STAFF"],
