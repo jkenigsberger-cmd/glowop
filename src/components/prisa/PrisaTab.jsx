@@ -134,11 +134,6 @@ export default function PrisaTab({ groupId, profile, group }) {
 
   return (
     <div className="space-y-4" dir="rtl">
-      {/* Temporary published-build marker — always visible, confirms the new פריסה bundle is live */}
-      <p className="text-[10px] text-emerald-600 bg-emerald-50 border border-emerald-200 rounded px-2 py-0.5 w-fit">
-        פריסה build active · PRISA_BUILD_ACTIVE_v1
-      </p>
-
       {/* Visible error handling — do not fail silently if the entity query fails */}
       {prisaError && (
         <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
