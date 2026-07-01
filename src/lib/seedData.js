@@ -31,6 +31,7 @@ export const ACTIVITY_SPACES_SEED = [
   { code: "bunker_8", name: 'ממ"ד 8', space_type: "BUNKER", is_bookable: true, working_status: "WORKING" },
   { code: "ohel_moed", name: "אוהל מועד", space_type: "OHEL_MOED", is_bookable: true, working_status: "WORKING" },
   { code: "dining_hall", name: "חדר אוכל", space_type: "DINING_HALL", is_bookable: true, working_status: "WORKING" },
+  { code: "rehavei_habayit", name: "רחבי הבית", space_type: "OHEL_MOED", is_bookable: true, working_status: "WORKING" },
 ];
 
 // --- Tent generators ---

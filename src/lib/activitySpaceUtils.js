@@ -14,6 +14,8 @@ export function getActivitySpaceDisplayName(space) {
 export function getActivitySpaceSortOrder(space) {
   const code = space?.code || "";
   const name = space?.name || "";
+  // רחבי הבית sorts right before בולדרים (open/general space)
+  if (code === "rehavei_habayit") return 999;
   // בולדרים sort after rooms but before outdoor/unnumbered
   if (code.startsWith("boulder_")) {
     const m = code.match(/(\d+)/);
