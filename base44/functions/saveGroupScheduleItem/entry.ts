@@ -3,7 +3,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 const VALID_SPACE_CODES = new Set([
   'bunker_1', 'bunker_2', 'bunker_4', 'bunker_5',
   'bunker_6', 'bunker_7', 'bunker_8', 'ohel_moed', 'dining_hall',
-  'outdoor_deck_lawn',
+  'outdoor_deck_lawn', 'rehavei_habayit',
   'boulder_1', 'boulder_2', 'boulder_3', 'boulder_4',
   'boulder_5', 'boulder_6', 'boulder_8',
 ]);
