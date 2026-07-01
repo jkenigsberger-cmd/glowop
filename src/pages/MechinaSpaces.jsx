@@ -285,6 +285,7 @@ export default function MechinaSpaces() {
     "bunker_1", "bunker_2", "bunker_3", "bunker_4",
     "bunker_6", "bunker_7", "bunker_8",
     "ohel_moed", "outdoor_deck_lawn", "dining_hall",
+    "rehavei_habayit",
     "boulder_1", "boulder_2", "boulder_3", "boulder_4",
     "boulder_5", "boulder_6", "boulder_7", "boulder_8",
   ];
