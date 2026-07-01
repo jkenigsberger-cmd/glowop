@@ -21,6 +21,15 @@ const LINK_ALERT_MODULE = {
   housekeeping: "HOUSEKEEPING",
 };
 
+// Build initials from a full name — e.g. "Jonathan Kenigsberger" -> "JK"
+function getInitials(name) {
+  if (!name) return "";
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
 // All available nav links
 const ALL_LINKS = [
   { key: "dashboard",       to: "/dashboard",       label: "בית",             icon: LayoutDashboard, group: "primary" },
@@ -28,10 +37,10 @@ const ALL_LINKS = [
   { key: "calendar",        to: "/calendar",        label: "לוח שנה",          icon: CalendarDays,    group: "primary" },
   { key: "allocation",      to: "/allocation",      label: "לינה",             icon: BedDouble,       group: "primary" },
   { key: "common-spaces",   to: "/common-spaces",   label: "מרחבי פעילות",    icon: Layers,          group: "primary" },
-  { key: "housekeeping",    to: "/housekeeping",    label: "משק בית",          icon: BedDouble,       group: "primary" },
-  { key: "kitchen",         to: "/kitchen",         label: "מטבח",             icon: UtensilsCrossed, group: "primary" },
+  { key: "housekeeping",    to: "/housekeeping",    label: "משק בית",          icon: BedDouble,       group: "ops" },
+  { key: "kitchen",         to: "/kitchen",         label: "מטבח",             icon: UtensilsCrossed, group: "ops" },
   { key: "maintenance",     to: "/maintenance",     label: "תחזוקה",           icon: Wrench,          group: "ops" },
-  { key: "mechina-spaces",  to: "/mechina-spaces",  label: "בקשות מרחבים",     icon: BookMarked,      group: "primary" },
+  { key: "mechina-spaces",  to: "/mechina-spaces",  label: "בקשות מרחבים",     icon: BookMarked,      group: "ops" },
 ];
 
 function isActive(linkTo, pathname) {
@@ -185,12 +194,12 @@ export default function AppNav() {
   const showAdmin = allowedKeys.includes("admin");
   const showUserManagement = role === "SUPER_ADMIN";
 
-  // Primary links: dashboard through kitchen
-  const PRIMARY_KEYS = ["dashboard", "approved-groups", "calendar", "allocation", "common-spaces", "housekeeping", "kitchen", "mechina-spaces"];
+  // Primary links: main daily-use modules kept in the top bar
+  const PRIMARY_KEYS = ["dashboard", "approved-groups", "calendar", "allocation", "common-spaces"];
   const primaryLinks = ALL_LINKS.filter(l => PRIMARY_KEYS.includes(l.key) && allowedKeys.includes(l.key));
 
-  // Ops dropdown: maintenance + any future ops secondary keys
-  const OPS_KEYS = ["maintenance"];
+  // Ops dropdown: housekeeping, kitchen, maintenance, mechina requests
+  const OPS_KEYS = ["housekeeping", "kitchen", "maintenance", "mechina-spaces"];
   const opsLinks = ALL_LINKS.filter(l => OPS_KEYS.includes(l.key) && allowedKeys.includes(l.key));
 
   // Admin dropdown items (not from ALL_LINKS — separate)
@@ -218,7 +227,7 @@ export default function AppNav() {
   const maintenanceOpenCount = maintenanceIssues.length;
   const maintenanceUrgent = maintenanceIssues.some(i => i.priority === "URGENT");
 
-  // Ops badge counts — include maintenance count
+  // Ops badge counts — include maintenance count + module alert counts
   const opsBadgeMap = Object.fromEntries(opsLinks.map(l => [
     l.key,
     l.key === "maintenance" ? maintenanceOpenCount : getCount(l.key)
@@ -294,10 +303,17 @@ export default function AppNav() {
 
             <div className="w-px h-5 bg-slate-200 shrink-0" />
 
-            {/* User info */}
+            {/* User info — initials avatar + role */}
             {role && (
               <div className="flex items-center gap-1.5">
-                {userName && <span className="text-xs text-slate-500 hidden lg:inline">{userName}</span>}
+                {userName && (
+                  <span
+                    title={userName}
+                    className="flex items-center justify-center w-7 h-7 rounded-full bg-primary/10 text-primary text-[11px] font-bold select-none shrink-0"
+                  >
+                    {getInitials(userName)}
+                  </span>
+                )}
                 <span className="text-[11px] font-semibold text-primary bg-primary/8 rounded-full px-2 py-0.5 whitespace-nowrap">
                   {roleLabel}
                 </span>
