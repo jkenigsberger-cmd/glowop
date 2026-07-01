@@ -61,7 +61,9 @@ export default function DuplicateMealModal({
     setCreating(true);
     try {
       const payloads = targetDates.map(d => buildDuplicatePayload(sourceMeal, d));
-      await base44.entities.MealReservation.bulkCreate(payloads);
+      // Use individual create calls (not bulkCreate) so each record goes through
+      // the standard client create path reliably from the frontend context.
+      await Promise.all(payloads.map(p => base44.entities.MealReservation.create(p)));
       toast.success(
         skippedCount > 0
           ? `נוצרו ${targetDates.length} ארוחות. ${skippedCount} דולגו כי כבר היו קיימות.`

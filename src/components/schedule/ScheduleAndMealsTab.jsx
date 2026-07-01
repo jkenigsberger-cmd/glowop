@@ -554,8 +554,11 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
     setAddingMeal(false);
     invalidate();
     toast.success("ארוחה נוספה");
-    // Offer to duplicate this manual meal to other stay dates
-    setDuplicateSourceMeal(createdMeal);
+    // Offer to duplicate this manual meal to other stay dates —
+    // excluded for COFFEE_CORNER (handled by the separate Coffee Corner module)
+    if (createdMeal.meal_type !== "COFFEE_CORNER") {
+      setDuplicateSourceMeal(createdMeal);
+    }
   };
 
   const setNewMealType = (v) => {
