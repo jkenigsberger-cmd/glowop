@@ -132,6 +132,62 @@ async function syncDayUseKitchen({ base44, group_id, profile_id, activity_date, 
   }
 }
 
+// ── OGP ensure (internal, service-role — never calls the admin-only endpoint) ──
+// Guarantees exactly one OperationalGroupProfile for the group.
+//   0 → create minimal OGP (accepted_at omitted — auto-ensured, not admin-accepted)
+//   1 → reuse
+//  >1 → throw MULTIPLE_OPERATIONAL_PROFILES (caller must stop)
+async function ensureOgpInternal(base44, group_id, group) {
+  const existing = await base44.asServiceRole.entities.OperationalGroupProfile.filter({ group_id });
+  if (existing.length > 1) {
+    const err = new Error('MULTIPLE_OPERATIONAL_PROFILES');
+    err.code = 'MULTIPLE_OPERATIONAL_PROFILES';
+    err.profile_ids = existing.map(p => p.id);
+    throw err;
+  }
+  if (existing.length === 1) return existing[0];
+
+  const profileData = { group_id, status: 'ACCEPTED' };
+  if (group?.arrival_date)   profileData.arrival_date   = group.arrival_date;
+  if (group?.departure_date) profileData.departure_date = group.departure_date;
+  if (group?.internal_notes) profileData.general_notes  = group.internal_notes;
+  const created = await base44.asServiceRole.entities.OperationalGroupProfile.create(profileData);
+
+  // Post-create duplicate safety check
+  const after = await base44.asServiceRole.entities.OperationalGroupProfile.filter({ group_id });
+  if (after.length > 1) {
+    const err = new Error('MULTIPLE_OPERATIONAL_PROFILES');
+    err.code = 'MULTIPLE_OPERATIONAL_PROFILES';
+    err.profile_ids = after.map(p => p.id);
+    throw err;
+  }
+  return created;
+}
+
+// Maps guest-form submission fields → valid OperationalGroupProfile fields only.
+function buildOgpUpdateFromFields(fields, num) {
+  const out = {};
+  const setNum = (key, val) => { const n = num(val); if (n != null) out[key] = n; };
+  setNum('total_pax',           fields.total_pax);
+  setNum('participant_count',   fields.participant_count);
+  setNum('staff_count',         fields.staff_count);
+  setNum('staff_men_count',     fields.staff_men_count);
+  setNum('staff_women_count',   fields.staff_women_count);
+  setNum('boys_count',          fields.boys_count);
+  setNum('girls_count',         fields.girls_count);
+  setNum('drivers_men_count',   fields.drivers_men_count);
+  setNum('drivers_women_count', fields.drivers_women_count);
+  if (fields.is_sleeping_group !== undefined) out.is_sleeping_group = !!fields.is_sleeping_group;
+  if (fields.arrival_lunch     !== undefined) out.arrival_lunch     = !!fields.arrival_lunch;
+  if (fields.departure_lunch   !== undefined) out.departure_lunch   = !!fields.departure_lunch;
+  if (fields.special_diets)            out.special_diets            = fields.special_diets;
+  if (fields.meal_plan)                out.meal_plan                = fields.meal_plan;
+  if (fields.tent_distribution_notes)  out.tent_distribution_notes  = fields.tent_distribution_notes;
+  if (fields.schedule_notes)           out.schedule_requests        = fields.schedule_notes;
+  if (fields.general_notes)            out.general_notes            = fields.general_notes;
+  return out;
+}
+
 // ── Main handler ─────────────────────────────────────────────────────────────
 
 Deno.serve(async (req) => {
@@ -221,6 +277,40 @@ Deno.serve(async (req) => {
 
     console.log('[submitGuestForm]', { group_id, isDirectGroup, quote_id: quote_id || null });
 
+    // ── Ensure exactly one OperationalGroupProfile for this group ─────────────
+    // Guests are unauthenticated/token-based, so we NEVER call the admin-only
+    // ensureOperationalGroupProfile endpoint — we run the same logic inline.
+    let groupForOgp = null;
+    try { groupForOgp = await base44.asServiceRole.entities.Group.get(group_id); } catch { /* handled */ }
+    if (!groupForOgp) {
+      return Response.json({ error: 'GROUP_NOT_FOUND', message: 'הקבוצה לא נמצאה' }, { status: 404 });
+    }
+
+    let operational_group_profile_id = '';
+    try {
+      const ogp = await ensureOgpInternal(base44, group_id, groupForOgp);
+      operational_group_profile_id = ogp.id;
+
+      // Update the OGP with operational fields from the submission (source of truth)
+      const ogpUpdate = buildOgpUpdateFromFields(fields, num);
+      if (Object.keys(ogpUpdate).length > 0) {
+        await base44.asServiceRole.entities.OperationalGroupProfile.update(ogp.id, ogpUpdate);
+      }
+    } catch (ogpErr) {
+      if (ogpErr?.code === 'MULTIPLE_OPERATIONAL_PROFILES') {
+        console.error('[submitGuestForm] MULTIPLE_OPERATIONAL_PROFILES for group', group_id, ogpErr.profile_ids);
+        return Response.json({
+          error: 'MULTIPLE_OPERATIONAL_PROFILES',
+          message: 'נמצאו מספר פרופילים תפעוליים לקבוצה — נדרשת בדיקת מנהל',
+        }, { status: 409 });
+      }
+      console.error('[submitGuestForm] OGP ensure/update failed:', ogpErr?.message);
+      return Response.json({
+        error: 'OGP_ENSURE_FAILED',
+        message: 'שגיאה ביצירת/עדכון הפרופיל התפעולי — אנא נסו שוב',
+      }, { status: 500 });
+    }
+
     // Resolve token version number if present
     let form_link_version = null;
     if (form_link_token && isDirectGroup) {
@@ -287,12 +377,8 @@ Deno.serve(async (req) => {
       let coffeeCorner = null;
       try { coffeeCorner = fields.day_use_coffee_corner ? JSON.parse(fields.day_use_coffee_corner) : null; } catch { coffeeCorner = null; }
 
-      // Find operational group profile id (best-effort)
-      let profile_id = '';
-      try {
-        const profiles = await base44.asServiceRole.entities.OperationalGroupProfile.filter({ group_id });
-        profile_id = profiles[0]?.id || '';
-      } catch { /* non-fatal */ }
+      // Use the OGP id ensured at the start of this request (never stale/empty)
+      const profile_id = operational_group_profile_id;
 
       if (activity_date && total_pax > 0) {
         try {
