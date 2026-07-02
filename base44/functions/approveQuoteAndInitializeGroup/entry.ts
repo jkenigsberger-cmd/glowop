@@ -1,0 +1,296 @@
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
+
+/**
+ * approveQuoteAndInitializeGroup
+ * ------------------------------------------------------------------
+ * Approving a Quote must FIRST initialize the operational source of truth
+ * (Group + exactly one OperationalGroupProfile), and ONLY THEN mark the
+ * Quote APPROVED. If any operational step fails, the Quote is NOT approved.
+ *
+ * Hard rules:
+ *   - Never silently overwrite existing operational Group/OGP data from Quote.
+ *   - Group is the source of truth for identity/core fields → mapped from Quote
+ *     ONLY when a NEW Group is created.
+ *   - OGP is the source of truth for operational details → mapped from Quote
+ *     ONLY when the OGP was just created OR the specific field is empty/null.
+ *   - Divergences between Quote and existing Group/OGP produce warnings, never
+ *     overwrites.
+ *   - Idempotent + duplicate-safe (no DB transactions → careful ordering).
+ *
+ * Links in this schema:
+ *   - quote.group_id                     → Quote → Group   (primary link)
+ *   - Group has NO quote_id field        → no reverse link written on Group
+ *   - operational_group_profile.quote_id → OGP → Quote     (set when empty)
+ * ------------------------------------------------------------------
+ */
+
+const ALLOWED_ROLES = new Set(['SUPER_ADMIN', 'ADMIN', 'OPERATIONS']);
+
+// Fields mapped Quote → Group, ONLY when creating a NEW Group.
+// Quote carries client_* / estimated_pax; Group uses contact_* — mapped below.
+function buildGroupFromQuote(quote) {
+  const g = { status: 'CONFIRMED' };
+  g.group_name     = quote.client_name || quote.contact_person || quote.quote_number || 'קבוצה חדשה';
+  // group_type: DAY_USE when quote is day_use OR single-day; else LODGING
+  const isSingleDay = quote.arrival_date && (!quote.departure_date || quote.departure_date === quote.arrival_date);
+  g.group_type     = quote.quote_type === 'day_use' || isSingleDay ? 'DAY_USE' : 'LODGING';
+  if (quote.arrival_date)   g.arrival_date   = quote.arrival_date;
+  g.departure_date = quote.departure_date || quote.arrival_date || undefined;
+  if (quote.arrival_time)   g.arrival_time   = quote.arrival_time;
+  if (quote.departure_time) g.departure_time = quote.departure_time;
+  if (quote.client_name || quote.contact_person) g.contact_name  = quote.contact_person || quote.client_name;
+  if (quote.client_phone)   g.contact_phone  = quote.client_phone;
+  if (quote.client_email)   g.contact_email  = quote.client_email;
+  if (quote.internal_notes) g.internal_notes = quote.internal_notes;
+  // strip undefined
+  Object.keys(g).forEach(k => g[k] === undefined && delete g[k]);
+  return g;
+}
+
+// Ensure exactly one OGP for a group (inline, service-role — never the admin HTTP endpoint).
+async function ensureOgp(base44, group_id, group) {
+  const existing = await base44.asServiceRole.entities.OperationalGroupProfile.filter({ group_id });
+  if (existing.length > 1) {
+    const err = new Error('MULTIPLE_OPERATIONAL_PROFILES');
+    err.code = 'MULTIPLE_OPERATIONAL_PROFILES';
+    err.profile_ids = existing.map(p => p.id);
+    throw err;
+  }
+  if (existing.length === 1) return { ogp: existing[0], created: false };
+
+  const profileData = { group_id, status: 'ACCEPTED' };
+  if (group?.arrival_date)   profileData.arrival_date   = group.arrival_date;
+  if (group?.departure_date) profileData.departure_date = group.departure_date;
+  if (group?.total_pax != null) profileData.total_pax   = group.total_pax;
+  if (group?.internal_notes) profileData.general_notes  = group.internal_notes;
+  const created = await base44.asServiceRole.entities.OperationalGroupProfile.create(profileData);
+
+  const after = await base44.asServiceRole.entities.OperationalGroupProfile.filter({ group_id });
+  if (after.length > 1) {
+    const err = new Error('MULTIPLE_OPERATIONAL_PROFILES_AFTER_CREATE');
+    err.code = 'MULTIPLE_OPERATIONAL_PROFILES_AFTER_CREATE';
+    err.profile_ids = after.map(p => p.id);
+    throw err;
+  }
+  return { ogp: created, created: true };
+}
+
+// Derive OGP operational values from Quote (Quote has no boys/girls split).
+function ogpValuesFromQuote(quote) {
+  const totalPax   = quote.estimated_pax   != null ? Number(quote.estimated_pax)   : null;
+  const staffCount = quote.staff_count     != null ? Number(quote.staff_count)     : null;
+  let participant  = quote.participant_count != null ? Number(quote.participant_count) : null;
+  if (participant == null && totalPax != null && staffCount != null) {
+    participant = Math.max(0, totalPax - staffCount);
+  }
+  const out = {};
+  if (totalPax   != null) out.total_pax         = totalPax;
+  if (staffCount != null) out.staff_count       = staffCount;
+  if (participant != null) out.participant_count = participant;
+  return out;
+}
+
+const isEmpty = (v) => v === null || v === undefined || v === '';
+
+Deno.serve(async (req) => {
+  try {
+    const base44 = createClientFromRequest(req);
+
+    // ── Auth ─────────────────────────────────────────────────────────────────
+    let user = null;
+    try { user = await base44.auth.me(); } catch { /* handled below */ }
+    if (!user) {
+      return Response.json({ success: false, error: 'UNAUTHORIZED', message: 'נדרשת התחברות' }, { status: 401 });
+    }
+    let effectiveRole = user.role;
+    try {
+      const internalUsers = await base44.asServiceRole.entities.InternalUser.filter({ email: user.email });
+      if (internalUsers[0]?.role) effectiveRole = internalUsers[0].role;
+    } catch { /* fall back to platform role */ }
+    if (!ALLOWED_ROLES.has(effectiveRole)) {
+      return Response.json({ success: false, error: 'FORBIDDEN', message: 'אין הרשאה לאשר הצעת מחיר' }, { status: 403 });
+    }
+
+    // ── Input ──────────────────────────────────────────────────────────────
+    const body = await req.json().catch(() => ({}));
+    const { quote_id } = body;
+    if (!quote_id || typeof quote_id !== 'string') {
+      return Response.json({
+        success: false, error: 'MISSING_QUOTE_ID', message: 'חסר מזהה הצעת מחיר (quote_id)',
+      }, { status: 400 });
+    }
+
+    // ── Load Quote ───────────────────────────────────────────────────────────
+    let quote = null;
+    try { quote = await base44.asServiceRole.entities.Quote.get(quote_id); } catch { /* handled */ }
+    if (!quote) {
+      return Response.json({
+        success: false, error: 'QUOTE_NOT_FOUND', message: 'הצעת המחיר לא נמצאה', quote_id,
+      }, { status: 404 });
+    }
+
+    const warnings = [];
+    const alreadyApproved = String(quote.status || '').toUpperCase() === 'APPROVED';
+
+    // ── Resolve or create Group ─────────────────────────────────────────────
+    let group = null;
+    let groupJustCreated = false;
+
+    if (quote.group_id) {
+      try { group = await base44.asServiceRole.entities.Group.get(quote.group_id); } catch { /* handled */ }
+      if (!group) {
+        return Response.json({
+          success: false, error: 'QUOTE_GROUP_LINK_BROKEN',
+          message: 'ההצעה מקושרת לקבוצה שאינה קיימת עוד — נדרשת בדיקת מנהל',
+          quote_id, group_id: quote.group_id,
+        }, { status: 409 });
+      }
+    } else {
+      // No link → create a new Group (never dedupe by name alone)
+      try {
+        group = await base44.asServiceRole.entities.Group.create(buildGroupFromQuote(quote));
+        groupJustCreated = true;
+      } catch (err) {
+        console.error('[approveQuoteAndInitializeGroup] group create failed:', err?.message);
+        return Response.json({
+          success: false, error: 'GROUP_CREATE_FAILED', message: 'יצירת הקבוצה נכשלה', quote_id,
+        }, { status: 500 });
+      }
+    }
+    const group_id = group.id;
+
+    // ── Ensure exactly one OGP ──────────────────────────────────────────────
+    let ogp = null;
+    let ogpJustCreated = false;
+    try {
+      const res = await ensureOgp(base44, group_id, group);
+      ogp = res.ogp;
+      ogpJustCreated = res.created;
+    } catch (err) {
+      if (err?.code === 'MULTIPLE_OPERATIONAL_PROFILES' || err?.code === 'MULTIPLE_OPERATIONAL_PROFILES_AFTER_CREATE') {
+        return Response.json({
+          success: false, error: err.code,
+          message: 'נמצאו מספר פרופילים תפעוליים לקבוצה — נדרשת בדיקת מנהל (לא נמחק דבר)',
+          quote_id, group_id, profile_ids: err.profile_ids,
+        }, { status: 409 });
+      }
+      // Group may have just been created → do NOT hide partial state, do NOT approve.
+      console.error('[approveQuoteAndInitializeGroup] OGP ensure failed:', err?.message);
+      return Response.json({
+        success: false, error: 'OGP_CREATE_FAILED_AFTER_GROUP',
+        message: 'הקבוצה קיימת אך יצירת הפרופיל התפעולי נכשלה — יש להריץ שוב או לתקן ידנית',
+        quote_id, group_id,
+      }, { status: 500 });
+    }
+
+    // ── Link Quote → OGP (OGP.quote_id) when empty ──────────────────────────
+    if (isEmpty(ogp.quote_id)) {
+      try {
+        await base44.asServiceRole.entities.OperationalGroupProfile.update(ogp.id, { quote_id });
+        ogp.quote_id = quote_id;
+      } catch (err) {
+        console.error('[approveQuoteAndInitializeGroup] OGP link update failed:', err?.message);
+        return Response.json({
+          success: false, error: 'QUOTE_LINK_UPDATE_FAILED',
+          message: 'קישור ההצעה לפרופיל התפעולי נכשל — ההצעה לא אושרה',
+          quote_id, group_id, operational_group_profile_id: ogp.id,
+        }, { status: 500 });
+      }
+    } else if (String(ogp.quote_id) !== String(quote_id)) {
+      warnings.push('QUOTE_OGP_LINK_DIFFERS');
+    }
+
+    // ── Field mapping into OGP — only newly created OR empty fields ──────────
+    const quoteOgpVals = ogpValuesFromQuote(quote);
+    const ogpUpdate = {};
+    for (const [key, val] of Object.entries(quoteOgpVals)) {
+      if (ogpJustCreated || isEmpty(ogp[key])) {
+        ogpUpdate[key] = val;
+      } else if (Number(ogp[key]) !== Number(val)) {
+        // existing non-empty value differs → warn, do NOT overwrite
+        if (key === 'total_pax' || key === 'participant_count' || key === 'staff_count') {
+          if (!warnings.includes('QUOTE_OGP_PAX_DIFFER')) warnings.push('QUOTE_OGP_PAX_DIFFER');
+        }
+      }
+    }
+    if (Object.keys(ogpUpdate).length > 0) {
+      try {
+        await base44.asServiceRole.entities.OperationalGroupProfile.update(ogp.id, ogpUpdate);
+      } catch (err) {
+        console.warn('[approveQuoteAndInitializeGroup] OGP field map update failed (non-fatal):', err?.message);
+        warnings.push('OGP_FIELD_MAP_UPDATE_FAILED');
+      }
+    }
+
+    // ── Divergence warnings against existing Group (never overwrite) ─────────
+    if (!groupJustCreated) {
+      const contactDiffers =
+        (!isEmpty(quote.client_name)  && !isEmpty(group.contact_name)  && quote.client_name  !== group.contact_name) ||
+        (!isEmpty(quote.client_phone) && !isEmpty(group.contact_phone) && quote.client_phone !== group.contact_phone) ||
+        (!isEmpty(quote.client_email) && !isEmpty(group.contact_email) && quote.client_email !== group.contact_email);
+      if (contactDiffers) warnings.push('QUOTE_GROUP_CONTACT_DIFFER');
+
+      const datesDiffer =
+        (!isEmpty(quote.arrival_date)   && !isEmpty(group.arrival_date)   && quote.arrival_date   !== group.arrival_date) ||
+        (!isEmpty(quote.departure_date) && !isEmpty(group.departure_date) && quote.departure_date !== group.departure_date);
+      if (datesDiffer) warnings.push('QUOTE_GROUP_DATES_DIFFER');
+    }
+
+    // ── Determine outcome status ────────────────────────────────────────────
+    let outcomeStatus;
+    if (alreadyApproved) {
+      // Quote was already APPROVED. If Group/OGP were missing and we repaired
+      // them just now, flag it. Otherwise it's a clean idempotent no-op.
+      if (groupJustCreated || ogpJustCreated) {
+        warnings.push('APPROVED_QUOTE_REPAIRED_OPERATIONAL_INIT');
+      }
+      outcomeStatus = 'already_approved';
+    } else {
+      outcomeStatus = groupJustCreated ? 'created' : 'linked';
+    }
+
+    // ── Ensure Quote → Group link exists (set group_id if missing) ──────────
+    if (isEmpty(quote.group_id)) {
+      try {
+        await base44.asServiceRole.entities.Quote.update(quote_id, { group_id });
+      } catch (err) {
+        console.error('[approveQuoteAndInitializeGroup] quote.group_id link failed:', err?.message);
+        return Response.json({
+          success: false, error: 'QUOTE_LINK_UPDATE_FAILED',
+          message: 'קישור ההצעה לקבוצה נכשל — ההצעה לא אושרה',
+          quote_id, group_id, operational_group_profile_id: ogp.id, warnings,
+        }, { status: 500 });
+      }
+    }
+
+    // ── ONLY NOW: mark Quote APPROVED (skip if already approved) ────────────
+    if (!alreadyApproved) {
+      try {
+        await base44.asServiceRole.entities.Quote.update(quote_id, { status: 'APPROVED' });
+      } catch (err) {
+        console.error('[approveQuoteAndInitializeGroup] quote approval update failed:', err?.message);
+        return Response.json({
+          success: false, error: 'QUOTE_APPROVAL_UPDATE_FAILED',
+          message: 'הקבוצה והפרופיל התפעולי מוכנים אך עדכון סטטוס ההצעה נכשל — נא לנסות שוב',
+          quote_id, group_id, operational_group_profile_id: ogp.id, warnings,
+        }, { status: 500 });
+      }
+    }
+
+    return Response.json({
+      success: true,
+      quote_id,
+      group_id,
+      operational_group_profile_id: ogp.id,
+      quote_status: 'APPROVED',
+      status: outcomeStatus,
+      ...(warnings.length > 0 ? { warnings } : {}),
+    });
+
+  } catch (error) {
+    console.error('[approveQuoteAndInitializeGroup] unexpected error:', error?.message, error?.stack);
+    return Response.json({
+      success: false, error: 'INTERNAL_ERROR', message: 'שגיאה פנימית בשרת — אנא נסה שוב',
+    }, { status: 500 });
+  }
+});
