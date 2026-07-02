@@ -13,6 +13,8 @@ import QuoteStatusBadge from "@/components/quotes/QuoteStatusBadge";
 import QuoteFormModal from "@/components/quotes/QuoteFormModal";
 import QuoteStatusActions from "@/components/quotes/QuoteStatusActions";
 import QuoteSyncButton from "@/components/quotes/QuoteSyncButton";
+import { buildQuoteOperationalDiff } from "@/lib/quoteOperationalDiff";
+import { AlertTriangle } from "lucide-react";
 import GuestFormSubmissionModal from "@/components/groups/GuestFormSubmissionModal";
 import SubmissionReviewModal from "@/components/groups/SubmissionReviewModal";
 import OperationalProfileDisplay from "@/components/groups/OperationalProfileDisplay";
@@ -41,6 +43,9 @@ export default function GroupDetail() {
   const [copiedId, setCopiedId] = useState(null);
   const [activeTab, setActiveTab] = useState("overview");
   const [approvingProfile, setApprovingProfile] = useState(false);
+  // Id of a quote just saved from the edit modal — used to surface the
+  // "operational data differs / not auto-updated" warning right after save.
+  const [justSavedQuoteId, setJustSavedQuoteId] = useState(null);
 
   const { data: group } = useQuery({
     queryKey: ["group", id],
@@ -75,6 +80,12 @@ export default function GroupDetail() {
   };
 
   const activeQuote = quotes.find(q => q.status === "APPROVED") || quotes[0];
+
+  // Post-save reconciliation: after editing a linked quote, compare it against
+  // the operational source of truth (Group + OGP). Differences are surfaced as a
+  // warning — the operational data is NEVER auto-updated on quote save.
+  const justSavedQuote = justSavedQuoteId ? quotes.find(q => q.id === justSavedQuoteId) : null;
+  const postSaveDiffs = justSavedQuote ? buildQuoteOperationalDiff(justSavedQuote, group, operationalProfile) : [];
 
   const handleApproveProfile = async () => {
     setApprovingProfile(true);
@@ -275,6 +286,35 @@ export default function GroupDetail() {
           </div>
         </div>
 
+        {/* Post-save reconciliation warning — quote was saved but operational data differs */}
+        {justSavedQuote && postSaveDiffs.length > 0 && (
+          <div className="bg-amber-50 border border-amber-300 rounded-xl px-4 py-3 space-y-2.5">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-amber-800">
+                  ההצעה נשמרה, אך נמצאו הבדלים מול הקבוצה/הפרופיל התפעולי. הנתונים התפעוליים לא עודכנו אוטומטית.
+                </p>
+                <p className="text-xs text-amber-700">
+                  ההצעה היא מסמך מסחרי — הקבוצה והפרופיל התפעולי הם מקור האמת התפעולי ולא משתנים אוטומטית.
+                  כדי להחיל את שינויי ההצעה על התפעול, יש ללחוץ על הכפתור למטה.
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 pr-6">
+              <QuoteSyncButton
+                quote={justSavedQuote}
+                group={group}
+                profile={operationalProfile}
+                onSynced={() => { refetch(); setJustSavedQuoteId(null); }}
+              />
+              <Button size="sm" variant="ghost" className="text-xs h-7 text-amber-700" onClick={() => setJustSavedQuoteId(null)}>
+                סגור
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* Quotes Section */}
         <section>
           <div className="flex items-center justify-between mb-3">
@@ -324,7 +364,7 @@ export default function GroupDetail() {
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <QuoteStatusActions quote={q} group={group} onUpdated={refetch} />
-                    <QuoteSyncButton quote={q} group={group} onSynced={refetch} />
+                    <QuoteSyncButton quote={q} group={group} profile={operationalProfile} onSynced={() => { refetch(); setJustSavedQuoteId(null); }} />
                   </div>
                 </div>
               ))}
@@ -462,7 +502,7 @@ export default function GroupDetail() {
 
       {/* Modals */}
       {editGroup && <GroupFormModal group={group} initialProfileDiets={operationalProfile?.special_diets || null} onClose={() => setEditGroup(false)} onSaved={() => { refetch(); setEditGroup(false); }} />}
-      {showQuoteForm && <QuoteFormModal quote={editQuote} group={group} onClose={() => { setShowQuoteForm(false); setEditQuote(null); }} onSaved={() => { refetch(); setShowQuoteForm(false); setEditQuote(null); }} />}
+      {showQuoteForm && <QuoteFormModal quote={editQuote} group={group} onClose={() => { setShowQuoteForm(false); setEditQuote(null); }} onSaved={() => { if (editQuote?.id) setJustSavedQuoteId(editQuote.id); refetch(); setShowQuoteForm(false); setEditQuote(null); }} />}
       {reviewSubmission && !showSubmissionForm && (
         <SubmissionReviewModal
           submission={reviewSubmission}

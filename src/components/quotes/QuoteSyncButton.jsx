@@ -12,65 +12,46 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { RefreshCw } from "lucide-react";
 import { toast } from "sonner";
-import { format } from "date-fns";
 import RoleGate from "@/components/RoleGate";
+import { buildQuoteOperationalDiff } from "@/lib/quoteOperationalDiff";
 
-function fmtDate(d) {
-  if (!d) return "—";
-  try { return format(new Date(d), "dd/MM/yyyy"); } catch { return d; }
-}
-
-function buildDiff(quote, group) {
-  const diffs = [];
-
-  const totalPax = Number(quote.estimated_pax || 0) || null;
-  const staffCount = Number(quote.staff_count || 0) || null;
-  const participantCount = totalPax != null && staffCount != null ? Math.max(0, totalPax - staffCount) : null;
-
-  if (quote.client_name && quote.client_name !== group.contact_name)
-    diffs.push({ label: "איש קשר", from: group.contact_name || "—", to: quote.client_name });
-  if (quote.client_phone && quote.client_phone !== group.contact_phone)
-    diffs.push({ label: "טלפון", from: group.contact_phone || "—", to: quote.client_phone });
-  if (quote.client_email && quote.client_email !== group.contact_email)
-    diffs.push({ label: "אימייל", from: group.contact_email || "—", to: quote.client_email });
-  if (quote.arrival_date && quote.arrival_date !== group.arrival_date)
-    diffs.push({ label: "תאריך הגעה", from: fmtDate(group.arrival_date), to: fmtDate(quote.arrival_date) });
-  if (quote.departure_date && quote.departure_date !== group.departure_date)
-    diffs.push({ label: "תאריך עזיבה", from: fmtDate(group.departure_date), to: fmtDate(quote.departure_date) });
-  if (totalPax != null && totalPax !== group.total_pax)
-    diffs.push({ label: "סה״כ משתתפים", from: group.total_pax ?? "—", to: totalPax });
-  if (staffCount != null && staffCount !== group.staff_count)
-    diffs.push({ label: "צוות", from: group.staff_count ?? "—", to: staffCount });
-  if (participantCount != null && participantCount !== group.participant_count)
-    diffs.push({ label: "חניכים", from: group.participant_count ?? "—", to: participantCount });
-
-  return diffs;
-}
-
-export default function QuoteSyncButton({ quote, group, onSynced }) {
+export default function QuoteSyncButton({ quote, group, profile, onSynced }) {
   const [open, setOpen] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [blockError, setBlockError] = useState(null);
 
   if (!quote || quote.status !== "APPROVED" || !group) return null;
 
-  const diffs = buildDiff(quote, group);
+  const diffs = buildQuoteOperationalDiff(quote, group, profile);
   if (diffs.length === 0) return null;
 
   const handleSync = async () => {
     setSyncing(true);
     setBlockError(null);
-    const res = await base44.functions.invoke("syncQuoteToOperationalGroup", {
-      quote_id: quote.id,
-      group_id: group.id,
-    });
+    // Guard: sync requires an existing OGP — never create a duplicate here.
+    if (!profile) {
+      setSyncing(false);
+      setBlockError("עדכון הנתונים התפעוליים נכשל — לא נמצא פרופיל תפעולי לקבוצה. יש לאשר/ליצור פרופיל תפעולי תחילה.");
+      return;
+    }
+    let res;
+    try {
+      res = await base44.functions.invoke("syncQuoteToOperationalGroup", {
+        quote_id: quote.id,
+        group_id: group.id,
+      });
+    } catch {
+      setSyncing(false);
+      setBlockError("עדכון הנתונים התפעוליים נכשל — יש לבדוק את הקבוצה והפרופיל התפעולי");
+      return;
+    }
     setSyncing(false);
     if (res.data?.success) {
-      toast.success("הנתונים סונכרנו בהצלחה מההצעה לקבוצה");
+      toast.success("הנתונים התפעוליים עודכנו מההצעה");
       setOpen(false);
       onSynced?.();
     } else {
-      setBlockError(res.data?.error || "שגיאה לא ידועה בסנכרון");
+      setBlockError(res.data?.error || "עדכון הנתונים התפעוליים נכשל — יש לבדוק את הקבוצה והפרופיל התפעולי");
     }
   };
 
@@ -83,14 +64,14 @@ export default function QuoteSyncButton({ quote, group, onSynced }) {
         onClick={() => { setBlockError(null); setOpen(true); }}
       >
         <RefreshCw className="w-3.5 h-3.5" />
-        סנכרן נתוני הצעה לקבוצה
+        עדכן נתונים תפעוליים מההצעה
       </Button>
 
       {open && (
         <Dialog open onOpenChange={() => setOpen(false)}>
           <DialogContent dir="rtl" className="max-w-md">
             <DialogHeader>
-              <DialogTitle className="text-right">סנכרון נתוני הצעה לקבוצה</DialogTitle>
+              <DialogTitle className="text-right">עדכון נתונים תפעוליים מההצעה</DialogTitle>
             </DialogHeader>
 
             <div className="space-y-4 text-sm">
