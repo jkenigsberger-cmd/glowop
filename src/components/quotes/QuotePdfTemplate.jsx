@@ -43,7 +43,12 @@ function resolveData(quote, group) {
   const workshopLines  = parse(quote?.workshop_lines);
   const lectureLines   = parse(quote?.lecture_lines);
   const addonLines     = parse(quote?.addon_lines);
-  const adjustLines    = parse(quote?.adjustment_lines).filter(r => Number(r.amount || 0) !== 0);
+  const adjustLines    = parse(quote?.adjustment_lines).filter(r => {
+    const lineTotal = (r.unit_price !== undefined || r.quantity !== undefined)
+      ? (Number(r.unit_price || 0) * Number(r.quantity ?? 1))
+      : Number(r.amount || 0);
+    return lineTotal !== 0;
+  });
   const surchargeLines = parse(quote?.surcharge_lines).filter(r => Number(r.amount || 0) !== 0);
   const coffeeCornerPax = Number(quote?.coffee_corner_pax || 0);
   const packageLines   = parse(quote?.package_lines);
@@ -136,10 +141,14 @@ function resolveData(quote, group) {
     lineItems.push({ name: r.description || "תוספת", qty, unitPrice: unit, total: qty * unit, vatAmount: null });
   });
 
-  // Adjustments (non-zero only, already filtered above)
+  // Adjustments — unified shape { description, unit_price, quantity }.
+  // Legacy rows only had { amount }; treat amount as a flat line total (qty 1).
   adjustLines.forEach(r => {
-    const amt = Number(r.amount || 0);
-    lineItems.push({ name: r.description || "התאמה", qty: 1, unitPrice: amt, total: amt, vatAmount: null, isAdjustment: true });
+    const hasNewShape = r.unit_price !== undefined || r.quantity !== undefined;
+    const qty        = hasNewShape ? (Number(r.quantity ?? 1)) : 1;
+    const unitPrice  = hasNewShape ? (Number(r.unit_price || 0)) : Number(r.amount || 0);
+    const total      = hasNewShape ? unitPrice * qty : Number(r.amount || 0);
+    lineItems.push({ name: r.description || "התאמה", qty, unitPrice, total, vatAmount: null, isAdjustment: true });
   });
 
   // Surcharges (positive, appear as normal line items)

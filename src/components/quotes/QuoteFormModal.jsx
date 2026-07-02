@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Plus, Trash2, CalendarDays, Users, Coffee, BookOpen, Mic2, Tag, SlidersHorizontal, ChevronDown, ChevronUp, Package } from "lucide-react";
 import CapacityWarningBanner from "./CapacityWarningBanner";
 import PackageLinesSection from "./PackageLinesSection";
+import AdjustmentsSection, { calcAdjustmentLine, normalizeAdjustmentRow } from "./AdjustmentsSection";
 import { calcPackageLine, calcAddonLine } from "@/lib/quoteCatalog";
 
 // ── Catalog ───────────────────────────────────────────────────────────────────
@@ -340,23 +341,6 @@ function AddonSection({ lines, setLines }) {
   );
 }
 
-function AdjustmentSection({ lines, setLines }) {
-  const update = (idx, field, val) => setLines(prev => prev.map((r, i) => i !== idx ? r : { ...r, [field]: val }));
-  return (
-    <div className="space-y-2">
-      <p className="text-xs text-slate-400">סכום חיובי = תוספת, שלילי = הנחה</p>
-      {lines.map((r, idx) => (
-        <div key={idx} className="grid grid-cols-12 gap-2 items-end bg-slate-50 rounded-xl p-2.5">
-          <div className="col-span-8"><Input className="h-8 text-xs bg-white" placeholder="תיאור" value={r.description} onChange={e => update(idx, "description", e.target.value)} /></div>
-          <div className="col-span-2 space-y-0.5"><FieldLabel>סכום (₪)</FieldLabel><Input className="h-8 text-xs bg-white" type="number" value={r.amount} onChange={e => update(idx, "amount", e.target.value)} /></div>
-          <div className="col-span-2 flex items-end justify-end gap-1"><RowTotal amount={Number(r.amount)} /><button type="button" onClick={() => setLines(p => p.filter((_, i) => i !== idx))} className="text-slate-300 hover:text-red-400 mb-0.5"><Trash2 className="w-3.5 h-3.5" /></button></div>
-        </div>
-      ))}
-      <Button type="button" variant="outline" size="sm" onClick={() => setLines(p => [...p, { description: "", amount: 0 }])} className="gap-1.5 text-xs h-7 border-dashed"><Plus className="w-3 h-3" /> הוסף התאמה</Button>
-    </div>
-  );
-}
-
 // ── Right Sidebar ─────────────────────────────────────────────────────────────
 function CalendarCard({ arrival, departure, nights, isDayUse }) {
   const hasDate = arrival;
@@ -577,8 +561,13 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
   const [workshops,      setWorkshops]      = useState(parse(quote?.workshop_lines,       []));
   const [lectures,       setLectures]       = useState(parse(quote?.lecture_lines,        []));
   const [addons,         setAddons]         = useState(parse(quote?.addon_lines,          []));
-  const [adjustments,    setAdjustments]    = useState(parse(quote?.adjustment_lines,     []));
-  const [surcharges,     setSurcharges]     = useState(parse(quote?.surcharge_lines,       []));
+  // Unified manual adjustments — merge legacy adjustment_lines + surcharge_lines,
+  // normalizing every row to { description, unit_price, quantity } (old data preserved).
+  const [adjustments, setAdjustments] = useState(() => {
+    const legacyAdjust    = parse(quote?.adjustment_lines, []).map(r => normalizeAdjustmentRow(r));
+    const legacySurcharge = parse(quote?.surcharge_lines,  []).map(r => normalizeAdjustmentRow(r));
+    return [...legacyAdjust, ...legacySurcharge];
+  });
   // New catalog lines
   const [packageLines,   setPackageLines]   = useState(parse(quote?.package_lines,        []));
   const [newAddonLines,  setNewAddonLines]  = useState(parse(quote?.new_addon_lines,      []));
@@ -647,8 +636,8 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
   const workshopTotal       = workshops.reduce((s, r) => s + calcWorkshop(r), 0);
   const lectureTotal        = lectures.reduce((s, r) => s + calcLecture(r), 0);
   const addonTotal          = addons.reduce((s, r) => s + calcAddon(r), 0);
-  const adjustmentTotal     = adjustments.reduce((s, r) => s + Number(r.amount || 0), 0);
-  const surchargeTotal      = surcharges.reduce((s, r) => s + Number(r.amount || 0), 0);
+  const adjustmentTotal     = adjustments.reduce((s, r) => s + calcAdjustmentLine(r), 0);
+  const surchargeTotal      = 0; // unified into adjustments
   // New catalog totals
   const packageLinesTotal   = packageLines.reduce((s, r) => s + calcPackageLine(r), 0);
   const newAddonLinesTotal  = newAddonLines.reduce((s, r) => s + calcAddonLine(r), 0);
@@ -689,7 +678,7 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
       lecture_lines:         JSON.stringify(lectures),
       addon_lines:           JSON.stringify(addons),
       adjustment_lines:      JSON.stringify(adjustments),
-      surcharge_lines:       JSON.stringify(surcharges),
+      surcharge_lines:       JSON.stringify([]),
       package_lines:         JSON.stringify(packageLines),
       new_addon_lines:       JSON.stringify(newAddonLines),
       quote_type:            quoteType,
@@ -1019,31 +1008,8 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
                 </SectionCard>
               )}
 
-              <SectionCard icon={SlidersHorizontal} title="התאמות / הנחות" defaultOpen={adjustments.length > 0}>
-                <AdjustmentSection lines={adjustments} setLines={setAdjustments} />
-              </SectionCard>
-
-              {/* Free surcharge */}
-              <SectionCard icon={Tag} title="תוספת תשלום חופשי" defaultOpen={surcharges.length > 0}>
-                <p className="text-xs text-slate-400 mb-2">סכום חיובי שיתווסף לסה״כ ויופיע ב-PDF</p>
-                <div className="space-y-2">
-                  {surcharges.map((r, idx) => (
-                    <div key={idx} className="grid grid-cols-12 gap-2 items-end bg-slate-50 rounded-xl p-2.5">
-                      <div className="col-span-8">
-                        <Input className="h-8 text-xs bg-white" placeholder="תיאור תוספת" value={r.description} onChange={e => setSurcharges(p => p.map((x, i) => i !== idx ? x : { ...x, description: e.target.value }))} />
-                      </div>
-                      <div className="col-span-2 space-y-0.5">
-                        <div className="text-[11px] text-slate-400 font-medium mb-0.5">סכום (₪)</div>
-                        <Input className="h-8 text-xs bg-white" type="number" min="0" value={r.amount} onChange={e => setSurcharges(p => p.map((x, i) => i !== idx ? x : { ...x, amount: e.target.value }))} />
-                      </div>
-                      <div className="col-span-2 flex items-end justify-end gap-1">
-                        <div className="text-xs font-semibold text-primary whitespace-nowrap">₪{Math.round(Number(r.amount) || 0).toLocaleString("he-IL")}</div>
-                        <button type="button" onClick={() => setSurcharges(p => p.filter((_, i) => i !== idx))} className="text-slate-300 hover:text-red-400 mb-0.5"><Trash2 className="w-3.5 h-3.5" /></button>
-                      </div>
-                    </div>
-                  ))}
-                  <Button type="button" variant="outline" size="sm" onClick={() => setSurcharges(p => [...p, { description: "", amount: 0 }])} className="gap-1.5 text-xs h-7 border-dashed"><Plus className="w-3 h-3" /> הוסף תוספת</Button>
-                </div>
+              <SectionCard icon={SlidersHorizontal} title="התאמות / תוספות" defaultOpen={adjustments.length > 0}>
+                <AdjustmentsSection lines={adjustments} setLines={setAdjustments} defaultQty={catalogDefaultPax} />
               </SectionCard>
 
               {/* Discount + payment terms */}
@@ -1116,8 +1082,7 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
                   {workshopTotal       > 0 && <div className="flex justify-between"><span>סדנאות</span><span className="font-medium text-slate-700">{fmtMoney(workshopTotal)}</span></div>}
                   {lectureTotal        > 0 && <div className="flex justify-between"><span>הרצאות</span><span className="font-medium text-slate-700">{fmtMoney(lectureTotal)}</span></div>}
                   {coffeeTotal         > 0 && <div className="flex justify-between"><span>פינת קפה</span><span className="font-medium text-slate-700">{fmtMoney(coffeeTotal)}</span></div>}
-                  {(addonTotal + adjustmentTotal) !== 0 && <div className="flex justify-between"><span>התאמות</span><span className="font-medium text-slate-700">{fmtMoney(addonTotal + adjustmentTotal)}</span></div>}
-                  {surchargeTotal > 0 && <div className="flex justify-between"><span>תוספת תשלום</span><span className="font-medium text-slate-700">{fmtMoney(surchargeTotal)}</span></div>}
+                  {(addonTotal + adjustmentTotal) !== 0 && <div className="flex justify-between"><span>התאמות / תוספות</span><span className="font-medium text-slate-700">{fmtMoney(addonTotal + adjustmentTotal)}</span></div>}
                   {prisaTotal     > 0 && <div className="flex justify-between"><span>פריסה</span><span className="font-medium text-slate-700">{fmtMoney(prisaTotal)}</span></div>}
                 </div>
               </div>
