@@ -20,7 +20,7 @@ export default function QuoteSyncButton({ quote, group, profile, onSynced }) {
   const [syncing, setSyncing] = useState(false);
   const [blockError, setBlockError] = useState(null);
 
-  if (!quote || quote.status !== "APPROVED" || !group) return null;
+  if (!quote || !["APPROVED", "DRAFT"].includes(quote.status) || !group) return null;
 
   const diffs = buildQuoteOperationalDiff(quote, group, profile);
   if (diffs.length === 0) return null;
