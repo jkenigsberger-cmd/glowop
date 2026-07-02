@@ -68,6 +68,14 @@ Deno.serve(async (req) => {
     const arrival_date = group.arrival_date || '';
     const departure_date = group_type === 'DAY_USE' ? arrival_date : (group.departure_date || '');
 
+    // OperationalGroupProfile is the operational source of truth for participant counts.
+    // Expose its pax so the guest form can prefill an editable value (DAY_USE especially).
+    let ogp = null;
+    try {
+      const profiles = await base44.asServiceRole.entities.OperationalGroupProfile.filter({ group_id });
+      ogp = profiles[0] || null;
+    } catch { /* non-fatal — fall back to Group values */ }
+
     return Response.json({
       // No quote_id — direct group link
       quote_id:          null,
@@ -78,11 +86,11 @@ Deno.serve(async (req) => {
       group_type,
       arrival_date,
       departure_date,
-      total_pax:         group.total_pax         ?? null,
-      staff_count:       group.staff_count        ?? null,
-      participant_count: group.participant_count   ?? null,
-      boys_count:        group.boys_count          ?? null,
-      girls_count:       group.girls_count         ?? null,
+      total_pax:         ogp?.total_pax         ?? group.total_pax         ?? null,
+      staff_count:       ogp?.staff_count       ?? group.staff_count        ?? null,
+      participant_count: ogp?.participant_count ?? group.participant_count   ?? null,
+      boys_count:        ogp?.boys_count        ?? group.boys_count          ?? null,
+      girls_count:       ogp?.girls_count       ?? group.girls_count         ?? null,
       contact_name:      group.contact_name        || '',
       contact_phone:     group.contact_phone       || '',
       contact_email:     group.contact_email       || '',

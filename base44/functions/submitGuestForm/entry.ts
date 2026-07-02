@@ -381,7 +381,16 @@ Deno.serve(async (req) => {
 
     if (groupForSync?.group_type === 'DAY_USE') {
       const activity_date = groupForSync.arrival_date;
-      const total_pax     = num(fields.total_pax) || 0;
+      // Prefer the edited form pax; if empty, fall back to the current OGP value
+      // (already updated above) so meals never get pax 0 when a valid number exists.
+      const formPax = num(fields.total_pax);
+      let total_pax = formPax != null ? formPax : 0;
+      if (formPax == null && operational_group_profile_id) {
+        try {
+          const ogpNow = await base44.asServiceRole.entities.OperationalGroupProfile.get(operational_group_profile_id);
+          if (ogpNow?.total_pax != null) total_pax = ogpNow.total_pax;
+        } catch { /* keep 0 fallback */ }
+      }
 
       // Parse DAY_USE meal selections
       let dayUseMeals = {};

@@ -33,9 +33,15 @@ Deno.serve(async (req) => {
     }
 
     let group = null;
+    let ogp = null;
     if (quote.group_id) {
       const groups = await base44.asServiceRole.entities.Group.filter({ id: quote.group_id });
       group = groups[0] || null;
+      // OperationalGroupProfile is the operational source of truth for participant counts.
+      try {
+        const profiles = await base44.asServiceRole.entities.OperationalGroupProfile.filter({ group_id: quote.group_id });
+        ogp = profiles[0] || null;
+      } catch { /* non-fatal — fall back to snapshot/quote values */ }
     }
 
     const group_name =
@@ -70,9 +76,9 @@ Deno.serve(async (req) => {
       group_type,
       arrival_date,
       departure_date,
-      total_pax:         snapshot?.totalPax         ?? quote.estimated_pax    ?? null,
-      staff_count:       snapshot?.staffTotal        ?? quote.staff_count      ?? null,
-      participant_count: snapshot?.studentsTotal     ?? quote.participant_count ?? null,
+      total_pax:         ogp?.total_pax         ?? snapshot?.totalPax         ?? quote.estimated_pax    ?? null,
+      staff_count:       ogp?.staff_count       ?? snapshot?.staffTotal        ?? quote.staff_count      ?? null,
+      participant_count: ogp?.participant_count ?? snapshot?.studentsTotal     ?? quote.participant_count ?? null,
       boys_count:        quote.boys_count            ?? null,
       girls_count:       quote.girls_count           ?? null,
       contact_name:      snapshot?.clientName  || quote.client_name  || '',

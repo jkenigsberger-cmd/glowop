@@ -119,6 +119,8 @@ export default function GuestForm() {
   // DAY_USE specific meal state
   const [dayUseMeals, setDayUseMeals] = useState({ breakfast: null, lunch: null, dinner: null });
   const [dayUseCoffeeCorner, setDayUseCoffeeCorner] = useState(null);
+  // DAY_USE participant count — prefilled from OperationalGroupProfile (source of truth), editable
+  const [dayUsePax, setDayUsePax] = useState("");
 
   const scheduleHasTimeErrors = schedule.some(r => r.start_time && r.end_time && r.start_time >= r.end_time);
 
@@ -159,6 +161,12 @@ export default function GuestForm() {
         const isDayUse = d.group_type === 'DAY_USE';
         const nights = arr && dep ? differenceInCalendarDays(parseISO(dep), parseISO(arr)) : 0;
         if (isDayUse || nights > 0) setMeals(buildInitialMeals(arr, dep, isDayUse));
+
+        // DAY_USE: prefill editable participant count from operational profile (total_pax)
+        if (isDayUse) {
+          const opTotalPax = getTotalPax(d);
+          if (opTotalPax != null) setDayUsePax(opTotalPax);
+        }
 
         const studentsTotal = getParticipantCount(d) || 0;
         const staffTotal    = getStaffCount(d) || 0;
@@ -232,7 +240,11 @@ export default function GuestForm() {
     const participantCount = boys + girls;
     const staffCount       = staffMen + staffWomen;
     const driversTotal     = driversMen + driversWomen;
-    const totalPax         = participantCount + staffCount + driversTotal;
+    // DAY_USE uses the single editable "סה״כ משתתפים" field; LODGING derives from the breakdown.
+    const dayUsePaxNum     = dayUsePax === "" || dayUsePax == null ? null : Number(dayUsePax);
+    const totalPax         = isDayUseGroup
+      ? dayUsePaxNum
+      : (participantCount + staffCount + driversTotal);
 
     const resolvedGroupId = directGroupId || quoteData?.group_id;
     console.log('[GuestForm submit]', {
@@ -262,7 +274,7 @@ export default function GuestForm() {
         estimated_arrival_time:   details.estimated_arrival_time   || null,
         estimated_departure_time: details.estimated_departure_time || null,
         total_pax:       totalPax || null,
-        participant_count: participantCount || null,
+        participant_count: isDayUseGroup ? (dayUsePaxNum || null) : (participantCount || null),
         staff_count:     staffCount || null,
         boys_count:      isDayUseGroup ? null : (boys || null),
         girls_count:     isDayUseGroup ? null : (girls || null),
@@ -370,6 +382,8 @@ export default function GuestForm() {
                 coffeeCorner={dayUseCoffeeCorner}
                 setCoffeeCorner={setDayUseCoffeeCorner}
                 quoteData={resolvedQuoteData}
+                totalPax={dayUsePax}
+                setTotalPax={setDayUsePax}
               />
             )}
             {currentStepKey === "participants" && (

@@ -41,7 +41,7 @@ function MealRow({ label, emoji, value, onChange }) {
   );
 }
 
-export default function GuestFormDayUseMeals({ meals, setMeals, coffeeCorner, setCoffeeCorner, quoteData }) {
+export default function GuestFormDayUseMeals({ meals, setMeals, coffeeCorner, setCoffeeCorner, quoteData, totalPax, setTotalPax }) {
   const date = quoteData?.arrival_date || "";
 
   const update = (key, val) => {
@@ -55,6 +55,21 @@ export default function GuestFormDayUseMeals({ meals, setMeals, coffeeCorner, se
 
   return (
     <div className="space-y-5">
+      {/* Participant count — prefilled from operational profile, editable by client */}
+      <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
+        <label className="text-sm font-semibold text-slate-700 block mb-1">סה״כ משתתפים</label>
+        <p className="text-xs text-slate-500 mb-2">מספר המשתתפים ביום הפעילות. הכמות תשמש לתכנון הארוחות.</p>
+        <input
+          type="number"
+          min="0"
+          inputMode="numeric"
+          className="w-32 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+          value={totalPax ?? ""}
+          onChange={e => setTotalPax(e.target.value === "" ? "" : Number(e.target.value))}
+          placeholder="0"
+        />
+      </div>
+
       <div>
         <h3 className="text-sm font-semibold text-slate-700 mb-1">ארוחות ביום הפעילות</h3>
         <p className="text-xs text-slate-500">
