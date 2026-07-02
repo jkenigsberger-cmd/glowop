@@ -124,17 +124,30 @@ export default function QuoteStatusActions({ quote, group, onUpdated }) {
 
     const targetGroupId = data.group_id || group?.id || quote.group_id;
 
+    // ── Resolve the group for snapshot/hold ─────────────────────────────────
+    // On a brand-new group the frontend `group` prop is null, so we fetch the
+    // backend-created group by id. This guarantees group_name / group_type are
+    // real values (never empty snapshot, never wrongly-skipped meal hold).
+    let resolvedGroup = group;
+    if (!resolvedGroup && targetGroupId) {
+      try {
+        resolvedGroup = await base44.entities.Group.get(targetGroupId);
+      } catch (grpErr) {
+        console.warn("[QuoteStatusActions] failed to fetch new group (non-blocking):", grpErr?.message);
+      }
+    }
+
     // ── Persist the commercial snapshot (NON-status field only) ─────────────
     // The backend owns the APPROVED status; here we only store the snapshot used
     // later by the guest-form flow. We never write status from the frontend.
     try {
-      await base44.entities.Quote.update(quote.id, { snapshot: buildSnapshot(quote, group) });
+      await base44.entities.Quote.update(quote.id, { snapshot: buildSnapshot(quote, resolvedGroup) });
     } catch (snapErr) {
       console.warn("[QuoteStatusActions] snapshot save failed (non-blocking):", snapErr?.message);
     }
 
     // Create or update OperationalHold
-    const hasMeals = !!group && group.group_type === "LODGING";
+    const hasMeals = !!resolvedGroup && resolvedGroup.group_type === "LODGING";
     const hasActivities = (() => {
       try { return JSON.parse(quote.workshop_lines || "[]").length > 0 || JSON.parse(quote.lecture_lines || "[]").length > 0; } catch { return false; }
     })();
@@ -144,7 +157,7 @@ export default function QuoteStatusActions({ quote, group, onUpdated }) {
       group_id:    targetGroupId,
       arrival_date:   quote.arrival_date,
       departure_date: quote.departure_date || quote.arrival_date,
-      group_type:     group?.group_type || "LODGING",
+      group_type:     resolvedGroup?.group_type || "LODGING",
       hold_type:      "SITE_GENERAL",
       total_pax:      Number(quote.estimated_pax) || 0,
       participant_count: Number(quote.participant_count) || 0,
