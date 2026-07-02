@@ -21,12 +21,33 @@ Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
 
-    // ── Auth (non-fatal, service role does the work) ──────────────────────
+    // ── Auth — REQUIRED. This standalone endpoint must not be openly callable ──
     let user = null;
-    try { user = await base44.auth.me(); } catch { /* unauthenticated — proceed with service role */ }
-    if (user) {
-      console.log(`[ensureOperationalGroupProfile] caller: ${user.email} role: ${user.role}`);
+    try { user = await base44.auth.me(); } catch { /* handled below */ }
+    if (!user) {
+      return Response.json({
+        success: false,
+        error: 'UNAUTHORIZED',
+        message: 'נדרשת התחברות',
+      }, { status: 401 });
     }
+
+    // Resolve effective role from InternalUser (falls back to platform role)
+    const ALLOWED_ROLES = new Set(['SUPER_ADMIN', 'ADMIN', 'OPERATIONS']);
+    let effectiveRole = user.role;
+    try {
+      const internalUsers = await base44.asServiceRole.entities.InternalUser.filter({ email: user.email });
+      if (internalUsers[0]?.role) effectiveRole = internalUsers[0].role;
+    } catch { /* fall back to platform role */ }
+
+    if (!ALLOWED_ROLES.has(effectiveRole)) {
+      return Response.json({
+        success: false,
+        error: 'FORBIDDEN',
+        message: 'אין הרשאה לפעולה זו',
+      }, { status: 403 });
+    }
+    console.log(`[ensureOperationalGroupProfile] caller: ${user.email} role: ${effectiveRole}`);
 
     // ── Input ─────────────────────────────────────────────────────────────
     const body = await req.json().catch(() => ({}));
@@ -85,11 +106,12 @@ Deno.serve(async (req) => {
 
     // ── Rule 3: Zero profiles → create a minimal OGP ──────────────────────
     // Copy only SAFE default fields from Group when available. Never invent data.
-    const now = new Date().toISOString();
+    // status "ACCEPTED" is the schema's only allowed enum value and is required.
+    // accepted_at is intentionally OMITTED here — this profile is auto-ensured,
+    // not explicitly accepted by an admin, so we avoid a misleading timestamp.
     const profileData = {
       group_id,
       status: 'ACCEPTED',
-      accepted_at: now,
     };
     if (group.arrival_date   != null && group.arrival_date   !== '') profileData.arrival_date   = group.arrival_date;
     if (group.departure_date != null && group.departure_date !== '') profileData.departure_date = group.departure_date;
@@ -98,6 +120,22 @@ Deno.serve(async (req) => {
 
     const created = await base44.asServiceRole.entities.OperationalGroupProfile.create(profileData);
     console.log(`[ensureOperationalGroupProfile] created OGP ${created.id} for group ${group_id}`);
+
+    // ── Post-create duplicate safety check (no DB transactions/unique keys) ──
+    // A concurrent call could have created a second OGP. Re-query and verify.
+    const afterCreate = await base44.asServiceRole.entities.OperationalGroupProfile.filter({ group_id });
+    if (afterCreate.length > 1) {
+      const profileIds = afterCreate.map(p => p.id);
+      console.error(`[ensureOperationalGroupProfile] MULTIPLE_OPERATIONAL_PROFILES_AFTER_CREATE for group ${group_id}:`, profileIds);
+      return Response.json({
+        success: false,
+        error: 'MULTIPLE_OPERATIONAL_PROFILES_AFTER_CREATE',
+        message: 'נוצרו מספר פרופילים תפעוליים במקביל — נדרשת בדיקת מנהל (לא נמחק דבר)',
+        group_id,
+        profile_ids: profileIds,
+        warnings: [`נמצאו ${afterCreate.length} פרופילים לאחר יצירה: ${profileIds.join(', ')}`],
+      }, { status: 409 });
+    }
 
     return Response.json({
       success: true,
