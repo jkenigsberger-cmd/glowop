@@ -38,7 +38,9 @@ Deno.serve(async (req) => {
 
     if (!quote) return Response.json({ error: 'הצעת מחיר לא נמצאה' }, { status: 404 });
     if (!group) return Response.json({ error: 'קבוצה לא נמצאה' }, { status: 404 });
-    if (quote.status !== 'APPROVED') return Response.json({ error: 'ניתן לסנכרן רק הצעה מאושרת' }, { status: 400 });
+    if (quote.status !== 'APPROVED' && quote.status !== 'DRAFT') {
+      return Response.json({ error: 'ניתן לסנכרן רק הצעה בטיוטה או מאושרת' }, { status: 400 });
+    }
     if (String(quote.group_id) !== String(group_id)) return Response.json({ error: 'הצעה זו אינה מקושרת לקבוצה זו' }, { status: 400 });
 
     // ── Derive pax fields from Quote ───────────────────────────────────────
@@ -87,8 +89,8 @@ Deno.serve(async (req) => {
     // Only non-empty Quote values are applied — empty/null values never overwrite
     // the operational source of truth.
     const groupUpdate = {};
-    if (quote.client_name)    groupUpdate.group_name    = quote.client_name;
-    if (quote.client_name)    groupUpdate.contact_name  = quote.client_name;
+    if (quote.client_name)     groupUpdate.group_name    = quote.client_name;
+    if (quote.contact_person)  groupUpdate.contact_name  = quote.contact_person;
     if (quote.client_phone)   groupUpdate.contact_phone = quote.client_phone;
     if (quote.client_email)   groupUpdate.contact_email = quote.client_email;
     if (quote.arrival_date)   groupUpdate.arrival_date  = quote.arrival_date;

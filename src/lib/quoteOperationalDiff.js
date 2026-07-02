@@ -30,11 +30,12 @@ export function buildQuoteOperationalDiff(quote, group, profile) {
     totalPax != null && staffCount != null ? Math.max(0, totalPax - staffCount) : null;
 
   // ── Quote vs Group ──────────────────────────────────────────────────────
-  // The Quote's client_name maps to BOTH the operational group name and contact name.
+  // Quote client/org/group name → Group.group_name.
+  // Quote contact_person (the real contact-person field) → Group.contact_name.
   if (quote.client_name && quote.client_name !== group.group_name)
     diffs.push({ label: "שם קבוצה", from: group.group_name || "—", to: quote.client_name });
-  if (quote.client_name && quote.client_name !== group.contact_name)
-    diffs.push({ label: "איש קשר", from: group.contact_name || "—", to: quote.client_name });
+  if (quote.contact_person && quote.contact_person !== group.contact_name)
+    diffs.push({ label: "איש קשר", from: group.contact_name || "—", to: quote.contact_person });
   if (quote.client_phone && quote.client_phone !== group.contact_phone)
     diffs.push({ label: "טלפון", from: group.contact_phone || "—", to: quote.client_phone });
   if (quote.client_email && quote.client_email !== group.contact_email)
