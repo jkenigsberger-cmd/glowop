@@ -4,6 +4,11 @@
  */
 
 const fmt = (n) => Math.round(Number(n) || 0).toLocaleString("he-IL");
+// Unit price: preserve decimals (e.g. 2.5) instead of rounding to a whole number.
+const fmtUnit = (n) => {
+  const v = Number(n) || 0;
+  return Number.isInteger(v) ? v.toLocaleString("he-IL") : v.toLocaleString("he-IL", { minimumFractionDigits: 1, maximumFractionDigits: 2 });
+};
 const fmtDate = (d) => {
   if (!d) return "—";
   try { return new Date(d).toLocaleDateString("he-IL"); } catch { return d; }
@@ -401,7 +406,7 @@ function Page1({ d, logoUrl }) {
                      {item.description && <div style={{ fontSize: 10, color: "#555", fontFamily: BODY_FONT, marginTop: 1 }}>{item.description}</div>}
                    </td>
                   <td style={{ ...tdBase, textAlign: "center" }}>{item.qty}</td>
-                  <td style={{ ...tdBase, textAlign: "center" }}>₪{fmt(item.unitPrice)}</td>
+                  <td style={{ ...tdBase, textAlign: "center" }}>₪{fmtUnit(item.unitPrice)}</td>
                   <td style={{ ...tdBase, textAlign: "left", fontWeight: 600, color: isNegative ? "#c00" : isSurcharge ? "#1a7a4a" : "#111" }}>
                     {item.vatAmount
                       ? `₪${fmt(item.unitPrice)} + ₪${fmt(item.vatAmount)} מע״מ`
