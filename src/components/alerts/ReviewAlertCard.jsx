@@ -11,6 +11,7 @@ import { acknowledgeAlert } from "@/lib/reviewAlerts";
 import { useRoleContext } from "@/lib/RoleContext";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import { groupDatesLabel } from "@/lib/groupDatesLabel";
 
 // Which roles can acknowledge which modules
 const MODULE_ACK_ROLES = {
@@ -67,8 +68,9 @@ function parsePaxChange(alert) {
   }
 }
 
-export default function ReviewAlertCard({ alert, groupName, onAcknowledged }) {
+export default function ReviewAlertCard({ alert, groupName, group, onAcknowledged }) {
   const { role } = useRoleContext();
+  const datesLabel = groupDatesLabel(group);
   const [acking, setAcking]         = useState(false);
   const [updating, setUpdating]     = useState(false);
   const [confirmUpdate, setConfirmUpdate] = useState(false);
@@ -186,6 +188,11 @@ export default function ReviewAlertCard({ alert, groupName, onAcknowledged }) {
       {/* Group name */}
       {groupName && (
         <p className={`text-xs font-semibold ${textColor}`}>קבוצה: {groupName}</p>
+      )}
+
+      {/* Group stay/activity dates */}
+      {datesLabel && (
+        <p className={`text-xs ${textColor}`}>{datesLabel}</p>
       )}
 
       {/* Message */}

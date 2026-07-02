@@ -46,7 +46,8 @@ export default function ReviewAlertsBanner({ groupId, module, title, grouped = f
   });
 
   const groupNameMap = {};
-  groupsForAlerts.forEach(g => { groupNameMap[g.id] = g.group_name; });
+  const groupMap = {};
+  groupsForAlerts.forEach(g => { groupNameMap[g.id] = g.group_name; groupMap[g.id] = g; });
 
   const refetch = () => {
     queryClient.invalidateQueries({ queryKey });
@@ -81,6 +82,7 @@ export default function ReviewAlertsBanner({ groupId, module, title, grouped = f
               key={source}
               alerts={sourceAlerts}
               groupName={groupNameMap[groupId] || null}
+              group={groupMap[groupId] || null}
               onAcknowledged={refetch}
             />
           ))}
@@ -101,6 +103,7 @@ export default function ReviewAlertsBanner({ groupId, module, title, grouped = f
             key={alert.id}
             alert={alert}
             groupName={groupNameMap[alert.group_id] || null}
+            group={groupMap[alert.group_id] || null}
             onAcknowledged={refetch}
           />
         ))}

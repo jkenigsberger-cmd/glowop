@@ -12,6 +12,7 @@ import { useRoleContext } from "@/lib/RoleContext";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { MODULE_LABELS } from "./ReviewAlertCard";
+import { groupDatesLabel } from "@/lib/groupDatesLabel";
 
 const MODULE_ACK_ROLES = {
   KITCHEN:               ["SUPER_ADMIN", "ADMIN", "OPERATIONS", "KITCHEN"],
@@ -46,9 +47,10 @@ function parsePaxChange(alert) {
   } catch { return null; }
 }
 
-export default function GroupedAlertCard({ alerts, groupName, onAcknowledged }) {
+export default function GroupedAlertCard({ alerts, groupName, group, onAcknowledged }) {
   const { role } = useRoleContext();
   const [ackingId, setAckingId] = useState(null);
+  const datesLabel = groupDatesLabel(group);
 
   if (!alerts || alerts.length === 0) return null;
 
@@ -85,6 +87,11 @@ export default function GroupedAlertCard({ alerts, groupName, onAcknowledged }) 
       {/* Group name */}
       {groupName && (
         <p className="text-xs font-semibold text-amber-700">קבוצה: {groupName}</p>
+      )}
+
+      {/* Group stay/activity dates */}
+      {datesLabel && (
+        <p className="text-xs text-amber-700">{datesLabel}</p>
       )}
 
       {/* Message / pax change */}
