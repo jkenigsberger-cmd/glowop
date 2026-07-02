@@ -73,28 +73,64 @@ export default function QuoteStatusActions({ quote, group, onUpdated }) {
     setLoading(true);
     setCapacityWarnings(null);
 
-    const quoteUpdate = {
-      status: "APPROVED",
-      snapshot: buildSnapshot(quote, group),
-    };
-    await base44.entities.Quote.update(quote.id, quoteUpdate);
+    // ── Safe approval + operational initialization (backend owns this) ──────
+    // The backend function approves the Quote ONLY after Group + exactly one
+    // OperationalGroupProfile are guaranteed. The frontend no longer updates
+    // Quote.status directly.
+    let approveRes;
+    try {
+      approveRes = await base44.functions.invoke("approveQuoteAndInitializeGroup", { quote_id: quote.id });
+    } catch (invokeErr) {
+      console.error("[QuoteStatusActions] approveQuoteAndInitializeGroup invoke failed:", invokeErr?.message);
+      toast.error("אישור הצעת המחיר נכשל");
+      setLoading(false);
+      return;
+    }
 
-    // ── Create / update OperationalGroupProfile + confirm group ───────────
-    const targetGroupId = group?.id || quote.group_id;
-    if (targetGroupId) {
-      try {
-        const profileRes = await base44.functions.invoke("createOrUpdateOperationalGroupProfile", {
-          group_id: targetGroupId,
-          quote_id: quote.id,
+    const data = approveRes?.data || {};
+    if (!data.success) {
+      // Log any returned IDs for admin/debug, but keep the user message clean
+      if (data.group_id || data.operational_group_profile_id) {
+        console.error("[QuoteStatusActions] approval error", data.error, {
+          group_id: data.group_id,
+          operational_group_profile_id: data.operational_group_profile_id,
         });
-        if (!profileRes.data?.success) {
-          const errMsg = profileRes.data?.error || "שגיאה לא ידועה";
-          toast.warning(`ההצעה אושרה אך הפרופיל התפעולי לא נוצר: ${errMsg}`);
-        }
-      } catch (profileErr) {
-        console.error("[QuoteStatusActions] createOrUpdateOperationalGroupProfile failed:", profileErr?.message);
-        toast.warning("ההצעה אושרה אך הפרופיל התפעולי לא נוצר. יש לבדוק את הקבוצה.");
       }
+      const ERROR_MESSAGES = {
+        UNAUTHORIZED: "אין הרשאה לאשר הצעת מחיר",
+        FORBIDDEN: "אין הרשאה לאשר הצעת מחיר",
+        QUOTE_NOT_FOUND: "הצעת המחיר לא נמצאה",
+        QUOTE_GROUP_LINK_BROKEN: "ההצעה מקושרת לקבוצה שלא קיימת — נדרשת בדיקת מנהל",
+        MULTIPLE_OPERATIONAL_PROFILES: "נמצאו מספר פרופילים תפעוליים לקבוצה — נדרשת בדיקת מנהל",
+        MULTIPLE_OPERATIONAL_PROFILES_AFTER_CREATE: "נמצאו מספר פרופילים תפעוליים לקבוצה — נדרשת בדיקת מנהל",
+        OGP_CREATE_FAILED_AFTER_GROUP: "הקבוצה נוצרה/קיימת אך יצירת הפרופיל התפעולי נכשלה — יש לפנות למנהל מערכת",
+        QUOTE_LINK_UPDATE_FAILED: "קישור ההצעה לקבוצה/פרופיל נכשל — ההצעה לא אושרה",
+        QUOTE_APPROVAL_UPDATE_FAILED: "הפרופיל התפעולי מוכן אך עדכון סטטוס ההצעה נכשל — נסה שוב",
+      };
+      toast.error(ERROR_MESSAGES[data.error] || "אישור הצעת המחיר נכשל");
+      setLoading(false);
+      return;
+    }
+
+    // ── Success — show non-blocking warnings if any ─────────────────────────
+    const WARNING_MESSAGES = {
+      QUOTE_GROUP_CONTACT_DIFFER: "פרטי איש הקשר בהצעה שונים מהקבוצה — לא בוצע שינוי אוטומטי",
+      QUOTE_GROUP_DATES_DIFFER: "התאריכים בהצעה שונים מהקבוצה — לא בוצע שינוי אוטומטי",
+      QUOTE_OGP_PAX_DIFFER: "מספרי המשתתפים בהצעה שונים מהפרופיל התפעולי — לא בוצע שינוי אוטומטי",
+      QUOTE_OGP_LINK_DIFFERS: "הפרופיל התפעולי מקושר להצעה אחרת — נדרשת בדיקת מנהל",
+      APPROVED_QUOTE_REPAIRED_OPERATIONAL_INIT: "ההצעה הייתה מאושרת — הושלמה אתחול הקבוצה/הפרופיל התפעולי",
+    };
+    (data.warnings || []).forEach(w => toast.warning(WARNING_MESSAGES[w] || w));
+
+    const targetGroupId = data.group_id || group?.id || quote.group_id;
+
+    // ── Persist the commercial snapshot (NON-status field only) ─────────────
+    // The backend owns the APPROVED status; here we only store the snapshot used
+    // later by the guest-form flow. We never write status from the frontend.
+    try {
+      await base44.entities.Quote.update(quote.id, { snapshot: buildSnapshot(quote, group) });
+    } catch (snapErr) {
+      console.warn("[QuoteStatusActions] snapshot save failed (non-blocking):", snapErr?.message);
     }
 
     // Create or update OperationalHold
@@ -105,7 +141,7 @@ export default function QuoteStatusActions({ quote, group, onUpdated }) {
 
     const holdPayload = {
       quote_id:    quote.id,
-      group_id:    group?.id || quote.group_id,
+      group_id:    targetGroupId,
       arrival_date:   quote.arrival_date,
       departure_date: quote.departure_date || quote.arrival_date,
       group_type:     group?.group_type || "LODGING",
@@ -131,6 +167,7 @@ export default function QuoteStatusActions({ quote, group, onUpdated }) {
       await base44.entities.OperationalHold.create(holdPayload);
     }
 
+    toast.success("הצעת המחיר אושרה");
     setLoading(false);
     onUpdated();
   };
