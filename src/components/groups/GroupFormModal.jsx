@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -40,6 +40,36 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
   // Dietary data — pre-loaded from profile.special_diets when editing
   const [diets, setDiets] = useState(() => mergeDiets(parseDiets(initialProfileDiets)));
   const [saving, setSaving] = useState(false);
+
+  // ── Prefill operational numbers from the OperationalGroupProfile (source of truth) ──
+  // Operational pax lives on the OGP, not on stale Group fields. On edit, read the OGP
+  // once (read-only — never mutates the DB) and fill any pax field the OGP provides.
+  useEffect(() => {
+    if (!isEdit || !group?.id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const profiles = await base44.entities.OperationalGroupProfile.filter({ group_id: group.id });
+        const prof = profiles[0];
+        if (!prof || cancelled) return;
+        setForm(f => ({
+          ...f,
+          total_pax:   prof.total_pax   != null ? prof.total_pax   : f.total_pax,
+          staff_count: prof.staff_count != null ? prof.staff_count : f.staff_count,
+          boys_count:  prof.boys_count  != null ? prof.boys_count  : f.boys_count,
+          girls_count: prof.girls_count != null ? prof.girls_count : f.girls_count,
+        }));
+        // Also prefill diets from the OGP if the caller didn't already supply them
+        if (initialProfileDiets == null && prof.special_diets) {
+          setDiets(mergeDiets(parseDiets(prof.special_diets)));
+        }
+      } catch (err) {
+        console.warn("[GroupFormModal] failed to prefill from OGP (non-blocking):", err?.message);
+      }
+    })();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEdit, group?.id]);
   const [allocationBlockError, setAllocationBlockError] = useState(null);
   const [genderConsistencyError, setGenderConsistencyError] = useState(null);
   const [mealSyncData, setMealSyncData] = useState(null); // { outOfRangeMeals, newDeparture }

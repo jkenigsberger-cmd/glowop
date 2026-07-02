@@ -72,6 +72,15 @@ export default function OperationalProfileDisplay({ groupId, group }) {
     queryFn: () => base44.entities.ActivitySpace.list(),
   });
 
+  // Guest-form Coffee Corner request — surfaced for manual review (never auto-created).
+  const { data: coffeeAlerts = [] } = useQuery({
+    queryKey: ["coffeeCornerAlert", groupId],
+    queryFn: () => base44.entities.OperationalReviewAlert.filter({
+      group_id: groupId, source: "GUEST_FORM_COFFEE_CORNER", status: "OPEN",
+    }),
+    enabled: !!groupId,
+  });
+
   if (isLoading) return null;
 
   const profile = profiles[0];
@@ -256,6 +265,17 @@ export default function OperationalProfileDisplay({ groupId, group }) {
               </div>
             );
           })()}
+
+          {/* Guest-form Coffee Corner request — manual review needed */}
+          {coffeeAlerts.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-slate-400 mb-1">☕ פינת קפה</p>
+              <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 text-sm text-amber-800">
+                <p className="font-semibold">יש בקשת פינת קפה בטופס האורח — נדרש טיפול ידני במודול פינת קפה</p>
+                <p className="text-xs text-amber-600 mt-1">הבקשה לא נוצרה אוטומטית. יש לרשום אותה ידנית במודול פינת קפה.</p>
+              </div>
+            </div>
+          )}
 
           {/* General notes */}
           {profile.general_notes && (

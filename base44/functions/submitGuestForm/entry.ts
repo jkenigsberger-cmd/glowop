@@ -394,7 +394,10 @@ Deno.serve(async (req) => {
       // Use the OGP id ensured at the start of this request (never stale/empty)
       const profile_id = operational_group_profile_id;
 
-      if (activity_date && total_pax > 0) {
+      // Meals must be created whenever a meal is selected — even if the DAY_USE
+      // form did not collect a participant breakdown (pax may legitimately be 0/null).
+      // Only activity_date is truly required; pax defaults to 0 and can be filled later.
+      if (activity_date) {
         try {
           await syncDayUseKitchen({ base44, group_id, profile_id, activity_date, total_pax, dayUseMeals, coffeeCorner });
           console.log('[submitGuestForm] DAY_USE kitchen sync complete');
@@ -402,7 +405,7 @@ Deno.serve(async (req) => {
           console.warn('[submitGuestForm] kitchen sync failed (non-fatal):', syncErr?.message);
         }
       } else {
-        console.warn('[submitGuestForm] skipping kitchen sync — missing activity_date or total_pax', { activity_date, total_pax });
+        console.warn('[submitGuestForm] skipping kitchen sync — missing activity_date', { activity_date, total_pax });
       }
     }
 
