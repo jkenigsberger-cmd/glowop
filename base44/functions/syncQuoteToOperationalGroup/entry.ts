@@ -84,7 +84,10 @@ Deno.serve(async (req) => {
     }
 
     // ── Build Group update payload ─────────────────────────────────────────
+    // Only non-empty Quote values are applied — empty/null values never overwrite
+    // the operational source of truth.
     const groupUpdate = {};
+    if (quote.client_name)    groupUpdate.group_name    = quote.client_name;
     if (quote.client_name)    groupUpdate.contact_name  = quote.client_name;
     if (quote.client_phone)   groupUpdate.contact_phone = quote.client_phone;
     if (quote.client_email)   groupUpdate.contact_email = quote.client_email;

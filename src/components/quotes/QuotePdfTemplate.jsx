@@ -179,10 +179,6 @@ function resolveData(quote, group) {
       ? (STUDENT_RATES[studentLines[0].rate_type]?.label || studentLines[0].rate_type)
       : (isDayUse ? "יום סמינר" : "לינה");
 
-  const audienceLabel = (quote?.participant_count ?? group?.participant_count)
-    ? "תלמידים"
-    : (quote?.staff_count ?? group?.staff_count) ? "מבוגרים" : "תלמידים";
-
   const STATUS_HE = { DRAFT: "טיוטה", SENT: "נשלח", APPROVED: "מאושר", REJECTED: "נדחה", EXPIRED: "פג תוקף" };
 
   // Contact person: use dedicated field first, never use client_name as first fallback
@@ -202,7 +198,6 @@ function resolveData(quote, group) {
     contactPerson,
     groupName:    snap?.groupName   || snap?.group_name    || group?.group_name    || quote?.client_name || "—",
     activityTypeLabel,
-    audienceLabel,
     arrival,
     departure,
     nights,
@@ -359,7 +354,6 @@ function Page1({ d, logoUrl }) {
           <SectionHeading>פרטי פעילות</SectionHeading>
           <DetailTable rows={[
             { label: "שם קבוצה",     value: d.groupName },
-            { label: "קהל יעד",       value: d.audienceLabel },
             { label: "סוג פעילות",    value: d.activityTypeLabel },
             {
               label: d.isDayUse ? "תאריך פעילות" : "תאריכים",
