@@ -95,40 +95,15 @@ async function syncDayUseKitchen({ base44, group_id, profile_id, activity_date, 
     }
   }
 
-  // ── 3. Sync coffee corner ────────────────────────────────────────────────────
-  const coffeeSelected = coffeeCorner?.answer === 'כן';
-  const existingCoffee = findExisting('COFFEE_CORNER');
-
-  if (coffeeSelected) {
-    const start_time = DEFAULT_TIMES.COFFEE_CORNER;
-    const end_time   = addMinutes(start_time, MEAL_DURATION.COFFEE_CORNER);
-    if (existingCoffee) {
-      await base44.asServiceRole.entities.MealReservation.update(existingCoffee.id, {
-        pax:                total_pax,
-        date:               activity_date,
-        start_time,
-        end_time,
-        coffee_service_type: 'קפה ועוגיות',
-        status:             'ACTIVE',
-      });
-    } else {
-      await base44.asServiceRole.entities.MealReservation.create({
-        group_id,
-        operational_group_profile_id: profile_id || '',
-        date:               activity_date,
-        meal_type:          'COFFEE_CORNER',
-        start_time,
-        end_time,
-        pax:                total_pax,
-        coffee_service_type: 'קפה ועוגיות',
-        source:             'guestForm',
-        status:             'ACTIVE',
-      });
-    }
-  } else {
-    if (existingCoffee) {
-      await base44.asServiceRole.entities.MealReservation.update(existingCoffee.id, { status: 'CANCELLED' });
-    }
+  // ── 3. Coffee Corner is NOT a meal ───────────────────────────────────────────
+  // Business rule: Coffee Corner from the guest form must NOT create a
+  // MealReservation and must NOT auto-create a CoffeeCornerRequest. It requires
+  // manual human handling in the Coffee Corner module. Here we only clean up any
+  // legacy COFFEE_CORNER MealReservation previously created by the guest form,
+  // so no ghost/orphan kitchen records remain.
+  const legacyCoffee = fromForm.filter(r => r.meal_type === 'COFFEE_CORNER' && r.status !== 'CANCELLED');
+  for (const r of legacyCoffee) {
+    await base44.asServiceRole.entities.MealReservation.update(r.id, { status: 'CANCELLED' });
   }
 }
 
@@ -309,6 +284,45 @@ Deno.serve(async (req) => {
         error: 'OGP_ENSURE_FAILED',
         message: 'שגיאה ביצירת/עדכון הפרופיל התפעולי — אנא נסו שוב',
       }, { status: 500 });
+    }
+
+    // ── Coffee Corner: surface for MANUAL review only (never auto-create) ─────
+    // Parse the guest's coffee corner answer (same field for LODGING & DAY_USE).
+    let coffeeAnswer = null;
+    try { coffeeAnswer = fields.day_use_coffee_corner ? JSON.parse(fields.day_use_coffee_corner) : null; } catch { coffeeAnswer = null; }
+    const coffeeRequested = coffeeAnswer?.answer === 'כן';
+    if (coffeeRequested && operational_group_profile_id) {
+      const COFFEE_NOTE = '☕ יש בקשת פינת קפה בטופס האורח — נדרש טיפול ידני במודול פינת קפה';
+      try {
+        // Append the note to OGP.general_notes idempotently (no duplicate line on resubmit)
+        const ogp = await base44.asServiceRole.entities.OperationalGroupProfile.get(operational_group_profile_id);
+        const currentNotes = ogp?.general_notes || '';
+        if (!currentNotes.includes('בקשת פינת קפה בטופס האורח')) {
+          const newNotes = currentNotes ? `${currentNotes}\n${COFFEE_NOTE}` : COFFEE_NOTE;
+          await base44.asServiceRole.entities.OperationalGroupProfile.update(operational_group_profile_id, { general_notes: newNotes });
+        }
+      } catch (noteErr) {
+        console.warn('[submitGuestForm] failed to save coffee note to OGP (non-fatal):', noteErr?.message);
+      }
+      // Create/refresh a review alert — reuse existing OperationalReviewAlert mechanism
+      try {
+        const existingAlerts = await base44.asServiceRole.entities.OperationalReviewAlert.filter({
+          group_id, source: 'GUEST_FORM_COFFEE_CORNER', status: 'OPEN',
+        });
+        if (existingAlerts.length === 0) {
+          await base44.asServiceRole.entities.OperationalReviewAlert.create({
+            group_id,
+            module:   'KITCHEN',
+            severity: 'WARNING',
+            source:   'GUEST_FORM_COFFEE_CORNER',
+            title:    'בקשת פינת קפה מהטופס החיצוני',
+            message:  'יש בקשת פינת קפה בטופס האורח — נדרש טיפול ידני במודול פינת קפה.',
+            status:   'OPEN',
+          });
+        }
+      } catch (alertErr) {
+        console.warn('[submitGuestForm] failed to create coffee review alert (non-fatal):', alertErr?.message);
+      }
     }
 
     // Resolve token version number if present
