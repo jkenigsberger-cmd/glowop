@@ -278,27 +278,48 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
         console.warn("[GroupFormModal] Alert creation failed:", alertErr?.message);
       }
     } else {
-      const newGroup = await base44.entities.Group.create(payload);
-      // Auto-create minimal OperationalGroupProfile so Group Detail is immediately operational
-      const existingProfiles = await base44.entities.OperationalGroupProfile.filter({ group_id: newGroup.id });
-      if (existingProfiles.length === 0) {
-        await base44.entities.OperationalGroupProfile.create({
-          group_id: newGroup.id,
-          quote_id: null,
-          guest_form_submission_id: null,
-          status: "ACCEPTED",
-          accepted_at: new Date().toISOString(),
-          ...profilePaxFields,
-          ...dietPayload,
-          general_notes: payload.internal_notes || null,
-          is_sleeping_group: payload.group_type === "LODGING",
-        });
-      } else {
-        // Profile already exists (race condition guard) — still sync pax + diets
-        await base44.entities.OperationalGroupProfile.update(existingProfiles[0].id, {
-          ...profilePaxFields,
-          ...dietPayload,
-        });
+      // ── Manual group creation → backend function creates Group + OGP atomically ──
+      const group_data = {
+        group_name:     payload.group_name,
+        group_type:     payload.group_type,
+        arrival_date:   payload.arrival_date,
+        departure_date: payload.departure_date,
+        arrival_time:   payload.arrival_time || null,
+        departure_time: payload.departure_time || null,
+        contact_name:   payload.contact_name || null,
+        contact_phone:  payload.contact_phone || null,
+        contact_email:  payload.contact_email || null,
+        internal_notes: payload.internal_notes || null,
+        status:         payload.status,
+      };
+      const ogp_data = {
+        ...profilePaxFields,
+        is_sleeping_group: payload.group_type === "LODGING",
+        general_notes: payload.internal_notes || null,
+        ...(payload.group_type === "LODGING"
+          ? { boys_beds_needed: payload.boys_count ?? null, girls_beds_needed: payload.girls_count ?? null }
+          : {}),
+        ...dietPayload,
+      };
+
+      const res = await base44.functions.invoke("createGroupWithOperationalProfile", { group_data, ogp_data });
+      const data = res.data || {};
+      if (!data.success) {
+        setSaving(false);
+        const errCode = data.error;
+        if (errCode === "OGP_CREATE_FAILED_AFTER_GROUP") {
+          console.error("[GroupFormModal] OGP failed after group create. group_id:", data.group_id);
+          setAllocationBlockError("הקבוצה נוצרה אך יצירת הפרופיל התפעולי נכשלה. יש לפנות למנהל מערכת.");
+        } else if (errCode === "MISSING_REQUIRED_GROUP_FIELDS" || errCode === "MISSING_GROUP_DATA") {
+          setAllocationBlockError("חסרים שדות חובה. יש למלא שם קבוצה ותאריך הגעה.");
+        } else if (errCode === "INVALID_GROUP_TYPE") {
+          setAllocationBlockError("סוג הקבוצה אינו תקין.");
+        } else if (errCode === "FORBIDDEN" || errCode === "UNAUTHORIZED") {
+          setAllocationBlockError("אין הרשאה ליצירת קבוצה.");
+        } else {
+          setAllocationBlockError("יצירת הקבוצה נכשלה. אנא נסה שוב.");
+        }
+        return;
       }
     }
 
