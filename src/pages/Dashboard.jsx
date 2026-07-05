@@ -10,6 +10,7 @@ import DashboardMealsToday from "@/components/dashboard/DashboardMealsToday";
 import DashboardActivitiesToday from "@/components/dashboard/DashboardActivitiesToday";
 import DashboardQuickLinks from "@/components/dashboard/DashboardQuickLinks";
 import OccupancyMap from "@/components/dashboard/OccupancyMap";
+import DailyStaffBrief from "@/components/dashboard/brief/DailyStaffBrief";
 import { Button } from "@/components/ui/button";
 import { FileText, ChevronRight, ChevronLeft, BedDouble, Sun, Users, LogIn, LogOut, UtensilsCrossed, CalendarDays, AlertTriangle } from "lucide-react";
 import { useRoleContext } from "@/lib/RoleContext";
@@ -345,6 +346,9 @@ export default function Dashboard() {
             className="border border-input bg-transparent rounded-md px-3 py-1.5 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
           />
         </div>
+
+        {/* ── Daily staff brief (generate-and-copy) ────────────────────── */}
+        <DailyStaffBrief selectedDate={selectedDate} />
 
         {/* ── Summary cards (clickable) ────────────────────────────────── */}
         <DashboardSummaryCards

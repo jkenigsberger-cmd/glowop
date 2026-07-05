@@ -1,0 +1,81 @@
+{
+  "name": "DailyStaffBrief",
+  "type": "object",
+  "properties": {
+    "date": {
+      "type": "string",
+      "format": "date",
+      "description": "Asia/Jerusalem operational date this brief refers to (YYYY-MM-DD). One brief per date."
+    },
+    "auto_summary_json": {
+      "type": "string",
+      "description": "JSON snapshot of system-generated operational data at generate/refresh time"
+    },
+    "manual_general_notes": {
+      "type": "string",
+      "description": "\u05d3\u05d2\u05e9\u05d9\u05dd \u05db\u05dc\u05dc\u05d9\u05d9\u05dd \u2014 manager free text"
+    },
+    "manual_logistics_tasks": {
+      "type": "string",
+      "description": "\u05de\u05e9\u05d9\u05de\u05d5\u05ea \u05dc\u05d5\u05d2\u05d9\u05e1\u05d8\u05d9\u05e7\u05d4 \u2014 manager free text"
+    },
+    "manual_housekeeping_tasks": {
+      "type": "string",
+      "description": "\u05de\u05e9\u05d9\u05de\u05d5\u05ea \u05de\u05e9\u05e7 \u05d1\u05d9\u05ea \u2014 manager free text"
+    },
+    "manual_maintenance_tasks": {
+      "type": "string",
+      "description": "\u05de\u05e9\u05d9\u05de\u05d5\u05ea \u05ea\u05d7\u05d6\u05d5\u05e7\u05d4 \u2014 manager free text"
+    },
+    "manual_duty_students_notes": {
+      "type": "string",
+      "description": "\u05d4\u05d5\u05e8\u05d0\u05d5\u05ea \u05dc\u05ea\u05d5\u05e8\u05e0\u05d9\u05dd / \u05de\u05d3\u05e8\u05d9\u05db\u05d9\u05dd \u2014 manager free text"
+    },
+    "manual_meals_notes": {
+      "type": "string",
+      "description": "\u05d0\u05e8\u05d5\u05d7\u05d5\u05ea / \u05d7\u05d3\u05e8 \u05d0\u05d5\u05db\u05dc \u2014 manager free text"
+    },
+    "manual_activity_spaces_notes": {
+      "type": "string",
+      "description": "\u05de\u05e8\u05d7\u05d1\u05d9 \u05e4\u05e2\u05d9\u05dc\u05d5\u05ea \u2014 manager free text"
+    },
+    "manual_final_notes": {
+      "type": "string",
+      "description": "\u05d4\u05e2\u05e8\u05d5\u05ea \u05d0\u05d7\u05e8\u05d5\u05e0\u05d5\u05ea \u2014 manager free text"
+    },
+    "generated_message": {
+      "type": "string",
+      "description": "Deterministically formatted WhatsApp-ready message"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "DRAFT",
+        "READY",
+        "SENT_MANUALLY",
+        "ARCHIVED"
+      ],
+      "default": "DRAFT"
+    },
+    "last_generated_at": {
+      "type": "string",
+      "description": "ISO datetime \u2014 last time auto_summary_json was generated/refreshed"
+    },
+    "last_copied_at": {
+      "type": "string",
+      "description": "ISO datetime \u2014 last time the message was copied to clipboard"
+    },
+    "created_by": {
+      "type": "string",
+      "description": "Email of the user who created the record"
+    },
+    "updated_by": {
+      "type": "string",
+      "description": "Email of the user who last updated the record"
+    }
+  },
+  "required": [
+    "date",
+    "status"
+  ]
+}
