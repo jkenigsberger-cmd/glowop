@@ -276,8 +276,8 @@ export default function Kitchen() {
       {kitchenTab === "list" && (
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 space-y-8">
 
-          {/* Kitchen review alerts */}
-          <ReviewAlertsBanner module="KITCHEN" />
+          {/* Kitchen review alerts — default to the next 14 days, with a "show all" toggle */}
+          <ReviewAlertsBanner module="KITCHEN" dateWindowDays={14} />
 
           {loadingMeals || loadingCoffee || loadingPrisa ? (
             <div className="flex justify-center py-16">
