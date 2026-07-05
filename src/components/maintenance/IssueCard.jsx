@@ -6,8 +6,8 @@ import { base44 } from "@/api/base44Client";
 import { AlertTriangle, CheckCircle2, Clock, Package, XCircle, ChevronDown, ChevronUp, MapPin, Calendar, MessageCircle } from "lucide-react";
 
 const MAINTENANCE_CONTACTS = [
-  { name: "טכנאי 1", phone: "972503256403" },
-  { name: "טכנאי 2", phone: "972526549582" },
+  { name: "פלאפון אירוח", phone: "972503256403" },
+  { name: "עומרי", phone: "972526549582" },
 ];
 
 export const STATUS_LABELS = {
