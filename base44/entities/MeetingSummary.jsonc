@@ -1,0 +1,90 @@
+{
+  "name": "MeetingSummary",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "Meeting title"
+    },
+    "meeting_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Date the meeting took place"
+    },
+    "relevant_week_start": {
+      "type": "string",
+      "format": "date",
+      "description": "Sunday of the operational week the meeting refers to"
+    },
+    "participants_text": {
+      "type": "string",
+      "description": "Free-text list of participants"
+    },
+    "meeting_summary_text": {
+      "type": "string",
+      "description": "Main field \u2014 the AI-generated meeting summary pasted from the external tool"
+    },
+    "original_transcript_optional": {
+      "type": "string",
+      "description": "Optional raw transcript / raw material"
+    },
+    "topics_tags": {
+      "type": "string",
+      "description": "JSON array of topic/tag strings"
+    },
+    "mentioned_people_text": {
+      "type": "string",
+      "description": "People mentioned in the meeting (free text)"
+    },
+    "mentioned_groups_text": {
+      "type": "string",
+      "description": "Groups mentioned in the meeting (free text)"
+    },
+    "mentioned_locations_text": {
+      "type": "string",
+      "description": "Locations mentioned in the meeting (free text)"
+    },
+    "related_group_ids": {
+      "type": "string",
+      "description": "Optional JSON array of Group UUIDs manually linked"
+    },
+    "related_event_ids": {
+      "type": "string",
+      "description": "Optional JSON array of event UUIDs manually linked"
+    },
+    "internal_notes": {
+      "type": "string",
+      "description": "Internal notes"
+    },
+    "search_text": {
+      "type": "string",
+      "description": "Concatenated searchable text rebuilt on every save"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "DRAFT",
+        "SAVED",
+        "ARCHIVED"
+      ],
+      "default": "DRAFT"
+    },
+    "visibility": {
+      "type": "string",
+      "enum": [
+        "PRIVATE_OPERATIONS",
+        "INTERNAL_VISIBLE"
+      ],
+      "default": "PRIVATE_OPERATIONS"
+    },
+    "created_by": {
+      "type": "string",
+      "description": "Email of the user who created the record"
+    }
+  },
+  "required": [
+    "title",
+    "status",
+    "visibility"
+  ]
+}

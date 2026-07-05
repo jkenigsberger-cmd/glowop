@@ -32,6 +32,7 @@ import OperationalSummaryPrint from "./pages/OperationalSummaryPrint.jsx";
 import DailyOperationalPrint from "./pages/DailyOperationalPrint.jsx";
 import UserManagement from "./pages/UserManagement.jsx";
 import MechinaSpaces from "./pages/MechinaSpaces.jsx";
+import MeetingSummaries from "./pages/MeetingSummaries.jsx";
 
 // Landing page resolver — MAINTENANCE users go straight to the maintenance module,
 // everyone else sees the Dashboard.
@@ -84,6 +85,7 @@ const AuthenticatedApp = () => {
         <Route path="/cleaning-hours" element={<RouteGuard><CleaningHours /></RouteGuard>} />
         <Route path="/cleaning-report" element={<RouteGuard><CleaningReport /></RouteGuard>} />
         <Route path="/mechina-spaces" element={<RouteGuard><MechinaSpaces /></RouteGuard>} />
+        <Route path="/meeting-summaries" element={<RouteGuard><MeetingSummaries /></RouteGuard>} />
         {/* Add your page Route elements here */}
         <Route path="*" element={<PageNotFound />} />
       </Routes>

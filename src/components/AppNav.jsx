@@ -3,7 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, CheckSquare, CalendarDays, BedDouble,
   UtensilsCrossed, Wrench, ShieldAlert, Layers, Lock,
-  Menu, X, Users, Search, ChevronDown, Settings, BookMarked, LogOut
+  Menu, X, Users, Search, ChevronDown, Settings, BookMarked, LogOut, NotebookPen
 } from "lucide-react";
 import { revokeAccess } from "@/components/PilotAccessGate";
 import { useRoleContext } from "@/lib/RoleContext";
@@ -41,6 +41,7 @@ const ALL_LINKS = [
   { key: "kitchen",         to: "/kitchen",         label: "מטבח",             icon: UtensilsCrossed, group: "ops" },
   { key: "maintenance",     to: "/maintenance",     label: "תחזוקה",           icon: Wrench,          group: "ops" },
   { key: "mechina-spaces",  to: "/mechina-spaces",  label: "בקשות מרחבים",     icon: BookMarked,      group: "primary" },
+  { key: "meeting-summaries", to: "/meeting-summaries", label: "סיכומי פגישות", icon: NotebookPen,   group: "primary" },
 ];
 
 function isActive(linkTo, pathname) {
@@ -195,7 +196,7 @@ export default function AppNav() {
   const showUserManagement = role === "SUPER_ADMIN";
 
   // Primary links: main daily-use modules kept in the top bar
-  const PRIMARY_KEYS = ["dashboard", "approved-groups", "calendar", "allocation", "common-spaces", "mechina-spaces"];
+  const PRIMARY_KEYS = ["dashboard", "approved-groups", "calendar", "allocation", "common-spaces", "mechina-spaces", "meeting-summaries"];
   const primaryLinks = ALL_LINKS.filter(l => PRIMARY_KEYS.includes(l.key) && allowedKeys.includes(l.key));
 
   // Ops dropdown: housekeeping, kitchen, maintenance
