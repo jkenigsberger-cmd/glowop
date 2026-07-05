@@ -280,6 +280,23 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
           if (datesChanged) {
             const prev = { arrival_date: group.arrival_date, departure_date: group.departure_date };
             const next = { arrival_date: payload.arrival_date, departure_date: payload.departure_date };
+
+            // ── Activities review: if the group already has activities, warn that they
+            // may need to be moved manually. Google Calendar is a mirror — activities are
+            // NOT auto-shifted here; each manual activity edit re-syncs its Google event.
+            try {
+              const activeActivities = await base44.entities.GroupScheduleItem.filter({
+                group_id: group.id,
+                status: "ACTIVE",
+              });
+              if (activeActivities.length > 0) {
+                const actMsg = `שינוי תאריכי הקבוצה דורש בדיקת פעילויות.\nייתכן שיש להזיז ${activeActivities.length} פעילויות ידנית לתאריכים החדשים. עדכון ידני של כל פעילות יסנכרן מחדש את האירוע ביומן Google.`;
+                await upsertReviewAlert(group.id, "ACTIVITIES", "GROUP_DATES_CHANGED", "שינוי תאריכי הקבוצה דורש בדיקת פעילויות", actMsg, prev, next);
+              }
+            } catch (actErr) {
+              console.warn("[GroupFormModal] activity date-change alert failed (non-blocking):", actErr?.message);
+            }
+
             if (isLodging) {
               const msg = `תאריכי הקבוצה השתנו (${group.arrival_date || "—"} — ${group.departure_date || "—"} ← ${payload.arrival_date || "—"} — ${payload.departure_date || "—"}). יש לבדוק זמינות, שיבוץ, ארוחות ומשק בית.`;
               await upsertReviewAlert(group.id, "ALLOCATION",   "GROUP_DATES_CHANGED", "שינוי תאריכים דורש בדיקה", msg, prev, next);
