@@ -7,7 +7,7 @@ import { useRoleContext } from "@/lib/RoleContext";
 import { buildDailyBriefMessage } from "@/lib/dailyBriefMessage";
 import AutoSummaryPreview from "./AutoSummaryPreview";
 import {
-  MessageSquare, RefreshCw, Save, Copy, Send, Loader2, ChevronDown, ChevronUp, Sparkles, CheckCircle2
+  MessageSquare, RefreshCw, Save, Copy, Send, Loader2, ChevronDown, ChevronUp, Sparkles, CheckCircle2, Trash2
 } from "lucide-react";
 
 const EDIT_ROLES = new Set(["SUPER_ADMIN", "ADMIN", "OPERATIONS"]);
@@ -197,6 +197,28 @@ export default function DailyStaffBrief({ selectedDate }) {
     }
   };
 
+  // מחק הודעה — clear generated message, revert to DRAFT
+  const handleClearMessage = async () => {
+    setBusy("clear");
+    try {
+      setMessage("");
+      if (brief) {
+        const rec = await base44.entities.DailyStaffBrief.update(brief.id, {
+          generated_message: "",
+          status: "DRAFT",
+          updated_by: internalUser?.email || "",
+        });
+        setBrief(rec);
+      }
+      setStatus("DRAFT");
+      toast({ title: "ההודעה נמחקה" });
+    } catch (e) {
+      toast({ title: "שגיאה", description: e.message, variant: "destructive" });
+    } finally {
+      setBusy("");
+    }
+  };
+
   // העתק הודעה — clipboard + update last_copied_at only
   const handleCopy = async () => {
     if (!message) return;
@@ -308,6 +330,10 @@ export default function DailyStaffBrief({ selectedDate }) {
                     </Button>
                     <Button size="sm" variant="outline" onClick={handleCopy} disabled={!message} className="gap-1.5">
                       <Copy className="w-3.5 h-3.5" /> העתק הודעה
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={handleClearMessage} disabled={!message || !!busy} className="gap-1.5 text-red-600 hover:text-red-700 hover:bg-red-50">
+                      {busy === "clear" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                      מחק הודעה
                     </Button>
                     <Button size="sm" variant="outline" onClick={handleMarkSent} disabled={!brief || !!busy} className="gap-1.5">
                       {busy === "sent" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
