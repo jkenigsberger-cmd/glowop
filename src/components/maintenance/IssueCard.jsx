@@ -3,7 +3,9 @@
  */
 import { useState } from "react";
 import { base44 } from "@/api/base44Client";
-import { AlertTriangle, CheckCircle2, Clock, Package, XCircle, ChevronDown, ChevronUp, MapPin, Calendar } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Clock, Package, XCircle, ChevronDown, ChevronUp, MapPin, Calendar, MessageCircle } from "lucide-react";
+
+const MAINTENANCE_WHATSAPP_PHONE = "972503256403";
 
 export const STATUS_LABELS = {
   OPEN: "פתוח",
@@ -69,6 +71,19 @@ export default function IssueCard({ issue, canEdit, onUpdated, showLocation = fa
   const formatDate = (d) => {
     if (!d) return "";
     return new Date(d).toLocaleDateString("he-IL", { day: "numeric", month: "numeric", year: "2-digit" });
+  };
+
+  const handleWhatsAppNotification = () => {
+    const url = `${window.location.origin}/maintenance`;
+    const location = [issue.location_section, issue.location_name].filter(Boolean).join(" · ") || "לא צוין";
+    const message = `🚨 תקלה חדשה במערכת התחזוקה
+נושא: ${issue.title}
+מיקום: ${location}
+עדיפות: ${PRIORITY_LABELS[issue.priority] || issue.priority}
+תיאור: ${issue.description || "ללא תיאור"}
+
+לצפייה בפרטי התקלה: ${url}`;
+    window.open(`https://wa.me/${MAINTENANCE_WHATSAPP_PHONE}?text=${encodeURIComponent(message)}`, "_blank");
   };
 
   return (
@@ -149,6 +164,13 @@ export default function IssueCard({ issue, canEdit, onUpdated, showLocation = fa
               {issue.internal_notes}
             </div>
           )}
+
+          <button
+            onClick={handleWhatsAppNotification}
+            className="w-full flex items-center justify-center gap-2 min-h-[44px] rounded-xl bg-green-50 text-green-700 border border-green-200 font-semibold text-sm active:bg-green-100 transition-colors"
+          >
+            <MessageCircle className="w-4 h-4" /> שלח בווטסאפ
+          </button>
 
           {photos.length > 0 && (
             <div className="flex gap-2 flex-wrap">
