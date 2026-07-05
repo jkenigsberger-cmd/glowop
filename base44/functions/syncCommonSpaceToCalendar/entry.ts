@@ -166,6 +166,39 @@ Deno.serve(async (req) => {
 
       const updated = await res.json();
       if (!res.ok) {
+        // If the Google event was deleted/missing (404/410), recreate it instead of failing —
+        // the app is the source of truth, Google Calendar is only a mirror.
+        if (res.status === 404 || res.status === 410) {
+          console.warn('[syncCommonSpaceToCalendar] Existing Google event missing (', res.status, ') — recreating. Old event id:', sr.calendar_event_id);
+
+          const recreateRes = await fetch(
+            `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(KEREN_HADOR_CALENDAR_ID)}/events`,
+            {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify(eventPayload),
+            }
+          );
+          const recreated = await recreateRes.json();
+          if (!recreateRes.ok) {
+            console.error('[syncCommonSpaceToCalendar] Recreate-after-missing error:', recreated);
+            return Response.json({ ok: false, error: recreated?.error?.message || 'Recreate failed' }, { status: 500 });
+          }
+
+          // Point the existing sync record at the new event id
+          await base44.asServiceRole.entities.CalendarSync.update(sr.id, {
+            calendar_event_id: recreated.id,
+            calendar_id: KEREN_HADOR_CALENDAR_ID,
+          });
+
+          return Response.json({
+            ok: true,
+            action: 'recreated_missing_event',
+            warning: 'האירוע הקודם ביומן Google לא נמצא ולכן נוצר אירוע חדש',
+            calendar_event_id: recreated.id,
+          });
+        }
+
         console.error('[syncCommonSpaceToCalendar] Patch error:', updated);
         return Response.json({ ok: false, error: updated?.error?.message || 'Patch failed' }, { status: 500 });
       }
