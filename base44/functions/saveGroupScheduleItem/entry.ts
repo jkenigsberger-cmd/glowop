@@ -545,21 +545,27 @@ Deno.serve(async (req) => {
           status: 'ACTIVE',
         });
 
-        // Update all — preserve each item's group_id and operational_group_profile_id
+        // Update all — preserve each item's group_id and operational_group_profile_id.
+        // Keep the freshly-updated objects so calendar sync uses the NEW values directly
+        // (a re-fetch here can read stale data before the write propagates).
+        const updatedLinked = [];
         for (const linkedItem of allLinked) {
-          await base44.asServiceRole.entities.GroupScheduleItem.update(linkedItem.id, {
+          const updated = await base44.asServiceRole.entities.GroupScheduleItem.update(linkedItem.id, {
             ...basePayload,
             group_id: linkedItem.group_id,
             operational_group_profile_id: linkedItem.operational_group_profile_id,
             shared_activity_id: currentSharedId,
             shared_activity_created_from_group_id: currentItem.shared_activity_created_from_group_id,
           });
+          updatedLinked.push(updated);
         }
 
         await recomputeSharedSnapshot(base44, currentSharedId);
-        // Sync every linked item — each mirrors its own Google Calendar event
-        await syncItemsByIds(base44, allLinked.map(i => i.id));
-        return Response.json({ success: true, updated_all: true, count: allLinked.length });
+        // Sync each linked item straight from its updated record — no stale re-fetch.
+        for (const u of updatedLinked) {
+          await syncItemToCalendar(base44, u);
+        }
+        return Response.json({ success: true, updated_all: true, count: updatedLinked.length });
       }
 
       // Fallback: normal update (edit_scope present but no sharedId)
