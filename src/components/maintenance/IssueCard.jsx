@@ -5,7 +5,10 @@ import { useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { AlertTriangle, CheckCircle2, Clock, Package, XCircle, ChevronDown, ChevronUp, MapPin, Calendar, MessageCircle } from "lucide-react";
 
-const MAINTENANCE_WHATSAPP_PHONE = "972503256403";
+const MAINTENANCE_CONTACTS = [
+  { name: "טכנאי 1", phone: "972503256403" },
+  { name: "טכנאי 2", phone: "972526549582" },
+];
 
 export const STATUS_LABELS = {
   OPEN: "פתוח",
@@ -44,6 +47,7 @@ export default function IssueCard({ issue, canEdit, onUpdated, showLocation = fa
   const [updating, setUpdating] = useState(null);
   const [note, setNote] = useState("");
   const [confirmStatus, setConfirmStatus] = useState(null);
+  const [whatsappOpen, setWhatsappOpen] = useState(false);
 
   const isClosed = !OPEN_STATUSES.includes(issue.status);
   const isUrgent = issue.priority === "URGENT";
@@ -73,7 +77,7 @@ export default function IssueCard({ issue, canEdit, onUpdated, showLocation = fa
     return new Date(d).toLocaleDateString("he-IL", { day: "numeric", month: "numeric", year: "2-digit" });
   };
 
-  const handleWhatsAppNotification = () => {
+  const handleWhatsAppNotification = (phone) => {
     const url = `${window.location.origin}/maintenance`;
     const location = [issue.location_section, issue.location_name].filter(Boolean).join(" · ") || "לא צוין";
     const message = `🚨 תקלה חדשה במערכת התחזוקה
@@ -83,7 +87,8 @@ export default function IssueCard({ issue, canEdit, onUpdated, showLocation = fa
 תיאור: ${issue.description || "ללא תיאור"}
 
 לצפייה בפרטי התקלה: ${url}`;
-    window.open(`https://wa.me/${MAINTENANCE_WHATSAPP_PHONE}?text=${encodeURIComponent(message)}`, "_blank");
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, "_blank");
+    setWhatsappOpen(false);
   };
 
   return (
@@ -165,12 +170,29 @@ export default function IssueCard({ issue, canEdit, onUpdated, showLocation = fa
             </div>
           )}
 
-          <button
-            onClick={handleWhatsAppNotification}
-            className="w-full flex items-center justify-center gap-2 min-h-[44px] rounded-xl bg-green-50 text-green-700 border border-green-200 font-semibold text-sm active:bg-green-100 transition-colors"
-          >
-            <MessageCircle className="w-4 h-4" /> שלח בווטסאפ
-          </button>
+          <div className="space-y-2">
+            <button
+              onClick={() => setWhatsappOpen(o => !o)}
+              className="w-full flex items-center justify-center gap-2 min-h-[44px] rounded-xl bg-green-50 text-green-700 border border-green-200 font-semibold text-sm active:bg-green-100 transition-colors"
+            >
+              <MessageCircle className="w-4 h-4" /> שלח בווטסאפ
+              {whatsappOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
+            {whatsappOpen && (
+              <div className="grid gap-2 bg-green-50/50 rounded-xl p-2 border border-green-100">
+                {MAINTENANCE_CONTACTS.map(contact => (
+                  <button
+                    key={contact.phone}
+                    onClick={() => handleWhatsAppNotification(contact.phone)}
+                    className="w-full flex items-center justify-between min-h-[44px] rounded-lg bg-white text-green-700 border border-green-200 px-3 font-semibold text-sm active:bg-green-100 transition-colors"
+                  >
+                    <span>{contact.name}</span>
+                    <MessageCircle className="w-4 h-4" />
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
           {photos.length > 0 && (
             <div className="flex gap-2 flex-wrap">
