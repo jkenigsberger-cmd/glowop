@@ -35,6 +35,145 @@ function timeToMinutes(t) {
   return h * 60 + m;
 }
 
+// ── Explicit Google Calendar sync ────────────────────────────────────────────
+// The entity automation "Sync Common Spaces to Google Calendar" does NOT reliably
+// fire on service-role writes made from inside this backend function, and a nested
+// functions.invoke() to the sync function does not run in this context either.
+// So we mirror the item to Google Calendar DIRECTLY here after every successful
+// create/update, for ALL edit scopes. Google Calendar is only a mirror — the app is
+// the source of truth. Failures are swallowed — never block the activity save.
+const KEREN_HADOR_CALENDAR_ID = 'c_d90deb3b0f276cded4ab5809199860a2b2e99c8ced3c62dc8432cae3261a5583@group.calendar.google.com';
+
+function buildCalendarEventPayload(item, space, group) {
+  const spaceName = space.name || space.code;
+  const groupName = group.group_name || 'קבוצה';
+  const summary = `${item.activity_name} – ${groupName}`;
+
+  const parts = [];
+  parts.push(`📌 מרחב: ${spaceName} (${space.code})`);
+  if (item.pax) parts.push(`👥 משתתפים: ${item.pax}`);
+  if (item.split_total && item.split_index) parts.push(`🔀 פיצול: ${item.split_index}/${item.split_total}`);
+  if (item.notes) parts.push(`📝 הערות: ${item.notes}`);
+
+  const logistics = [];
+  if (item.needs_projector) logistics.push('מקרן');
+  if (item.needs_screen) logistics.push('מסך');
+  if (item.needs_microphone) logistics.push('מיקרופון');
+  if (item.needs_sound) logistics.push('הגברה');
+  if (item.needs_whiteboard) logistics.push('לוח');
+  if (item.needs_chair_circle) logistics.push('מעגל כיסאות');
+  if (item.chairs_count) logistics.push(`${item.chairs_count} כיסאות`);
+  if (item.logistics_other) logistics.push(item.logistics_other);
+  if (logistics.length > 0) parts.push(`🔧 לוגיסטיקה: ${logistics.join(', ')}`);
+
+  return {
+    summary,
+    description: parts.join('\n'),
+    start: { dateTime: `${item.date}T${item.start_time}:00+03:00`, timeZone: 'Asia/Jerusalem' },
+    end:   { dateTime: `${item.date}T${item.end_time}:00+03:00`,   timeZone: 'Asia/Jerusalem' },
+    location: spaceName,
+  };
+}
+
+async function syncItemToCalendar(base44, item) {
+  if (!item || !item.id) return;
+  try {
+    const itemId = item.id;
+    const activitySpaceId = item.activity_space_id;
+
+    const existingSyncs = await base44.asServiceRole.entities.CalendarSync.filter({
+      group_schedule_item_id: itemId,
+    });
+
+    const connection = await base44.asServiceRole.connectors.getConnection('googlecalendar');
+    const accessToken = connection.accessToken;
+    const authHeaders = { Authorization: `Bearer ${accessToken}` };
+    const jsonHeaders = { ...authHeaders, 'Content-Type': 'application/json' };
+
+    // ── Delete flow: cancelled OR no space assigned ──
+    if (item.status === 'CANCELLED' || !activitySpaceId) {
+      if (existingSyncs.length > 0) {
+        const sr = existingSyncs[0];
+        await fetch(
+          `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(sr.calendar_id || KEREN_HADOR_CALENDAR_ID)}/events/${encodeURIComponent(sr.calendar_event_id)}`,
+          { method: 'DELETE', headers: authHeaders }
+        ).catch(() => {});
+        await base44.asServiceRole.entities.CalendarSync.delete(sr.id).catch(() => {});
+      }
+      return;
+    }
+
+    // ── Need space + group info ──
+    const [spaces, groups] = await Promise.all([
+      base44.asServiceRole.entities.ActivitySpace.filter({ id: activitySpaceId }),
+      base44.asServiceRole.entities.Group.filter({ id: item.group_id }),
+    ]);
+    const space = spaces[0];
+    const group = groups[0];
+    if (!space || !group) return;
+
+    const eventPayload = buildCalendarEventPayload(item, space, group);
+
+    if (existingSyncs.length > 0) {
+      const sr = existingSyncs[0];
+      // Update the SAME event → no duplicates
+      const res = await fetch(
+        `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(KEREN_HADOR_CALENDAR_ID)}/events/${encodeURIComponent(sr.calendar_event_id)}`,
+        { method: 'PATCH', headers: jsonHeaders, body: JSON.stringify(eventPayload) }
+      );
+      if (!res.ok) {
+        // Missing/deleted Google event → recreate and repoint the sync record
+        if (res.status === 404 || res.status === 410) {
+          const recreateRes = await fetch(
+            `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(KEREN_HADOR_CALENDAR_ID)}/events`,
+            { method: 'POST', headers: jsonHeaders, body: JSON.stringify(eventPayload) }
+          );
+          const recreated = await recreateRes.json();
+          if (recreateRes.ok) {
+            await base44.asServiceRole.entities.CalendarSync.update(sr.id, {
+              calendar_event_id: recreated.id,
+              calendar_id: KEREN_HADOR_CALENDAR_ID,
+            });
+          }
+        }
+      } else if ((sr.calendar_id || KEREN_HADOR_CALENDAR_ID) !== KEREN_HADOR_CALENDAR_ID) {
+        // Normalize calendar id on the record
+        await base44.asServiceRole.entities.CalendarSync.update(sr.id, { calendar_id: KEREN_HADOR_CALENDAR_ID });
+      }
+      return;
+    }
+
+    // No sync record → create event + save sync record
+    const res = await fetch(
+      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(KEREN_HADOR_CALENDAR_ID)}/events`,
+      { method: 'POST', headers: jsonHeaders, body: JSON.stringify(eventPayload) }
+    );
+    const created = await res.json();
+    if (res.ok) {
+      await base44.asServiceRole.entities.CalendarSync.create({
+        group_schedule_item_id: itemId,
+        calendar_event_id: created.id,
+        calendar_id: KEREN_HADOR_CALENDAR_ID,
+      });
+    }
+  } catch (e) {
+    console.warn('[saveGroupScheduleItem] calendar sync failed (non-blocking) for item', item?.id, ':', e?.message);
+  }
+}
+
+// Sync a list of item ids by loading each fresh record then mirroring it.
+async function syncItemsByIds(base44, ids) {
+  for (const id of ids) {
+    if (!id) continue;
+    try {
+      const fresh = await base44.asServiceRole.entities.GroupScheduleItem.get(id);
+      if (fresh) await syncItemToCalendar(base44, fresh);
+    } catch (e) {
+      console.warn('[saveGroupScheduleItem] could not load item for sync', id, ':', e?.message);
+    }
+  }
+}
+
 // Fetch groups by ids safely — no $in, loop of .get()
 async function fetchGroupsByIds(base44, ids) {
   const results = [];
@@ -326,6 +465,9 @@ Deno.serve(async (req) => {
           createdIds.push(clone.id);
         }
 
+        // Sync every affected item to Google Calendar
+        await syncItemsByIds(base44, createdIds);
+
         return Response.json({
           success: true,
           converted_to_shared: true,
@@ -375,6 +517,7 @@ Deno.serve(async (req) => {
           const result = await base44.asServiceRole.entities.GroupScheduleItem.update(id, updatedItem);
           // Recompute snapshot for remaining items
           await recomputeSharedSnapshot(base44, currentSharedId);
+          await syncItemToCalendar(base44, result);
           return Response.json({ success: true, item: result, unlinked: true });
         } else {
           // Update only this item, keep its shared_activity_id
@@ -386,6 +529,7 @@ Deno.serve(async (req) => {
             shared_activity_group_names: currentItem.shared_activity_group_names || null,
             is_shared_activity: currentItem.is_shared_activity || false,
           });
+          await syncItemToCalendar(base44, result);
           return Response.json({ success: true, item: result });
         }
       }
@@ -413,6 +557,8 @@ Deno.serve(async (req) => {
         }
 
         await recomputeSharedSnapshot(base44, currentSharedId);
+        // Sync every linked item — each mirrors its own Google Calendar event
+        await syncItemsByIds(base44, allLinked.map(i => i.id));
         return Response.json({ success: true, updated_all: true, count: allLinked.length });
       }
 
@@ -420,6 +566,7 @@ Deno.serve(async (req) => {
       const conflictErr = await checkConflict(resolvedSpaceId, id, currentSharedId);
       if (conflictErr) return Response.json({ success: false, error: conflictErr }, { status: 409 });
       const result = await base44.asServiceRole.entities.GroupScheduleItem.update(id, basePayload);
+      await syncItemToCalendar(base44, result);
       return Response.json({ success: true, item: result });
     }
 
@@ -463,6 +610,9 @@ Deno.serve(async (req) => {
         }
       }
 
+      // Explicit Google Calendar sync — create OR update, single item path.
+      // Passing the fresh result guarantees date/time/title/location/notes mirror correctly.
+      await syncItemToCalendar(base44, result);
       return Response.json({ success: true, item: result });
     }
 
@@ -555,6 +705,9 @@ Deno.serve(async (req) => {
           shared_activity_group_names: JSON.stringify(groupNames),
         });
       }
+
+      // Sync every created item to Google Calendar
+      await syncItemsByIds(base44, createdIds);
 
       return Response.json({
         success: true,
