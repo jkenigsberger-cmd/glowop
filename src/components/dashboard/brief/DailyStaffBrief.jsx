@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/components/ui/use-toast";
 import { useRoleContext } from "@/lib/RoleContext";
 import { buildDailyBriefMessage } from "@/lib/dailyBriefMessage";
@@ -45,6 +46,7 @@ export default function DailyStaffBrief({ selectedDate }) {
   const [status, setStatus] = useState("DRAFT");
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState("");              // which action is running
+  const [includeSummary, setIncludeSummary] = useState(true); // include auto system data in the message
 
   // Load existing brief for the date (does NOT generate)
   const loadBrief = useCallback(async () => {
@@ -167,7 +169,7 @@ export default function DailyStaffBrief({ selectedDate }) {
   const handleGenerateMessage = async () => {
     setBusy("message");
     try {
-      const msg = buildDailyBriefMessage(summary, manual, selectedDate);
+      const msg = buildDailyBriefMessage(summary, manual, selectedDate, includeSummary);
       setMessage(msg);
       let rec = brief;
       const payload = {
@@ -321,6 +323,10 @@ export default function DailyStaffBrief({ selectedDate }) {
 
               {/* 3. WhatsApp message */}
               <section className="space-y-2">
+                <label className="flex items-center gap-2 text-xs font-semibold text-slate-600 cursor-pointer w-fit">
+                  <Switch checked={includeSummary} onCheckedChange={setIncludeSummary} />
+                  כלול את המידע מהמערכת (התדריך היומי) בהודעה
+                </label>
                 <div className="flex items-center justify-between gap-2">
                   <h3 className="text-sm font-bold text-slate-700">הודעת WhatsApp</h3>
                   <div className="flex gap-2">

@@ -55,8 +55,9 @@ function dietLines(diets) {
  * @param {object} summary parsed auto_summary_json (may be null)
  * @param {object} manual manual_* fields
  * @param {string} dateStr YYYY-MM-DD
+ * @param {boolean} includeSummary whether to include the auto system summary (default true)
  */
-export function buildDailyBriefMessage(summary, manual, dateStr) {
+export function buildDailyBriefMessage(summary, manual, dateStr, includeSummary = true) {
   const lines = [];
   const push = (s = "") => lines.push(s);
 
@@ -71,7 +72,7 @@ export function buildDailyBriefMessage(summary, manual, dateStr) {
   }
 
   // ── מידע מהמערכת ──────────────────────────────────────────────────────
-  if (summary) {
+  if (summary && includeSummary) {
     push("");
     push("*מידע מהמערכת:*");
 
