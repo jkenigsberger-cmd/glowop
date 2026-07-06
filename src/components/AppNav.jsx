@@ -170,19 +170,20 @@ export default function AppNav() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const { role, internalUser } = useRoleContext();
+  const canUseGlobalSearch = role !== "OPERATIONS";
   const alertCounts = useAlertCounts();
 
   // Ctrl+K / Cmd+K shortcut
   useEffect(() => {
     const handler = (e) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+      if (canUseGlobalSearch && (e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
         setSearchOpen(true);
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, []);
+  }, [canUseGlobalSearch]);
 
   const closeDrawer = () => setDrawerOpen(false);
 
@@ -295,7 +296,7 @@ export default function AppNav() {
             {/* Quick search pill */}
             <button
               onClick={() => setSearchOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-slate-400 border border-slate-200 rounded-full bg-slate-50 hover:bg-slate-100 hover:text-slate-600 hover:border-slate-300 transition-all duration-150"
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs text-slate-400 border border-slate-200 rounded-full bg-slate-50 hover:bg-slate-100 hover:text-slate-600 hover:border-slate-300 transition-all duration-150 ${canUseGlobalSearch ? "" : "hidden"}`}
             >
               <Search className="w-3.5 h-3.5 shrink-0" />
               <span className="hidden lg:inline">חיפוש מהיר</span>
@@ -354,7 +355,7 @@ export default function AppNav() {
           </button>
           <button
             onClick={() => setSearchOpen(true)}
-            className="flex-1 mx-2 flex items-center gap-2 px-3 py-2 text-xs text-slate-400 border border-slate-200 rounded-full bg-slate-50"
+            className={`flex-1 mx-2 items-center gap-2 px-3 py-2 text-xs text-slate-400 border border-slate-200 rounded-full bg-slate-50 ${canUseGlobalSearch ? "flex" : "hidden"}`}
           >
             <Search className="w-3.5 h-3.5 shrink-0" />
             <span>חיפוש מהיר...</span>

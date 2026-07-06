@@ -4,6 +4,7 @@ import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
 import { Search, X, Users, Layers } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useRoleContext } from "@/lib/RoleContext";
 
 const STATUS_LABELS = {
   DRAFT:     "טיוטה",
@@ -36,17 +37,21 @@ export default function GlobalSearch({ isOpen, onClose }) {
   const [activeIdx, setActiveIdx] = useState(0);
   const inputRef = useRef(null);
   const navigate = useNavigate();
+  const { role } = useRoleContext();
+  const isOperationsOnly = role === "OPERATIONS";
 
   const { data: groups = [] } = useQuery({
     queryKey: ["global-search-groups"],
     queryFn: () => base44.entities.Group.list("arrival_date", 500),
     staleTime: 30_000,
+    enabled: !isOperationsOnly,
   });
 
   const { data: spaces = [] } = useQuery({
     queryKey: ["global-search-spaces"],
     queryFn: () => base44.entities.ActivitySpace.list(),
     staleTime: 60_000,
+    enabled: !isOperationsOnly,
   });
 
   useEffect(() => {
@@ -98,7 +103,7 @@ export default function GlobalSearch({ isOpen, onClose }) {
     if (e.key === "Escape") onClose();
   };
 
-  if (!isOpen) return null;
+  if (!isOpen || isOperationsOnly) return null;
 
   const showEmpty = q && allResults.length === 0;
 

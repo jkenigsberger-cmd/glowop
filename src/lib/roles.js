@@ -29,7 +29,7 @@ export const ROLE_LABELS = {
 export const ROLE_NAV_LINKS = {
   SUPER_ADMIN:          ["dashboard", "approved-groups", "calendar", "allocation", "common-spaces", "housekeeping", "kitchen", "maintenance", "admin", "mechina-spaces", "meeting-summaries"],
   ADMIN:                ["dashboard", "approved-groups", "calendar", "allocation", "common-spaces", "housekeeping", "kitchen", "maintenance", "admin", "mechina-spaces", "meeting-summaries"],
-  OPERATIONS:           ["dashboard", "approved-groups", "calendar", "allocation", "common-spaces", "housekeeping", "kitchen", "maintenance", "mechina-spaces", "meeting-summaries"],
+  OPERATIONS:           ["dashboard", "calendar", "maintenance"],
   HOUSEKEEPING_MANAGER: ["dashboard", "calendar", "allocation", "housekeeping", "approved-groups", "maintenance"],
   HOUSEKEEPING_STAFF:   ["dashboard", "calendar", "housekeeping"],
   HOUSEKEEPING_MANAGER: ["dashboard", "calendar", "allocation", "housekeeping", "approved-groups", "maintenance"],
@@ -43,7 +43,7 @@ export const ROLE_NAV_LINKS = {
 export const ROLE_ALLOWED_ROUTES = {
   SUPER_ADMIN: "*", // all
   ADMIN:       ["dashboard", "approved-groups", "calendar", "allocation", "common-spaces", "housekeeping", "kitchen", "kitchen-report", "maintenance", "admin", "groups", "inventory", "cleaning-hours", "mechina-spaces", "meeting-summaries"],
-  OPERATIONS:  ["dashboard", "approved-groups", "calendar", "allocation", "common-spaces", "housekeeping", "kitchen", "kitchen-report", "maintenance", "groups", "cleaning-hours", "mechina-spaces", "meeting-summaries"],
+  OPERATIONS:  ["dashboard", "calendar", "maintenance"],
   HOUSEKEEPING_MANAGER: ["dashboard", "calendar", "allocation", "housekeeping", "approved-groups", "cleaning-hours", "maintenance"],
   HOUSEKEEPING_STAFF:   ["dashboard", "calendar", "housekeeping"],
   KITCHEN:              ["dashboard", "calendar", "kitchen", "kitchen-report"],
@@ -56,7 +56,7 @@ export const ROLE_ALLOWED_ROUTES = {
 export const PERMISSIONS = {
   // Group actions
   CREATE_GROUP:      ["SUPER_ADMIN", "ADMIN"],
-  EDIT_GROUP:        ["SUPER_ADMIN", "ADMIN", "OPERATIONS"],
+  EDIT_GROUP:        ["SUPER_ADMIN", "ADMIN"],
   DELETE_GROUP:      ["SUPER_ADMIN"],
   ARCHIVE_GROUP:     ["SUPER_ADMIN", "ADMIN"],
   APPROVE_PROFILE:   ["SUPER_ADMIN", "ADMIN"],
@@ -68,17 +68,17 @@ export const PERMISSIONS = {
   EDIT_PRICES:       ["SUPER_ADMIN", "ADMIN"],
 
   // Operational
-  MANAGE_MEALS:      ["SUPER_ADMIN", "ADMIN", "OPERATIONS"],
-  MANAGE_ACTIVITIES: ["SUPER_ADMIN", "ADMIN", "OPERATIONS"],
-  MANAGE_ALLOCATION: ["SUPER_ADMIN", "ADMIN", "OPERATIONS", "HOUSEKEEPING_MANAGER"],
-  CONFIRM_ALLOCATION:["SUPER_ADMIN", "ADMIN", "OPERATIONS", "HOUSEKEEPING_MANAGER"],
+  MANAGE_MEALS:      ["SUPER_ADMIN", "ADMIN"],
+  MANAGE_ACTIVITIES: ["SUPER_ADMIN", "ADMIN"],
+  MANAGE_ALLOCATION: ["SUPER_ADMIN", "ADMIN", "HOUSEKEEPING_MANAGER"],
+  CONFIRM_ALLOCATION:["SUPER_ADMIN", "ADMIN", "HOUSEKEEPING_MANAGER"],
 
   // Housekeeping
-  HOUSEKEEPING_ACTIONS: ["SUPER_ADMIN", "ADMIN", "OPERATIONS", "HOUSEKEEPING_MANAGER", "HOUSEKEEPING_STAFF"],
-  MARK_TENT_READY:      ["SUPER_ADMIN", "ADMIN", "OPERATIONS", "HOUSEKEEPING_MANAGER", "HOUSEKEEPING_STAFF"],
+  HOUSEKEEPING_ACTIONS: ["SUPER_ADMIN", "ADMIN", "HOUSEKEEPING_MANAGER", "HOUSEKEEPING_STAFF"],
+  MARK_TENT_READY:      ["SUPER_ADMIN", "ADMIN", "HOUSEKEEPING_MANAGER", "HOUSEKEEPING_STAFF"],
 
   // Kitchen
-  KITCHEN_ACTIONS:   ["SUPER_ADMIN", "ADMIN", "OPERATIONS", "KITCHEN"],
+  KITCHEN_ACTIONS:   ["SUPER_ADMIN", "ADMIN", "KITCHEN"],
 
   // Admin / system
   MANAGE_USERS:      ["SUPER_ADMIN"],
@@ -86,24 +86,24 @@ export const PERMISSIONS = {
   VIEW_ADMIN:        ["SUPER_ADMIN", "ADMIN"],
 
   // Guest form links
-  CREATE_GUEST_LINK: ["SUPER_ADMIN", "ADMIN", "OPERATIONS"],
+  CREATE_GUEST_LINK: ["SUPER_ADMIN", "ADMIN"],
 
   // Reports / PDFs
-  GENERATE_REPORTS:  ["SUPER_ADMIN", "ADMIN", "OPERATIONS", "HOUSEKEEPING_MANAGER"],
+  GENERATE_REPORTS:  ["SUPER_ADMIN", "ADMIN", "HOUSEKEEPING_MANAGER"],
 
   // Post-stay summary (סיכום שהייה)
-  MANAGE_POST_STAY:  ["SUPER_ADMIN", "ADMIN", "OPERATIONS"],
+  MANAGE_POST_STAY:  ["SUPER_ADMIN", "ADMIN"],
 
   // Maintenance
   CREATE_MAINTENANCE_ISSUE: ["SUPER_ADMIN", "ADMIN", "OPERATIONS", "HOUSEKEEPING_MANAGER", "HOUSEKEEPING_STAFF", "MAINTENANCE"],
   CLOSE_MAINTENANCE_ISSUE:  ["SUPER_ADMIN", "ADMIN", "OPERATIONS", "HOUSEKEEPING_MANAGER", "MAINTENANCE"],
 
   // Review alerts acknowledgement
-  ACKNOWLEDGE_ALERT: ["SUPER_ADMIN", "ADMIN", "OPERATIONS", "KITCHEN", "HOUSEKEEPING_MANAGER", "HOUSEKEEPING_STAFF"],
+  ACKNOWLEDGE_ALERT: ["SUPER_ADMIN", "ADMIN", "KITCHEN", "HOUSEKEEPING_MANAGER", "HOUSEKEEPING_STAFF"],
 
   // Mechina module
-  VIEW_MECHINA_MODULE:   ["SUPER_ADMIN", "ADMIN", "OPERATIONS", "MECHINA_USER"],
-  MANAGE_MECHINA_REQUESTS: ["SUPER_ADMIN", "ADMIN", "OPERATIONS"],
+  VIEW_MECHINA_MODULE:   ["SUPER_ADMIN", "ADMIN", "MECHINA_USER"],
+  MANAGE_MECHINA_REQUESTS: ["SUPER_ADMIN", "ADMIN"],
   SUBMIT_MECHINA_REQUEST:  ["MECHINA_USER"],
 };
 
