@@ -94,6 +94,11 @@ export default function SplitActivityEditModal({
         </DialogHeader>
 
         <div className="max-h-[65vh] overflow-y-auto py-2 px-1 space-y-4">
+          {items.some(i => i.shared_activity_id) && (
+            <p className="text-xs text-violet-700 bg-violet-50 border border-violet-200 rounded-lg px-3 py-2">
+              🔗 חלק מהמרחבים משויכים לקבוצות נוספות — השינויים כאן יחולו רק על הקבוצה הזו. השיוך עצמו יישמר.
+            </p>
+          )}
           {/* Shared fields */}
           <div className="space-y-1">
             <Label>שם פעילות</Label>

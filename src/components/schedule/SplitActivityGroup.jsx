@@ -4,9 +4,10 @@
  */
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Pencil, Trash2, Copy, MapPin, ChevronDown, ChevronUp } from "lucide-react";
+import { Pencil, Trash2, Copy, MapPin, ChevronDown, ChevronUp, Link2 } from "lucide-react";
 import RoleGate from "@/components/RoleGate";
 import SplitActivityEditModal from "./SplitActivityEditModal";
+import LinkSplitChildModal from "./LinkSplitChildModal";
 import { LogisticsBadges } from "./LogisticsFields";
 
 export default function SplitActivityGroup({
@@ -15,11 +16,13 @@ export default function SplitActivityGroup({
   onCancel,
   onDuplicate,
   onEditSave,   // async (updatedRows) => errorString | null
+  onLinkSave,   // async (form) => errorString | null — link a single split child to more groups
   groupDateRange,
   saving,
 }) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [linkChild, setLinkChild] = useState(null);
 
   if (!items || items.length === 0) return null;
 
@@ -46,6 +49,11 @@ export default function SplitActivityGroup({
               <span className="text-xs bg-purple-50 text-purple-700 border border-purple-200 rounded px-1.5 py-0.5">
                 {sorted.length} מרחבים
               </span>
+              {sorted.some(i => i.shared_activity_id) && (
+                <span className="text-xs bg-violet-50 text-violet-700 border border-violet-200 rounded px-1.5 py-0.5">
+                  🔗 משותף חלקית
+                </span>
+              )}
               {isCancelled && (
                 <span className="text-xs bg-red-50 text-red-600 border border-red-200 rounded px-1.5 py-0.5">בוטל</span>
               )}
@@ -119,17 +127,35 @@ export default function SplitActivityGroup({
                     <span className="font-medium">{spaceName}</span>
                     {item.pax ? <span className="text-slate-400">{item.pax} משתתפים</span> : null}
                     {hasCoffee && <span className="text-amber-600">☕</span>}
+                    {item.shared_activity_id && (
+                      <span className="text-[10px] bg-violet-50 text-violet-600 border border-violet-200 rounded px-1 py-0.5">
+                        🔗 משותף
+                      </span>
+                    )}
                     {!isCancelled && (
                       <RoleGate permission="MANAGE_ACTIVITIES">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => onCancel(item.id)}
-                          className="h-5 w-5 p-0 text-red-300 hover:text-red-500 mr-auto"
-                          title="בטל מרחב זה"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </Button>
+                        <div className="flex items-center gap-0.5 mr-auto">
+                          {!item.shared_activity_id && onLinkSave && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => setLinkChild(item)}
+                              className="h-5 w-5 p-0 text-violet-300 hover:text-violet-600"
+                              title="לשייך מרחב זה לקבוצות נוספות"
+                            >
+                              <Link2 className="w-3 h-3" />
+                            </Button>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => onCancel(item.id)}
+                            className="h-5 w-5 p-0 text-red-300 hover:text-red-500"
+                            title="בטל מרחב זה"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
+                        </div>
                       </RoleGate>
                     )}
                   </div>
@@ -143,6 +169,16 @@ export default function SplitActivityGroup({
           </div>
         )}
       </div>
+
+      {linkChild && onLinkSave && (
+        <LinkSplitChildModal
+          item={linkChild}
+          spaceName={getSpaceName(linkChild.activity_space_id)}
+          onSave={onLinkSave}
+          onClose={() => setLinkChild(null)}
+          saving={saving}
+        />
+      )}
 
       {editing && onEditSave && (
         <SplitActivityEditModal

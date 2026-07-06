@@ -451,6 +451,11 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
       setNewScheduleError("לא ניתן לבחור את אותו מרחב פעמיים");
       return;
     }
+    if (sharedEnabled && extraGroups.length === 0) {
+      setNewScheduleError("יש לבחור לפחות קבוצה אחת לשיוך");
+      return;
+    }
+    const isSharedSplit = sharedEnabled && extraGroups.length > 0;
 
     setSaving(true);
     const splitGroupId = crypto.randomUUID();
@@ -480,24 +485,30 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
           split_group_id: splitGroupId,
           split_index: i + 1,
           split_total: splitRows.length,
+          ...(isSharedSplit ? { extra_group_ids: extraGroups.map(g => g.id) } : {}),
           source: "manual",
           status: "ACTIVE",
         });
-        if (res.data?.error) {
+        if (!res.data?.success || res.data?.error) {
           // Rollback
           for (const cid of createdIds) {
             await base44.entities.GroupScheduleItem.update(cid, { status: "CANCELLED" }).catch(() => {});
           }
           invalidate();
-          setNewScheduleError(`אחד המרחבים שנבחרו כבר תפוס בשעה הזו. יש לבחור שעה או מרחב אחר. (${res.data.error})`);
+          setNewScheduleError(res.data?.error || "השמירה נכשלה. נסה שוב.");
           setSaving(false);
           return;
         }
-        createdIds.push(res.data.item.id);
+        createdIds.push(...(res.data.created_ids || (res.data.item ? [res.data.item.id] : [])));
       }
-      toast.success(`שיבוץ מפוצל נשמר — ${splitRows.length} מרחבים`);
+      if (isSharedSplit) {
+        toast.success(`שיבוץ מפוצל ומשותף נשמר — ${splitRows.length} מרחבים, ${extraGroups.length + 1} קבוצות`);
+        invalidate(extraGroups.map(g => g.id));
+      } else {
+        toast.success(`שיבוץ מפוצל נשמר — ${splitRows.length} מרחבים`);
+        invalidate();
+      }
       resetAddActivityForm();
-      invalidate();
     } catch (err) {
       for (const cid of createdIds) {
         await base44.entities.GroupScheduleItem.update(cid, { status: "CANCELLED" }).catch(() => {});
@@ -903,8 +914,8 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
                 </label>
               </div>
 
-              {/* ── Shared activity toggle ── */}
-              {!splitEnabled && (
+              {/* ── Shared activity toggle — independent of split ── */}
+              {(
                 <div className="col-span-2">
                   <label className="flex items-center gap-2 cursor-pointer select-none w-fit">
                     <input
@@ -1004,11 +1015,16 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
             )}
 
             {/* Shared group selector */}
-            {sharedEnabled && !splitEnabled && (
+            {sharedEnabled && (
               <div className="border border-violet-200 rounded-lg p-3 bg-violet-50/40 space-y-2">
                 <p className="text-xs font-semibold text-violet-700 flex items-center gap-1">
                   <Users className="w-3.5 h-3.5" /> שיוך לקבוצות נוספות
                 </p>
+                {splitEnabled && (
+                  <p className="text-[11px] text-violet-500">
+                    הפעילות המפוצלת תשותף במלואה — כל מרחב ישויך לקבוצות שנבחרו
+                  </p>
+                )}
                 <SharedGroupSelector
                   currentGroupId={groupId}
                   selectedGroups={extraGroups}
@@ -1050,6 +1066,7 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
                   items={entry.items}
                   activitySpaces={activitySpaces}
                   onCancel={handleCancelScheduleItem}
+                  onLinkSave={handleSaveScheduleItem}
                   onDuplicate={handleDuplicateActivity}
                   onEditSave={handleEditSplitGroup}
                   groupDateRange={{ arrivalDate, departureDate }}

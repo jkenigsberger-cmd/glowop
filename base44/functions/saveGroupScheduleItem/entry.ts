@@ -460,6 +460,10 @@ Deno.serve(async (req) => {
             ...basePayload,
             group_id: extraGroupId,
             operational_group_profile_id: extraProfile.id,
+            // Clones never inherit split metadata — the split belongs to the source group only
+            split_group_id: null,
+            split_index: null,
+            split_total: null,
             ...sharedMeta,
           });
           createdIds.push(clone.id);
@@ -508,6 +512,10 @@ Deno.serve(async (req) => {
           // Unlink this item from the shared activity
           const updatedItem = {
             ...basePayload,
+            // Preserve split metadata — split and shared are independent dimensions
+            split_group_id: split_group_id ?? currentItem.split_group_id ?? null,
+            split_index: split_index ?? currentItem.split_index ?? null,
+            split_total: split_total ?? currentItem.split_total ?? null,
             shared_activity_id: null,
             shared_activity_created_from_group_id: null,
             shared_activity_group_ids: null,
@@ -523,6 +531,10 @@ Deno.serve(async (req) => {
           // Update only this item, keep its shared_activity_id
           const result = await base44.asServiceRole.entities.GroupScheduleItem.update(id, {
             ...basePayload,
+            // Preserve split metadata if the body didn't carry it — split and shared are independent
+            split_group_id: split_group_id ?? currentItem.split_group_id ?? null,
+            split_index: split_index ?? currentItem.split_index ?? null,
+            split_total: split_total ?? currentItem.split_total ?? null,
             shared_activity_id: currentItem.shared_activity_id || null,
             shared_activity_created_from_group_id: currentItem.shared_activity_created_from_group_id || null,
             shared_activity_group_ids: currentItem.shared_activity_group_ids || null,
@@ -554,6 +566,10 @@ Deno.serve(async (req) => {
             ...basePayload,
             group_id: linkedItem.group_id,
             operational_group_profile_id: linkedItem.operational_group_profile_id,
+            // Preserve each linked item's OWN split metadata — never overwrite one dimension with the other
+            split_group_id: linkedItem.split_group_id || null,
+            split_index: linkedItem.split_index ?? null,
+            split_total: linkedItem.split_total ?? null,
             shared_activity_id: currentSharedId,
             shared_activity_created_from_group_id: currentItem.shared_activity_created_from_group_id,
           });
@@ -578,8 +594,17 @@ Deno.serve(async (req) => {
 
     // ── CASE: Normal single item save (no extra groups) ───────────────────────
     if (!extra_group_ids || extra_group_ids.length === 0) {
+      // Split-modal edits don't carry shared fields in the body — use the stored
+      // shared_activity_id so linked clones of the same activity don't block the save.
+      let effectiveSharedId = excludeSharedId;
+      if (id && !effectiveSharedId) {
+        try {
+          const cur = await base44.asServiceRole.entities.GroupScheduleItem.get(id);
+          effectiveSharedId = cur?.shared_activity_id || null;
+        } catch { /* not found — keep null */ }
+      }
       if (resolvedSpaceId && status !== 'CANCELLED') {
-        const conflictErr = await checkConflict(resolvedSpaceId, id || null, excludeSharedId);
+        const conflictErr = await checkConflict(resolvedSpaceId, id || null, effectiveSharedId);
         if (conflictErr) return Response.json({ success: false, error: conflictErr }, { status: 409 });
       }
 
@@ -601,7 +626,7 @@ Deno.serve(async (req) => {
         });
         const postConflicts = afterItems.filter(item => {
           if (item.id === result.id) return false;
-          if (excludeSharedId && item.shared_activity_id === excludeSharedId) return false;
+          if (effectiveSharedId && item.shared_activity_id === effectiveSharedId) return false;
           const eStart = timeToMinutes(item.start_time);
           const eEnd   = timeToMinutes(item.end_time);
           return newStart < eEnd && newEnd > eStart;
