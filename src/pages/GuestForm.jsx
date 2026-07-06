@@ -6,6 +6,7 @@ import GuestFormStep3 from "@/components/guest-form/GuestFormStep3";
 import GuestFormStep4 from "@/components/guest-form/GuestFormStep4";
 import GuestFormDayUseMeals from "@/components/guest-form/GuestFormDayUseMeals";
 import GuestFormProgress from "@/components/guest-form/GuestFormProgress";
+import GuestFormAssistant from "@/components/guest-form/assistant/GuestFormAssistant";
 import { Button } from "@/components/ui/button";
 import { differenceInCalendarDays, addDays, format, parseISO } from "date-fns";
 import { base44 } from "@/api/base44Client";
@@ -439,6 +440,8 @@ export default function GuestForm() {
           )}
         </div>
       </div>
+
+      <GuestFormAssistant formLinkToken={formLinkToken} />
     </div>
   );
 }
