@@ -5,7 +5,7 @@ const NIGHT_TYPE = "NIGHT_ON_CALL";
 
 const esc = (value = "") => String(value).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const isCleaning = (shift) => CLEANING_TYPES.has(shift.row_type);
-const isWorkerShift = (shift) => !isCleaning(shift) && shift.row_type !== "PLANNED_ACTIVITY" && (shift.worker_name || shift.worker_id);
+const isWorkerShift = (shift) => !isCleaning(shift) && shift.row_type !== "PLANNED_ACTIVITY" && !(shift.row_type === "SPECIAL_TASKS" && !shift.worker_id) && (shift.worker_name || shift.worker_id);
 const rowOrder = (shift) => Number(shift.row_order ?? ROW_BY_TYPE[shift.row_type]?.order ?? 99);
 
 export const reportStatusLabel = (schedule) => schedule?.status === "PUBLISHED" ? "פורסם" : "טיוטה";
@@ -84,7 +84,9 @@ const workerShiftText = (shift, compact = false) => {
 };
 
 export function generateWorkerPersonalMessage(worker, schedule, weekStart) {
-  const lines = [`${worker.name} שלום,`, `אלה המשמרות שלך לשבוע ${weekRangeLabel(weekStart)}:`, ""];
+  const lines = [`${worker.name} שלום,`, `אלה המשמרות שלך לשבוע ${weekRangeLabel(weekStart)}:`];
+  if (schedule?.status !== "PUBLISHED") lines.push("שים לב: הסידור עדיין טיוטה");
+  lines.push("");
   worker.days.forEach((day) => {
     lines.push(`${day.dayName} ${day.dateLabel}`);
     day.shifts.forEach((shift) => lines.push(workerShiftText(shift)));

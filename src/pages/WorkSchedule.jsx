@@ -287,6 +287,7 @@ export default function WorkSchedule() {
           schedule={schedule}
           shifts={shifts}
           weekStart={weekStart}
+          workers={workers}
         />
       )}
     </div>

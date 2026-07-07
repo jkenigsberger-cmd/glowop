@@ -4,11 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/use-toast";
+import PersonalWorkerMessageTab from "@/components/work-schedule/PersonalWorkerMessageTab";
 import WeeklyScheduleReportDays from "@/components/work-schedule/WeeklyScheduleReportDays";
 import WeeklyScheduleReportWorkers from "@/components/work-schedule/WeeklyScheduleReportWorkers";
 import { generateWeeklySchedulePrintHtml, generateWeeklyWhatsAppText, generateWorkersOnlyText } from "@/lib/weeklyScheduleReport";
 
-export default function WeeklyScheduleReportModal({ open, onClose, schedule, shifts, weekStart }) {
+export default function WeeklyScheduleReportModal({ open, onClose, schedule, shifts, weekStart, workers = [] }) {
   const { toast } = useToast();
   const generalText = generateWeeklyWhatsAppText(schedule, shifts, weekStart);
   const workersText = generateWorkersOnlyText(schedule, shifts, weekStart);
@@ -35,6 +36,7 @@ export default function WeeklyScheduleReportModal({ open, onClose, schedule, shi
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <TabsList>
               <TabsTrigger value="workers">לפי עובדים</TabsTrigger>
+              <TabsTrigger value="personal">הודעה לעובד</TabsTrigger>
               <TabsTrigger value="days">לפי ימים</TabsTrigger>
               <TabsTrigger value="whatsapp">טקסט ל-WhatsApp</TabsTrigger>
             </TabsList>
@@ -46,6 +48,9 @@ export default function WeeklyScheduleReportModal({ open, onClose, schedule, shi
           </div>
           <TabsContent value="workers" className="mt-4">
             <WeeklyScheduleReportWorkers schedule={schedule} shifts={shifts} weekStart={weekStart} onCopyWorker={(text) => copyText(text, "ההודעה לעובד הועתקה")} />
+          </TabsContent>
+          <TabsContent value="personal" className="mt-4">
+            <PersonalWorkerMessageTab schedule={schedule} shifts={shifts} weekStart={weekStart} workers={workers} onCopy={(text) => copyText(text, "ההודעה לעובד הועתקה")} />
           </TabsContent>
           <TabsContent value="days" className="mt-4"><WeeklyScheduleReportDays schedule={schedule} shifts={shifts} weekStart={weekStart} /></TabsContent>
           <TabsContent value="whatsapp" className="mt-4"><Textarea readOnly value={generalText} rows={22} className="font-mono text-xs leading-5 bg-slate-50" /></TabsContent>
