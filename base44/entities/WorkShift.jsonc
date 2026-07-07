@@ -1,0 +1,79 @@
+{
+  "name": "WorkShift",
+  "type": "object",
+  "properties": {
+    "work_schedule_id": {
+      "type": "string",
+      "description": "FK to WorkSchedule"
+    },
+    "date": {
+      "type": "string",
+      "format": "date"
+    },
+    "row_type": {
+      "type": "string",
+      "enum": [
+        "PLANNED_ACTIVITY",
+        "OPERATIONS_MORNING",
+        "HOUSEKEEPING_MORNING",
+        "HOUSEKEEPING_MANAGER",
+        "MAINTENANCE",
+        "OPERATIONS_EVENING",
+        "HOUSEKEEPING_EVENING",
+        "NIGHT_ON_CALL",
+        "SPECIAL_TASKS"
+      ]
+    },
+    "row_label": {
+      "type": "string",
+      "description": "Hebrew label snapshot e.g. \u05ea\u05e4\u05e2\u05d5\u05dc \u05d1\u05d5\u05e7\u05e8"
+    },
+    "row_order": {
+      "type": "number",
+      "description": "Visual order of the row in the grid"
+    },
+    "worker_id": {
+      "type": "string",
+      "description": "FK to WorkerProfile (optional \u2014 PLANNED_ACTIVITY rows have no worker)"
+    },
+    "worker_name": {
+      "type": "string",
+      "description": "Snapshot of worker name at assignment time"
+    },
+    "start_time": {
+      "type": "string",
+      "description": "HH:MM"
+    },
+    "end_time": {
+      "type": "string",
+      "description": "HH:MM"
+    },
+    "notes": {
+      "type": "string"
+    },
+    "color_key": {
+      "type": "string",
+      "description": "Optional color override key"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "PLANNED",
+        "CANCELLED"
+      ],
+      "default": "PLANNED"
+    },
+    "created_by": {
+      "type": "string"
+    },
+    "updated_by": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "work_schedule_id",
+    "date",
+    "row_type",
+    "status"
+  ]
+}

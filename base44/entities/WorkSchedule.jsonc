@@ -1,0 +1,34 @@
+{
+  "name": "WorkSchedule",
+  "type": "object",
+  "properties": {
+    "week_start_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Sunday of the week (YYYY-MM-DD). One schedule per week."
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "DRAFT",
+        "PUBLISHED",
+        "ARCHIVED"
+      ],
+      "default": "DRAFT"
+    },
+    "published_at": {
+      "type": "string",
+      "description": "ISO datetime \u2014 set when published"
+    },
+    "created_by": {
+      "type": "string"
+    },
+    "updated_by": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "week_start_date",
+    "status"
+  ]
+}

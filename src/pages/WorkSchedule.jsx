@@ -1,0 +1,216 @@
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { base44 } from "@/api/base44Client";
+import { useRoleContext } from "@/lib/RoleContext";
+import { hasPermission } from "@/lib/roles";
+import { useToast } from "@/components/ui/use-toast";
+import { AlertTriangle, CalendarClock } from "lucide-react";
+import { getWeekStart, addDays, TEAM_FILTERS } from "@/lib/workScheduleConfig";
+import WeekToolbar from "@/components/work-schedule/WeekToolbar";
+import ScheduleGrid from "@/components/work-schedule/ScheduleGrid";
+import ShiftFormModal from "@/components/work-schedule/ShiftFormModal";
+
+export default function WorkSchedule() {
+  const { role, internalUser } = useRoleContext();
+  const canManage = hasPermission(role, "MANAGE_WORK_SCHEDULE");
+  const userEmail = internalUser?.email || "";
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const [weekStart, setWeekStart] = useState(() => getWeekStart());
+  const [teamFilter, setTeamFilter] = useState("ALL");
+  const [modal, setModal] = useState(null); // { shift } | { defaults }
+  const [busy, setBusy] = useState(false);
+
+  const { data: schedules = [] } = useQuery({
+    queryKey: ["workSchedule", weekStart],
+    queryFn: () => base44.entities.WorkSchedule.filter({ week_start_date: weekStart }),
+  });
+  const schedule = schedules[0] || null;
+
+  const { data: shifts = [] } = useQuery({
+    queryKey: ["workShifts", schedule?.id],
+    queryFn: () => base44.entities.WorkShift.filter({ work_schedule_id: schedule.id }, "date", 500),
+    enabled: !!schedule,
+  });
+
+  const { data: workers = [] } = useQuery({
+    queryKey: ["workerProfiles"],
+    queryFn: () => base44.entities.WorkerProfile.filter({ is_active: true }, "full_name", 500),
+  });
+
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ["workSchedule", weekStart] });
+    queryClient.invalidateQueries({ queryKey: ["workShifts"] });
+    queryClient.invalidateQueries({ queryKey: ["workerProfiles"] });
+  };
+
+  const ensureSchedule = async () => {
+    if (schedule) return schedule;
+    const created = await base44.entities.WorkSchedule.create({
+      week_start_date: weekStart, status: "DRAFT", created_by: userEmail || undefined,
+    });
+    invalidate();
+    return created;
+  };
+
+  const handleCreateDraft = async () => {
+    setBusy(true);
+    await ensureSchedule();
+    toast({ description: "נוצרה טיוטת סידור לשבוע זה" });
+    setBusy(false);
+  };
+
+  const handleSaveShift = async (payload) => {
+    const s = await ensureSchedule();
+    if (modal?.shift) {
+      await base44.entities.WorkShift.update(modal.shift.id, { ...payload, updated_by: userEmail || undefined });
+    } else {
+      await base44.entities.WorkShift.create({ ...payload, work_schedule_id: s.id, created_by: userEmail || undefined });
+    }
+    invalidate();
+  };
+
+  const handleCancelShift = async (shift) => {
+    await base44.entities.WorkShift.update(shift.id, { status: "CANCELLED", updated_by: userEmail || undefined });
+    invalidate();
+  };
+
+  const handleDeleteShift = async (shift) => {
+    await base44.entities.WorkShift.delete(shift.id);
+    invalidate();
+  };
+
+  const handleCopyPrev = async () => {
+    setBusy(true);
+    try {
+      const prevStart = addDays(weekStart, -7);
+      const prevScheds = await base44.entities.WorkSchedule.filter({ week_start_date: prevStart });
+      if (!prevScheds[0]) {
+        toast({ description: "לא נמצא סידור בשבוע הקודם", variant: "destructive" });
+        setBusy(false);
+        return;
+      }
+      if (shifts.length > 0) {
+        const ok = window.confirm("כבר קיימים משמרות בשבוע זה. להעתיק בכל זאת? (המשמרות הקיימות יישארו)");
+        if (!ok) { setBusy(false); return; }
+      }
+      const prevShifts = await base44.entities.WorkShift.filter(
+        { work_schedule_id: prevScheds[0].id, status: "PLANNED" }, "date", 500
+      );
+      if (prevShifts.length === 0) {
+        toast({ description: "אין משמרות להעתקה בשבוע הקודם" });
+        setBusy(false);
+        return;
+      }
+      const target = await ensureSchedule();
+      await base44.entities.WorkShift.bulkCreate(prevShifts.map((s) => ({
+        work_schedule_id: target.id,
+        date: addDays(s.date, 7),
+        row_type: s.row_type,
+        row_label: s.row_label,
+        row_order: s.row_order,
+        worker_id: s.worker_id || undefined,
+        worker_name: s.worker_name || undefined,
+        start_time: s.start_time || undefined,
+        end_time: s.end_time || undefined,
+        notes: s.notes || undefined,
+        status: "PLANNED",
+        created_by: userEmail || undefined,
+      })));
+      invalidate();
+      toast({ description: `הועתקו ${prevShifts.length} משמרות מהשבוע הקודם (טיוטה)` });
+    } catch (err) {
+      toast({ description: err.message || "שגיאה בהעתקה", variant: "destructive" });
+    }
+    setBusy(false);
+  };
+
+  const handlePublish = async () => {
+    if (!schedule) return;
+    setBusy(true);
+    await base44.entities.WorkSchedule.update(schedule.id, {
+      status: "PUBLISHED",
+      published_at: new Date().toISOString(),
+      updated_by: userEmail || undefined,
+    });
+    invalidate();
+    toast({ description: "הסידור פורסם — העובדים יכולים לראות את המשמרות שלהם" });
+    setBusy(false);
+  };
+
+  if (!canManage) {
+    return (
+      <div className="max-w-screen-xl mx-auto px-4 py-12 text-center text-slate-400 text-sm" dir="rtl">
+        אין לך הרשאה לצפות בסידור העבודה
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-screen-xl mx-auto px-4 lg:px-6 py-6 space-y-4" dir="rtl">
+      <div className="flex items-center gap-2">
+        <CalendarClock className="w-5 h-5 text-primary" />
+        <h1 className="text-xl font-bold text-slate-800">סידור עבודה שבועי</h1>
+      </div>
+
+      <WeekToolbar
+        weekStart={weekStart}
+        setWeekStart={setWeekStart}
+        schedule={schedule}
+        onCopyPrev={handleCopyPrev}
+        onCreateDraft={handleCreateDraft}
+        onPublish={handlePublish}
+        busy={busy}
+      />
+
+      {schedule?.status === "PUBLISHED" && (
+        <div className="flex items-center gap-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          הסידור כבר פורסם. כל שינוי ישפיע על מה שהעובדים רואים.
+        </div>
+      )}
+
+      {/* Team filter */}
+      <div className="flex gap-2 flex-wrap">
+        {TEAM_FILTERS.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => setTeamFilter(t.id)}
+            className={`px-3.5 py-1 rounded-full text-xs font-medium border transition-all ${
+              teamFilter === t.id
+                ? "bg-primary text-white border-primary"
+                : "bg-white text-slate-600 border-slate-200 hover:border-primary/50"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      <ScheduleGrid
+        weekStart={weekStart}
+        shifts={shifts}
+        teamFilter={teamFilter}
+        canManage={canManage}
+        onAddShift={(date, rowType) => setModal({ defaults: { date, row_type: rowType } })}
+        onEditShift={(shift) => setModal({ shift })}
+      />
+
+      {modal && (
+        <ShiftFormModal
+          shift={modal.shift || null}
+          defaults={modal.defaults || null}
+          workers={workers}
+          isPublished={schedule?.status === "PUBLISHED"}
+          userEmail={userEmail}
+          onSave={handleSaveShift}
+          onDelete={handleDeleteShift}
+          onCancelShift={handleCancelShift}
+          onClose={() => setModal(null)}
+        />
+      )}
+    </div>
+  );
+}

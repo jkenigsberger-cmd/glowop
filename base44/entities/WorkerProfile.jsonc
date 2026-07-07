@@ -1,0 +1,48 @@
+{
+  "name": "WorkerProfile",
+  "type": "object",
+  "properties": {
+    "full_name": {
+      "type": "string",
+      "description": "Worker display name"
+    },
+    "phone": {
+      "type": "string"
+    },
+    "default_team": {
+      "type": "string",
+      "enum": [
+        "OPERATIONS",
+        "HOUSEKEEPING",
+        "MAINTENANCE",
+        "OTHER"
+      ],
+      "default": "OTHER"
+    },
+    "is_active": {
+      "type": "boolean",
+      "default": true
+    },
+    "internal_user_id": {
+      "type": "string",
+      "description": "FK to InternalUser (optional \u2014 workers may exist without app login)"
+    },
+    "internal_user_email": {
+      "type": "string",
+      "description": "Lowercased email of linked InternalUser \u2014 used by \u05d4\u05de\u05e9\u05de\u05e8\u05d5\u05ea \u05e9\u05dc\u05d9 to match the logged-in worker"
+    },
+    "notes": {
+      "type": "string"
+    },
+    "created_by": {
+      "type": "string"
+    },
+    "updated_by": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "full_name",
+    "is_active"
+  ]
+}
