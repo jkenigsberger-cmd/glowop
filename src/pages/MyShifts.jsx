@@ -1,19 +1,13 @@
-import { useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { useRoleContext } from "@/lib/RoleContext";
-import { CalendarClock, Plus, StickyNote } from "lucide-react";
+import { CalendarClock, StickyNote } from "lucide-react";
 import { ROW_BY_TYPE, fmtShiftTime, fmtDM, dayNameOf } from "@/lib/workScheduleConfig";
-import { Button } from "@/components/ui/button";
-import WorkerShiftRequestModal from "@/components/work-schedule/WorkerShiftRequestModal";
-import WorkerRequestsList from "@/components/work-schedule/WorkerRequestsList";
 
 // Worker view — only PUBLISHED shifts assigned to the logged-in worker. Read-only.
 export default function MyShifts() {
   const { internalUser } = useRoleContext();
   const email = (internalUser?.email || "").trim().toLowerCase();
-  const queryClient = useQueryClient();
-  const [requestOpen, setRequestOpen] = useState(false);
 
   const { data: profiles = [], isLoading: loadingProfile } = useQuery({
     queryKey: ["myWorkerProfile", email],
@@ -40,20 +34,6 @@ export default function MyShifts() {
     .filter((s) => s.row_type !== "HOUSEKEEPING_MORNING" && s.row_type !== "HOUSEKEEPING_EVENING")
     .sort((a, b) => a.date.localeCompare(b.date) || (a.start_time || "").localeCompare(b.start_time || ""));
 
-  const { data: myRequests = [] } = useQuery({
-    queryKey: ["myWorkScheduleRequests", email],
-    queryFn: () => base44.entities.WorkScheduleRequest.filter({ worker_email: email }, "-created_date", 100),
-    enabled: !!email,
-  });
-
-  const refreshRequests = () => queryClient.invalidateQueries({ queryKey: ["myWorkScheduleRequests", email] });
-
-  const handleCancelRequest = async (request) => {
-    if (request.status !== "PENDING") return;
-    await base44.entities.WorkScheduleRequest.update(request.id, { status: "CANCELLED", updated_by: email });
-    refreshRequests();
-  };
-
   const loading = loadingProfile || loadingShifts;
 
   return (
@@ -63,12 +43,6 @@ export default function MyShifts() {
           <CalendarClock className="w-5 h-5 text-primary" />
           <h1 className="text-xl font-bold text-slate-800">המשמרות שלי</h1>
         </div>
-        {profile && (
-          <Button type="button" size="sm" onClick={() => setRequestOpen(true)}>
-            <Plus className="w-4 h-4" />
-            בקשה חדשה
-          </Button>
-        )}
       </div>
 
       {loading ? (
@@ -113,29 +87,6 @@ export default function MyShifts() {
         </div>
       )}
 
-      {profile && (
-        <section className="space-y-3 pt-2">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-lg font-bold text-slate-800">הבקשות שלי</h2>
-            <Button type="button" variant="outline" size="sm" onClick={() => setRequestOpen(true)}>
-              <Plus className="w-4 h-4" />
-              בקשה חדשה
-            </Button>
-          </div>
-          <WorkerRequestsList requests={myRequests} onCancel={handleCancelRequest} />
-        </section>
-      )}
-
-      {requestOpen && profile && (
-        <WorkerShiftRequestModal
-          open={requestOpen}
-          onClose={() => setRequestOpen(false)}
-          profile={profile}
-          email={email}
-          shifts={shifts}
-          onCreated={refreshRequests}
-        />
-      )}
     </div>
   );
 }

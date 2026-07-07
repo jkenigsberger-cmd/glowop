@@ -271,12 +271,12 @@ export default function WorkSchedule() {
         shifts={shifts}
         teamFilter={teamFilter}
         canManage={canManage}
-        onAddShift={(date, rowType) => setModal({ defaults: { date, row_type: rowType } })}
-        onEditShift={(shift) => setModal({ shift })}
+        onAddShift={(date, rowType) => canManage && setModal({ defaults: { date, row_type: rowType } })}
+        onEditShift={(shift) => canManage && setModal({ shift })}
         onToggleNightOnCall={handleToggleNightOnCall}
       />
 
-      {modal && (
+      {modal && canManage && (
         <ShiftFormModal
           shift={modal.shift || null}
           defaults={modal.defaults || null}
