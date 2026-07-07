@@ -41,6 +41,7 @@ const GROUP_FIELDS = [
   'group_name', 'group_type', 'arrival_date', 'departure_date',
   'arrival_time', 'departure_time', 'contact_name', 'contact_phone',
   'contact_email', 'internal_notes', 'status',
+  'total_pax', 'staff_count', 'participant_count', 'boys_count', 'girls_count',
 ];
 
 // Valid operational fields we accept into the OGP (mirrors OGP schema).

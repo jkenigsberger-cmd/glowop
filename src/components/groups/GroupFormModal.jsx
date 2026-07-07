@@ -338,6 +338,12 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
         contact_email:  payload.contact_email || null,
         internal_notes: payload.internal_notes || null,
         status:         payload.status,
+        // Participant counts must be saved on the Group too — overview counters read them
+        ...(payload.total_pax         != null ? { total_pax: payload.total_pax } : {}),
+        ...(payload.staff_count       != null ? { staff_count: payload.staff_count } : {}),
+        ...(payload.participant_count != null ? { participant_count: payload.participant_count } : {}),
+        ...(payload.boys_count        != null ? { boys_count: payload.boys_count } : {}),
+        ...(payload.girls_count       != null ? { girls_count: payload.girls_count } : {}),
       };
       const ogp_data = {
         ...profilePaxFields,
@@ -368,6 +374,14 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
         }
         return;
       }
+      // Creation succeeded — refresh caches, close, and navigate to the new group
+      setSaving(false);
+      queryClient.invalidateQueries({ queryKey: ["groups"] });
+      queryClient.invalidateQueries({ queryKey: ["profiles_kitchen"] });
+      queryClient.invalidateQueries({ queryKey: ["profiles_kitchenReport"] });
+      queryClient.invalidateQueries({ queryKey: ["operationalProfile"] });
+      onSaved(data.group_id);
+      return;
     }
 
     setSaving(false);
