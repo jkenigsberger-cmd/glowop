@@ -6,6 +6,7 @@ export default function ShiftCard({ shift, onClick, clickable }) {
   const row = ROW_BY_TYPE[shift.row_type] || {};
   const cancelled = shift.status === "CANCELLED";
   const isTextOnly = row.textOnly;
+  const isCountBased = row.countBased;
 
   return (
     <button
@@ -18,6 +19,17 @@ export default function ShiftCard({ shift, onClick, clickable }) {
     >
       {isTextOnly ? (
         <span className="whitespace-pre-line">{shift.notes || "—"}</span>
+      ) : isCountBased ? (
+        <>
+          <span className="font-semibold block">{row.label}</span>
+          <span className="block">{Number(shift.worker_count || 0)} מנקות</span>
+          {shift.notes && (
+            <span className="flex items-center gap-0.5 mt-0.5 opacity-70">
+              <StickyNote className="w-2.5 h-2.5 shrink-0" />
+              <span className="truncate">{shift.notes}</span>
+            </span>
+          )}
+        </>
       ) : (
         <>
           <span className="font-semibold">{shift.worker_name || "—"}</span>

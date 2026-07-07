@@ -34,11 +34,15 @@
     },
     "worker_id": {
       "type": "string",
-      "description": "FK to WorkerProfile (optional \u2014 PLANNED_ACTIVITY rows have no worker)"
+      "description": "FK to WorkerProfile (optional \u2014 PLANNED_ACTIVITY and contractor cleaning rows have no worker)"
     },
     "worker_name": {
       "type": "string",
       "description": "Snapshot of worker name at assignment time"
+    },
+    "worker_count": {
+      "type": "number",
+      "description": "Number of contractor cleaners requested \u2014 required in UI for HOUSEKEEPING_MORNING and HOUSEKEEPING_EVENING"
     },
     "start_time": {
       "type": "string",

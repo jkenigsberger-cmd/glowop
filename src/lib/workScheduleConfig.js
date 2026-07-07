@@ -3,11 +3,11 @@
 export const ROW_TYPES = [
   { type: "PLANNED_ACTIVITY",    label: "פעילות מתוכננת", order: 0, team: null,          textOnly: true,  cell: "bg-slate-50",     chip: "bg-white border-slate-300 text-slate-700" },
   { type: "OPERATIONS_MORNING",  label: "תפעול בוקר",     order: 1, team: "OPERATIONS",  textOnly: false, cell: "bg-blue-50/60",   chip: "bg-blue-100 border-blue-300 text-blue-900" },
-  { type: "HOUSEKEEPING_MORNING",label: "ניקיון בוקר",    order: 2, team: "HOUSEKEEPING",textOnly: false, cell: "bg-green-50/60",  chip: "bg-green-100 border-green-300 text-green-900" },
+  { type: "HOUSEKEEPING_MORNING",label: "ניקיון בוקר",    order: 2, team: "HOUSEKEEPING",textOnly: false, countBased: true, cell: "bg-green-50/60",  chip: "bg-green-100 border-green-300 text-green-900" },
   { type: "HOUSEKEEPING_MANAGER",label: "אחראי משק בית",  order: 3, team: "HOUSEKEEPING",textOnly: false, cell: "bg-emerald-50/60",chip: "bg-emerald-100 border-emerald-300 text-emerald-900" },
   { type: "MAINTENANCE",         label: "תחזוקה",          order: 4, team: "MAINTENANCE", textOnly: false, cell: "bg-sky-50/60",    chip: "bg-sky-100 border-sky-300 text-sky-900" },
   { type: "OPERATIONS_EVENING",  label: "תפעול ערב",      order: 5, team: "OPERATIONS",  textOnly: false, cell: "bg-orange-50/60", chip: "bg-orange-100 border-orange-300 text-orange-900" },
-  { type: "HOUSEKEEPING_EVENING",label: "ניקיון ערב",     order: 6, team: "HOUSEKEEPING",textOnly: false, cell: "bg-green-50/60",  chip: "bg-green-100 border-green-300 text-green-900" },
+  { type: "HOUSEKEEPING_EVENING",label: "ניקיון ערב",     order: 6, team: "HOUSEKEEPING",textOnly: false, countBased: true, cell: "bg-green-50/60",  chip: "bg-green-100 border-green-300 text-green-900" },
   { type: "NIGHT_ON_CALL",       label: "כונן לילה",      order: 7, team: "OPERATIONS",  textOnly: false, cell: "bg-cyan-50/60",   chip: "bg-cyan-100 border-cyan-300 text-cyan-900" },
   { type: "SPECIAL_TASKS",       label: "משימות מיוחדות", order: 8, team: null,          textOnly: false, cell: "bg-slate-50",     chip: "bg-white border-slate-300 text-slate-700" },
 ];

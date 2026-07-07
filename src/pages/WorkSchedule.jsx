@@ -104,20 +104,24 @@ export default function WorkSchedule() {
         return;
       }
       const target = await ensureSchedule();
-      await base44.entities.WorkShift.bulkCreate(prevShifts.map((s) => ({
-        work_schedule_id: target.id,
-        date: addDays(s.date, 7),
-        row_type: s.row_type,
-        row_label: s.row_label,
-        row_order: s.row_order,
-        worker_id: s.worker_id || undefined,
-        worker_name: s.worker_name || undefined,
-        start_time: s.start_time || undefined,
-        end_time: s.end_time || undefined,
-        notes: s.notes || undefined,
-        status: "PLANNED",
-        created_by: userEmail || undefined,
-      })));
+      await base44.entities.WorkShift.bulkCreate(prevShifts.map((s) => {
+        const isCleaning = s.row_type === "HOUSEKEEPING_MORNING" || s.row_type === "HOUSEKEEPING_EVENING";
+        return {
+          work_schedule_id: target.id,
+          date: addDays(s.date, 7),
+          row_type: s.row_type,
+          row_label: s.row_label,
+          row_order: s.row_order,
+          worker_id: isCleaning ? "" : (s.worker_id || undefined),
+          worker_name: isCleaning ? "" : (s.worker_name || undefined),
+          start_time: isCleaning ? "" : (s.start_time || undefined),
+          end_time: isCleaning ? "" : (s.end_time || undefined),
+          worker_count: s.worker_count || undefined,
+          notes: s.notes || undefined,
+          status: "PLANNED",
+          created_by: userEmail || undefined,
+        };
+      }));
       invalidate();
       toast({ description: `הועתקו ${prevShifts.length} משמרות מהשבוע הקודם (טיוטה)` });
     } catch (err) {

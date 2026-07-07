@@ -17,6 +17,7 @@ export default function ShiftFormModal({ shift, defaults, workers, isPublished, 
     date:       shift?.date       || defaults?.date     || "",
     row_type:   shift?.row_type   || defaults?.row_type || "OPERATIONS_MORNING",
     worker_id:  shift?.worker_id  || "",
+    worker_count: shift?.worker_count || "",
     start_time: shift?.start_time || "",
     end_time:   shift?.end_time   || "",
     notes:      shift?.notes      || "",
@@ -28,6 +29,7 @@ export default function ShiftFormModal({ shift, defaults, workers, isPublished, 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const row = ROW_BY_TYPE[form.row_type] || {};
   const isActivity = !!row.textOnly;
+  const isCountBased = !!row.countBased;
   const isNewWorker = form.worker_id === NEW_WORKER;
 
   const handleSubmit = async (e) => {
@@ -36,6 +38,8 @@ export default function ShiftFormModal({ shift, defaults, workers, isPublished, 
     if (!form.date) { setError("יש לבחור תאריך"); return; }
     if (isActivity) {
       if (!form.notes.trim()) { setError("יש להזין טקסט לפעילות המתוכננת"); return; }
+    } else if (isCountBased) {
+      if (!form.worker_count || Number(form.worker_count) < 1) { setError("יש להזין כמות מנקות"); return; }
     } else {
       if (!form.worker_id) { setError("יש לבחור עובד"); return; }
       if (isNewWorker && !newWorker.full_name.trim()) { setError("יש להזין שם עובד"); return; }
@@ -46,7 +50,7 @@ export default function ShiftFormModal({ shift, defaults, workers, isPublished, 
     try {
       let workerId = form.worker_id;
       let workerName = "";
-      if (!isActivity) {
+      if (!isActivity && !isCountBased) {
         if (isNewWorker) {
           const created = await base44.entities.WorkerProfile.create({
             full_name: newWorker.full_name.trim(),
@@ -68,10 +72,11 @@ export default function ShiftFormModal({ shift, defaults, workers, isPublished, 
         row_type: form.row_type,
         row_label: row.label,
         row_order: row.order,
-        worker_id: isActivity ? undefined : workerId,
-        worker_name: isActivity ? undefined : workerName,
-        start_time: isActivity ? (form.start_time || undefined) : form.start_time,
-        end_time: isActivity ? (form.end_time || undefined) : form.end_time,
+        worker_id: (isActivity || isCountBased) ? "" : workerId,
+        worker_name: (isActivity || isCountBased) ? "" : workerName,
+        worker_count: isCountBased ? Number(form.worker_count) : undefined,
+        start_time: (isActivity || isCountBased) ? "" : form.start_time,
+        end_time: (isActivity || isCountBased) ? "" : form.end_time,
         notes: form.notes || undefined,
         status: shift?.status || "PLANNED",
       });
@@ -113,7 +118,20 @@ export default function ShiftFormModal({ shift, defaults, workers, isPublished, 
             </div>
           </div>
 
-          {!isActivity && (
+          {isCountBased && (
+            <div className="space-y-1">
+              <Label className="text-xs text-slate-500">כמות מנקות *</Label>
+              <Input
+                type="number"
+                min="1"
+                value={form.worker_count}
+                onChange={(e) => set("worker_count", e.target.value)}
+                placeholder="לדוגמה: 4"
+              />
+            </div>
+          )}
+
+          {!isActivity && !isCountBased && (
             <>
               <div className="space-y-1">
                 <Label className="text-xs text-slate-500">עובד</Label>
