@@ -43,7 +43,7 @@ const ALL_LINKS = [
   { key: "maintenance",     to: "/maintenance",     label: "תחזוקה",           icon: Wrench,          group: "ops" },
   { key: "mechina-spaces",  to: "/mechina-spaces",  label: "בקשות מרחבים",     icon: BookMarked,      group: "primary" },
   { key: "meeting-summaries", to: "/meeting-summaries", label: "סיכומי פגישות", icon: NotebookPen,   group: "primary" },
-  { key: "work-schedule",   to: "/work-schedule",   label: "סידור עבודה",      icon: CalendarClock,   group: "primary" },
+  { key: "work-schedule",   to: "/work-schedule",   label: "סידור עבודה",      icon: CalendarClock,   group: "ops" },
   { key: "my-shifts",       to: "/my-shifts",       label: "המשמרות שלי",      icon: Clock,           group: "primary" },
 ];
 
@@ -200,11 +200,11 @@ export default function AppNav() {
   const showUserManagement = role === "SUPER_ADMIN";
 
   // Primary links: main daily-use modules kept in the top bar
-  const PRIMARY_KEYS = ["dashboard", "approved-groups", "calendar", "allocation", "common-spaces", "mechina-spaces", "meeting-summaries", "work-schedule", "my-shifts"];
+  const PRIMARY_KEYS = ["dashboard", "approved-groups", "calendar", "allocation", "common-spaces", "mechina-spaces", "meeting-summaries", "my-shifts"];
   const primaryLinks = ALL_LINKS.filter(l => PRIMARY_KEYS.includes(l.key) && allowedKeys.includes(l.key));
 
-  // Ops dropdown: housekeeping, kitchen, maintenance
-  const OPS_KEYS = ["housekeeping", "kitchen", "maintenance"];
+  // Ops dropdown: housekeeping, kitchen, maintenance, work schedule
+  const OPS_KEYS = ["housekeeping", "kitchen", "maintenance", "work-schedule"];
   const opsLinks = ALL_LINKS.filter(l => OPS_KEYS.includes(l.key) && allowedKeys.includes(l.key));
 
   // Admin dropdown items (not from ALL_LINKS — separate)
@@ -408,6 +408,7 @@ export default function AppNav() {
                   role={role}
                 />
               ))}
+              {opsLinks.length > 0 && <div className="px-4 pt-3 pb-1 text-[11px] font-bold text-slate-400">תפעול</div>}
               {opsLinks.map(link => (
                 <DrawerLink
                   key={link.key}

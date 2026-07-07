@@ -31,6 +31,7 @@ export default function MyShifts() {
   const today = new Date().toISOString().slice(0, 10);
   const shifts = myShifts
     .filter((s) => publishedIds.has(s.work_schedule_id) && s.date >= today)
+    .filter((s) => s.row_type !== "HOUSEKEEPING_MORNING" && s.row_type !== "HOUSEKEEPING_EVENING")
     .sort((a, b) => a.date.localeCompare(b.date) || (a.start_time || "").localeCompare(b.start_time || ""));
 
   const loading = loadingProfile || loadingShifts;
