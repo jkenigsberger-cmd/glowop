@@ -11,6 +11,7 @@ import DietaryFields, { EMPTY_DIETS, parseDiets, mergeDiets } from "@/components
 import { upsertReviewAlert } from "@/lib/reviewAlerts";
 import { syncExistingOperationalPaxForGroup } from "@/lib/syncOperationalPax";
 import MealSyncAfterDateChangeModal from "@/components/groups/MealSyncAfterDateChangeModal";
+import GroupAvailabilityChecker from "@/components/groups/GroupAvailabilityChecker";
 
 // Fields that trigger pax-related alerts when changed
 const PAX_FIELDS = ["total_pax", "participant_count", "staff_count", "boys_count", "girls_count"];
@@ -515,6 +516,19 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
               <Input type="number" min="0" value={form.girls_count} onChange={e => handleGirlsChange(e.target.value)} />
             </div>
           </div>
+
+          {/* Live site availability check — same logic as the Quote flow */}
+          <GroupAvailabilityChecker
+            groupType={form.group_type}
+            arrivalDate={form.arrival_date}
+            departureDate={form.departure_date}
+            totalPax={form.total_pax}
+            staffCount={staffCount}
+            participantCount={participantCount}
+            boysCount={boysCount}
+            girlsCount={girlsCount}
+            excludeGroupId={isEdit ? group?.id : undefined}
+          />
 
           {genderConsistencyError && (
             <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 whitespace-pre-line">
