@@ -5,10 +5,12 @@ import { useRoleContext } from "@/lib/RoleContext";
 import { hasPermission } from "@/lib/roles";
 import { useToast } from "@/components/ui/use-toast";
 import { AlertTriangle, CalendarClock } from "lucide-react";
-import { getWeekStart, addDays, TEAM_FILTERS } from "@/lib/workScheduleConfig";
+import { getWeekStart, addDays, TEAM_FILTERS, ROW_BY_TYPE } from "@/lib/workScheduleConfig";
 import WeekToolbar from "@/components/work-schedule/WeekToolbar";
 import ScheduleGrid from "@/components/work-schedule/ScheduleGrid";
 import ShiftFormModal from "@/components/work-schedule/ShiftFormModal";
+
+const NIGHT_ON_CALL_SOURCE = "OPERATIONS_EVENING_TO_NIGHT_ON_CALL";
 
 export default function WorkSchedule() {
   const { role, internalUser } = useRoleContext();
@@ -54,6 +56,17 @@ export default function WorkSchedule() {
     return created;
   };
 
+  const getLinkedNightOnCallShifts = (sourceShift) => base44.entities.WorkShift.filter({
+    work_schedule_id: sourceShift.work_schedule_id,
+    linked_source_shift_id: sourceShift.id,
+    auto_created_from: NIGHT_ON_CALL_SOURCE,
+  }, "-created_date", 50);
+
+  const deleteLinkedNightOnCallShifts = async (sourceShift) => {
+    const linked = await getLinkedNightOnCallShifts(sourceShift);
+    await Promise.all(linked.map((s) => base44.entities.WorkShift.delete(s.id)));
+  };
+
   const handleCreateDraft = async () => {
     setBusy(true);
     await ensureSchedule();
@@ -65,6 +78,19 @@ export default function WorkSchedule() {
     const s = await ensureSchedule();
     if (modal?.shift) {
       await base44.entities.WorkShift.update(modal.shift.id, { ...payload, updated_by: userEmail || undefined });
+      if (modal.shift.row_type === "OPERATIONS_EVENING") {
+        const linked = await getLinkedNightOnCallShifts(modal.shift);
+        if (payload.row_type === "OPERATIONS_EVENING") {
+          await Promise.all(linked.map((nightShift) => base44.entities.WorkShift.update(nightShift.id, {
+            date: payload.date,
+            worker_id: payload.worker_id,
+            worker_name: payload.worker_name,
+            updated_by: userEmail || undefined,
+          })));
+        } else {
+          await Promise.all(linked.map((nightShift) => base44.entities.WorkShift.delete(nightShift.id)));
+        }
+      }
     } else {
       await base44.entities.WorkShift.create({ ...payload, work_schedule_id: s.id, created_by: userEmail || undefined });
     }
@@ -73,11 +99,39 @@ export default function WorkSchedule() {
 
   const handleCancelShift = async (shift) => {
     await base44.entities.WorkShift.update(shift.id, { status: "CANCELLED", updated_by: userEmail || undefined });
+    if (shift.row_type === "OPERATIONS_EVENING") await deleteLinkedNightOnCallShifts(shift);
     invalidate();
   };
 
   const handleDeleteShift = async (shift) => {
+    if (shift.row_type === "OPERATIONS_EVENING") await deleteLinkedNightOnCallShifts(shift);
     await base44.entities.WorkShift.delete(shift.id);
+    invalidate();
+  };
+
+  const handleToggleNightOnCall = async (shift, shouldCreate) => {
+    if (!canManage || shift.row_type !== "OPERATIONS_EVENING") return;
+    const linked = await getLinkedNightOnCallShifts(shift);
+    if (shouldCreate) {
+      if (linked.some((s) => s.status === "PLANNED")) return;
+      const nightRow = ROW_BY_TYPE.NIGHT_ON_CALL;
+      await base44.entities.WorkShift.create({
+        work_schedule_id: shift.work_schedule_id,
+        date: shift.date,
+        row_type: "NIGHT_ON_CALL",
+        row_label: nightRow.label,
+        row_order: nightRow.order,
+        worker_id: shift.worker_id,
+        worker_name: shift.worker_name,
+        notes: "נוצר מתפעול ערב",
+        status: "PLANNED",
+        linked_source_shift_id: shift.id,
+        auto_created_from: NIGHT_ON_CALL_SOURCE,
+        created_by: userEmail || undefined,
+      });
+    } else {
+      await Promise.all(linked.map((s) => base44.entities.WorkShift.delete(s.id)));
+    }
     invalidate();
   };
 
@@ -200,6 +254,7 @@ export default function WorkSchedule() {
         canManage={canManage}
         onAddShift={(date, rowType) => setModal({ defaults: { date, row_type: rowType } })}
         onEditShift={(shift) => setModal({ shift })}
+        onToggleNightOnCall={handleToggleNightOnCall}
       />
 
       {modal && (

@@ -3,7 +3,7 @@ import { ROW_TYPES, getWeekDays, fmtDM, DAY_NAMES } from "@/lib/workScheduleConf
 import ShiftCard from "@/components/work-schedule/ShiftCard";
 
 // Weekly Excel-like grid: columns = Sunday→Saturday, rows = fixed row types
-export default function ScheduleGrid({ weekStart, shifts, teamFilter, canManage, onAddShift, onEditShift }) {
+export default function ScheduleGrid({ weekStart, shifts, teamFilter, canManage, onAddShift, onEditShift, onToggleNightOnCall }) {
   const days = getWeekDays(weekStart);
   const today = new Date().toISOString().slice(0, 10);
 
@@ -47,9 +47,25 @@ export default function ScheduleGrid({ weekStart, shifts, teamFilter, canManage,
                 return (
                   <td key={d} className={`border-b border-l border-slate-100 p-1 align-top ${row.cell} ${d === today ? "ring-1 ring-inset ring-primary/20" : ""}`}>
                     <div className="space-y-1 min-h-[34px]">
-                      {items.map((s) => (
-                        <ShiftCard key={s.id} shift={s} clickable={canManage} onClick={() => onEditShift(s)} />
-                      ))}
+                      {items.map((s) => {
+                        const linkedNightOnCall = shifts.some((n) =>
+                          n.row_type === "NIGHT_ON_CALL" &&
+                          n.status === "PLANNED" &&
+                          n.linked_source_shift_id === s.id &&
+                          n.auto_created_from === "OPERATIONS_EVENING_TO_NIGHT_ON_CALL"
+                        );
+                        return (
+                          <ShiftCard
+                            key={s.id}
+                            shift={s}
+                            clickable={canManage}
+                            onClick={() => onEditShift(s)}
+                            showNightOnCallToggle={canManage && s.row_type === "OPERATIONS_EVENING" && s.status === "PLANNED"}
+                            nightOnCallLinked={linkedNightOnCall}
+                            onToggleNightOnCall={onToggleNightOnCall}
+                          />
+                        );
+                      })}
                       {canManage && (
                         <button
                           type="button"

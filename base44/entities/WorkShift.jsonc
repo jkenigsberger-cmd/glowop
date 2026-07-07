@@ -44,6 +44,14 @@
       "type": "number",
       "description": "Number of contractor cleaners requested \u2014 required in UI for HOUSEKEEPING_MORNING and HOUSEKEEPING_EVENING"
     },
+    "linked_source_shift_id": {
+      "type": "string",
+      "description": "Source WorkShift id when this shift was auto-created from another shift"
+    },
+    "auto_created_from": {
+      "type": "string",
+      "description": "Automation marker, e.g. OPERATIONS_EVENING_TO_NIGHT_ON_CALL"
+    },
     "start_time": {
       "type": "string",
       "description": "HH:MM"
