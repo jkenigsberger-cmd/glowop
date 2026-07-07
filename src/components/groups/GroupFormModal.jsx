@@ -11,7 +11,6 @@ import DietaryFields, { EMPTY_DIETS, parseDiets, mergeDiets } from "@/components
 import { upsertReviewAlert } from "@/lib/reviewAlerts";
 import { syncExistingOperationalPaxForGroup } from "@/lib/syncOperationalPax";
 import MealSyncAfterDateChangeModal from "@/components/groups/MealSyncAfterDateChangeModal";
-import ParticipantCalculator from "@/components/groups/ParticipantCalculator";
 
 // Fields that trigger pax-related alerts when changed
 const PAX_FIELDS = ["total_pax", "participant_count", "staff_count", "boys_count", "girls_count"];
@@ -75,17 +74,33 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
   const [genderConsistencyError, setGenderConsistencyError] = useState(null);
   const [mealSyncData, setMealSyncData] = useState(null); // { outOfRangeMeals, newDeparture }
 
-  // ── Derived values (הרכב הקבוצה calculator) ──────────────────────────────
-  // LODGING: חניכים = בנים + בנות · סה״כ = חניכים + צוות (both calculated)
-  // DAY_USE: סה״כ + צוות editable · חניכים = סה״כ − צוות
-  const isDayUse   = form.group_type === "DAY_USE";
+  // ── Derived values ────────────────────────────────────────────────────────
+  const totalPax   = Number(form.total_pax   || 0);
   const staffCount = Number(form.staff_count || 0);
   const boysCount  = Number(form.boys_count  || 0);
   const girlsCount = Number(form.girls_count || 0);
-  const totalPax   = isDayUse ? Number(form.total_pax || 0) : (boysCount + girlsCount + staffCount);
-  const participantCount = isDayUse ? Math.max(0, totalPax - staffCount) : (boysCount + girlsCount);
 
+  // participant_count is always derived, never manually entered
+  const participantCount = Math.max(0, totalPax - staffCount);
+
+  // Validation warnings
+  const staffExceedsTotal = staffCount > totalPax && totalPax > 0;
+  const genderExceedsPax  = (boysCount + girlsCount) > participantCount && participantCount > 0;
+
+  // ── Field setters with auto-fill logic ───────────────────────────────────
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const handleBoysChange = (val) => {
+    const boys = Math.max(0, Math.min(Number(val || 0), participantCount));
+    const girls = Math.max(0, participantCount - boys);
+    setForm(f => ({ ...f, boys_count: boys, girls_count: girls }));
+  };
+
+  const handleGirlsChange = (val) => {
+    const girls = Math.max(0, Math.min(Number(val || 0), participantCount));
+    const boys = Math.max(0, participantCount - girls);
+    setForm(f => ({ ...f, girls_count: girls, boys_count: boys }));
+  };
 
   // ── Submit ────────────────────────────────────────────────────────────────
   const handleSubmit = async (e) => {
@@ -136,7 +151,6 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
     setSaving(true);
     const payload = {
       ...form,
-      total_pax: totalPax,
       participant_count: participantCount,
     };
     // coerce numeric fields
@@ -324,12 +338,6 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
         contact_email:  payload.contact_email || null,
         internal_notes: payload.internal_notes || null,
         status:         payload.status,
-        // Participant counts must be saved on the Group too — overview counters read them
-        ...(payload.total_pax         != null ? { total_pax: payload.total_pax } : {}),
-        ...(payload.staff_count       != null ? { staff_count: payload.staff_count } : {}),
-        ...(payload.participant_count != null ? { participant_count: payload.participant_count } : {}),
-        ...(payload.boys_count        != null ? { boys_count: payload.boys_count } : {}),
-        ...(payload.girls_count       != null ? { girls_count: payload.girls_count } : {}),
       };
       const ogp_data = {
         ...profilePaxFields,
@@ -360,14 +368,6 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
         }
         return;
       }
-      // Creation succeeded — refresh caches, close, and navigate to the new group
-      setSaving(false);
-      queryClient.invalidateQueries({ queryKey: ["groups"] });
-      queryClient.invalidateQueries({ queryKey: ["profiles_kitchen"] });
-      queryClient.invalidateQueries({ queryKey: ["profiles_kitchenReport"] });
-      queryClient.invalidateQueries({ queryKey: ["operationalProfile"] });
-      onSaved(data.group_id);
-      return;
     }
 
     setSaving(false);
@@ -400,6 +400,8 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
 
     onSaved();
   };
+
+  const isDayUse = form.group_type === "DAY_USE";
 
   if (mealSyncData) {
     return (
@@ -478,14 +480,61 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
             </div>
           </div>
 
-          {/* הרכב הקבוצה — live participant calculator */}
-          <ParticipantCalculator form={form} set={set} isDayUse={isDayUse} />
+          {/* Participant counts */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="space-y-1">
+              <Label>סה"כ</Label>
+              <Input type="number" min="0" value={form.total_pax} onChange={e => set("total_pax", e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <Label>צוות</Label>
+              <Input type="number" min="0" value={form.staff_count} onChange={e => set("staff_count", e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <Label>חניכים</Label>
+              <div className="h-9 flex items-center px-3 rounded-md border bg-muted/40 text-sm font-medium">
+                {participantCount}
+              </div>
+            </div>
+          </div>
+
+          {staffExceedsTotal && (
+            <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+              ⚠️ מספר הצוות ({staffCount}) גדול מסה"כ המשתתפים ({totalPax})
+            </div>
+          )}
+
+          {/* Gender split — optional */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label>בנים <span className="text-slate-400 font-normal text-[11px]">(אופציונלי)</span></Label>
+              <Input type="number" min="0" value={form.boys_count} onChange={e => handleBoysChange(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <Label>בנות <span className="text-slate-400 font-normal text-[11px]">(אופציונלי)</span></Label>
+              <Input type="number" min="0" value={form.girls_count} onChange={e => handleGirlsChange(e.target.value)} />
+            </div>
+          </div>
 
           {genderConsistencyError && (
             <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 whitespace-pre-line">
               ⛔ {genderConsistencyError}
             </div>
           )}
+          {!genderConsistencyError && form.group_type === "LODGING" && participantCount > 0 && (() => {
+            const genderSum = boysCount + girlsCount;
+            if (genderSum === 0) return (
+              <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+                ⚠️ יש להזין חלוקת בנים / בנות כדי לשמור קבוצת לינה ({participantCount} חניכים)
+              </div>
+            );
+            if (genderSum === participantCount) return (
+              <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-3 py-2">
+                ✓ חלוקת בנים / בנות תואמת ({boysCount} + {girlsCount} = {participantCount})
+              </div>
+            );
+            return null;
+          })()}
 
           {/* Contact */}
           <div className="grid grid-cols-2 gap-3">

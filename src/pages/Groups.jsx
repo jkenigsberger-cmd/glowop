@@ -1,5 +1,4 @@
 import { useState, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
 import { Users, Plus, Clock, FileText } from "lucide-react";
@@ -15,7 +14,6 @@ import DayGroupHeader, { groupByDay } from "@/components/groups/DayGroupHeader";
 const TODAY = new Date().toISOString().slice(0, 10);
 
 export default function Groups() {
-  const navigate = useNavigate();
   const [showForm, setShowForm] = useState(false);
   const [showQuoteForm, setShowQuoteForm] = useState(false);
 
@@ -224,11 +222,7 @@ export default function Groups() {
       {showForm && (
         <GroupFormModal
           onClose={() => setShowForm(false)}
-          onSaved={(newGroupId) => {
-            setShowForm(false);
-            refetch();
-            if (newGroupId) navigate(`/groups/${newGroupId}`);
-          }}
+          onSaved={() => { setShowForm(false); refetch(); }}
         />
       )}
 
