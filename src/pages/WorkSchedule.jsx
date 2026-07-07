@@ -4,11 +4,13 @@ import { base44 } from "@/api/base44Client";
 import { useRoleContext } from "@/lib/RoleContext";
 import { hasPermission } from "@/lib/roles";
 import { useToast } from "@/components/ui/use-toast";
-import { AlertTriangle, CalendarClock } from "lucide-react";
+import { AlertTriangle, CalendarClock, FileText } from "lucide-react";
 import { getWeekStart, addDays, TEAM_FILTERS, ROW_BY_TYPE } from "@/lib/workScheduleConfig";
+import { Button } from "@/components/ui/button";
 import WeekToolbar from "@/components/work-schedule/WeekToolbar";
 import ScheduleGrid from "@/components/work-schedule/ScheduleGrid";
 import ShiftFormModal from "@/components/work-schedule/ShiftFormModal";
+import WeeklyScheduleReportModal from "@/components/work-schedule/WeeklyScheduleReportModal";
 
 const NIGHT_ON_CALL_SOURCE = "OPERATIONS_EVENING_TO_NIGHT_ON_CALL";
 
@@ -22,6 +24,7 @@ export default function WorkSchedule() {
   const [weekStart, setWeekStart] = useState(() => getWeekStart());
   const [teamFilter, setTeamFilter] = useState("ALL");
   const [modal, setModal] = useState(null); // { shift } | { defaults }
+  const [reportOpen, setReportOpen] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const { data: schedules = [] } = useQuery({
@@ -229,22 +232,28 @@ export default function WorkSchedule() {
         </div>
       )}
 
-      {/* Team filter */}
-      <div className="flex gap-2 flex-wrap">
-        {TEAM_FILTERS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => setTeamFilter(t.id)}
-            className={`px-3.5 py-1 rounded-full text-xs font-medium border transition-all ${
-              teamFilter === t.id
-                ? "bg-primary text-white border-primary"
-                : "bg-white text-slate-600 border-slate-200 hover:border-primary/50"
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
+      {/* Team filter + weekly report */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex gap-2 flex-wrap">
+          {TEAM_FILTERS.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setTeamFilter(t.id)}
+              className={`px-3.5 py-1 rounded-full text-xs font-medium border transition-all ${
+                teamFilter === t.id
+                  ? "bg-primary text-white border-primary"
+                  : "bg-white text-slate-600 border-slate-200 hover:border-primary/50"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+        <Button type="button" variant="outline" size="sm" disabled={!schedule} onClick={() => setReportOpen(true)}>
+          <FileText className="w-4 h-4" />
+          דוח שבועי
+        </Button>
       </div>
 
       <ScheduleGrid
@@ -268,6 +277,16 @@ export default function WorkSchedule() {
           onDelete={handleDeleteShift}
           onCancelShift={handleCancelShift}
           onClose={() => setModal(null)}
+        />
+      )}
+
+      {reportOpen && (
+        <WeeklyScheduleReportModal
+          open={reportOpen}
+          onClose={() => setReportOpen(false)}
+          schedule={schedule}
+          shifts={shifts}
+          weekStart={weekStart}
         />
       )}
     </div>
