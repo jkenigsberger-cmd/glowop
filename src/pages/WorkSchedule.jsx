@@ -11,12 +11,14 @@ import WeekToolbar from "@/components/work-schedule/WeekToolbar";
 import ScheduleGrid from "@/components/work-schedule/ScheduleGrid";
 import ShiftFormModal from "@/components/work-schedule/ShiftFormModal";
 import WeeklyScheduleReportModal from "@/components/work-schedule/WeeklyScheduleReportModal";
+import AdminRequestsPanel from "@/components/work-schedule/AdminRequestsPanel";
 
 const NIGHT_ON_CALL_SOURCE = "OPERATIONS_EVENING_TO_NIGHT_ON_CALL";
 
 export default function WorkSchedule() {
   const { role, internalUser } = useRoleContext();
   const canManage = hasPermission(role, "MANAGE_WORK_SCHEDULE");
+  const canView = canManage || hasPermission(role, "VIEW_WORK_SCHEDULE");
   const userEmail = internalUser?.email || "";
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -29,7 +31,7 @@ export default function WorkSchedule() {
 
   const { data: schedules = [] } = useQuery({
     queryKey: ["workSchedule", weekStart],
-    queryFn: () => base44.entities.WorkSchedule.filter({ week_start_date: weekStart }),
+    queryFn: () => base44.entities.WorkSchedule.filter(canManage ? { week_start_date: weekStart } : { week_start_date: weekStart, status: "PUBLISHED" }),
   });
   const schedule = schedules[0] || null;
 
@@ -71,6 +73,7 @@ export default function WorkSchedule() {
   };
 
   const handleCreateDraft = async () => {
+    if (!canManage) return;
     setBusy(true);
     await ensureSchedule();
     toast({ description: "נוצרה טיוטת סידור לשבוע זה" });
@@ -78,6 +81,7 @@ export default function WorkSchedule() {
   };
 
   const handleSaveShift = async (payload) => {
+    if (!canManage) return;
     const s = await ensureSchedule();
     if (modal?.shift) {
       await base44.entities.WorkShift.update(modal.shift.id, { ...payload, updated_by: userEmail || undefined });
@@ -101,12 +105,14 @@ export default function WorkSchedule() {
   };
 
   const handleCancelShift = async (shift) => {
+    if (!canManage) return;
     await base44.entities.WorkShift.update(shift.id, { status: "CANCELLED", updated_by: userEmail || undefined });
     if (shift.row_type === "OPERATIONS_EVENING") await deleteLinkedNightOnCallShifts(shift);
     invalidate();
   };
 
   const handleDeleteShift = async (shift) => {
+    if (!canManage) return;
     if (shift.row_type === "OPERATIONS_EVENING") await deleteLinkedNightOnCallShifts(shift);
     await base44.entities.WorkShift.delete(shift.id);
     invalidate();
@@ -139,6 +145,7 @@ export default function WorkSchedule() {
   };
 
   const handleCopyPrev = async () => {
+    if (!canManage) return;
     setBusy(true);
     try {
       const prevStart = addDays(weekStart, -7);
@@ -188,7 +195,7 @@ export default function WorkSchedule() {
   };
 
   const handlePublish = async () => {
-    if (!schedule) return;
+    if (!canManage || !schedule) return;
     setBusy(true);
     await base44.entities.WorkSchedule.update(schedule.id, {
       status: "PUBLISHED",
@@ -200,7 +207,7 @@ export default function WorkSchedule() {
     setBusy(false);
   };
 
-  if (!canManage) {
+  if (!canView) {
     return (
       <div className="max-w-screen-xl mx-auto px-4 py-12 text-center text-slate-400 text-sm" dir="rtl">
         אין לך הרשאה לצפות בסידור העבודה
@@ -223,9 +230,10 @@ export default function WorkSchedule() {
         onCreateDraft={handleCreateDraft}
         onPublish={handlePublish}
         busy={busy}
+        canManage={canManage}
       />
 
-      {schedule?.status === "PUBLISHED" && (
+      {canManage && schedule?.status === "PUBLISHED" && (
         <div className="flex items-center gap-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5">
           <AlertTriangle className="w-4 h-4 shrink-0" />
           הסידור כבר פורסם. כל שינוי ישפיע על מה שהעובדים רואים.
@@ -250,10 +258,12 @@ export default function WorkSchedule() {
             </button>
           ))}
         </div>
-        <Button type="button" variant="outline" size="sm" disabled={!schedule} onClick={() => setReportOpen(true)}>
-          <FileText className="w-4 h-4" />
-          דוח שבועי
-        </Button>
+        {canManage && (
+          <Button type="button" variant="outline" size="sm" disabled={!schedule} onClick={() => setReportOpen(true)}>
+            <FileText className="w-4 h-4" />
+            דוח שבועי
+          </Button>
+        )}
       </div>
 
       <ScheduleGrid
@@ -280,7 +290,9 @@ export default function WorkSchedule() {
         />
       )}
 
-      {reportOpen && (
+      {canManage && <AdminRequestsPanel userEmail={userEmail} />}
+
+      {reportOpen && canManage && (
         <WeeklyScheduleReportModal
           open={reportOpen}
           onClose={() => setReportOpen(false)}

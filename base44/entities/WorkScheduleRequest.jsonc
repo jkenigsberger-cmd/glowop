@@ -1,0 +1,79 @@
+{
+  "name": "WorkScheduleRequest",
+  "type": "object",
+  "properties": {
+    "worker_id": {
+      "type": "string"
+    },
+    "worker_name": {
+      "type": "string"
+    },
+    "worker_email": {
+      "type": "string"
+    },
+    "request_type": {
+      "type": "string",
+      "enum": [
+        "WANT_TO_WORK",
+        "CANNOT_WORK",
+        "CHANGE_SHIFT",
+        "GENERAL"
+      ]
+    },
+    "date": {
+      "type": "string",
+      "format": "date"
+    },
+    "preferred_slot": {
+      "type": "string",
+      "enum": [
+        "MORNING",
+        "EVENING",
+        "NIGHT",
+        "ANY"
+      ]
+    },
+    "related_shift_id": {
+      "type": "string"
+    },
+    "current_shift_summary": {
+      "type": "string"
+    },
+    "requested_change_text": {
+      "type": "string"
+    },
+    "notes": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "PENDING",
+        "APPROVED",
+        "REJECTED",
+        "APPLIED",
+        "CANCELLED"
+      ],
+      "default": "PENDING"
+    },
+    "admin_response": {
+      "type": "string"
+    },
+    "reviewed_by": {
+      "type": "string"
+    },
+    "reviewed_at": {
+      "type": "string"
+    },
+    "created_by": {
+      "type": "string"
+    },
+    "updated_by": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "request_type",
+    "status"
+  ]
+}

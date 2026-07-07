@@ -8,7 +8,7 @@ const STATUS_BADGE = {
   ARCHIVED:  { label: "בארכיון", cls: "bg-slate-100 text-slate-500" },
 };
 
-export default function WeekToolbar({ weekStart, setWeekStart, schedule, onCopyPrev, onCreateDraft, onPublish, busy }) {
+export default function WeekToolbar({ weekStart, setWeekStart, schedule, onCopyPrev, onCreateDraft, onPublish, busy, canManage }) {
   const badge = schedule ? STATUS_BADGE[schedule.status] : null;
 
   return (
@@ -42,18 +42,22 @@ export default function WeekToolbar({ weekStart, setWeekStart, schedule, onCopyP
       <div className="flex-1" />
 
       {/* Actions */}
-      <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={onCopyPrev} disabled={busy}>
-        <Copy className="w-3.5 h-3.5" /> העתק משבוע קודם
-      </Button>
-      {!schedule && (
-        <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={onCreateDraft} disabled={busy}>
-          <Save className="w-3.5 h-3.5" /> שמור טיוטה
-        </Button>
-      )}
-      {schedule?.status === "DRAFT" && (
-        <Button size="sm" className="gap-1.5 text-xs" onClick={onPublish} disabled={busy}>
-          <Send className="w-3.5 h-3.5" /> פרסם סידור
-        </Button>
+      {canManage && (
+        <>
+          <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={onCopyPrev} disabled={busy}>
+            <Copy className="w-3.5 h-3.5" /> העתק משבוע קודם
+          </Button>
+          {!schedule && (
+            <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={onCreateDraft} disabled={busy}>
+              <Save className="w-3.5 h-3.5" /> שמור טיוטה
+            </Button>
+          )}
+          {schedule?.status === "DRAFT" && (
+            <Button size="sm" className="gap-1.5 text-xs" onClick={onPublish} disabled={busy}>
+              <Send className="w-3.5 h-3.5" /> פרסם סידור
+            </Button>
+          )}
+        </>
       )}
     </div>
   );

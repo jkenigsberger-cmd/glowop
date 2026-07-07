@@ -29,7 +29,7 @@ export const ROLE_LABELS = {
 export const ROLE_NAV_LINKS = {
   SUPER_ADMIN:          ["dashboard", "approved-groups", "calendar", "allocation", "common-spaces", "housekeeping", "kitchen", "maintenance", "admin", "mechina-spaces", "meeting-summaries", "work-schedule"],
   ADMIN:                ["dashboard", "approved-groups", "calendar", "allocation", "common-spaces", "housekeeping", "kitchen", "maintenance", "admin", "mechina-spaces", "meeting-summaries", "work-schedule"],
-  OPERATIONS:           ["dashboard", "calendar", "maintenance", "work-schedule"],
+  OPERATIONS:           ["dashboard", "calendar", "maintenance", "work-schedule", "my-shifts"],
   HOUSEKEEPING_MANAGER: ["dashboard", "calendar", "allocation", "housekeeping", "approved-groups", "maintenance", "my-shifts"],
   HOUSEKEEPING_STAFF:   ["dashboard", "calendar", "housekeeping", "my-shifts"],
   HOUSEKEEPING_MANAGER: ["dashboard", "calendar", "allocation", "housekeeping", "approved-groups", "maintenance", "my-shifts"],
@@ -107,7 +107,8 @@ export const PERMISSIONS = {
   SUBMIT_MECHINA_REQUEST:  ["MECHINA_USER"],
 
   // Work schedule (סידור עבודה)
-  MANAGE_WORK_SCHEDULE: ["SUPER_ADMIN", "ADMIN", "OPERATIONS"],
+  MANAGE_WORK_SCHEDULE: ["SUPER_ADMIN", "ADMIN"],
+  VIEW_WORK_SCHEDULE: ["SUPER_ADMIN", "ADMIN", "OPERATIONS", "HOUSEKEEPING_MANAGER", "HOUSEKEEPING_STAFF", "MAINTENANCE"],
 };
 
 export function hasPermission(role, permission) {
