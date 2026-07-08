@@ -150,6 +150,7 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
     }
 
     setSaving(true);
+    let newGroupId = null;
     const payload = {
       ...form,
       participant_count: participantCount,
@@ -328,17 +329,22 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
     } else {
       // ── Manual group creation → backend function creates Group + OGP atomically ──
       const group_data = {
-        group_name:     payload.group_name,
-        group_type:     payload.group_type,
-        arrival_date:   payload.arrival_date,
-        departure_date: payload.departure_date,
-        arrival_time:   payload.arrival_time || null,
-        departure_time: payload.departure_time || null,
-        contact_name:   payload.contact_name || null,
-        contact_phone:  payload.contact_phone || null,
-        contact_email:  payload.contact_email || null,
-        internal_notes: payload.internal_notes || null,
-        status:         payload.status,
+        group_name:        payload.group_name,
+        group_type:        payload.group_type,
+        arrival_date:      payload.arrival_date,
+        departure_date:    payload.departure_date,
+        arrival_time:      payload.arrival_time || null,
+        departure_time:    payload.departure_time || null,
+        total_pax:         payload.total_pax ?? null,
+        staff_count:       payload.staff_count ?? null,
+        participant_count: payload.participant_count ?? null,
+        boys_count:        payload.boys_count ?? null,
+        girls_count:       payload.girls_count ?? null,
+        contact_name:      payload.contact_name || null,
+        contact_phone:     payload.contact_phone || null,
+        contact_email:     payload.contact_email || null,
+        internal_notes:    payload.internal_notes || null,
+        status:            payload.status,
       };
       const ogp_data = {
         ...profilePaxFields,
@@ -352,6 +358,7 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
 
       const res = await base44.functions.invoke("createGroupWithOperationalProfile", { group_data, ogp_data });
       const data = res.data || {};
+      newGroupId = data.group_id || null;
       if (!data.success) {
         setSaving(false);
         const errCode = data.error;
@@ -372,6 +379,12 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
     }
 
     setSaving(false);
+    // ── Navigate to the newly created group's detail page ──
+    if (newGroupId) {
+      queryClient.invalidateQueries({ queryKey: ["groups"] });
+      onSaved(newGroupId);
+      return;
+    }
     // Invalidate kitchen and group-detail profile queries so all views refresh immediately
     queryClient.invalidateQueries({ queryKey: ["profiles_kitchen"] });
     queryClient.invalidateQueries({ queryKey: ["profiles_kitchenReport"] });
