@@ -7,7 +7,8 @@ import { useToast } from "@/components/ui/use-toast";
 import PersonalWorkerMessageTab from "@/components/work-schedule/PersonalWorkerMessageTab";
 import WeeklyScheduleReportDays from "@/components/work-schedule/WeeklyScheduleReportDays";
 import WeeklyScheduleReportWorkers from "@/components/work-schedule/WeeklyScheduleReportWorkers";
-import { generateWeeklySchedulePrintHtml, generateWeeklyWhatsAppText, generateWorkersOnlyText } from "@/lib/weeklyScheduleReport";
+import { generateWeeklySchedulePdfHtml } from "@/components/work-schedule/WeeklySchedulePdfView";
+import { generateWeeklyWhatsAppText, generateWorkersOnlyText } from "@/lib/weeklyScheduleReport";
 
 export default function WeeklyScheduleReportModal({ open, onClose, schedule, shifts, weekStart, workers = [] }) {
   const { toast } = useToast();
@@ -22,7 +23,7 @@ export default function WeeklyScheduleReportModal({ open, onClose, schedule, shi
   const handlePrint = () => {
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
-    printWindow.document.write(generateWeeklySchedulePrintHtml(schedule, shifts, weekStart));
+    printWindow.document.write(generateWeeklySchedulePdfHtml(schedule, shifts, weekStart));
     printWindow.document.close();
     printWindow.focus();
     setTimeout(() => printWindow.print(), 250);
