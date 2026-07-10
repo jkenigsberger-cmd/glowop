@@ -32,6 +32,9 @@ Deno.serve(async (req) => {
     step = 'calendar_cleanup';
     const cleanupRes = await base44.functions.invoke('cleanupGroupCalendarSync', { group_id });
     console.log('[deleteGroup v3] calendar cleanup report:', JSON.stringify(cleanupRes?.data?.report || {}));
+    if (!cleanupRes?.data?.success) {
+      throw new Error(`Calendar cleanup failed before deleting group: ${JSON.stringify(cleanupRes?.data?.report || cleanupRes?.data || {})}`);
+    }
 
     // ── Fetch all related records in parallel ─────────────────────────────
     step = 'fetch_related';

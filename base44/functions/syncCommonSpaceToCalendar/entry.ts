@@ -26,6 +26,8 @@ Deno.serve(async (req) => {
         group_schedule_item_id: itemId,
       });
 
+      const deleteErrors = [];
+
       if (syncRecords.length > 0) {
         const connection = await base44.asServiceRole.connectors.getConnection('googlecalendar');
         const accessToken = connection.accessToken;
@@ -43,10 +45,16 @@ Deno.serve(async (req) => {
           if (res.ok || res.status === 404 || res.status === 410) {
             await base44.asServiceRole.entities.CalendarSync.delete(sr.id);
           } else {
+            // Keep the CalendarSync record so a retry can clean it up
             const errBody = await res.text().catch(() => '');
             console.error('[syncCommonSpaceToCalendar] Delete error:', res.status, sr.calendar_event_id, errBody.slice(0, 300));
+            deleteErrors.push({ calendar_event_id: sr.calendar_event_id, status: res.status, error: errBody.slice(0, 300) });
           }
         }
+      }
+
+      if (deleteErrors.length > 0) {
+        return Response.json({ ok: false, action: 'delete_event_failed', errors: deleteErrors }, { status: 500 });
       }
 
       return Response.json({ ok: true, action: 'deleted_event' });
