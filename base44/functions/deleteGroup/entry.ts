@@ -25,6 +25,14 @@ Deno.serve(async (req) => {
     }
     console.log(`[deleteGroup v3] group found: ${groups[0].group_name}`);
 
+    // ── Clean up Google Calendar events synced for this group ────────────
+    // Must run BEFORE deleting GroupScheduleItems, otherwise the synced
+    // Google Calendar events become orphans. Fails the whole delete if
+    // calendar cleanup fails, so nothing is left half-deleted.
+    step = 'calendar_cleanup';
+    const cleanupRes = await base44.functions.invoke('cleanupGroupCalendarSync', { group_id });
+    console.log('[deleteGroup v3] calendar cleanup report:', JSON.stringify(cleanupRes?.data?.report || {}));
+
     // ── Fetch all related records in parallel ─────────────────────────────
     step = 'fetch_related';
     const [

@@ -17,20 +17,21 @@ Deno.serve(async (req) => {
     const status = data.status;
     const activitySpaceId = data.activity_space_id;
 
-    // ── Delete flow: cancelled OR space removed ──
-    if (status === 'CANCELLED' || !activitySpaceId) {
+    // ── Delete flow: item deleted OR cancelled OR space removed ──
+    // event.type === 'delete' covers hard deletes of GroupScheduleItem
+    // (e.g. when a whole group is deleted) — previously these fell through
+    // to the create/update flow and left orphan Google Calendar events.
+    if (event.type === 'delete' || status === 'CANCELLED' || !activitySpaceId) {
       const syncRecords = await base44.asServiceRole.entities.CalendarSync.filter({
         group_schedule_item_id: itemId,
       });
 
       if (syncRecords.length > 0) {
-        const sr = syncRecords[0];
+        const connection = await base44.asServiceRole.connectors.getConnection('googlecalendar');
+        const accessToken = connection.accessToken;
 
-        try {
-          const connection = await base44.asServiceRole.connectors.getConnection('googlecalendar');
-          const accessToken = connection.accessToken;
-
-          await fetch(
+        for (const sr of syncRecords) {
+          const res = await fetch(
             `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(sr.calendar_id || KEREN_HADOR_CALENDAR_ID)}/events/${encodeURIComponent(sr.calendar_event_id)}`,
             {
               method: 'DELETE',
@@ -38,9 +39,13 @@ Deno.serve(async (req) => {
             }
           );
 
-          await base44.asServiceRole.entities.CalendarSync.delete(sr.id);
-        } catch (err) {
-          console.error('[syncCommonSpaceToCalendar] Delete error:', err?.message);
+          // 404/410 = event already gone in Google Calendar → treat as success
+          if (res.ok || res.status === 404 || res.status === 410) {
+            await base44.asServiceRole.entities.CalendarSync.delete(sr.id);
+          } else {
+            const errBody = await res.text().catch(() => '');
+            console.error('[syncCommonSpaceToCalendar] Delete error:', res.status, sr.calendar_event_id, errBody.slice(0, 300));
+          }
         }
       }
 
