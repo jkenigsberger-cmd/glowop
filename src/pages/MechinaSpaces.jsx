@@ -289,9 +289,9 @@ export default function MechinaSpaces() {
     "boulder_1", "boulder_2", "boulder_3", "boulder_4",
     "boulder_5", "boulder_6", "boulder_7", "boulder_8",
   ];
-  // Bunker 4 is never lent to Mechinot — exclude it from Mechina selectable spaces only.
-  // (ActivitySpace record, general activity scheduling, calendars and reports are unaffected.)
-  const MECHINA_EXCLUDED_CODES = ["bunker_5", "bunker_4"];
+  // Spaces never lent to Mechinot — excluded from Mechina selectable spaces only.
+  // (ActivitySpace records, general activity scheduling, calendars and reports are unaffected.)
+  const MECHINA_EXCLUDED_CODES = ["bunker_5", "bunker_4", "bunker_2", "bunker_3", "dining_hall"];
   const bookableSpaces = spaces
     .filter(s => s.is_bookable !== false && !MECHINA_EXCLUDED_CODES.includes(s.code))
     .sort((a, b) => {

@@ -68,6 +68,12 @@ Deno.serve(async (req) => {
     } catch {}
     if (!space) return Response.json({ success: false, error: "מרחב לא נמצא" }, { status: 200 });
 
+    // ── Blocked spaces for Mechina requests (does not affect admin/general modules) ──
+    const MECHINA_BLOCKED_CODES = ["bunker_2", "bunker_3", "bunker_4", "bunker_5", "dining_hall"];
+    if (MECHINA_BLOCKED_CODES.includes(space.code)) {
+      return Response.json({ success: false, error: "המרחב הזה לא זמין לבקשות מכינה" }, { status: 200 });
+    }
+
     // ── Validate group exists ────────────────────────────────────────────────
     let group = null;
     try {
