@@ -74,6 +74,15 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
   const [allocationBlockError, setAllocationBlockError] = useState(null);
   const [genderConsistencyError, setGenderConsistencyError] = useState(null);
   const [mealSyncData, setMealSyncData] = useState(null); // { outOfRangeMeals, newDeparture }
+  const [replanifyPreview, setReplanifyPreview] = useState(null); // impact summary awaiting confirmation
+  const [replanifyConfirmed, setReplanifyConfirmed] = useState(false);
+
+  // Reset the replanification confirmation whenever the dates are edited again
+  useEffect(() => {
+    setReplanifyPreview(null);
+    setReplanifyConfirmed(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.arrival_date, form.departure_date]);
 
   // ── Derived values ────────────────────────────────────────────────────────
   const totalPax   = Number(form.total_pax   || 0);
@@ -129,24 +138,31 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
       }
     }
 
-    // ── Guard: block date/type changes if active sleeping allocations exist ──
-    if (isEdit) {
-      const datesChanged = (form.arrival_date !== (group.arrival_date || "")) ||
-                           (form.departure_date !== (group.departure_date || ""));
-      const typeChangedToDay = group.group_type === "LODGING" && form.group_type === "DAY_USE";
+    // ── Date change → cascade re-planification with a preview/confirmation step ──
+    const groupDatesChanged = isEdit && (
+      (form.arrival_date !== (group.arrival_date || "")) ||
+      (form.departure_date !== (group.departure_date || ""))
+    );
 
-      if (datesChanged || typeChangedToDay) {
-        const activeAllocs = await base44.entities.SleepingAllocation.filter({
-          group_id: group.id,
-          status: { $in: ["DRAFT", "CONFIRMED"] },
-        });
-        if (activeAllocs.length > 0) {
-          setAllocationBlockError(
-            "לא ניתן לשנות תאריכים או להפוך ליום סמינר כאשר קיימים שיבוצי לינה פעילים.\nיש לשחרר או לבטל את השיבוצים הקיימים ואז לבצע את השינוי."
-          );
-          return;
-        }
+    if (groupDatesChanged && !replanifyConfirmed) {
+      setSaving(true);
+      const previewRes = await base44.functions.invoke("replanifyGroupDates", {
+        group_id: group.id,
+        new_arrival_date: form.arrival_date,
+        new_departure_date: form.group_type === "DAY_USE" ? form.arrival_date : form.departure_date,
+        dry_run: true,
+      });
+      setSaving(false);
+      if (!previewRes.data?.success) {
+        setAllocationBlockError("בדיקת ההשפעה של שינוי התאריכים נכשלה. אנא נסה שוב.");
+        return;
       }
+      if (previewRes.data.summary?.has_impact) {
+        setReplanifyPreview(previewRes.data.summary);
+        return; // wait for user confirmation before saving anything
+      }
+      // No dependent records affected — nothing to confirm, proceed straight to save
+      setReplanifyConfirmed(true);
     }
 
     setSaving(true);
@@ -201,6 +217,21 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
         setSaving(false);
         onSaved();
         return;
+      }
+
+      // Apply the date re-planification cascade (already previewed/confirmed above)
+      if (groupDatesChanged) {
+        const applyRes = await base44.functions.invoke("replanifyGroupDates", {
+          group_id: group.id,
+          new_arrival_date: form.arrival_date,
+          new_departure_date: form.group_type === "DAY_USE" ? form.arrival_date : form.departure_date,
+          dry_run: false,
+        });
+        if (!applyRes.data?.success) {
+          setSaving(false);
+          setAllocationBlockError("עדכון התאריכים נכשל. אנא נסה שוב.");
+          return;
+        }
       }
 
       await base44.entities.Group.update(group.id, payload);
@@ -598,10 +629,36 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
           </div>
         )}
 
+        {/* Date re-planification impact preview — requires explicit confirmation */}
+        {replanifyPreview && (
+          <div className="px-4 sm:px-6 py-3 border-t border-amber-200 bg-amber-50 text-xs text-amber-800 text-right shrink-0 space-y-2">
+            <p className="font-semibold">⚠️ שינוי התאריכים ישפיע על נתונים קיימים:</p>
+            <ul className="list-disc pr-4 space-y-0.5">
+              {replanifyPreview.allocations_cancelled > 0 && <li>{replanifyPreview.allocations_cancelled} שיבוצי לינה יבוטלו</li>}
+              {replanifyPreview.allocations_trimmed > 0 && <li>{replanifyPreview.allocations_trimmed} שיבוצי לינה יקוצרו לתאריכים החדשים</li>}
+              {replanifyPreview.schedule_items_cancelled > 0 && <li>{replanifyPreview.schedule_items_cancelled} פעילויות מחוץ לטווח יבוטלו (כולל סנכרון יומן Google)</li>}
+              {replanifyPreview.meals_cancelled > 0 && <li>{replanifyPreview.meals_cancelled} ארוחות מחוץ לטווח יבוטלו</li>}
+              {replanifyPreview.prisa_cancelled > 0 && <li>{replanifyPreview.prisa_cancelled} בקשות פריסה מחוץ לטווח יבוטלו</li>}
+              {replanifyPreview.coffee_cancelled > 0 && <li>{replanifyPreview.coffee_cancelled} פינות קפה מחוץ לטווח יבוטלו</li>}
+            </ul>
+            <p>יש לאשר את השינוי כדי להמשיך בשמירה.</p>
+          </div>
+        )}
+
         {/* Sticky footer */}
         <div className="px-4 sm:px-6 py-4 border-t border-border shrink-0 flex gap-2 justify-end bg-card">
           <Button type="button" variant="outline" onClick={onClose}>ביטול</Button>
-          <Button type="submit" form="group-form" disabled={saving}>{saving ? "שומר..." : isEdit ? "שמור" : "צור קבוצה"}</Button>
+          {replanifyPreview ? (
+            <Button
+              type="button"
+              disabled={saving}
+              onClick={() => { setReplanifyConfirmed(true); setReplanifyPreview(null); document.getElementById("group-form").requestSubmit(); }}
+            >
+              {saving ? "שומר..." : "מאשר את השינוי ושומר"}
+            </Button>
+          ) : (
+            <Button type="submit" form="group-form" disabled={saving}>{saving ? "שומר..." : isEdit ? "שמור" : "צור קבוצה"}</Button>
+          )}
         </div>
       </DialogContent>
     </Dialog>
