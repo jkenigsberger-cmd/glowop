@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import MechinaBookingRequestModal from "@/components/mechina/MechinaBookingRequestModal";
 import MechinaSpaceAvailability from "@/components/mechina/MechinaSpaceAvailability";
 import MechinaDecisionModal from "@/components/mechina/MechinaDecisionModal";
+import { filterRelevantMechinaAssignments } from "@/lib/mechinaGroups";
 
 const ADMIN_ROLES = ["SUPER_ADMIN", "ADMIN", "OPERATIONS"];
 
@@ -152,18 +153,20 @@ export default function MechinaSpaces() {
   const [resolveCancellationModal, setResolveCancellationModal] = useState(null); // request
 
   const groupMap = Object.fromEntries(groups.map(g => [g.id, g]));
-  const activeAssignments = assignments.filter(a => a.is_active);
+  // Only assignments pointing to real, relevant groups are selectable (old/cancelled/deleted groups excluded)
+  const activeAssignments = groups.length > 0 ? filterRelevantMechinaAssignments(assignments, groupMap) : [];
   const assignment = activeAssignments.find(a => a.id === selectedAssignmentId) || activeAssignments[0];
   const mechinaGroupId = assignment?.group_id || "";
 
   useEffect(() => {
-    if (activeAssignments.length > 0 && !selectedAssignmentId) {
+    if (activeAssignments.length > 0 && !activeAssignments.some(a => a.id === selectedAssignmentId)) {
       setSelectedAssignmentId(activeAssignments[0].id);
     }
-  }, [assignments]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assignments, groups]);
 
   useEffect(() => { base44.entities.ActivitySpace.list().then(setSpaces); }, []);
-  useEffect(() => { base44.entities.Group.list().then(setGroups); }, []);
+  useEffect(() => { base44.entities.Group.list("-created_date", 500).then(setGroups); }, []);
 
   useEffect(() => {
     if (!isMechinaUser || !internalUser?.email) return;

@@ -81,6 +81,12 @@ Deno.serve(async (req) => {
     } catch {}
     if (!group) return Response.json({ success: false, error: "מכינה לא נמצאה" }, { status: 200 });
 
+    // ── Only relevant/active groups may submit Mechina requests ─────────────
+    const RELEVANT_GROUP_STATUSES = ["CONFIRMED", "PENDING_APPROVAL"];
+    if (!RELEVANT_GROUP_STATUSES.includes(group.status)) {
+      return Response.json({ success: false, error: "הקבוצה הזו לא זמינה לבקשות מכינה" }, { status: 200 });
+    }
+
     // ── Conflict A: ACTIVE GroupScheduleItem ────────────────────────────────
     const activeBookings = await base44.asServiceRole.entities.GroupScheduleItem.filter({
       activity_space_id: space_id,
