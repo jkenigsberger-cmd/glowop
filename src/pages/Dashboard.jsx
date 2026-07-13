@@ -8,11 +8,12 @@ import DashboardGroupCard from "@/components/dashboard/DashboardGroupCard";
 import DashboardWarnings from "@/components/dashboard/DashboardWarnings";
 import DashboardMealsToday from "@/components/dashboard/DashboardMealsToday";
 import DashboardActivitiesToday from "@/components/dashboard/DashboardActivitiesToday";
+import DashboardSpaceBlocksAlert from "@/components/dashboard/DashboardSpaceBlocksAlert";
 import DashboardQuickLinks from "@/components/dashboard/DashboardQuickLinks";
 import OccupancyMap from "@/components/dashboard/OccupancyMap";
 import DailyStaffBrief from "@/components/dashboard/brief/DailyStaffBrief";
 import { Button } from "@/components/ui/button";
-import { FileText, ChevronRight, ChevronLeft, BedDouble, Sun, Users, LogIn, LogOut, UtensilsCrossed, CalendarDays, AlertTriangle } from "lucide-react";
+import { FileText, ChevronRight, ChevronLeft, BedDouble, Sun, Users, LogIn, LogOut, UtensilsCrossed, CalendarDays, AlertTriangle, Ban } from "lucide-react";
 import { useRoleContext } from "@/lib/RoleContext";
 
 const toDateStr = (date) => format(date, "yyyy-MM-dd");
@@ -88,6 +89,8 @@ function PaxDebugPanel({ activeGroups, profileByGroupId }) {
 export default function Dashboard() {
   const [selectedDate, setSelectedDate] = useState(TODAY);
   const [activeFilter, setActiveFilter] = useState(null);
+  const { role } = useRoleContext();
+  const canViewSpaceBlocks = ["SUPER_ADMIN", "ADMIN", "OPERATIONS", "MAINTENANCE"].includes(role);
   const isToday = selectedDate === TODAY;
 
   const shiftDate = (days) => {
@@ -134,6 +137,12 @@ export default function Dashboard() {
   const { data: activitySpaces = [] } = useQuery({
     queryKey: ["activitySpaces"],
     queryFn: () => base44.entities.ActivitySpace.list(),
+  });
+
+  const { data: activitySpaceBlocks = [] } = useQuery({
+    queryKey: ["activity-space-blocks-active"],
+    queryFn: () => base44.entities.ActivitySpaceBlock.filter({ status: "ACTIVE" }),
+    enabled: canViewSpaceBlocks,
   });
 
   const { data: neighborhoods = [] } = useQuery({
@@ -200,6 +209,11 @@ export default function Dashboard() {
   const activitiesForDate = useMemo(() =>
     activities.filter(a => a.date === selectedDate),
     [activities, selectedDate]
+  );
+
+  const spaceBlocksForDate = useMemo(() =>
+    activitySpaceBlocks.filter(block => block.start_date <= selectedDate && block.end_date >= selectedDate),
+    [activitySpaceBlocks, selectedDate]
   );
 
   // ── Stats ──────────────────────────────────────────────────────────────
@@ -449,6 +463,12 @@ export default function Dashboard() {
         <Section id={SECTION_IDS.activities} title={`פעילויות (${activitiesForDate.length})`} icon={CalendarDays}>
           <DashboardActivitiesToday activities={activitiesForDate} groupById={groupById} spaceById={spaceById} />
         </Section>
+
+        {canViewSpaceBlocks && spaceBlocksForDate.length > 0 && (
+          <Section title="מרחבים חסומים היום" icon={Ban}>
+            <DashboardSpaceBlocksAlert blocks={spaceBlocksForDate} activities={activitiesForDate} groupById={groupById} selectedDate={selectedDate} />
+          </Section>
+        )}
 
         {/* ── Alerts ───────────────────────────────────────────────────── */}
         <Section id={SECTION_IDS.warnings} title="התראות תפעוליות" icon={AlertTriangle}>
