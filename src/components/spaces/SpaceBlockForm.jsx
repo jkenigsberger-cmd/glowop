@@ -9,7 +9,7 @@ export default function SpaceBlockForm({ spaces, initial, saving, onSubmit, onCl
   useEffect(() => setForm(initial || empty), [initial]);
   const set = (key, value) => setForm(current => ({ ...current, [key]: value }));
   return (
-    <div className="border border-slate-200 rounded-xl bg-white p-4 space-y-4" dir="rtl">
+    <form onSubmit={event => { event.preventDefault(); onSubmit(form); }} className="border border-slate-200 rounded-xl bg-white p-4 space-y-4" dir="rtl">
       <h3 className="font-semibold text-slate-800">{initial ? "עריכת חסימה" : "חסימת מרחב חדשה"}</h3>
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
         <label className="text-sm space-y-1"><span>מרחב</span><select required value={form.activity_space_id} onChange={e => set("activity_space_id", e.target.value)} className="w-full border rounded-lg px-3 py-2 bg-white"><option value="">בחר מרחב...</option>{spaces.map(space => <option key={space.id} value={space.id}>{space.name}</option>)}</select></label>
@@ -20,7 +20,7 @@ export default function SpaceBlockForm({ spaces, initial, saving, onSubmit, onCl
         <label className="text-sm space-y-1"><span>סיבה</span><select value={form.reason_type} onChange={e => set("reason_type", e.target.value)} className="w-full border rounded-lg px-3 py-2 bg-white">{Object.entries(BLOCK_REASON_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
       </div>
       <label className="text-sm space-y-1 block"><span>הערות</span><textarea value={form.reason_notes || ""} onChange={e => set("reason_notes", e.target.value)} rows={2} className="w-full border rounded-lg px-3 py-2 resize-none" /></label>
-      <div className="flex gap-2 justify-end"><Button variant="outline" onClick={onClose}>ביטול</Button><Button disabled={saving} onClick={() => onSubmit(form)}>{saving ? "שומר..." : "חסום מרחב"}</Button></div>
-    </div>
+      <div className="flex gap-2 justify-end"><Button type="button" variant="outline" onClick={onClose}>ביטול</Button><Button type="submit" disabled={saving}>{saving ? "שומר..." : "חסום מרחב"}</Button></div>
+    </form>
   );
 }
