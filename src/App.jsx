@@ -35,6 +35,7 @@ import MechinaSpaces from "./pages/MechinaSpaces.jsx";
 import MeetingSummaries from "./pages/MeetingSummaries.jsx";
 import WorkSchedule from "./pages/WorkSchedule.jsx";
 import MyShifts from "./pages/MyShifts.jsx";
+import AnalyticsDashboard from "./pages/AnalyticsDashboard.jsx";
 
 // Landing page resolver — MAINTENANCE users go straight to the maintenance module,
 // everyone else sees the Dashboard.
@@ -90,6 +91,7 @@ const AuthenticatedApp = () => {
         <Route path="/meeting-summaries" element={<RouteGuard><MeetingSummaries /></RouteGuard>} />
         <Route path="/work-schedule" element={<RouteGuard><WorkSchedule /></RouteGuard>} />
         <Route path="/my-shifts" element={<RouteGuard><MyShifts /></RouteGuard>} />
+        <Route path="/analytics" element={<RouteGuard><AnalyticsDashboard /></RouteGuard>} />
         {/* Add your page Route elements here */}
         <Route path="*" element={<PageNotFound />} />
       </Routes>

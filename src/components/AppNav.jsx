@@ -4,7 +4,7 @@ import {
   LayoutDashboard, CheckSquare, CalendarDays, BedDouble,
   UtensilsCrossed, Wrench, ShieldAlert, Layers, Lock,
   Menu, X, Users, Search, ChevronDown, Settings, BookMarked, LogOut, NotebookPen,
-  CalendarClock, Clock
+  CalendarClock, Clock, BarChart3
 } from "lucide-react";
 import { revokeAccess } from "@/components/PilotAccessGate";
 import { useRoleContext } from "@/lib/RoleContext";
@@ -209,6 +209,7 @@ export default function AppNav() {
 
   // Admin dropdown items (not from ALL_LINKS — separate)
   const adminDropdownItems = [];
+  if (["SUPER_ADMIN", "ADMIN"].includes(role)) adminDropdownItems.push({ key: "analytics", to: "/analytics", label: "BI / אנליטיקה", icon: BarChart3 });
   if (showUserManagement) adminDropdownItems.push({ key: "admin-users", to: "/admin/users", label: "משתמשים", icon: Users });
   if (showAdmin) adminDropdownItems.push({ key: "admin", to: "/admin", label: "ניהול מערכת", icon: ShieldAlert });
 
