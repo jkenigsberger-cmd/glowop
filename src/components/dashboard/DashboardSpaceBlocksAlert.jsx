@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { AlertTriangle, ChevronLeft } from "lucide-react";
-import { BLOCK_REASON_LABELS, timesOverlap } from "@/lib/activitySpaceBlocks";
+import { BLOCK_REASON_LABELS, doesBlockOverlapReservation } from "@/lib/activitySpaceBlocks";
 
 const shortDate = value => value?.split("-").slice(1).reverse().join("/") || "";
 
@@ -9,8 +9,7 @@ export default function DashboardSpaceBlocksAlert({ blocks, activities }) {
   const conflictCount = blocks.filter(block =>
     block.status === "ACTIVE" && activities.some(activity =>
       activity.activity_space_id === block.activity_space_id &&
-      activity.date >= block.start_date && activity.date <= block.end_date &&
-      timesOverlap(activity.start_time, activity.end_time, block.start_time, block.end_time)
+      doesBlockOverlapReservation(block, activity.date, activity.start_time, activity.end_time)
     )
   ).length;
 
@@ -25,7 +24,7 @@ export default function DashboardSpaceBlocksAlert({ blocks, activities }) {
         {visibleBlocks.map(block => (
           <div key={block.id} className="py-1.5 first:pt-0 last:pb-0 text-xs text-amber-950">
             <p className="font-semibold">{block.activity_space_name} — {BLOCK_REASON_LABELS[block.reason_type] || block.reason_type}</p>
-            <p className="text-amber-800">{shortDate(block.start_date)}–{shortDate(block.end_date)} · {block.start_time}–{block.end_time}</p>
+            <p className="text-amber-800">{block.is_open_ended ? `מ-${shortDate(block.start_date)} ${block.start_time} — עד תיקון` : `${shortDate(block.start_date)}–${shortDate(block.end_date)} · ${block.start_time}–${block.end_time}`}</p>
             {block.reason_notes && <p className="text-amber-700">הערה: {block.reason_notes}</p>}
           </div>
         ))}

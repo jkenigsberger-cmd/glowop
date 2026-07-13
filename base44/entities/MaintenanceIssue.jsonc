@@ -37,7 +37,7 @@
         "URGENT"
       ],
       "default": "MEDIUM",
-      "description": "\u05d3\u05d7\u05d9\u05e4\u05d5\u05ea: LOW=\u05e0\u05de\u05d5\u05db\u05d4, MEDIUM=\u05d1\u05d9\u05e0\u05d5\u05e0\u05d9\u05ea, HIGH=\u05d2\u05d1\u05d5\u05d4\u05d4, URGENT=\u05d3\u05d7\u05d5\u05e3"
+      "description": "Issue urgency"
     },
     "status": {
       "type": "string",
@@ -49,11 +49,15 @@
         "CANCELLED"
       ],
       "default": "OPEN",
-      "description": "\u05e1\u05d8\u05d8\u05d5\u05e1: OPEN=\u05e4\u05ea\u05d5\u05d7, IN_PROGRESS=\u05d1\u05d8\u05d9\u05e4\u05d5\u05dc, WAITING_PARTS=\u05de\u05de\u05ea\u05d9\u05df \u05dc\u05d7\u05dc\u05e7\u05d9\u05dd, DONE=\u05d1\u05d5\u05e6\u05e2, CANCELLED=\u05d1\u05d5\u05d8\u05dc"
+      "description": "Issue workflow status"
     },
     "site_location_id": {
       "type": "string",
       "description": "FK to SiteLocation"
+    },
+    "activity_space_id": {
+      "type": "string",
+      "description": "Optional FK to ActivitySpace when this issue affects a common space"
     },
     "location_type": {
       "type": "string",

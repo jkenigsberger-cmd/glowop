@@ -11,6 +11,14 @@ function timesOverlap(s1, e1, s2, e2) {
   return timeToMinutes(s1) < timeToMinutes(e2) && timeToMinutes(s2) < timeToMinutes(e1);
 }
 
+function reservationOverlapsBlock(block, date, startTime, endTime) {
+  const reservationStart = `${date}T${startTime}`;
+  const reservationEnd = `${date}T${endTime}`;
+  const blockStart = `${block.start_date}T${block.start_time}`;
+  if (block.is_open_ended) return reservationEnd > blockStart;
+  return reservationStart < `${block.end_date}T${block.end_time}` && blockStart < reservationEnd;
+}
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
@@ -58,12 +66,9 @@ Deno.serve(async (req) => {
 
     // D. Final conflict check — include physical temporary blocks
     const activeBlocks = await base44.asServiceRole.entities.ActivitySpaceBlock.filter({ activity_space_id: request.space_id, status: "ACTIVE" });
-    const blocking = activeBlocks.find(block =>
-      block.start_date <= request.date && block.end_date >= request.date &&
-      timesOverlap(request.start_time, request.end_time, block.start_time, block.end_time)
-    );
+    const blocking = activeBlocks.find(block => reservationOverlapsBlock(block, request.date, request.start_time, request.end_time));
     if (blocking) {
-      return Response.json({ success: false, error: "המרחב הזה לא זמין בזמן הזה", block: { space_name: space.name, reason_type: blocking.reason_type, start_date: blocking.start_date, end_date: blocking.end_date, start_time: blocking.start_time, end_time: blocking.end_time, notes: blocking.reason_notes || "" } }, { status: 200 });
+      return Response.json({ success: false, error: "המרחב הזה לא זמין בזמן הזה", detail: blocking.is_open_ended ? "חסום עד תיקון" : "", block: { space_name: space.name, reason_type: blocking.reason_type, start_date: blocking.start_date, end_date: blocking.end_date, start_time: blocking.start_time, end_time: blocking.end_time, is_open_ended: !!blocking.is_open_ended, notes: blocking.reason_notes || "" } }, { status: 200 });
     }
 
     const activeBookings = await base44.asServiceRole.entities.GroupScheduleItem.filter({

@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { AlertTriangle, Users, Ban } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { BLOCK_REASON_LABELS, timesOverlap } from "@/lib/activitySpaceBlocks";
+import { BLOCK_REASON_LABELS, doesBlockOverlapReservation } from "@/lib/activitySpaceBlocks";
 import { mergeSharedActivities } from "@/lib/mergeSharedActivities";
 
 function timeToMinutes(t) {
@@ -60,12 +60,12 @@ export default function SpaceDailyView({ spaces, itemsBySpace, blocks = [], date
             <div className="divide-y divide-slate-100">
               {spaceBlocks.map(block => (
                 <div key={block.id} className="px-4 py-3 flex gap-3 items-start bg-amber-50 border-r-4 border-amber-500">
-                  <div className="text-sm font-bold text-amber-800 shrink-0 min-w-[80px]">{block.start_time}–{block.end_time}</div>
+                  <div className="text-sm font-bold text-amber-800 shrink-0 min-w-[80px]">{block.is_open_ended ? (block.start_date === date ? `${block.start_time} → עד תיקון` : "כל היום — חסום עד תיקון") : `${block.start_time}–${block.end_time}`}</div>
                   <div className="flex-1"><p className="font-semibold text-sm text-amber-900 flex items-center gap-1"><Ban className="w-4 h-4" /> לא זמין — {BLOCK_REASON_LABELS[block.reason_type] || block.reason_type}</p>{block.reason_notes && <p className="text-xs text-amber-700 mt-1">{block.reason_notes}</p>}</div>
                 </div>
               ))}
               {dayItems.map((item) => {
-                const blockConflict = spaceBlocks.some(block => timesOverlap(item.start_time, item.end_time, block.start_time, block.end_time));
+                const blockConflict = spaceBlocks.some(block => doesBlockOverlapReservation(block, date, item.start_time, item.end_time));
                 const conflict = blockConflict || (!item.isShared && isConflicting(item, rawDayItems));
                 return (
                   <div

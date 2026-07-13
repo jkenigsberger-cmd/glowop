@@ -26,6 +26,11 @@
       "type": "string",
       "description": "HH:MM"
     },
+    "is_open_ended": {
+      "type": "boolean",
+      "default": false,
+      "description": "True when the space remains blocked until manually released"
+    },
     "reason_type": {
       "type": "string",
       "enum": [
@@ -60,6 +65,18 @@
       "type": "string",
       "description": "ISO datetime"
     },
+    "resolved_by": {
+      "type": "string",
+      "description": "User email that released the space"
+    },
+    "resolved_at": {
+      "type": "string",
+      "description": "ISO datetime when the space was released"
+    },
+    "resolution_notes": {
+      "type": "string",
+      "description": "Release or resolution notes"
+    },
     "created_from_maintenance_issue_id": {
       "type": "string",
       "description": "Optional FK to MaintenanceIssue"
@@ -73,9 +90,7 @@
     "activity_space_id",
     "activity_space_name",
     "start_date",
-    "end_date",
     "start_time",
-    "end_time",
     "reason_type",
     "status"
   ]

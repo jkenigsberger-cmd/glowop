@@ -96,13 +96,15 @@ function TimeBlock({ groupId, groupName, startTime, endTime, statusLabel, title 
   );
 }
 
-function SpaceBlockTime({ block }) {
-  return <div className="absolute right-0 left-0 mx-0.5 rounded px-1.5 py-1 overflow-hidden bg-amber-100 border-l-4 border-amber-600 text-amber-900" style={{ ...blockStyle(block.start_time, block.end_time), zIndex: 5 }} title={block.reason_notes || BLOCK_REASON_LABELS[block.reason_type]}><span className="text-[10px] font-bold block truncate">לא זמין — {BLOCK_REASON_LABELS[block.reason_type] || block.reason_type}</span><span className="text-[9px] font-medium">{block.start_time}–{block.end_time}</span></div>;
+function SpaceBlockTime({ block, selectedDate }) {
+  const startTime = block.is_open_ended && block.start_date < selectedDate ? "06:00" : block.start_time;
+  const endTime = block.is_open_ended ? "24:00" : block.end_time;
+  return <div className="absolute right-0 left-0 mx-0.5 rounded px-1.5 py-1 overflow-hidden bg-amber-100 border-l-4 border-amber-600 text-amber-900" style={{ ...blockStyle(startTime, endTime), zIndex: 5 }} title={block.reason_notes || BLOCK_REASON_LABELS[block.reason_type]}><span className="text-[10px] font-bold block truncate">לא זמין — {BLOCK_REASON_LABELS[block.reason_type] || block.reason_type}</span><span className="text-[9px] font-medium">{block.is_open_ended ? (block.start_date === selectedDate ? `${block.start_time} → עד תיקון` : "כל היום — חסום עד תיקון") : `${block.start_time}–${block.end_time}`}</span></div>;
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
 export default function MechinaSpaceAvailability({
-  spaces, activeBookings, pendingRequests, blocks = [],
+  spaces, activeBookings, pendingRequests, blocks = [], selectedDate,
   isAdmin, onRequestNew, allowCreateRequest,
   groupMap = {},
 }) {
@@ -239,7 +241,7 @@ export default function MechinaSpaceAvailability({
                   ))}
 
                   {/* Physical space blocks — never group activities */}
-                  {spaceBlocks.map(block => <SpaceBlockTime key={block.id} block={block} />)}
+                  {spaceBlocks.map(block => <SpaceBlockTime key={block.id} block={block} selectedDate={selectedDate} />)}
 
                   {/* ACTIVE bookings */}
                   {spaceBookings.map(b => (

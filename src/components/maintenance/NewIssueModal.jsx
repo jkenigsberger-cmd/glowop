@@ -5,6 +5,8 @@ import { useState, useRef } from "react";
 import { base44 } from "@/api/base44Client";
 import { X, Camera, ImagePlus, Loader2, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useQueryClient } from "@tanstack/react-query";
+import MaintenanceSpaceBlockFields from "./MaintenanceSpaceBlockFields";
 
 const CATEGORIES = ["חשמל", "אינסטלציה", "מזגן", "שירותים", "מקלחת", "דלת / חלון", "תאורה", "בטיחות", "אחר"];
 
@@ -23,20 +25,25 @@ const DEFAULT_CATEGORY = {
   VIP_SHOWER:  "מקלחת",
 };
 
-export default function NewIssueModal({ location, user, onClose, onCreated }) {
+export default function NewIssueModal({ location, user, onClose, onCreated, canManageBlocks = false }) {
   const defaultCat = DEFAULT_CATEGORY[location.location_type] || "";
+  const now = new Date();
+  const localDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const localTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  const canBlockSpace = canManageBlocks && location.source_entity_type === "ACTIVITY_SPACE" && !!location.source_entity_id;
+  const qc = useQueryClient();
 
   const [form, setForm] = useState({
-    title: "",
-    description: "",
-    category: defaultCat,
-    priority: "MEDIUM",
+    title: "", description: "", category: defaultCat, priority: "MEDIUM",
+    can_block_space: canBlockSpace, block_space: false, block_open_ended: true,
+    block_start_date: localDate, block_start_time: localTime, block_end_date: localDate, block_end_time: "18:00",
   });
   const [photos, setPhotos] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+  const [blockConflicts, setBlockConflicts] = useState(null);
 
   const cameraRef = useRef(null);
   const galleryRef = useRef(null);
@@ -69,27 +76,47 @@ export default function NewIssueModal({ location, user, onClose, onCreated }) {
     return location.display_name;
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const buildBlock = issueId => ({
+    activity_space_id: location.source_entity_id,
+    start_date: form.block_start_date,
+    start_time: form.block_start_time,
+    end_date: form.block_open_ended ? null : form.block_end_date,
+    end_time: form.block_open_ended ? null : form.block_end_time,
+    is_open_ended: form.block_open_ended,
+    reason_type: "REPAIR",
+    reason_notes: form.description.trim() || getTitle(),
+    created_from_maintenance_issue_id: issueId || null,
+  });
+
+  const handleSubmit = async (e, confirmConflicts = false) => {
+    e?.preventDefault();
     if (!form.category) { setError("יש לבחור קטגוריה"); return; }
-    setSaving(true);
-    setError(null);
-    await base44.entities.MaintenanceIssue.create({
-      title: getTitle(),
-      description: form.description.trim() || null,
-      category: form.category,
-      priority: form.priority,
-      status: "OPEN",
-      site_location_id: location.id,
-      location_type: location.location_type,
-      location_name: location.display_name,
-      location_section: location.section || null,
-      reported_by_user_id: user?.id,
-      reported_by_name: user?.full_name || user?.email || "לא ידוע",
-      photo_urls: photos.length ? JSON.stringify(photos) : null,
-    });
-    setSaving(false);
-    onCreated();
+    setSaving(true); setError(null);
+    try {
+      if (form.block_space && !confirmConflicts) {
+        const preview = await base44.functions.invoke("manageActivitySpaceBlock", { action: "preview", block: buildBlock(null) });
+        if (preview.data?.conflicts?.length) { setBlockConflicts(preview.data.conflicts); setSaving(false); return; }
+      }
+      const issue = await base44.entities.MaintenanceIssue.create({
+        title: getTitle(), description: form.description.trim() || null, category: form.category,
+        priority: form.priority, status: "OPEN", site_location_id: location.id,
+        activity_space_id: canBlockSpace ? location.source_entity_id : null,
+        location_type: location.location_type, location_name: location.display_name,
+        location_section: location.section || null, reported_by_user_id: user?.id,
+        reported_by_name: user?.full_name || user?.email || "לא ידוע",
+        photo_urls: photos.length ? JSON.stringify(photos) : null,
+      });
+      if (form.block_space) {
+        await base44.functions.invoke("manageActivitySpaceBlock", { action: "save", block: buildBlock(issue.id), confirm_conflicts: confirmConflicts });
+        await Promise.all([
+          qc.invalidateQueries({ queryKey: ["activity-space-blocks"] }),
+          qc.invalidateQueries({ queryKey: ["activity-space-blocks-active"] }),
+        ]);
+      }
+      setBlockConflicts(null); onCreated();
+    } catch (err) {
+      setError(err?.response?.data?.error || err?.message || "שגיאה בשמירת התקלה");
+    } finally { setSaving(false); }
   };
 
   return (
@@ -237,6 +264,8 @@ export default function NewIssueModal({ location, user, onClose, onCreated }) {
             </div>
           </div>
 
+          <MaintenanceSpaceBlockFields form={form} set={set} />
+
           {/* Description — optional */}
           <div>
             <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-2">
@@ -256,6 +285,7 @@ export default function NewIssueModal({ location, user, onClose, onCreated }) {
               <AlertCircle className="w-4 h-4 shrink-0" />{error}
             </p>
           )}
+          {blockConflicts && <div className="rounded-xl border border-red-200 bg-red-50 p-3 space-y-2 text-sm"><p className="font-bold text-red-700">קיימות פעילויות קיימות בטווח החסימה</p><p className="text-xs text-red-600">נמצאו {blockConflicts.length} התנגשויות ב-30 הימים הקרובים. הפעילויות לא יימחקו ולא יוזזו.</p><div className="flex gap-2"><Button type="button" variant="outline" onClick={() => setBlockConflicts(null)}>חזור</Button><Button type="button" onClick={event => handleSubmit(event, true)}>צור תקלה וחסימה בכל זאת</Button></div></div>}
 
           {/* Spacer so content isn't hidden behind sticky button */}
           <div className="h-2" />

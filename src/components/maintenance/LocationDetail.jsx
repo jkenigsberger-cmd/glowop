@@ -20,7 +20,7 @@ const SECTIONS_CONFIG = [
 const OPEN_STATUSES  = ["OPEN", "IN_PROGRESS", "WAITING_PARTS"];
 const CLOSED_STATUSES = ["DONE", "CANCELLED"];
 
-export default function LocationDetail({ location, user, canEdit, onBack }) {
+export default function LocationDetail({ location, user, canEdit, canManageBlocks, onBack }) {
   const qc = useQueryClient();
   const [showModal, setShowModal] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -99,7 +99,7 @@ export default function LocationDetail({ location, user, canEdit, onBack }) {
         )}
 
         {openIssues.map(issue => (
-          <IssueCard key={issue.id} issue={issue} canEdit={canEdit} onUpdated={refresh} />
+          <IssueCard key={issue.id} issue={issue} canEdit={canEdit} canManageBlocks={canManageBlocks} onUpdated={refresh} />
         ))}
       </div>
 
@@ -114,7 +114,7 @@ export default function LocationDetail({ location, user, canEdit, onBack }) {
             <ChevronRight className={`w-4 h-4 transition-transform ${showHistory ? "rotate-90" : ""}`} />
           </button>
           {showHistory && closedIssues.map(issue => (
-            <IssueCard key={issue.id} issue={issue} canEdit={false} onUpdated={refresh} />
+            <IssueCard key={issue.id} issue={issue} canEdit={false} canManageBlocks={canManageBlocks} onUpdated={refresh} />
           ))}
         </div>
       )}
@@ -124,6 +124,7 @@ export default function LocationDetail({ location, user, canEdit, onBack }) {
           location={location}
           user={user}
           onClose={() => setShowModal(false)}
+          canManageBlocks={canManageBlocks}
           onCreated={() => { setShowModal(false); refresh(); }}
         />
       )}

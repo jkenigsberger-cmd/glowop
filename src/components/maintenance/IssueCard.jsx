@@ -2,6 +2,7 @@
  * IssueCard — mobile-optimised card with large status action buttons.
  */
 import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { AlertTriangle, CheckCircle2, Clock, Package, XCircle, ChevronDown, ChevronUp, MapPin, Calendar, MessageCircle } from "lucide-react";
 
@@ -42,12 +43,33 @@ export const PRIORITY_COLORS = {
 
 const OPEN_STATUSES = ["OPEN", "IN_PROGRESS", "WAITING_PARTS"];
 
-export default function IssueCard({ issue, canEdit, onUpdated, showLocation = false }) {
+export default function IssueCard({ issue, canEdit, canManageBlocks = false, onUpdated, showLocation = false }) {
+  const qc = useQueryClient();
   const [expanded, setExpanded] = useState(false);
   const [updating, setUpdating] = useState(null);
   const [note, setNote] = useState("");
   const [confirmStatus, setConfirmStatus] = useState(null);
   const [whatsappOpen, setWhatsappOpen] = useState(false);
+  const [resolutionNote, setResolutionNote] = useState("");
+  const [releasing, setReleasing] = useState(false);
+  const { data: linkedBlocks = [] } = useQuery({
+    queryKey: ["maintenanceIssueBlock", issue.id],
+    queryFn: () => base44.entities.ActivitySpaceBlock.filter({ created_from_maintenance_issue_id: issue.id }),
+    enabled: !!issue.id,
+  });
+  const activeBlock = linkedBlocks.find(block => block.status === "ACTIVE");
+
+  const releaseBlock = async () => {
+    if (!activeBlock) return;
+    setReleasing(true);
+    await base44.functions.invoke("manageActivitySpaceBlock", { action: "cancel", id: activeBlock.id, resolution_notes: resolutionNote.trim() });
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ["maintenanceIssueBlock", issue.id] }),
+      qc.invalidateQueries({ queryKey: ["activity-space-blocks"] }),
+      qc.invalidateQueries({ queryKey: ["activity-space-blocks-active"] }),
+    ]);
+    setResolutionNote(""); setReleasing(false);
+  };
 
   const isClosed = !OPEN_STATUSES.includes(issue.status);
   const isUrgent = issue.priority === "URGENT";
@@ -193,6 +215,8 @@ export default function IssueCard({ issue, canEdit, onUpdated, showLocation = fa
               </div>
             )}
           </div>
+
+          {activeBlock && <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-2"><p className="text-sm font-bold text-amber-800">המרחב חסום להזמנות — {activeBlock.is_open_ended ? "חסום עד תיקון" : `${activeBlock.start_date}–${activeBlock.end_date}`}</p>{canManageBlocks && <><textarea value={resolutionNote} onChange={e => setResolutionNote(e.target.value)} placeholder="סיבת שחרור / הערת סיום" rows={2} className="w-full rounded-lg border border-amber-200 px-3 py-2 text-sm resize-none" /><button onClick={releaseBlock} disabled={releasing} className="w-full min-h-[40px] rounded-lg bg-emerald-600 text-white font-bold text-sm disabled:opacity-50">{releasing ? "משחרר..." : "שחרור חסימה"}</button></>}</div>}
 
           {photos.length > 0 && (
             <div className="flex gap-2 flex-wrap">

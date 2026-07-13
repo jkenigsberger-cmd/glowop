@@ -347,6 +347,7 @@ export default function Maintenance() {
   const qc = useQueryClient();
   const { role } = useRoleContext();
   const isAdmin = ["SUPER_ADMIN", "ADMIN", "OPERATIONS"].includes(role);
+  const canManageBlocks = ["SUPER_ADMIN", "ADMIN"].includes(role);
   const canEdit = hasPermission(role, "CREATE_MAINTENANCE_ISSUE");
 
   const { data: locations = [], isLoading: locLoading } = useQuery({
@@ -433,7 +434,7 @@ export default function Maintenance() {
               </div>
             )}
           </div>
-          <OpenIssuesList canEdit={canEdit} />
+          <OpenIssuesList canEdit={canEdit} canManageBlocks={canManageBlocks} />
         </div>
       </div>
     );
@@ -448,6 +449,7 @@ export default function Maintenance() {
             location={activeLocation}
             user={currentUser}
             canEdit={canEdit}
+            canManageBlocks={canManageBlocks}
             onBack={handleBack}
           />
         </div>

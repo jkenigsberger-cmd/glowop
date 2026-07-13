@@ -8,7 +8,7 @@ import IssueCard from "./IssueCard";
 
 const PRIORITY_ORDER = { URGENT: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
 
-export default function OpenIssuesList({ canEdit }) {
+export default function OpenIssuesList({ canEdit, canManageBlocks }) {
   const qc = useQueryClient();
 
   const { data: issues = [], isLoading } = useQuery({
@@ -55,6 +55,7 @@ export default function OpenIssuesList({ canEdit }) {
           key={issue.id}
           issue={issue}
           canEdit={canEdit}
+          canManageBlocks={canManageBlocks}
           onUpdated={refresh}
           showLocation
         />

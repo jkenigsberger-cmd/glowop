@@ -38,9 +38,10 @@ export default function ActivitySpaceBlocksPanel({ spaces, blocks, role }) {
     finally { setSaving(false); }
   };
   const cancel = async block => {
-    if (!window.confirm("לבטל את החסימה? ההיסטוריה תישמר.")) return;
+    if (!window.confirm("לשחרר את החסימה? ההיסטוריה תישמר.")) return;
+    const resolutionNotes = window.prompt("סיבת שחרור / הערת סיום", "") || "";
     setError("");
-    try { await invoke({ action: "cancel", id: block.id }); await refresh(); }
+    try { await invoke({ action: "cancel", id: block.id, resolution_notes: resolutionNotes }); await refresh(); }
     catch (err) { setError(errorMessage(err)); }
   };
   const showConflicts = async block => {

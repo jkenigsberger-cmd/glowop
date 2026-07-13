@@ -23,8 +23,24 @@ export function parseBlockStartDateTime(block) {
   return parseBlockDateTime(block?.start_date, block?.start_time);
 }
 
+export function isOpenEndedBlock(block) {
+  return block?.is_open_ended === true;
+}
+
 export function parseBlockEndDateTime(block) {
+  if (isOpenEndedBlock(block)) return null;
   return parseBlockDateTime(block?.end_date, block?.end_time);
+}
+
+export function doesBlockOverlapReservation(block, reservationDate, startTime, endTime) {
+  if (block?.status !== "ACTIVE" || !reservationDate || !startTime || !endTime) return false;
+  const blockStart = parseBlockStartDateTime(block);
+  const reservationStart = parseBlockDateTime(reservationDate, startTime);
+  const reservationEnd = parseBlockDateTime(reservationDate, endTime);
+  if (!blockStart || !reservationStart || !reservationEnd) return false;
+  if (isOpenEndedBlock(block)) return reservationEnd > blockStart;
+  const blockEnd = parseBlockEndDateTime(block);
+  return !!blockEnd && reservationStart < blockEnd && blockStart < reservationEnd;
 }
 
 export function isBlockVisibleInDashboardAlert(block, referenceDateTime = new Date(), alertEndDateTime = null) {
@@ -32,11 +48,13 @@ export function isBlockVisibleInDashboardAlert(block, referenceDateTime = new Da
   const end = parseBlockEndDateTime(block);
   const alertEnd = alertEndDateTime || new Date(referenceDateTime);
   if (!alertEndDateTime) alertEnd.setDate(alertEnd.getDate() + 14);
-  return block?.status === "ACTIVE" && !!start && !!end && end >= referenceDateTime && start <= alertEnd;
+  if (block?.status !== "ACTIVE" || !start || start > alertEnd) return false;
+  return isOpenEndedBlock(block) || (!!end && end >= referenceDateTime);
 }
 
 export function isBlockVisibleOnCalendarDate(block, selectedDate) {
-  return block?.status === "ACTIVE" && block.start_date <= selectedDate && block.end_date >= selectedDate;
+  if (block?.status !== "ACTIVE" || !block.start_date || block.start_date > selectedDate) return false;
+  return isOpenEndedBlock(block) || (!!block.end_date && block.end_date >= selectedDate);
 }
 
 export function blockAppliesOnDate(block, date) {
@@ -47,7 +65,6 @@ export function findBlockingSpace(blocks, spaceId, date, startTime, endTime) {
   if (!spaceId || !date || !startTime || !endTime) return null;
   return blocks.find(block =>
     block.activity_space_id === spaceId &&
-    blockAppliesOnDate(block, date) &&
-    timesOverlap(startTime, endTime, block.start_time, block.end_time)
+    doesBlockOverlapReservation(block, date, startTime, endTime)
   ) || null;
 }

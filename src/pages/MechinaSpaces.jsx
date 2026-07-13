@@ -8,6 +8,7 @@ import MechinaBookingRequestModal from "@/components/mechina/MechinaBookingReque
 import MechinaSpaceAvailability from "@/components/mechina/MechinaSpaceAvailability";
 import MechinaDecisionModal from "@/components/mechina/MechinaDecisionModal";
 import { filterRelevantMechinaAssignments } from "@/lib/mechinaGroups";
+import { isBlockVisibleOnCalendarDate } from "@/lib/activitySpaceBlocks";
 
 const ADMIN_ROLES = ["SUPER_ADMIN", "ADMIN", "OPERATIONS"];
 
@@ -184,7 +185,7 @@ export default function MechinaSpaces() {
     ]).then(([bookings, requests, blocks]) => {
       setActiveBookings(bookings.filter(b => b.activity_space_id));
       setPendingRequests(requests);
-      setSpaceBlocks(blocks.filter(b => b.start_date <= selectedDate && b.end_date >= selectedDate));
+      setSpaceBlocks(blocks.filter(block => isBlockVisibleOnCalendarDate(block, selectedDate)));
       setLoading(false);
     }).catch(() => setLoading(false));
   }, [selectedDate]);
@@ -344,7 +345,7 @@ export default function MechinaSpaces() {
             <div className="text-center py-10 text-slate-400 text-sm">טוען...</div>
           ) : (
             <MechinaSpaceAvailability spaces={bookableSpaces} activeBookings={activeBookings}
-              pendingRequests={pendingRequests} blocks={spaceBlocks} isAdmin={false} allowCreateRequest={true} onRequestNew={handleRequestNew} groupMap={groupMap} />
+              pendingRequests={pendingRequests} blocks={spaceBlocks} selectedDate={selectedDate} isAdmin={false} allowCreateRequest={true} onRequestNew={handleRequestNew} groupMap={groupMap} />
           )}
         </section>
 
@@ -448,7 +449,7 @@ export default function MechinaSpaces() {
           <div className="text-center py-10 text-slate-400 text-sm">טוען...</div>
         ) : (
           <MechinaSpaceAvailability spaces={bookableSpaces} activeBookings={activeBookings}
-            pendingRequests={pendingRequests} blocks={spaceBlocks} isAdmin={true} allowCreateRequest={false} onRequestNew={handleRequestNew} groupMap={groupMap} />
+            pendingRequests={pendingRequests} blocks={spaceBlocks} selectedDate={selectedDate} isAdmin={true} allowCreateRequest={false} onRequestNew={handleRequestNew} groupMap={groupMap} />
         )}
       </section>
 
