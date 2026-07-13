@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { sortActivitySpaces } from "@/lib/activitySpaceUtils";
 import { useRoleContext } from "@/lib/RoleContext";
+import { isBlockVisibleOnCalendarDate } from "@/lib/activitySpaceBlocks";
 
 import SpaceOverviewCard from "../components/spaces/SpaceOverviewCard.jsx";
 import SpaceDailyView from "../components/spaces/SpaceDailyView.jsx";
@@ -97,7 +98,7 @@ export default function CommonSpaces() {
 
   // ── Handlers ─────────────────────────────────────────────────────────────
   const blocksForSelectedDay = useMemo(
-    () => spaceBlocks.filter(b => b.status === "ACTIVE" && b.start_date <= selectedDate && b.end_date >= selectedDate),
+    () => spaceBlocks.filter(block => isBlockVisibleOnCalendarDate(block, selectedDate)),
     [spaceBlocks, selectedDate]
   );
 

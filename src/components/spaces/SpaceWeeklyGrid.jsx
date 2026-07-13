@@ -1,6 +1,7 @@
 import moment from "moment";
 import "moment/locale/he";
 import { cn } from "@/lib/utils";
+import { isBlockVisibleOnCalendarDate } from "@/lib/activitySpaceBlocks";
 
 moment.locale("he");
 
@@ -73,7 +74,9 @@ export default function SpaceWeeklyGrid({ spaces, allItems, blocks = [], pivot, 
                 const count = allItems.filter(
                   (i) => i.activity_space_id === space.id && i.date === dateStr
                 ).length;
-                const blockCount = blocks.filter(b => b.status === "ACTIVE" && b.activity_space_id === space.id && b.start_date <= dateStr && b.end_date >= dateStr).length;
+                const blockCount = blocks.filter(block =>
+                  block.activity_space_id === space.id && isBlockVisibleOnCalendarDate(block, dateStr)
+                ).length;
                 const hasContent = count > 0 || blockCount > 0;
 
                 return (

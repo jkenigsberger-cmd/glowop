@@ -2,7 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { format, addDays } from "date-fns";
 import { he } from "date-fns/locale";
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
+import { isBlockVisibleInDashboardAlert } from "@/lib/activitySpaceBlocks";
 import DashboardSummaryCards, { SECTION_IDS } from "@/components/dashboard/DashboardSummaryCards";
 import DashboardGroupCard from "@/components/dashboard/DashboardGroupCard";
 import DashboardWarnings from "@/components/dashboard/DashboardWarnings";
@@ -18,7 +19,6 @@ import { useRoleContext } from "@/lib/RoleContext";
 
 const toDateStr = (date) => format(date, "yyyy-MM-dd");
 const TODAY = toDateStr(new Date());
-const SPACE_BLOCK_ALERT_END = toDateStr(addDays(new Date(), 14));
 
 function Section({ title, children, id, icon: Icon }) {
   return (
@@ -90,9 +90,15 @@ function PaxDebugPanel({ activeGroups, profileByGroupId }) {
 export default function Dashboard() {
   const [selectedDate, setSelectedDate] = useState(TODAY);
   const [activeFilter, setActiveFilter] = useState(null);
+  const [alertNow, setAlertNow] = useState(() => new Date());
   const { role } = useRoleContext();
   const canViewSpaceBlocks = ["SUPER_ADMIN", "ADMIN", "OPERATIONS", "MAINTENANCE"].includes(role);
   const isToday = selectedDate === TODAY;
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setAlertNow(new Date()), 60000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const shiftDate = (days) => {
     const d = new Date(selectedDate + "T00:00:00");
@@ -212,24 +218,22 @@ export default function Dashboard() {
     [activities, selectedDate]
   );
 
+  const spaceBlockAlertEnd = toDateStr(addDays(alertNow, 14));
+  const spaceBlockAlertStart = toDateStr(alertNow);
   const upcomingSpaceBlocks = useMemo(() =>
     activitySpaceBlocks
-      .filter(block =>
-        block.status === "ACTIVE" &&
-        block.end_date >= TODAY &&
-        block.start_date <= SPACE_BLOCK_ALERT_END
-      )
+      .filter(block => isBlockVisibleInDashboardAlert(block, alertNow))
       .sort((a, b) => a.start_date.localeCompare(b.start_date) || a.start_time.localeCompare(b.start_time)),
-    [activitySpaceBlocks]
+    [activitySpaceBlocks, alertNow]
   );
 
   const activitiesForSpaceBlockAlert = useMemo(() =>
     activities.filter(activity =>
-      activity.date >= TODAY &&
-      activity.date <= SPACE_BLOCK_ALERT_END &&
+      activity.date >= spaceBlockAlertStart &&
+      activity.date <= spaceBlockAlertEnd &&
       activity.activity_space_id
     ),
-    [activities]
+    [activities, spaceBlockAlertStart, spaceBlockAlertEnd]
   );
 
   // ── Stats ──────────────────────────────────────────────────────────────
