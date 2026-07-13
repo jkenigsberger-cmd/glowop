@@ -218,22 +218,26 @@ export default function Dashboard() {
     [activities, selectedDate]
   );
 
-  const spaceBlockAlertEnd = toDateStr(addDays(alertNow, 14));
-  const spaceBlockAlertStart = toDateStr(alertNow);
+  const realToday = toDateStr(alertNow);
+  const viewingToday = selectedDate === realToday;
+  const spaceBlockAlertReference = viewingToday ? alertNow : new Date(`${selectedDate}T00:00:00`);
+  const spaceBlockAlertEndDateTime = addDays(spaceBlockAlertReference, 14);
+  if (!viewingToday) spaceBlockAlertEndDateTime.setHours(23, 59, 59, 999);
+  const spaceBlockAlertEnd = toDateStr(spaceBlockAlertEndDateTime);
   const upcomingSpaceBlocks = useMemo(() =>
     activitySpaceBlocks
-      .filter(block => isBlockVisibleInDashboardAlert(block, alertNow))
+      .filter(block => isBlockVisibleInDashboardAlert(block, spaceBlockAlertReference, spaceBlockAlertEndDateTime))
       .sort((a, b) => a.start_date.localeCompare(b.start_date) || a.start_time.localeCompare(b.start_time)),
-    [activitySpaceBlocks, alertNow]
+    [activitySpaceBlocks, spaceBlockAlertReference, spaceBlockAlertEndDateTime]
   );
 
   const activitiesForSpaceBlockAlert = useMemo(() =>
     activities.filter(activity =>
-      activity.date >= spaceBlockAlertStart &&
+      activity.date >= selectedDate &&
       activity.date <= spaceBlockAlertEnd &&
       activity.activity_space_id
     ),
-    [activities, spaceBlockAlertStart, spaceBlockAlertEnd]
+    [activities, selectedDate, spaceBlockAlertEnd]
   );
 
   // ── Stats ──────────────────────────────────────────────────────────────

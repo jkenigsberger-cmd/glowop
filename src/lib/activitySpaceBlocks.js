@@ -27,12 +27,12 @@ export function parseBlockEndDateTime(block) {
   return parseBlockDateTime(block?.end_date, block?.end_time);
 }
 
-export function isBlockVisibleInDashboardAlert(block, now = new Date()) {
+export function isBlockVisibleInDashboardAlert(block, referenceDateTime = new Date(), alertEndDateTime = null) {
   const start = parseBlockStartDateTime(block);
   const end = parseBlockEndDateTime(block);
-  const alertEnd = new Date(now);
-  alertEnd.setDate(alertEnd.getDate() + 14);
-  return block?.status === "ACTIVE" && !!start && !!end && end >= now && start <= alertEnd;
+  const alertEnd = alertEndDateTime || new Date(referenceDateTime);
+  if (!alertEndDateTime) alertEnd.setDate(alertEnd.getDate() + 14);
+  return block?.status === "ACTIVE" && !!start && !!end && end >= referenceDateTime && start <= alertEnd;
 }
 
 export function isBlockVisibleOnCalendarDate(block, selectedDate) {
