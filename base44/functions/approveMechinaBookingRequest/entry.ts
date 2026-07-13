@@ -56,7 +56,16 @@ Deno.serve(async (req) => {
     const profiles = await base44.asServiceRole.entities.OperationalGroupProfile.filter({ group_id: request.mechina_group_id });
     const profile = profiles[0] || null;
 
-    // D. Final conflict check
+    // D. Final conflict check — include physical temporary blocks
+    const activeBlocks = await base44.asServiceRole.entities.ActivitySpaceBlock.filter({ activity_space_id: request.space_id, status: "ACTIVE" });
+    const blocking = activeBlocks.find(block =>
+      block.start_date <= request.date && block.end_date >= request.date &&
+      timesOverlap(request.start_time, request.end_time, block.start_time, block.end_time)
+    );
+    if (blocking) {
+      return Response.json({ success: false, error: "המרחב הזה לא זמין בזמן הזה", block: { space_name: space.name, reason_type: blocking.reason_type, start_date: blocking.start_date, end_date: blocking.end_date, start_time: blocking.start_time, end_time: blocking.end_time, notes: blocking.reason_notes || "" } }, { status: 200 });
+    }
+
     const activeBookings = await base44.asServiceRole.entities.GroupScheduleItem.filter({
       activity_space_id: request.space_id,
       date: request.date,

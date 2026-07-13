@@ -27,7 +27,7 @@ function heatClass(count) {
 
 const SPACE_TYPE_LABELS = { BUNKER: "בונקר", OHEL_MOED: "אוהל מועד", DINING_HALL: "חדר אוכל" };
 
-export default function SpaceWeeklyGrid({ spaces, allItems, pivot, onSelectDay }) {
+export default function SpaceWeeklyGrid({ spaces, allItems, blocks = [], pivot, onSelectDay }) {
   const weekDates = getWeekDates(pivot);
   const today = moment().format("YYYY-MM-DD");
 
@@ -73,20 +73,22 @@ export default function SpaceWeeklyGrid({ spaces, allItems, pivot, onSelectDay }
                 const count = allItems.filter(
                   (i) => i.activity_space_id === space.id && i.date === dateStr
                 ).length;
+                const blockCount = blocks.filter(b => b.status === "ACTIVE" && b.activity_space_id === space.id && b.start_date <= dateStr && b.end_date >= dateStr).length;
+                const hasContent = count > 0 || blockCount > 0;
 
                 return (
                   <td key={dateStr} className="border border-slate-200 p-1 text-center">
                     <button
                       type="button"
-                      onClick={() => count > 0 && onSelectDay(dateStr)}
-                      disabled={count === 0}
+                      onClick={() => hasContent && onSelectDay(dateStr)}
+                      disabled={!hasContent}
                       className={cn(
                         "w-full h-10 rounded-lg text-xs font-bold transition-all",
-                        heatClass(count),
-                        count > 0 && "hover:shadow-md cursor-pointer hover:scale-105"
+                        blockCount > 0 ? "bg-amber-100 text-amber-800 border border-amber-300" : heatClass(count),
+                        hasContent && "hover:shadow-md cursor-pointer hover:scale-105"
                       )}
                     >
-                      {count > 0 ? count : "—"}
+                      {blockCount > 0 ? `חסום${count > 0 ? ` · ${count}` : ""}` : count > 0 ? count : "—"}
                     </button>
                   </td>
                 );

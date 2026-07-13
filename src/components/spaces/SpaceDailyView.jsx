@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
-import { AlertTriangle, Users } from "lucide-react";
+import { AlertTriangle, Users, Ban } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { BLOCK_REASON_LABELS, timesOverlap } from "@/lib/activitySpaceBlocks";
 import { mergeSharedActivities } from "@/lib/mergeSharedActivities";
 
 function timeToMinutes(t) {
@@ -20,8 +21,8 @@ function isConflicting(item, allDayItems) {
 
 const SPACE_TYPE_LABELS = { BUNKER: "בונקר", OHEL_MOED: "אוהל מועד", DINING_HALL: "חדר אוכל", FIREPLACE: "בולדר" };
 
-export default function SpaceDailyView({ spaces, itemsBySpace, date }) {
-  const hasAnyBooking = spaces.some((s) => (itemsBySpace[s.id] || []).length > 0);
+export default function SpaceDailyView({ spaces, itemsBySpace, blocks = [], date }) {
+  const hasAnyBooking = spaces.some((s) => (itemsBySpace[s.id] || []).length > 0 || blocks.some(b => b.activity_space_id === s.id));
 
   if (!hasAnyBooking) {
     return (
@@ -37,7 +38,8 @@ export default function SpaceDailyView({ spaces, itemsBySpace, date }) {
         const rawDayItems = (itemsBySpace[space.id] || []).sort((a, b) =>
           a.start_time.localeCompare(b.start_time)
         );
-        if (rawDayItems.length === 0) return null;
+        const spaceBlocks = blocks.filter(b => b.activity_space_id === space.id);
+        if (rawDayItems.length === 0 && spaceBlocks.length === 0) return null;
 
         const dayItems = mergeSharedActivities(rawDayItems);
 
@@ -51,13 +53,20 @@ export default function SpaceDailyView({ spaces, itemsBySpace, date }) {
                   {SPACE_TYPE_LABELS[space.space_type] || space.space_type}
                 </span>
               </div>
-              <span className="text-xs text-slate-500">{dayItems.length} הזמנות</span>
+              <span className="text-xs text-slate-500">{dayItems.length} הזמנות · {spaceBlocks.length} חסימות</span>
             </div>
 
             {/* Bookings list */}
             <div className="divide-y divide-slate-100">
+              {spaceBlocks.map(block => (
+                <div key={block.id} className="px-4 py-3 flex gap-3 items-start bg-amber-50 border-r-4 border-amber-500">
+                  <div className="text-sm font-bold text-amber-800 shrink-0 min-w-[80px]">{block.start_time}–{block.end_time}</div>
+                  <div className="flex-1"><p className="font-semibold text-sm text-amber-900 flex items-center gap-1"><Ban className="w-4 h-4" /> לא זמין — {BLOCK_REASON_LABELS[block.reason_type] || block.reason_type}</p>{block.reason_notes && <p className="text-xs text-amber-700 mt-1">{block.reason_notes}</p>}</div>
+                </div>
+              ))}
               {dayItems.map((item) => {
-                const conflict = !item.isShared && isConflicting(item, rawDayItems);
+                const blockConflict = spaceBlocks.some(block => timesOverlap(item.start_time, item.end_time, block.start_time, block.end_time));
+                const conflict = blockConflict || (!item.isShared && isConflicting(item, rawDayItems));
                 return (
                   <div
                     key={item.id}
@@ -100,7 +109,7 @@ export default function SpaceDailyView({ spaces, itemsBySpace, date }) {
                             )}
                             {conflict && (
                               <span className="flex items-center gap-1 text-[10px] bg-red-100 text-red-700 border border-red-200 px-2 py-0.5 rounded-full font-bold">
-                                <AlertTriangle className="w-2.5 h-2.5" /> חפיפה
+                                <AlertTriangle className="w-2.5 h-2.5" /> {blockConflict ? "התנגשות עם חסימה" : "חפיפה"}
                               </span>
                             )}
                           </div>

@@ -87,6 +87,23 @@ Deno.serve(async (req) => {
       return Response.json({ success: false, error: "הקבוצה הזו לא זמינה לבקשות מכינה" }, { status: 200 });
     }
 
+    // ── Physical space blocks are the source of truth for temporary closures ──
+    const activeBlocks = await base44.asServiceRole.entities.ActivitySpaceBlock.filter({
+      activity_space_id: space_id,
+      status: "ACTIVE",
+    });
+    const blocking = activeBlocks.find(block =>
+      block.start_date <= date && block.end_date >= date &&
+      timesOverlap(start_time, end_time, block.start_time, block.end_time)
+    );
+    if (blocking) {
+      return Response.json({
+        success: false,
+        error: "המרחב הזה לא זמין בזמן הזה",
+        block: { space_name: space.name, reason_type: blocking.reason_type, start_date: blocking.start_date, end_date: blocking.end_date, start_time: blocking.start_time, end_time: blocking.end_time, notes: blocking.reason_notes || "" },
+      }, { status: 200 });
+    }
+
     // ── Conflict A: ACTIVE GroupScheduleItem ────────────────────────────────
     const activeBookings = await base44.asServiceRole.entities.GroupScheduleItem.filter({
       activity_space_id: space_id,

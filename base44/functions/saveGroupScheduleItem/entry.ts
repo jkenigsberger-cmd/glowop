@@ -10,6 +10,7 @@ const VALID_SPACE_CODES = new Set([
 
 // Roles allowed to manage activities (mirrors roles.js MANAGE_ACTIVITIES)
 const MANAGE_ACTIVITIES_ROLES = new Set(['SUPER_ADMIN', 'ADMIN', 'OPERATIONS']);
+const BLOCK_REASON_LABELS = { PAINTING: 'צביעה', MAINTENANCE: 'תחזוקה', REPAIR: 'תיקון', SPECIAL_CLEANING: 'ניקיון מיוחד', TEMPORARILY_CLOSED: 'סגור זמנית', OTHER: 'אחר' };
 
 async function resolveEffectiveRole(base44, user) {
   try {
@@ -329,6 +330,17 @@ Deno.serve(async (req) => {
 
       const newStart = timeToMinutes(start_time);
       const newEnd   = timeToMinutes(end_time);
+
+      const activeBlocks = await base44.asServiceRole.entities.ActivitySpaceBlock.filter({ activity_space_id: spaceId, status: 'ACTIVE' });
+      const blocking = activeBlocks.find(block =>
+        block.start_date <= date && block.end_date >= date &&
+        newStart < timeToMinutes(block.end_time) && timeToMinutes(block.start_time) < newEnd
+      );
+      if (blocking) {
+        const reason = BLOCK_REASON_LABELS[blocking.reason_type] || blocking.reason_type;
+        const notes = blocking.reason_notes ? ` — ${blocking.reason_notes}` : '';
+        return `המרחב הזה לא זמין בזמן הזה. ${space.name} · ${reason} · ${blocking.start_date}–${blocking.end_date} ${blocking.start_time}–${blocking.end_time}${notes}`;
+      }
 
       const existingItems = await base44.asServiceRole.entities.GroupScheduleItem.filter({
         activity_space_id: spaceId,

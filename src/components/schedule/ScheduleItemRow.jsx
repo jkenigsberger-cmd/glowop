@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -9,6 +11,7 @@ import { ACTIVITY_CATALOG, catalogItemLabel } from "@/lib/activityCatalog.js";
 import LogisticsFields, { LogisticsBadges, LOGISTICS_DEFAULTS, pickLogistics } from "./LogisticsFields";
 import SharedActivityBadge from "./SharedActivityBadge";
 import SharedGroupSelector from "./SharedGroupSelector";
+import { findBlockingSpace } from "@/lib/activitySpaceBlocks";
 
 const LOCATION_OPTIONS = ["כיתה", "מתחם חוץ", "מחוץ לחווה", "אחר"];
 
@@ -111,6 +114,10 @@ export default function ScheduleItemRow({
   const [unlinkDialog, setUnlinkDialog] = useState(false);
   const [deleteScopeDialog, setDeleteScopeDialog] = useState(false);
   const [pendingSaveForm, setPendingSaveForm] = useState(null);
+  const { data: activeSpaceBlocks = [] } = useQuery({
+    queryKey: ["activity-space-blocks-active"],
+    queryFn: () => base44.entities.ActivitySpaceBlock.filter({ status: "ACTIVE" }),
+  });
 
   const { arrivalDate, departureDate } = groupDateRange;
   const isShared = !!(item.is_shared_activity || item.shared_activity_id);
@@ -316,9 +323,10 @@ export default function ScheduleItemRow({
                 <SelectTrigger><SelectValue placeholder="לא הוקצה" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">— לא הוקצה —</SelectItem>
-                  {sortActivitySpaces(activitySpaces).map(s => (
-                    <SelectItem key={s.id} value={s.id}>{getActivitySpaceDisplayName(s)}</SelectItem>
-                  ))}
+                  {sortActivitySpaces(activitySpaces).map(s => {
+                    const blocked = !!findBlockingSpace(activeSpaceBlocks, s.id, form.date, form.start_time, form.end_time);
+                    return <SelectItem key={s.id} value={s.id} disabled={blocked}>{getActivitySpaceDisplayName(s)}{blocked ? " — לא זמין בזמן הזה" : ""}</SelectItem>;
+                  })}
                 </SelectContent>
               </Select>
             </div>

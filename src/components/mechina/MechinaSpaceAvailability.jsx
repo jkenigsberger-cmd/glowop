@@ -12,6 +12,8 @@
  *   rightmost space column is never hidden under the labels.
  */
 
+import { BLOCK_REASON_LABELS } from "@/lib/activitySpaceBlocks";
+
 const HOUR_START   = 6;
 const HOUR_END     = 23;
 const HOURS        = Array.from({ length: HOUR_END - HOUR_START + 1 }, (_, i) => HOUR_START + i);
@@ -94,9 +96,13 @@ function TimeBlock({ groupId, groupName, startTime, endTime, statusLabel, title 
   );
 }
 
+function SpaceBlockTime({ block }) {
+  return <div className="absolute right-0 left-0 mx-0.5 rounded px-1.5 py-1 overflow-hidden bg-amber-100 border-l-4 border-amber-600 text-amber-900" style={{ ...blockStyle(block.start_time, block.end_time), zIndex: 5 }} title={block.reason_notes || BLOCK_REASON_LABELS[block.reason_type]}><span className="text-[10px] font-bold block truncate">לא זמין — {BLOCK_REASON_LABELS[block.reason_type] || block.reason_type}</span><span className="text-[9px] font-medium">{block.start_time}–{block.end_time}</span></div>;
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 export default function MechinaSpaceAvailability({
-  spaces, activeBookings, pendingRequests,
+  spaces, activeBookings, pendingRequests, blocks = [],
   isAdmin, onRequestNew, allowCreateRequest,
   groupMap = {},
 }) {
@@ -212,6 +218,7 @@ export default function MechinaSpaceAvailability({
             {spaces.map(space => {
               const spaceBookings = activeBookings.filter(b => b.activity_space_id === space.id);
               const spacePending  = pendingRequests.filter(r => r.space_id === space.id);
+              const spaceBlocks = blocks.filter(b => b.activity_space_id === space.id);
 
               return (
                 <div
@@ -230,6 +237,9 @@ export default function MechinaSpaceAvailability({
                       }}
                     />
                   ))}
+
+                  {/* Physical space blocks — never group activities */}
+                  {spaceBlocks.map(block => <SpaceBlockTime key={block.id} block={block} />)}
 
                   {/* ACTIVE bookings */}
                   {spaceBookings.map(b => (
@@ -284,6 +294,9 @@ export default function MechinaSpaceAvailability({
         </span>
         <span className="flex items-center gap-1.5 text-xs text-slate-500">
           <span className="w-3 h-3 rounded inline-block" style={{ background: "#fef3c7", border: "2px solid #f59e0b" }} /> ממתין לאישור
+        </span>
+        <span className="flex items-center gap-1.5 text-xs text-amber-800">
+          <span className="w-3 h-3 rounded inline-block bg-amber-100 border-2 border-amber-600" /> חסימת מרחב
         </span>
         {legendGroups.length > 0 && (
           <>

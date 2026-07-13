@@ -3,6 +3,9 @@
  * for a split activity group.
  */
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { base44 } from "@/api/base44Client";
+import { findBlockingSpace } from "@/lib/activitySpaceBlocks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -59,6 +62,10 @@ export default function SplitActivityEditModal({
 
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const { data: activeSpaceBlocks = [] } = useQuery({
+    queryKey: ["activity-space-blocks-active"],
+    queryFn: () => base44.entities.ActivitySpaceBlock.filter({ status: "ACTIVE" }),
+  });
 
   const updateRow = (idx, field, value) => {
     setRows(prev => prev.map((r, i) => i === idx ? { ...r, [field]: value } : r));
@@ -143,9 +150,10 @@ export default function SplitActivityEditModal({
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="none">ללא מרחב</SelectItem>
-                        {activitySpaces.map(s => (
-                          <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                        ))}
+                        {activitySpaces.map(s => {
+                          const blocked = !!findBlockingSpace(activeSpaceBlocks, s.id, date, startTime, endTime);
+                          return <SelectItem key={s.id} value={s.id} disabled={blocked}>{s.name}{blocked ? " — לא זמין בזמן הזה" : ""}</SelectItem>;
+                        })}
                       </SelectContent>
                     </Select>
                   </div>

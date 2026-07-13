@@ -29,12 +29,12 @@ export const ROLE_LABELS = {
 export const ROLE_NAV_LINKS = {
   SUPER_ADMIN:          ["dashboard", "approved-groups", "calendar", "allocation", "common-spaces", "housekeeping", "kitchen", "maintenance", "admin", "mechina-spaces", "meeting-summaries", "work-schedule"],
   ADMIN:                ["dashboard", "approved-groups", "calendar", "allocation", "common-spaces", "housekeeping", "kitchen", "maintenance", "admin", "mechina-spaces", "meeting-summaries", "work-schedule"],
-  OPERATIONS:           ["dashboard", "calendar", "maintenance", "work-schedule", "my-shifts"],
+  OPERATIONS:           ["dashboard", "calendar", "common-spaces", "maintenance", "work-schedule", "my-shifts"],
   HOUSEKEEPING_MANAGER: ["dashboard", "calendar", "allocation", "housekeeping", "approved-groups", "maintenance", "my-shifts"],
   HOUSEKEEPING_STAFF:   ["dashboard", "calendar", "housekeeping", "my-shifts"],
   HOUSEKEEPING_MANAGER: ["dashboard", "calendar", "allocation", "housekeeping", "approved-groups", "maintenance", "my-shifts"],
   KITCHEN:              ["dashboard", "calendar", "kitchen"],
-  MAINTENANCE:          ["maintenance", "my-shifts"],
+  MAINTENANCE:          ["common-spaces", "maintenance", "my-shifts"],
   VIEWER:               ["dashboard", "calendar"],
   MECHINA_USER:         ["mechina-spaces"],
 };
@@ -43,11 +43,11 @@ export const ROLE_NAV_LINKS = {
 export const ROLE_ALLOWED_ROUTES = {
   SUPER_ADMIN: "*", // all
   ADMIN:       ["dashboard", "approved-groups", "calendar", "allocation", "common-spaces", "housekeeping", "kitchen", "kitchen-report", "maintenance", "admin", "groups", "inventory", "cleaning-hours", "mechina-spaces", "meeting-summaries", "work-schedule", "my-shifts"],
-  OPERATIONS:  ["dashboard", "calendar", "maintenance", "work-schedule", "my-shifts"],
+  OPERATIONS:  ["dashboard", "calendar", "common-spaces", "maintenance", "work-schedule", "my-shifts"],
   HOUSEKEEPING_MANAGER: ["dashboard", "calendar", "allocation", "housekeeping", "approved-groups", "cleaning-hours", "maintenance", "my-shifts"],
   HOUSEKEEPING_STAFF:   ["dashboard", "calendar", "housekeeping", "my-shifts"],
   KITCHEN:              ["dashboard", "calendar", "kitchen", "kitchen-report"],
-  MAINTENANCE:          ["maintenance", "my-shifts"],
+  MAINTENANCE:          ["common-spaces", "maintenance", "my-shifts"],
   VIEWER:               ["dashboard", "calendar"],
   MECHINA_USER:         ["mechina-spaces"],
 };
@@ -70,6 +70,8 @@ export const PERMISSIONS = {
   // Operational
   MANAGE_MEALS:      ["SUPER_ADMIN", "ADMIN"],
   MANAGE_ACTIVITIES: ["SUPER_ADMIN", "ADMIN"],
+  VIEW_SPACE_BLOCKS: ["SUPER_ADMIN", "ADMIN", "OPERATIONS", "MAINTENANCE"],
+  MANAGE_SPACE_BLOCKS: ["SUPER_ADMIN", "ADMIN"],
   MANAGE_ALLOCATION: ["SUPER_ADMIN", "ADMIN", "HOUSEKEEPING_MANAGER"],
   CONFIRM_ALLOCATION:["SUPER_ADMIN", "ADMIN", "HOUSEKEEPING_MANAGER"],
 

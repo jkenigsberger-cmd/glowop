@@ -2,6 +2,8 @@ import { useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { useEffect } from "react";
+import { findBlockingSpace } from "@/lib/activitySpaceBlocks";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -26,6 +28,9 @@ export default function MechinaBookingRequestModal({ open, onClose, onSubmitted,
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [blocks, setBlocks] = useState([]);
+  useEffect(() => { base44.entities.ActivitySpaceBlock.filter({ status: "ACTIVE" }).then(setBlocks); }, []);
+  const isBlocked = spaceId => !!findBlockingSpace(blocks, spaceId, form.date, form.start_time, form.end_time);
 
   const set = (field, val) => setForm(f => ({ ...f, [field]: val }));
   const toggle = (field) => setForm(f => ({ ...f, [field]: !f[field] }));
@@ -36,6 +41,7 @@ export default function MechinaBookingRequestModal({ open, onClose, onSubmitted,
     if (!form.space_id) { setError("יש לבחור מרחב"); return; }
     if (!form.start_time || !form.end_time) { setError("יש להזין שעות"); return; }
     if (!form.activity_title.trim()) { setError("יש להזין שם פעילות"); return; }
+    if (isBlocked(form.space_id)) { setError("המרחב הזה לא זמין בזמן הזה"); return; }
 
     setSaving(true);
     try {
@@ -110,9 +116,10 @@ export default function MechinaBookingRequestModal({ open, onClose, onSubmitted,
               className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary bg-white"
             >
               <option value="">בחר מרחב...</option>
-              {spaces.filter(s => s.is_bookable !== false).map(s => (
-                <option key={s.id} value={s.id}>{s.name}{s.capacity ? ` (${s.capacity} איש)` : ""}</option>
-              ))}
+              {spaces.filter(s => s.is_bookable !== false).map(s => {
+                const blocked = isBlocked(s.id);
+                return <option key={s.id} value={s.id} disabled={blocked}>{s.name}{s.capacity ? ` (${s.capacity} איש)` : ""}{blocked ? " — המרחב הזה לא זמין בזמן הזה" : ""}</option>;
+              })}
             </select>
           </div>
 

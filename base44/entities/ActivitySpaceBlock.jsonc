@@ -1,0 +1,82 @@
+{
+  "name": "ActivitySpaceBlock",
+  "type": "object",
+  "properties": {
+    "activity_space_id": {
+      "type": "string",
+      "description": "FK to ActivitySpace"
+    },
+    "activity_space_name": {
+      "type": "string",
+      "description": "Space name snapshot"
+    },
+    "start_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "end_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "start_time": {
+      "type": "string",
+      "description": "HH:MM"
+    },
+    "end_time": {
+      "type": "string",
+      "description": "HH:MM"
+    },
+    "reason_type": {
+      "type": "string",
+      "enum": [
+        "PAINTING",
+        "MAINTENANCE",
+        "REPAIR",
+        "SPECIAL_CLEANING",
+        "TEMPORARILY_CLOSED",
+        "OTHER"
+      ]
+    },
+    "reason_notes": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "ACTIVE",
+        "CANCELLED"
+      ],
+      "default": "ACTIVE"
+    },
+    "created_by": {
+      "type": "string",
+      "description": "Creator email"
+    },
+    "cancelled_by": {
+      "type": "string",
+      "description": "Cancelling user email"
+    },
+    "cancelled_at": {
+      "type": "string",
+      "description": "ISO datetime"
+    },
+    "created_from_maintenance_issue_id": {
+      "type": "string",
+      "description": "Optional FK to MaintenanceIssue"
+    },
+    "conflict_acknowledged": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "required": [
+    "activity_space_id",
+    "activity_space_name",
+    "start_date",
+    "end_date",
+    "start_time",
+    "end_time",
+    "reason_type",
+    "status"
+  ]
+}

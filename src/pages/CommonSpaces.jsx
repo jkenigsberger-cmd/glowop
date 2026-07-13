@@ -8,15 +8,18 @@ import SearchBar from "@/components/search/SearchBar";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { sortActivitySpaces } from "@/lib/activitySpaceUtils";
+import { useRoleContext } from "@/lib/RoleContext";
 
 import SpaceOverviewCard from "../components/spaces/SpaceOverviewCard.jsx";
 import SpaceDailyView from "../components/spaces/SpaceDailyView.jsx";
 import SpaceWeeklyGrid from "../components/spaces/SpaceWeeklyGrid.jsx";
 import LogisticsReportTab from "../components/spaces/LogisticsReportTab.jsx";
+import ActivitySpaceBlocksPanel from "@/components/spaces/ActivitySpaceBlocksPanel";
 
 moment.locale("he");
 
 export default function CommonSpaces() {
+  const { role } = useRoleContext();
   const [tab, setTab] = useState("overview");
   const [selectedDate, setSelectedDate] = useState(moment().format("YYYY-MM-DD"));
   const [weekPivot, setWeekPivot] = useState(moment());
@@ -46,6 +49,11 @@ export default function CommonSpaces() {
   const { data: groups = [] } = useQuery({
     queryKey: ["spaces-groups"],
     queryFn: () => base44.entities.Group.list("-arrival_date", 500),
+  });
+
+  const { data: spaceBlocks = [] } = useQuery({
+    queryKey: ["activity-space-blocks"],
+    queryFn: () => base44.entities.ActivitySpaceBlock.list("-start_date", 500),
   });
 
   // ── Derived ───────────────────────────────────────────────────────────────
@@ -88,6 +96,11 @@ export default function CommonSpaces() {
   }, [spaceItems, selectedDate]);
 
   // ── Handlers ─────────────────────────────────────────────────────────────
+  const blocksForSelectedDay = useMemo(
+    () => spaceBlocks.filter(b => b.status === "ACTIVE" && b.start_date <= selectedDate && b.end_date >= selectedDate),
+    [spaceBlocks, selectedDate]
+  );
+
   const handleWeeklyDayClick = (dateStr) => {
     setSelectedDate(dateStr);
     setTab("daily");
@@ -101,6 +114,7 @@ export default function CommonSpaces() {
     { id: "overview",  label: "סקירה כללית" },
     { id: "daily",     label: "יומי" },
     { id: "weekly",    label: "שבועי" },
+    { id: "blocks",    label: "חסימות מרחבים" },
     { id: "logistics", label: "📋 דוח לוגיסטיקה" },
   ];
 
@@ -201,9 +215,14 @@ export default function CommonSpaces() {
             <SpaceDailyView
               spaces={activitySpaces}
               itemsBySpace={itemsBySpaceForDay}
+              blocks={blocksForSelectedDay}
               date={selectedDate}
             />
           </div>
+        )}
+
+        {tab === "blocks" && (
+          <ActivitySpaceBlocksPanel spaces={activitySpaces} blocks={spaceBlocks} role={role} />
         )}
 
         {/* ── LOGISTICS REPORT TAB ─────────────────────────────────────────── */}
@@ -234,6 +253,7 @@ export default function CommonSpaces() {
               <SpaceWeeklyGrid
                 spaces={activitySpaces}
                 allItems={spaceItems}
+                blocks={spaceBlocks}
                 pivot={weekPivot}
                 onSelectDay={handleWeeklyDayClick}
               />
