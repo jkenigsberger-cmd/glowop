@@ -214,9 +214,22 @@ export default function Dashboard() {
 
   const upcomingSpaceBlocks = useMemo(() =>
     activitySpaceBlocks
-      .filter(block => block.end_date >= TODAY && block.start_date <= SPACE_BLOCK_ALERT_END)
+      .filter(block =>
+        block.status === "ACTIVE" &&
+        block.end_date >= TODAY &&
+        block.start_date <= SPACE_BLOCK_ALERT_END
+      )
       .sort((a, b) => a.start_date.localeCompare(b.start_date) || a.start_time.localeCompare(b.start_time)),
     [activitySpaceBlocks]
+  );
+
+  const activitiesForSpaceBlockAlert = useMemo(() =>
+    activities.filter(activity =>
+      activity.date >= TODAY &&
+      activity.date <= SPACE_BLOCK_ALERT_END &&
+      activity.activity_space_id
+    ),
+    [activities]
   );
 
   // ── Stats ──────────────────────────────────────────────────────────────
@@ -365,7 +378,7 @@ export default function Dashboard() {
         </div>
 
         {canViewSpaceBlocks && upcomingSpaceBlocks.length > 0 && (
-          <DashboardSpaceBlocksAlert blocks={upcomingSpaceBlocks} activities={activities} />
+          <DashboardSpaceBlocksAlert blocks={upcomingSpaceBlocks} activities={activitiesForSpaceBlockAlert} />
         )}
 
         {/* ── Daily staff brief (generate-and-copy) ────────────────────── */}

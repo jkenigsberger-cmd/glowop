@@ -6,11 +6,13 @@ const shortDate = value => value?.split("-").slice(1).reverse().join("/") || "";
 
 export default function DashboardSpaceBlocksAlert({ blocks, activities }) {
   const visibleBlocks = blocks.slice(0, 3);
-  const conflictCount = blocks.filter(block => activities.some(activity =>
-    activity.activity_space_id === block.activity_space_id &&
-    activity.date >= block.start_date && activity.date <= block.end_date &&
-    timesOverlap(activity.start_time, activity.end_time, block.start_time, block.end_time)
-  )).length;
+  const conflictCount = blocks.filter(block =>
+    block.status === "ACTIVE" && activities.some(activity =>
+      activity.activity_space_id === block.activity_space_id &&
+      activity.date >= block.start_date && activity.date <= block.end_date &&
+      timesOverlap(activity.start_time, activity.end_time, block.start_time, block.end_time)
+    )
+  ).length;
 
   return (
     <Link to="/common-spaces" className="block rounded-xl border border-amber-300 border-r-4 border-r-amber-500 bg-amber-50 px-4 py-3 hover:bg-amber-100/70 transition-colors" dir="rtl">
