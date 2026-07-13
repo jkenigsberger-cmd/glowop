@@ -13,11 +13,12 @@ import DashboardQuickLinks from "@/components/dashboard/DashboardQuickLinks";
 import OccupancyMap from "@/components/dashboard/OccupancyMap";
 import DailyStaffBrief from "@/components/dashboard/brief/DailyStaffBrief";
 import { Button } from "@/components/ui/button";
-import { FileText, ChevronRight, ChevronLeft, BedDouble, Sun, Users, LogIn, LogOut, UtensilsCrossed, CalendarDays, AlertTriangle, Ban } from "lucide-react";
+import { FileText, ChevronRight, ChevronLeft, BedDouble, Sun, Users, LogIn, LogOut, UtensilsCrossed, CalendarDays, AlertTriangle } from "lucide-react";
 import { useRoleContext } from "@/lib/RoleContext";
 
 const toDateStr = (date) => format(date, "yyyy-MM-dd");
 const TODAY = toDateStr(new Date());
+const SPACE_BLOCK_ALERT_END = toDateStr(addDays(new Date(), 14));
 
 function Section({ title, children, id, icon: Icon }) {
   return (
@@ -211,9 +212,11 @@ export default function Dashboard() {
     [activities, selectedDate]
   );
 
-  const spaceBlocksForDate = useMemo(() =>
-    activitySpaceBlocks.filter(block => block.start_date <= selectedDate && block.end_date >= selectedDate),
-    [activitySpaceBlocks, selectedDate]
+  const upcomingSpaceBlocks = useMemo(() =>
+    activitySpaceBlocks
+      .filter(block => block.end_date >= TODAY && block.start_date <= SPACE_BLOCK_ALERT_END)
+      .sort((a, b) => a.start_date.localeCompare(b.start_date) || a.start_time.localeCompare(b.start_time)),
+    [activitySpaceBlocks]
   );
 
   // ── Stats ──────────────────────────────────────────────────────────────
@@ -361,6 +364,10 @@ export default function Dashboard() {
           />
         </div>
 
+        {canViewSpaceBlocks && upcomingSpaceBlocks.length > 0 && (
+          <DashboardSpaceBlocksAlert blocks={upcomingSpaceBlocks} activities={activities} />
+        )}
+
         {/* ── Daily staff brief (generate-and-copy) ────────────────────── */}
         <DailyStaffBrief selectedDate={selectedDate} />
 
@@ -463,12 +470,6 @@ export default function Dashboard() {
         <Section id={SECTION_IDS.activities} title={`פעילויות (${activitiesForDate.length})`} icon={CalendarDays}>
           <DashboardActivitiesToday activities={activitiesForDate} groupById={groupById} spaceById={spaceById} />
         </Section>
-
-        {canViewSpaceBlocks && spaceBlocksForDate.length > 0 && (
-          <Section title="מרחבים חסומים היום" icon={Ban}>
-            <DashboardSpaceBlocksAlert blocks={spaceBlocksForDate} activities={activitiesForDate} groupById={groupById} selectedDate={selectedDate} />
-          </Section>
-        )}
 
         {/* ── Alerts ───────────────────────────────────────────────────── */}
         <Section id={SECTION_IDS.warnings} title="התראות תפעוליות" icon={AlertTriangle}>
