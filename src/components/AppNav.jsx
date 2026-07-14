@@ -209,7 +209,7 @@ export default function AppNav() {
 
   // Admin dropdown items (not from ALL_LINKS — separate)
   const adminDropdownItems = [];
-  if (["SUPER_ADMIN", "ADMIN"].includes(role)) adminDropdownItems.push({ key: "analytics", to: "/analytics", label: "BI / אנליטיקה", icon: BarChart3 });
+  if (role === "SUPER_ADMIN") adminDropdownItems.push({ key: "analytics", to: "/analytics", label: "BI / אנליטיקה", icon: BarChart3 });
   if (showUserManagement) adminDropdownItems.push({ key: "admin-users", to: "/admin/users", label: "משתמשים", icon: Users });
   if (showAdmin) adminDropdownItems.push({ key: "admin", to: "/admin", label: "ניהול מערכת", icon: ShieldAlert });
 
@@ -246,7 +246,7 @@ export default function AppNav() {
       <GlobalSearch isOpen={searchOpen} onClose={() => setSearchOpen(false)} />
 
       {/* ── Desktop header ─────────────────────────────────────────────── */}
-      <header className="hidden sm:block bg-white border-b border-slate-200 sticky top-0 z-40" dir="rtl">
+      <header className="app-navigation hidden sm:block bg-white border-b border-slate-200 sticky top-0 z-40" dir="rtl">
         <div className="max-w-screen-xl mx-auto px-4 lg:px-6 flex items-center h-14 gap-1">
 
           {/* Brand */}
@@ -348,7 +348,7 @@ export default function AppNav() {
       </header>
 
       {/* ── Mobile top bar ──────────────────────────────────────────────── */}
-      <div className="sm:hidden sticky top-0 z-40 bg-white border-b border-slate-200" dir="rtl">
+      <div className="app-navigation sm:hidden sticky top-0 z-40 bg-white border-b border-slate-200" dir="rtl">
         <div className="flex items-center justify-between px-2 h-14">
           <button
             onClick={() => setDrawerOpen(true)}

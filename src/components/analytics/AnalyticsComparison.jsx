@@ -1,0 +1,7 @@
+const metrics = [["total_active_groups","קבוצות פעילות"],["arrivals_count","כניסות"],["departures_count","יציאות"],["total_pax_unique_groups","סה״כ משתתפים"],["person_nights","לינות אדם"],["bed_occupancy_rate","תפוסת מיטות"],["total_activities","פעילויות"],["total_meals","ארוחות"],["total_meal_pax","משתתפי ארוחות"]];
+export default function AnalyticsComparison({ current, previous }) {
+  if (!previous) return null;
+  return <section className="rounded-xl border bg-card p-4"><h2 className="font-semibold mb-3">השוואת חודשים</h2><div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+    {metrics.map(([key,label]) => { const a = Number(current[key] || 0), b = Number(previous[key] || 0), diff = a - b, percent = b ? diff / b * 100 : null, occupancy = key === "bed_occupancy_rate"; return <div key={key} className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">{label}</p><p className="font-bold mt-1">{a.toFixed(occupancy ? 1 : 0)}{occupancy ? "%" : ""} <span className="font-normal text-muted-foreground">מול {b.toFixed(occupancy ? 1 : 0)}{occupancy ? "%" : ""}</span></p><p className={`text-xs mt-1 ${diff >= 0 ? "text-emerald-600" : "text-red-600"}`}>{diff >= 0 ? "+" : ""}{diff.toFixed(occupancy ? 1 : 0)} {occupancy ? "נקודות" : ""}{percent !== null && ` (${percent >= 0 ? "+" : ""}${percent.toFixed(1)}%)`}</p></div>; })}
+  </div></section>;
+}

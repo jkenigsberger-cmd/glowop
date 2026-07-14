@@ -288,3 +288,20 @@
     print-color-adjust: exact;
   }
 }
+
+.analytics-print-title { display: none; }
+
+@media print {
+  body.analytics-print-mode { background: #fff !important; }
+  body.analytics-print-mode .app-navigation,
+  body.analytics-print-mode .analytics-no-print { display: none !important; }
+  body.analytics-print-mode .analytics-print-title { display: block; text-align: center; margin-bottom: 8mm; }
+  body.analytics-print-mode .analytics-print-title h1 { font-size: 22px; color: #1a1a1a; }
+  body.analytics-print-mode .analytics-print-title p { font-size: 13px; color: #555; margin-top: 2mm; }
+  body.analytics-print-mode .analytics-report { max-width: none; padding: 10mm; background: #fff; color: #111; }
+  body.analytics-print-mode .analytics-report > * { break-inside: avoid; margin-bottom: 5mm; }
+  body.analytics-print-mode .analytics-print-section { break-before: page; }
+  body.analytics-print-mode table { font-size: 9px; }
+  body.analytics-print-mode .recharts-responsive-container { min-height: 220px; }
+  body.analytics-print-mode * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}

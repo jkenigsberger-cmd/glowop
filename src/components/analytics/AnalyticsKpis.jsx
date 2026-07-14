@@ -9,6 +9,7 @@ const cards = [
   ["person_nights", "לינות אדם", Moon, "text-indigo-600"],
   ["total_activities", "פעילויות", CalendarDays, "text-cyan-600"],
   ["total_meals", "ארוחות", UtensilsCrossed, "text-amber-600"],
+  ["total_meal_pax", "משתתפי ארוחות", UserRound, "text-rose-600"],
 ];
 
 export default function AnalyticsKpis({ kpis }) {
