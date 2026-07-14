@@ -1,8 +1,8 @@
-import { StickyNote, Moon } from "lucide-react";
+import { StickyNote, Moon, Copy } from "lucide-react";
 import { ROW_BY_TYPE, fmtShiftTime } from "@/lib/workScheduleConfig";
 
 // Small colored chip inside a grid cell — worker name + hours (+ note)
-export default function ShiftCard({ shift, onClick, clickable, showNightOnCallToggle, nightOnCallLinked, onToggleNightOnCall }) {
+export default function ShiftCard({ shift, onClick, onCopy, clickable, copyable, showNightOnCallToggle, nightOnCallLinked, onToggleNightOnCall }) {
   const row = ROW_BY_TYPE[shift.row_type] || {};
   const cancelled = shift.status === "CANCELLED";
   const isTextOnly = row.textOnly;
@@ -46,6 +46,11 @@ export default function ShiftCard({ shift, onClick, clickable, showNightOnCallTo
           )}
           {shift.auto_created_from === "OPERATIONS_EVENING_TO_NIGHT_ON_CALL" && (
             <span className="inline-flex mt-1 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500">נוצר מתפעול ערב</span>
+          )}
+          {copyable && (
+            <button type="button" onClick={(e) => { e.stopPropagation(); onCopy?.(shift); }} className="mt-1 ml-1 inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white/70 px-2 py-0.5 text-[10px] font-semibold text-slate-600 hover:text-primary" title="העתק לימים נוספים">
+              <Copy className="w-2.5 h-2.5" /> העתק
+            </button>
           )}
           {showNightOnCallToggle && (
             <button

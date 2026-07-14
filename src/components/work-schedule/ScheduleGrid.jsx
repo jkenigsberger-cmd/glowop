@@ -3,7 +3,7 @@ import { ROW_TYPES, getWeekDays, fmtDM, DAY_NAMES } from "@/lib/workScheduleConf
 import ShiftCard from "@/components/work-schedule/ShiftCard";
 
 // Weekly Excel-like grid: columns = Sunday→Saturday, rows = fixed row types
-export default function ScheduleGrid({ weekStart, shifts, teamFilter, canManage, onAddShift, onEditShift, onToggleNightOnCall }) {
+export default function ScheduleGrid({ weekStart, shifts, teamFilter, canManage, onAddShift, onEditShift, onCopyShift, onToggleNightOnCall }) {
   const days = getWeekDays(weekStart);
   const today = new Date().toISOString().slice(0, 10);
 
@@ -60,6 +60,8 @@ export default function ScheduleGrid({ weekStart, shifts, teamFilter, canManage,
                             shift={s}
                             clickable={canManage}
                             onClick={() => onEditShift(s)}
+                            onCopy={() => onCopyShift(s)}
+                            copyable={canManage && !row.textOnly && s.status !== "CANCELLED"}
                             showNightOnCallToggle={canManage && s.row_type === "OPERATIONS_EVENING" && s.status === "PLANNED"}
                             nightOnCallLinked={linkedNightOnCall}
                             onToggleNightOnCall={onToggleNightOnCall}

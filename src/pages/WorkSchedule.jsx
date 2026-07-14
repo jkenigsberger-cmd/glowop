@@ -13,6 +13,7 @@ import ShiftFormModal from "@/components/work-schedule/ShiftFormModal";
 import WeeklyScheduleReportModal from "@/components/work-schedule/WeeklyScheduleReportModal";
 import AdminRequestsPanel from "@/components/work-schedule/AdminRequestsPanel";
 import WorkerManagementPanel from "@/components/work-schedule/WorkerManagementPanel";
+import CopyShiftModal from "@/components/work-schedule/CopyShiftModal";
 
 const NIGHT_ON_CALL_SOURCE = "OPERATIONS_EVENING_TO_NIGHT_ON_CALL";
 
@@ -28,6 +29,7 @@ export default function WorkSchedule() {
   const [teamFilter, setTeamFilter] = useState("ALL");
   const [modal, setModal] = useState(null); // { shift } | { defaults }
   const [reportOpen, setReportOpen] = useState(false);
+  const [copyShift, setCopyShift] = useState(null);
   const [activeTab, setActiveTab] = useState("schedule");
   const [busy, setBusy] = useState(false);
 
@@ -118,6 +120,15 @@ export default function WorkSchedule() {
     if (shift.row_type === "OPERATIONS_EVENING") await deleteLinkedNightOnCallShifts(shift);
     await base44.entities.WorkShift.delete(shift.id);
     invalidate();
+  };
+
+  const handleCopyShift = async (targetDates) => {
+    if (!canManage || !copyShift) return;
+    const response = await base44.functions.invoke("copyWorkShiftToDays", { shift_id: copyShift.id, target_dates: targetDates });
+    invalidate();
+    toast({ description: `נוצרו ${response.data.created_count} משמרות · דולגו ${response.data.skipped_count} משמרות שכבר קיימות` });
+    setCopyShift(null);
+    return response.data;
   };
 
   const handleToggleNightOnCall = async (shift, shouldCreate) => {
@@ -281,8 +292,13 @@ export default function WorkSchedule() {
         canManage={canManage}
         onAddShift={(date, rowType) => canManage && setModal({ defaults: { date, row_type: rowType } })}
         onEditShift={(shift) => canManage && setModal({ shift })}
+        onCopyShift={(shift) => canManage && setCopyShift(shift)}
         onToggleNightOnCall={handleToggleNightOnCall}
       />
+
+      {copyShift && canManage && (
+        <CopyShiftModal shift={copyShift} weekStart={weekStart} shifts={shifts} onCopy={handleCopyShift} onClose={() => setCopyShift(null)} />
+      )}
 
       {modal && canManage && (
         <ShiftFormModal
