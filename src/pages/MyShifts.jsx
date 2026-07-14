@@ -7,14 +7,21 @@ import { ROW_BY_TYPE, fmtShiftTime, fmtDM, dayNameOf } from "@/lib/workScheduleC
 // Worker view — only PUBLISHED shifts assigned to the logged-in worker. Read-only.
 export default function MyShifts() {
   const { internalUser } = useRoleContext();
+  const internalUserId = internalUser?.id || "";
   const email = (internalUser?.email || "").trim().toLowerCase();
 
-  const { data: profiles = [], isLoading: loadingProfile } = useQuery({
-    queryKey: ["myWorkerProfile", email],
-    queryFn: () => base44.entities.WorkerProfile.filter({ internal_user_email: email }),
-    enabled: !!email,
+  const { data: profile = null, isLoading: loadingProfile } = useQuery({
+    queryKey: ["myWorkerProfile", internalUserId, email],
+    queryFn: async () => {
+      if (internalUserId) {
+        const byId = await base44.entities.WorkerProfile.filter({ internal_user_id: internalUserId });
+        if (byId[0]) return byId[0];
+      }
+      const byEmail = await base44.entities.WorkerProfile.filter({ internal_user_email: email });
+      return byEmail[0] || null;
+    },
+    enabled: !!internalUserId || !!email,
   });
-  const profile = profiles[0] || null;
 
   const { data: publishedSchedules = [] } = useQuery({
     queryKey: ["publishedWorkSchedules"],
@@ -49,7 +56,7 @@ export default function MyShifts() {
         <div className="text-sm text-slate-400 text-center py-10">טוען...</div>
       ) : !profile ? (
         <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-6 text-center text-sm text-slate-500">
-          החשבון שלך אינו מקושר לעובד בסידור העבודה.
+          לא נמצא פרופיל עובד מקושר למשתמש שלך
           <br />
           <span className="text-xs text-slate-400">פנה למנהל כדי לקשר את החשבון.</span>
         </div>

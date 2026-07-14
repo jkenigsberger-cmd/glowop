@@ -9,12 +9,17 @@
     "phone": {
       "type": "string"
     },
+    "email": {
+      "type": "string",
+      "description": "Normalized contact email; does not grant system access"
+    },
     "default_team": {
       "type": "string",
       "enum": [
         "OPERATIONS",
         "HOUSEKEEPING",
         "MAINTENANCE",
+        "KITCHEN",
         "OTHER"
       ],
       "default": "OTHER"
@@ -29,7 +34,7 @@
     },
     "internal_user_email": {
       "type": "string",
-      "description": "Lowercased email of linked InternalUser \u2014 used by \u05d4\u05de\u05e9\u05de\u05e8\u05d5\u05ea \u05e9\u05dc\u05d9 to match the logged-in worker"
+      "description": "Normalized email of the confirmed linked InternalUser"
     },
     "notes": {
       "type": "string"

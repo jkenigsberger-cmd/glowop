@@ -23,8 +23,9 @@ export const TEAM_FILTERS = [
 
 export const WORKER_TEAMS = [
   { id: "OPERATIONS",   label: "תפעול" },
-  { id: "HOUSEKEEPING", label: "משק בית" },
   { id: "MAINTENANCE",  label: "תחזוקה" },
+  { id: "HOUSEKEEPING", label: "משק בית" },
+  { id: "KITCHEN",      label: "מטבח" },
   { id: "OTHER",        label: "אחר" },
 ];
 

@@ -52,16 +52,16 @@ export default function ShiftFormModal({ shift, defaults, workers, isPublished, 
       let workerName = "";
       if (!isActivity && !isCountBased) {
         if (isNewWorker) {
-          const created = await base44.entities.WorkerProfile.create({
-            full_name: newWorker.full_name.trim(),
-            phone: newWorker.phone || undefined,
-            default_team: newWorker.default_team,
-            internal_user_email: newWorker.internal_user_email ? newWorker.internal_user_email.trim().toLowerCase() : undefined,
-            is_active: true,
-            created_by: userEmail || undefined,
+          const response = await base44.functions.invoke("manageWorkerProfiles", {
+            action: "save",
+            worker: {
+              full_name: newWorker.full_name.trim(), phone: newWorker.phone || "",
+              email: newWorker.internal_user_email.trim().toLowerCase(), default_team: newWorker.default_team,
+              is_active: true, internal_user_id: "",
+            },
           });
-          workerId = created.id;
-          workerName = created.full_name;
+          workerId = response.data.worker.id;
+          workerName = response.data.worker.full_name;
         } else {
           workerName = workers.find((w) => w.id === form.worker_id)?.full_name || shift?.worker_name || "";
         }
@@ -138,7 +138,7 @@ export default function ShiftFormModal({ shift, defaults, workers, isPublished, 
                 <Select value={form.worker_id} onValueChange={(v) => set("worker_id", v)}>
                   <SelectTrigger><SelectValue placeholder="בחר עובד" /></SelectTrigger>
                   <SelectContent>
-                    {workers.map((w) => <SelectItem key={w.id} value={w.id}>{w.full_name}</SelectItem>)}
+                    {workers.map((w) => <SelectItem key={w.id} value={w.id}><span>{w.full_name} · <span className={w.internal_user_id ? "text-emerald-600" : "text-slate-400"}>{w.internal_user_id ? "משתמש מערכת מקושר" : "ללא משתמש מערכת"}</span></span></SelectItem>)}
                     <SelectItem value={NEW_WORKER}>➕ עובד חדש...</SelectItem>
                   </SelectContent>
                 </Select>
