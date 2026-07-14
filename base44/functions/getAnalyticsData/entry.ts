@@ -148,7 +148,7 @@ Deno.serve(async (req) => {
         { type: "DAY_USE", count: selected.kpis.day_use_groups_count },
         { type: "OTHER/UNKNOWN", count: unknown },
       ],
-      activities: { total: activities.length, common_space_activities_count: activities.filter(item => item.activity_space_id).length, activities_by_type: Object.entries(activityTypeCounts).map(([type, count]) => ({ type, count })) },
+      activities: { total: activities.length, common_space_activities_count: activities.filter(item => item.activity_space_id).length, activities_by_name: Object.entries(activityTypeCounts).map(([name, count]) => ({ name, count })) },
       activitiesBySpace: Object.entries(activitySpaceCounts).map(([space_name, count]) => ({ space_name, count })).sort((a, b) => b.count - a.count),
       meals: { available: true, total: meals.length, total_pax: meals.reduce((sum, meal) => sum + number(meal.pax), 0), meals_by_type: Object.entries(mealCounts).map(([meal_type, values]) => ({ meal_type, ...values })) },
       mealsByType: Object.entries(mealCounts).map(([meal_type, values]) => ({ meal_type, pax: values.pax })),
