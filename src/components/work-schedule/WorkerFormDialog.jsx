@@ -14,7 +14,18 @@ export default function WorkerFormDialog({ worker, onSave, onClose }) {
   const [linkedUser, setLinkedUser] = useState(worker?.linked_user ? { id: worker.linked_user.id, name: worker.linked_user.name, email: worker.linked_user.email, role: worker.linked_user.role } : null);
   const [foundUser, setFoundUser] = useState(null); const [message, setMessage] = useState(""); const [saving, setSaving] = useState(false);
   const set = (key, value) => { setForm((current) => ({ ...current, [key]: value })); if (key === "email") { setFoundUser(null); if (linkedUser && normalize(value) !== normalize(linkedUser.email || "")) setLinkedUser(null); } };
-  const search = async () => { setMessage(""); const res = await base44.functions.invoke("manageWorkerProfiles", { action: "search_user", email: normalize(form.email) }); setFoundUser(res.data.user); if (!res.data.user) setMessage("לא נמצא משתמש מערכת עם האימייל הזה"); };
+  const search = async () => {
+    setMessage(""); setFoundUser(null);
+    const email = normalize(form.email);
+    if (!email) { setMessage("יש להזין אימייל"); return; }
+    try {
+      const res = await base44.functions.invoke("manageWorkerProfiles", { action: "search_user", email });
+      setFoundUser(res.data.user);
+      if (!res.data.user) setMessage("לא נמצא משתמש מערכת עם האימייל הזה");
+    } catch (error) {
+      setMessage(error.response?.data?.error || error.message || "שגיאה בחיפוש משתמש מערכת");
+    }
+  };
   const submit = async (event) => { event.preventDefault(); if (!form.full_name.trim()) return setMessage("שם מלא הוא שדה חובה"); setSaving(true); try { await onSave({ ...form, email: normalize(form.email), internal_user_id: linkedUser?.id || "" }); } catch (error) { setMessage(error.response?.data?.error || error.message || "שגיאה בשמירה"); setSaving(false); } };
   return <Dialog open onOpenChange={onClose}><DialogContent className="max-w-lg" dir="rtl"><DialogHeader><DialogTitle>{worker ? "עריכת עובד" : "עובד חדש"}</DialogTitle></DialogHeader><form onSubmit={submit} className="space-y-3">
     <div><Label>שם מלא *</Label><Input value={form.full_name} onChange={(e) => set("full_name", e.target.value)} /></div><div className="grid grid-cols-2 gap-3"><div><Label>טלפון</Label><Input value={form.phone} onChange={(e) => set("phone", e.target.value)} /></div><div><Label>צוות / תפקיד</Label><Select value={form.default_team} onValueChange={(value) => set("default_team", value)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{WORKER_TEAMS.map((team) => <SelectItem key={team.id} value={team.id}>{team.label}</SelectItem>)}</SelectContent></Select></div></div>
