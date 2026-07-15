@@ -49,6 +49,10 @@ export default function WorkSchedule() {
     queryKey: ["workerProfiles"],
     queryFn: () => base44.entities.WorkerProfile.filter({ is_active: true }, "full_name", 500),
   });
+  const { data: assignmentRequests = [] } = useQuery({
+    queryKey: ["workScheduleRequests"], enabled: canManage,
+    queryFn: async () => (await base44.functions.invoke("manageWorkScheduleRequests", { action: "admin_list" })).data.requests || [],
+  });
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["workSchedule", weekStart] });
@@ -237,10 +241,11 @@ export default function WorkSchedule() {
 
       {canManage && <div className="flex gap-2 border-b border-slate-200 pb-2">
         <Button type="button" size="sm" variant={activeTab === "schedule" ? "default" : "ghost"} onClick={() => setActiveTab("schedule")}>סידור עבודה</Button>
+        <Button type="button" size="sm" variant={activeTab === "requests" ? "default" : "ghost"} onClick={() => setActiveTab("requests")}>בקשות</Button>
         <Button type="button" size="sm" variant={activeTab === "workers" ? "default" : "ghost"} onClick={() => setActiveTab("workers")}>ניהול עובדים</Button>
       </div>}
 
-      {activeTab === "workers" && canManage ? <WorkerManagementPanel /> : <>
+      {activeTab === "workers" && canManage ? <WorkerManagementPanel /> : activeTab === "requests" && canManage ? <AdminRequestsPanel weekStart={weekStart} setWeekStart={setWeekStart} /> : <>
       <WeekToolbar
         weekStart={weekStart}
         setWeekStart={setWeekStart}
@@ -305,6 +310,7 @@ export default function WorkSchedule() {
           shift={modal.shift || null}
           defaults={modal.defaults || null}
           workers={workers}
+          requests={assignmentRequests}
           isPublished={schedule?.status === "PUBLISHED"}
           userEmail={userEmail}
           onSave={handleSaveShift}
@@ -313,8 +319,6 @@ export default function WorkSchedule() {
           onClose={() => setModal(null)}
         />
       )}
-
-      {canManage && <AdminRequestsPanel userEmail={userEmail} />}
 
       {reportOpen && canManage && (
         <WeeklyScheduleReportModal

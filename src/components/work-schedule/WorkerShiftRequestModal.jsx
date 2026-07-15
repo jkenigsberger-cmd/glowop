@@ -4,60 +4,28 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { fmtDM, fmtShiftTime, dayNameOf } from "@/lib/workScheduleConfig";
-import { REQUEST_TYPE_LABELS, SLOT_LABELS } from "@/lib/workScheduleRequestLabels";
+import { REQUEST_TYPE_LABELS } from "@/lib/workScheduleRequestLabels";
 
-export default function WorkerShiftRequestModal({ open, onClose, profile, email, shifts, onCreated }) {
-  const [type, setType] = useState("WANT_TO_WORK");
-  const [date, setDate] = useState("");
-  const [slot, setSlot] = useState("ANY");
-  const [shiftId, setShiftId] = useState(shifts[0]?.id || "");
-  const [changeText, setChangeText] = useState("");
-  const [notes, setNotes] = useState("");
+export default function WorkerShiftRequestModal({ open, onClose, shifts, onCreated }) {
+  const [form, setForm] = useState({ request_type: "DAY_OFF", start_date: "", end_date: "", start_time: "", end_time: "", related_shift_id: "", message: "" });
   const [busy, setBusy] = useState(false);
-
-  const selectedShift = shifts.find((shift) => shift.id === shiftId);
-  const shiftSummary = selectedShift ? `${dayNameOf(selectedShift.date)} ${fmtDM(selectedShift.date)} · ${selectedShift.row_label} ${fmtShiftTime(selectedShift.start_time, selectedShift.end_time)}`.trim() : "";
-  const canSubmit = type === "GENERAL" ? changeText.trim() : type === "CHANGE_SHIFT" ? shiftId && changeText.trim() : !!date;
-
+  const [error, setError] = useState("");
+  const set = (key, value) => setForm((current) => ({ ...current, [key]: value }));
+  const needsDate = form.request_type !== "GENERAL_NOTE";
   const submit = async () => {
-    if (!canSubmit) return;
-    setBusy(true);
-    await base44.entities.WorkScheduleRequest.create({
-      worker_id: profile?.id,
-      worker_name: profile?.full_name,
-      worker_email: email,
-      request_type: type,
-      date: type === "WANT_TO_WORK" || type === "CANNOT_WORK" ? date : selectedShift?.date,
-      preferred_slot: type === "WANT_TO_WORK" ? slot : undefined,
-      related_shift_id: type === "CHANGE_SHIFT" ? shiftId : undefined,
-      current_shift_summary: type === "CHANGE_SHIFT" ? shiftSummary : undefined,
-      requested_change_text: type === "CHANGE_SHIFT" || type === "GENERAL" ? changeText : undefined,
-      notes,
-      status: "PENDING",
-      created_by: email,
-    });
-    setBusy(false);
-    onCreated();
-    onClose();
+    if (!form.message.trim() || (needsDate && !form.start_date)) return;
+    setBusy(true); setError("");
+    try {
+      await base44.functions.invoke("manageWorkScheduleRequests", { action: "create", request: { ...form, date: form.start_date, end_date: form.end_date || form.start_date } });
+      onCreated(); onClose();
+    } catch (e) { setError(e.response?.data?.error || e.message); setBusy(false); }
   };
-
-  return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-lg" dir="rtl">
-        <DialogHeader><DialogTitle>בקשה חדשה</DialogTitle></DialogHeader>
-        <div className="space-y-4">
-          <label className="block text-sm font-semibold">סוג בקשה</label>
-          <select value={type} onChange={(e) => setType(e.target.value)} className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm">
-            {Object.entries(REQUEST_TYPE_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-          </select>
-          {(type === "WANT_TO_WORK" || type === "CANNOT_WORK") && <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" />}
-          {type === "WANT_TO_WORK" && <select value={slot} onChange={(e) => setSlot(e.target.value)} className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm">{Object.entries(SLOT_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select>}
-          {type === "CHANGE_SHIFT" && <select value={shiftId} onChange={(e) => setShiftId(e.target.value)} className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm">{shifts.map((shift) => <option key={shift.id} value={shift.id}>{dayNameOf(shift.date)} {fmtDM(shift.date)} · {shift.row_label} {fmtShiftTime(shift.start_time, shift.end_time)}</option>)}</select>}
-          {(type === "CHANGE_SHIFT" || type === "GENERAL") && <Textarea value={changeText} onChange={(e) => setChangeText(e.target.value)} placeholder={type === "GENERAL" ? "כתוב/כתבי את הבקשה" : "מה תרצה/י לשנות?"} rows={3} />}
-          <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="הערות נוספות" rows={3} />
-          <div className="flex justify-end gap-2"><Button variant="ghost" onClick={onClose}>ביטול</Button><Button onClick={submit} disabled={!canSubmit || busy}>שלח בקשה</Button></div>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
+  return <Dialog open={open} onOpenChange={onClose}><DialogContent className="max-w-lg" dir="rtl"><DialogHeader><DialogTitle>בקשה חדשה</DialogTitle></DialogHeader><div className="space-y-3">
+    <label className="text-sm font-semibold">סוג בקשה</label><select value={form.request_type} onChange={(e) => set("request_type", e.target.value)} className="w-full rounded-md border px-3 py-2 text-sm">{Object.entries(REQUEST_TYPE_LABELS).filter(([key]) => !["WANT_TO_WORK", "CANNOT_WORK", "CHANGE_SHIFT", "GENERAL"].includes(key)).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select>
+    {needsDate && <div className="grid grid-cols-2 gap-2"><input type="date" value={form.start_date} onChange={(e) => set("start_date", e.target.value)} className="rounded-md border px-3 py-2 text-sm" /><input type="date" value={form.end_date} min={form.start_date} onChange={(e) => set("end_date", e.target.value)} className="rounded-md border px-3 py-2 text-sm" /></div>}
+    <div className="grid grid-cols-2 gap-2"><input type="time" value={form.start_time} onChange={(e) => set("start_time", e.target.value)} className="rounded-md border px-3 py-2 text-sm" /><input type="time" value={form.end_time} onChange={(e) => set("end_time", e.target.value)} className="rounded-md border px-3 py-2 text-sm" /></div>
+    {form.request_type === "SHIFT_CHANGE" && <select value={form.related_shift_id} onChange={(e) => set("related_shift_id", e.target.value)} className="w-full rounded-md border px-3 py-2 text-sm"><option value="">ללא משמרת מסוימת</option>{shifts.map((shift) => <option key={shift.id} value={shift.id}>{dayNameOf(shift.date)} {fmtDM(shift.date)} · {shift.row_label} {fmtShiftTime(shift.start_time, shift.end_time)}</option>)}</select>}
+    <Textarea value={form.message} onChange={(e) => set("message", e.target.value)} placeholder="הודעה *" rows={4} />{error && <div className="text-xs text-red-600">{error}</div>}
+    <div className="flex justify-end gap-2"><Button variant="ghost" onClick={onClose}>ביטול</Button><Button onClick={submit} disabled={busy || !form.message.trim() || (needsDate && !form.start_date)}>שלח בקשה</Button></div>
+  </div></DialogContent></Dialog>;
 }

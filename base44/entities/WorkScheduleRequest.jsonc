@@ -2,47 +2,58 @@
   "name": "WorkScheduleRequest",
   "type": "object",
   "properties": {
-    "worker_id": {
-      "type": "string"
+    "worker_profile_id": {
+      "type": "string",
+      "description": "FK to WorkerProfile"
     },
     "worker_name": {
       "type": "string"
     },
-    "worker_email": {
+    "internal_user_id": {
+      "type": "string",
+      "description": "FK to InternalUser"
+    },
+    "internal_user_email": {
       "type": "string"
     },
     "request_type": {
       "type": "string",
       "enum": [
-        "WANT_TO_WORK",
-        "CANNOT_WORK",
-        "CHANGE_SHIFT",
-        "GENERAL"
+        "DAY_OFF",
+        "UNAVAILABLE",
+        "PREFERRED_SHIFT",
+        "SHIFT_CHANGE",
+        "GENERAL_NOTE"
       ]
     },
     "date": {
       "type": "string",
       "format": "date"
     },
-    "preferred_slot": {
+    "start_date": {
       "type": "string",
-      "enum": [
-        "MORNING",
-        "EVENING",
-        "NIGHT",
-        "ANY"
-      ]
+      "format": "date"
+    },
+    "end_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "start_time": {
+      "type": "string",
+      "description": "HH:MM"
+    },
+    "end_time": {
+      "type": "string",
+      "description": "HH:MM"
     },
     "related_shift_id": {
+      "type": "string",
+      "description": "Optional FK to WorkShift"
+    },
+    "title": {
       "type": "string"
     },
-    "current_shift_summary": {
-      "type": "string"
-    },
-    "requested_change_text": {
-      "type": "string"
-    },
-    "notes": {
+    "message": {
       "type": "string"
     },
     "status": {
@@ -51,7 +62,6 @@
         "PENDING",
         "APPROVED",
         "REJECTED",
-        "APPLIED",
         "CANCELLED"
       ],
       "default": "PENDING"
@@ -73,7 +83,9 @@
     }
   },
   "required": [
+    "worker_profile_id",
     "request_type",
+    "message",
     "status"
   ]
 }

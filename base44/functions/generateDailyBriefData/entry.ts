@@ -5,7 +5,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 // It NEVER writes/creates/updates/deletes any entity. The frontend stores the
 // returned object into DailyStaffBrief.auto_summary_json when the user saves/refreshes.
 
-const ADMIN_ROLES = new Set(["SUPER_ADMIN", "ADMIN", "OPERATIONS"]);
+const ADMIN_ROLES = new Set(["SUPER_ADMIN", "ADMIN"]);
 
 // Operationally sensitive space names (substring match on ActivitySpace.name)
 const SENSITIVE_NAMES = ["חדר אוכל", "אוהל מועד", "חדר תקווה", "חדר אומץ", "שירותים", "מכולות"];
@@ -38,7 +38,7 @@ Deno.serve(async (req) => {
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-    // Resolve internal role — only admin/operations may generate
+    // Resolve internal role — only ADMIN / SUPER_ADMIN may generate
     let role = null;
     try {
       const internalUsers = await base44.asServiceRole.entities.InternalUser.filter({ email: user.email });

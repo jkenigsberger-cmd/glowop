@@ -11,7 +11,7 @@ import {
   MessageSquare, RefreshCw, Save, Copy, Send, Loader2, ChevronDown, ChevronUp, Sparkles, CheckCircle2, Trash2
 } from "lucide-react";
 
-const EDIT_ROLES = new Set(["SUPER_ADMIN", "ADMIN", "OPERATIONS"]);
+const EDIT_ROLES = new Set(["SUPER_ADMIN", "ADMIN"]);
 
 const MANUAL_FIELDS = [
   { key: "manual_general_notes", label: "דגשים כלליים" },
@@ -77,6 +77,10 @@ export default function DailyStaffBrief({ selectedDate }) {
   useEffect(() => { if (open) loadBrief(); }, [open, loadBrief]);
 
   const nowIso = () => new Date().toISOString();
+  const saveBrief = async (payload) => {
+    const response = await base44.functions.invoke("manageDailyStaffBrief", { action: "save", date: selectedDate, brief_id: brief?.id, payload });
+    return response.data.brief;
+  };
 
   // Fetch fresh operational data (read-only backend call)
   const fetchSummary = async () => {
@@ -90,23 +94,7 @@ export default function DailyStaffBrief({ selectedDate }) {
     try {
       const freshSummary = await fetchSummary();
       const jsonStr = freshSummary ? JSON.stringify(freshSummary) : "";
-      let rec = brief;
-      if (!rec) {
-        rec = await base44.entities.DailyStaffBrief.create({
-          date: selectedDate,
-          auto_summary_json: jsonStr,
-          status: "DRAFT",
-          last_generated_at: nowIso(),
-          created_by: internalUser?.email || "",
-          updated_by: internalUser?.email || "",
-        });
-      } else {
-        rec = await base44.entities.DailyStaffBrief.update(rec.id, {
-          auto_summary_json: jsonStr,
-          last_generated_at: nowIso(),
-          updated_by: internalUser?.email || "",
-        });
-      }
+      const rec = await saveBrief({ auto_summary_json: jsonStr, status: brief?.status || "DRAFT", last_generated_at: nowIso() });
       setBrief(rec);
       setSummary(freshSummary);
       toast({ title: "התדריך נוצר", description: "נשלפו נתונים עדכניים מהמערכת." });
@@ -124,11 +112,7 @@ export default function DailyStaffBrief({ selectedDate }) {
     try {
       const freshSummary = await fetchSummary();
       const jsonStr = freshSummary ? JSON.stringify(freshSummary) : "";
-      const rec = await base44.entities.DailyStaffBrief.update(brief.id, {
-        auto_summary_json: jsonStr,
-        last_generated_at: nowIso(),
-        updated_by: internalUser?.email || "",
-      });
+      const rec = await saveBrief({ auto_summary_json: jsonStr, last_generated_at: nowIso() });
       setBrief(rec);
       setSummary(freshSummary);
       toast({ title: "הנתונים רועננו", description: "ההערות הידניות נשמרו ללא שינוי." });
@@ -143,18 +127,7 @@ export default function DailyStaffBrief({ selectedDate }) {
   const handleSaveDraft = async () => {
     setBusy("save");
     try {
-      let rec = brief;
-      const payload = { ...manual, status: "DRAFT", updated_by: internalUser?.email || "" };
-      if (!rec) {
-        rec = await base44.entities.DailyStaffBrief.create({
-          date: selectedDate,
-          status: "DRAFT",
-          created_by: internalUser?.email || "",
-          ...payload,
-        });
-      } else {
-        rec = await base44.entities.DailyStaffBrief.update(rec.id, payload);
-      }
+      const rec = await saveBrief({ ...manual, status: "DRAFT" });
       setBrief(rec);
       setStatus("DRAFT");
       toast({ title: "הטיוטה נשמרה" });
@@ -171,24 +144,7 @@ export default function DailyStaffBrief({ selectedDate }) {
     try {
       const msg = buildDailyBriefMessage(summary, manual, selectedDate, includeSummary);
       setMessage(msg);
-      let rec = brief;
-      const payload = {
-        ...manual,
-        generated_message: msg,
-        status: "READY",
-        updated_by: internalUser?.email || "",
-      };
-      if (!rec) {
-        rec = await base44.entities.DailyStaffBrief.create({
-          date: selectedDate,
-          status: "READY",
-          created_by: internalUser?.email || "",
-          auto_summary_json: summary ? JSON.stringify(summary) : "",
-          ...payload,
-        });
-      } else {
-        rec = await base44.entities.DailyStaffBrief.update(rec.id, payload);
-      }
+      const rec = await saveBrief({ ...manual, generated_message: msg, status: "READY", auto_summary_json: summary ? JSON.stringify(summary) : "" });
       setBrief(rec);
       setStatus("READY");
       toast({ title: "ההודעה נוצרה", description: "ניתן לערוך לפני העתקה." });
@@ -205,11 +161,7 @@ export default function DailyStaffBrief({ selectedDate }) {
     try {
       setMessage("");
       if (brief) {
-        const rec = await base44.entities.DailyStaffBrief.update(brief.id, {
-          generated_message: "",
-          status: "DRAFT",
-          updated_by: internalUser?.email || "",
-        });
+        const rec = await saveBrief({ generated_message: "", status: "DRAFT" });
         setBrief(rec);
       }
       setStatus("DRAFT");
@@ -228,7 +180,7 @@ export default function DailyStaffBrief({ selectedDate }) {
       await navigator.clipboard.writeText(message);
       toast({ title: "ההודעה הועתקה" });
       if (brief) {
-        const rec = await base44.entities.DailyStaffBrief.update(brief.id, { last_copied_at: nowIso() });
+        const rec = await saveBrief({ last_copied_at: nowIso() });
         setBrief(rec);
       }
     } catch (_e) {
@@ -241,10 +193,7 @@ export default function DailyStaffBrief({ selectedDate }) {
     if (!brief) return;
     setBusy("sent");
     try {
-      const rec = await base44.entities.DailyStaffBrief.update(brief.id, {
-        status: "SENT_MANUALLY",
-        updated_by: internalUser?.email || "",
-      });
+      const rec = await saveBrief({ status: "SENT_MANUALLY" });
       setBrief(rec);
       setStatus("SENT_MANUALLY");
       toast({ title: "סומן כנשלח ידנית" });

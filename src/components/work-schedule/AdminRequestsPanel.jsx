@@ -3,58 +3,21 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { REQUEST_STATUS_LABELS, REQUEST_STATUS_STYLES, REQUEST_TYPE_LABELS, SLOT_LABELS } from "@/lib/workScheduleRequestLabels";
+import { addDays, getWeekStart } from "@/lib/workScheduleConfig";
+import { REQUEST_STATUS_LABELS, REQUEST_STATUS_STYLES, REQUEST_TYPE_LABELS } from "@/lib/workScheduleRequestLabels";
 
-const FILTERS = [
-  { id: "PENDING", label: "ממתין" },
-  { id: "APPROVED", label: "אושר" },
-  { id: "REJECTED", label: "נדחה" },
-  { id: "APPLIED", label: "בוצע" },
-  { id: "ALL", label: "הכל" },
-];
-
-export default function AdminRequestsPanel({ userEmail }) {
-  const [filter, setFilter] = useState("PENDING");
-  const [responses, setResponses] = useState({});
+export default function AdminRequestsPanel({ weekStart, setWeekStart }) {
+  const [status, setStatus] = useState("PENDING"); const [worker, setWorker] = useState("ALL"); const [responses, setResponses] = useState({});
   const queryClient = useQueryClient();
-  const { data: requests = [] } = useQuery({ queryKey: ["workScheduleRequests"], queryFn: () => base44.entities.WorkScheduleRequest.list("-created_date", 500) });
-  const visible = requests.filter((request) => filter === "ALL" || request.status === filter);
-
-  const updateRequest = async (request, status) => {
-    await base44.entities.WorkScheduleRequest.update(request.id, {
-      status,
-      admin_response: responses[request.id] ?? request.admin_response,
-      reviewed_by: userEmail,
-      reviewed_at: new Date().toISOString(),
-      updated_by: userEmail,
-    });
-    queryClient.invalidateQueries({ queryKey: ["workScheduleRequests"] });
-  };
-
-  return (
-    <section className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm" dir="rtl">
-      <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
-        <h2 className="text-lg font-bold text-slate-800">בקשות עובדים</h2>
-        <div className="flex gap-2 flex-wrap">{FILTERS.map((item) => <button key={item.id} onClick={() => setFilter(item.id)} className={`px-3 py-1 rounded-full text-xs border ${filter === item.id ? "bg-primary text-white border-primary" : "bg-white text-slate-600 border-slate-200"}`}>{item.label}</button>)}</div>
-      </div>
-      <div className="space-y-3">
-        {visible.length === 0 ? <div className="text-sm text-slate-400 text-center py-6">אין בקשות להצגה</div> : visible.map((request) => (
-          <div key={request.id} className="border border-slate-200 rounded-xl p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <div className="font-bold text-slate-800">{request.worker_name || request.worker_email || "עובד"}</div>
-                <div className="text-sm text-slate-600 mt-1">{REQUEST_TYPE_LABELS[request.request_type]}{request.date && ` · ${request.date}`}{request.preferred_slot && ` · ${SLOT_LABELS[request.preferred_slot]}`}</div>
-              </div>
-              <span className={`text-[11px] font-semibold rounded-full border px-2 py-0.5 ${REQUEST_STATUS_STYLES[request.status]}`}>{REQUEST_STATUS_LABELS[request.status]}</span>
-            </div>
-            {request.current_shift_summary && <div className="text-sm text-slate-600 mt-2">משמרת קשורה: {request.current_shift_summary}</div>}
-            {request.requested_change_text && <div className="text-sm text-slate-700 mt-2 whitespace-pre-wrap">{request.requested_change_text}</div>}
-            {request.notes && <div className="text-sm text-slate-500 mt-2 whitespace-pre-wrap">{request.notes}</div>}
-            <Textarea value={responses[request.id] ?? request.admin_response ?? ""} onChange={(e) => setResponses({ ...responses, [request.id]: e.target.value })} placeholder="תגובת מנהל" rows={2} className="mt-3" />
-            <div className="flex gap-2 flex-wrap mt-3"><Button size="sm" variant="outline" onClick={() => updateRequest(request, "APPROVED")}>אשר</Button><Button size="sm" variant="outline" onClick={() => updateRequest(request, "REJECTED")}>דחה</Button><Button size="sm" onClick={() => updateRequest(request, "APPLIED")}>סמן כבוצע בסידור</Button></div>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
+  const { data: requests = [] } = useQuery({ queryKey: ["workScheduleRequests"], queryFn: async () => (await base44.functions.invoke("manageWorkScheduleRequests", { action: "admin_list" })).data.requests || [] });
+  const weekEnd = addDays(weekStart, 6);
+  const weekRequests = requests.filter((request) => { const start = request.start_date || request.date || ""; const end = request.end_date || start; return start && start <= weekEnd && end >= weekStart; });
+  const workers = [...new Map(weekRequests.map((request) => [request.worker_profile_id || request.worker_id, request.worker_name])).entries()].filter(([id]) => id);
+  const visible = weekRequests.filter((request) => (status === "ALL" || request.status === status) && (worker === "ALL" || (request.worker_profile_id || request.worker_id) === worker));
+  const update = async (request, nextStatus = request.status) => { await base44.functions.invoke("manageWorkScheduleRequests", { action: "admin_update", request_id: request.id, status: nextStatus, admin_response: responses[request.id] ?? request.admin_response ?? "" }); queryClient.invalidateQueries({ queryKey: ["workScheduleRequests"] }); };
+  return <section className="rounded-2xl border bg-white p-4 shadow-sm" dir="rtl">
+    <div className="flex flex-wrap items-center justify-between gap-2 mb-4"><h2 className="text-lg font-bold">בקשות</h2><div className="flex gap-2"><Button size="sm" variant="outline" onClick={() => setWeekStart(addDays(weekStart, -7))}>שבוע קודם</Button><Button size="sm" variant="outline" onClick={() => setWeekStart(getWeekStart())}>השבוע</Button><Button size="sm" variant="outline" onClick={() => setWeekStart(addDays(weekStart, 7))}>שבוע הבא</Button></div></div>
+    <div className="flex gap-2 mb-4"><select value={status} onChange={(e) => setStatus(e.target.value)} className="rounded-md border px-3 py-2 text-sm"><option value="ALL">כל הסטטוסים</option>{["PENDING", "APPROVED", "REJECTED", "CANCELLED"].map((value) => <option key={value} value={value}>{REQUEST_STATUS_LABELS[value]}</option>)}</select><select value={worker} onChange={(e) => setWorker(e.target.value)} className="rounded-md border px-3 py-2 text-sm"><option value="ALL">כל העובדים</option>{workers.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></div>
+    <div className="overflow-x-auto"><table className="w-full min-w-[1000px] text-sm"><thead><tr className="border-b text-right text-slate-500">{["עובד", "סוג בקשה", "תאריך / טווח", "שעות", "הודעה", "סטטוס", "תשובת מנהל", "פעולות"].map((label) => <th key={label} className="p-2">{label}</th>)}</tr></thead><tbody>{visible.map((request) => <tr key={request.id} className="border-b align-top"><td className="p-2 font-semibold">{request.worker_name}</td><td className="p-2">{REQUEST_TYPE_LABELS[request.request_type] || request.request_type}</td><td className="p-2">{request.start_date || request.date}{request.end_date && request.end_date !== request.start_date ? ` – ${request.end_date}` : ""}</td><td className="p-2" dir="ltr">{request.start_time || request.end_time ? `${request.start_time || ""}–${request.end_time || ""}` : "—"}</td><td className="p-2 max-w-56 whitespace-pre-wrap">{request.message || request.requested_change_text || request.notes}</td><td className="p-2"><span className={`rounded-full border px-2 py-0.5 text-xs ${REQUEST_STATUS_STYLES[request.status]}`}>{REQUEST_STATUS_LABELS[request.status]}</span></td><td className="p-2"><Textarea rows={2} value={responses[request.id] ?? request.admin_response ?? ""} onChange={(e) => setResponses({ ...responses, [request.id]: e.target.value })} /></td><td className="p-2"><div className="flex flex-wrap gap-1"><Button size="sm" variant="outline" onClick={() => update(request, "APPROVED")}>אשר</Button><Button size="sm" variant="outline" onClick={() => update(request, "REJECTED")}>דחה</Button><Button size="sm" variant="outline" onClick={() => update(request)}>הוסף תגובה</Button>{request.status !== "CANCELLED" && <Button size="sm" variant="ghost" onClick={() => update(request, "CANCELLED")}>סמן כבטלה</Button>}</div></td></tr>)}</tbody></table>{!visible.length && <div className="py-8 text-center text-sm text-slate-400">אין בקשות להצגה</div>}</div>
+  </section>;
 }

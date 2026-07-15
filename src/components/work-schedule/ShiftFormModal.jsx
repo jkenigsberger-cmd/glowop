@@ -8,10 +8,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertTriangle, Trash2, Ban } from "lucide-react";
 import { ROW_TYPES, ROW_BY_TYPE, WORKER_TEAMS } from "@/lib/workScheduleConfig";
+import { REQUEST_TYPE_LABELS, REQUEST_STATUS_LABELS } from "@/lib/workScheduleRequestLabels";
 
 const NEW_WORKER = "__new__";
 
-export default function ShiftFormModal({ shift, defaults, workers, isPublished, userEmail, onSave, onDelete, onCancelShift, onClose }) {
+export default function ShiftFormModal({ shift, defaults, workers, requests = [], isPublished, userEmail, onSave, onDelete, onCancelShift, onClose }) {
   const isEdit = !!shift;
   const [form, setForm] = useState({
     date:       shift?.date       || defaults?.date     || "",
@@ -31,6 +32,12 @@ export default function ShiftFormModal({ shift, defaults, workers, isPublished, 
   const isActivity = !!row.textOnly;
   const isCountBased = !!row.countBased;
   const isNewWorker = form.worker_id === NEW_WORKER;
+  const availabilityWarnings = requests.filter((request) => {
+    const start = request.start_date || request.date || "";
+    const end = request.end_date || start;
+    const timeMatches = (!request.start_time && !request.end_time) || ((request.start_time || "00:00") < (form.end_time || "23:59") && (request.end_time || "23:59") > (form.start_time || "00:00"));
+    return (request.worker_profile_id || request.worker_id) === form.worker_id && ["DAY_OFF", "UNAVAILABLE", "CANNOT_WORK"].includes(request.request_type) && ["PENDING", "APPROVED"].includes(request.status) && start <= form.date && end >= form.date && timeMatches;
+  });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -100,6 +107,7 @@ export default function ShiftFormModal({ shift, defaults, workers, isPublished, 
             הסידור כבר פורסם. שינוי זה ישפיע על מה שהעובדים רואים.
           </div>
         )}
+        {availabilityWarnings.length > 0 && <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900"><b>לעובד קיימת בקשה / אי זמינות בתאריך זה</b>{availabilityWarnings.map((request) => <div key={request.id} className="mt-1">{REQUEST_TYPE_LABELS[request.request_type]} · {REQUEST_STATUS_LABELS[request.status]} — {request.message}</div>)}</div>}
 
         <form onSubmit={handleSubmit} className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
