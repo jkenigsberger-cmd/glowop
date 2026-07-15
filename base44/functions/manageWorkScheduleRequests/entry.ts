@@ -15,10 +15,11 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const isAdmin = ADMIN_ROLES.has(internalUser?.role);
 
-    if (body.action === 'admin_list' || body.action === 'admin_update') {
+    if (body.action === 'admin_list' || body.action === 'admin_update' || body.action === 'pending_count') {
       if (!isAdmin) return Response.json({ error: 'Forbidden' }, { status: 403 });
-      if (body.action === 'admin_list') {
+      if (body.action === 'admin_list' || body.action === 'pending_count') {
         const requests = await base44.asServiceRole.entities.WorkScheduleRequest.list('-created_date', 500);
+        if (body.action === 'pending_count') return Response.json({ pending_count: requests.filter((item) => item.status === 'PENDING').length });
         return Response.json({ requests });
       }
       const request = await base44.asServiceRole.entities.WorkScheduleRequest.get(body.request_id);

@@ -24,7 +24,7 @@ export default function MyShifts() {
   const { data: schedule = null, isLoading: loadingSchedule } = useQuery({ queryKey: ["myPublishedSchedule", weekStart], queryFn: async () => (await base44.entities.WorkSchedule.filter({ week_start_date: weekStart, status: "PUBLISHED" }))[0] || null });
   const { data: shifts = [], isLoading: loadingShifts } = useQuery({ queryKey: ["myWeeklyShifts", schedule?.id, profile?.id], enabled: !!schedule && !!profile, queryFn: async () => (await base44.entities.WorkShift.filter({ work_schedule_id: schedule.id, worker_id: profile.id, status: "PLANNED" }, "date", 100)).filter((shift) => shift.status !== "CANCELLED") });
   const { data: requests = [] } = useQuery({ queryKey: ["myWorkScheduleRequests", profile?.id], enabled: !!profile, queryFn: async () => (await base44.functions.invoke("manageWorkScheduleRequests", { action: "mine" })).data.requests || [] });
-  const refreshRequests = () => queryClient.invalidateQueries({ queryKey: ["myWorkScheduleRequests", profile?.id] });
+  const refreshRequests = () => { queryClient.invalidateQueries({ queryKey: ["myWorkScheduleRequests", profile?.id] }); queryClient.invalidateQueries({ queryKey: ["workScheduleRequests"] }); queryClient.invalidateQueries({ queryKey: ["workScheduleRequestsPendingCount"] }); };
   const cancelRequest = async (request) => { await base44.functions.invoke("manageWorkScheduleRequests", { action: "cancel", request_id: request.id }); refreshRequests(); };
   const loading = loadingProfile || loadingSchedule || loadingShifts;
 

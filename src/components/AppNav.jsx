@@ -14,6 +14,7 @@ import { useQuery } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import GlobalSearch from "@/components/search/GlobalSearch";
 import MechinaPendingBadge from "@/components/mechina/MechinaPendingBadge";
+import { usePendingWorkScheduleRequests } from "@/hooks/usePendingWorkScheduleRequests";
 
 // Alert module mapping
 const LINK_ALERT_MODULE = {
@@ -53,9 +54,9 @@ function isActive(linkTo, pathname) {
     : pathname === linkTo || pathname.startsWith(linkTo + "/");
 }
 
-function AlertBadge({ count, small, urgent }) {
+function AlertBadge({ count, small, urgent, amber }) {
   if (!count || count < 1) return null;
-  const urgentClass = urgent ? "bg-red-600 animate-pulse" : "bg-red-500";
+  const urgentClass = urgent ? "bg-red-600 animate-pulse" : amber ? "bg-amber-500" : "bg-red-500";
   return (
     <span className={`inline-flex items-center justify-center ${urgentClass} text-white font-bold rounded-full leading-none pointer-events-none
       ${small ? "min-w-[14px] h-3.5 text-[9px] px-0.5" : "min-w-[16px] h-4 text-[10px] px-1"}`}>
@@ -138,7 +139,7 @@ function NavDropdown({ label, icon: Icon, items, pathname, alertCounts, urgentKe
               >
                 <item.icon className="w-3.5 h-3.5 shrink-0 text-slate-400" />
                 <span className="flex-1">{item.label}</span>
-                {cnt > 0 && <AlertBadge count={cnt} urgent={urgentKeys.includes(item.key)} />}
+                {cnt > 0 && <AlertBadge count={cnt} urgent={urgentKeys.includes(item.key)} amber={item.key === "work-schedule"} />}
               </Link>
             );
           })}
@@ -149,7 +150,7 @@ function NavDropdown({ label, icon: Icon, items, pathname, alertCounts, urgentKe
 }
 
 // Mobile drawer link
-function DrawerLink({ to, label, icon: Icon, pathname, onClick, alertCount, role, urgent = false }) {
+function DrawerLink({ to, label, icon: Icon, pathname, onClick, alertCount, role, urgent = false, amber = false }) {
   const active = isActive(to, pathname);
   const isMechinaSpaces = to === "/mechina-spaces";
   const isAdminRole = ADMIN_ROLES_SET.has(role);
@@ -162,7 +163,7 @@ function DrawerLink({ to, label, icon: Icon, pathname, onClick, alertCount, role
     >
       <Icon className="w-4 h-4 shrink-0" />
       <span className="flex-1">{label}</span>
-      {alertCount > 0 && <AlertBadge count={alertCount} urgent={urgent} />}
+      {alertCount > 0 && <AlertBadge count={alertCount} urgent={urgent} amber={amber} />}
       {isMechinaSpaces && isAdminRole && <MechinaPendingBadge />}
     </Link>
   );
@@ -175,6 +176,7 @@ export default function AppNav() {
   const { role, internalUser } = useRoleContext();
   const canUseGlobalSearch = role !== "OPERATIONS";
   const alertCounts = useAlertCounts();
+  const pendingWorkRequests = usePendingWorkScheduleRequests(role);
 
   // Ctrl+K / Cmd+K shortcut
   useEffect(() => {
@@ -236,7 +238,7 @@ export default function AppNav() {
   // Ops badge counts — include maintenance count + module alert counts
   const opsBadgeMap = Object.fromEntries(opsLinks.map(l => [
     l.key,
-    l.key === "maintenance" ? maintenanceOpenCount : getCount(l.key)
+    l.key === "maintenance" ? maintenanceOpenCount : l.key === "work-schedule" ? pendingWorkRequests : getCount(l.key)
   ]));
   // Admin badge map — no alerts currently but structure is ready
   const adminBadgeMap = {};
@@ -416,8 +418,9 @@ export default function AppNav() {
                   {...link}
                   pathname={pathname}
                   onClick={closeDrawer}
-                  alertCount={link.key === "maintenance" ? maintenanceOpenCount : getCount(link.key)}
+                  alertCount={link.key === "maintenance" ? maintenanceOpenCount : link.key === "work-schedule" ? pendingWorkRequests : getCount(link.key)}
                   urgent={link.key === "maintenance" && maintenanceUrgent}
+                  amber={link.key === "work-schedule"}
                 />
               ))}
             </div>
