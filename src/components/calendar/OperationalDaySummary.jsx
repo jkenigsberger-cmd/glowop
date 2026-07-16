@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ActivityEquipmentLine } from "@/components/schedule/LogisticsFields";
 import ChronologicalDayView from "./ChronologicalDayView";
+import ChronologicalDayPdfButton from "./ChronologicalDayPdfButton";
 
 moment.locale("he");
 
@@ -634,14 +635,26 @@ export default function OperationalDaySummary({
           )}
 
           {activeFilter === "chrono" && (
-            <ChronologicalDayView
-              dateStr={dateStr}
-              allGroups={allGroups}
-              allMeals={allMeals}
-              allActivities={allActivities}
-              allCoffeeRequests={allCoffeeRequests}
-              allSpaces={allSpaces}
-            />
+            <>
+              <div className="flex justify-end mb-1">
+                <ChronologicalDayPdfButton
+                  dateStr={dateStr}
+                  allGroups={allGroups}
+                  allMeals={allMeals}
+                  allActivities={allActivities}
+                  allCoffeeRequests={allCoffeeRequests}
+                  allSpaces={allSpaces}
+                />
+              </div>
+              <ChronologicalDayView
+                dateStr={dateStr}
+                allGroups={allGroups}
+                allMeals={allMeals}
+                allActivities={allActivities}
+                allCoffeeRequests={allCoffeeRequests}
+                allSpaces={allSpaces}
+              />
+            </>
           )}
         </div>
 
