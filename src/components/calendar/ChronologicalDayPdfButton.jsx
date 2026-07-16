@@ -32,28 +32,44 @@ export default function ChronologicalDayPdfButton({ dateStr, allGroups, allMeals
 
   const handlePrint = () => {
     setPrinting(true);
-    const container = document.createElement("div");
-    container.id = "chrono-print-root";
-    document.body.appendChild(container);
+    const printWindow = window.open("", "_blank", "width=820,height=1000");
+    if (!printWindow) {
+      alert("נא לאפשר חלונות קופצים כדי לייצא PDF");
+      setPrinting(false);
+      return;
+    }
 
+    printWindow.document.open();
+    printWindow.document.write(`<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>סדר יום כרונולוגי</title>
+<style>
+  @font-face { font-family: 'Kav16'; src: url('https://raw.githubusercontent.com/jkenigsberger-cmd/fonts-/refs/heads/main/Kav16-Semibold.otf') format('opentype'); font-weight: 600; font-display: swap; }
+  @font-face { font-family: 'SimplerPro'; src: url('https://raw.githubusercontent.com/jkenigsberger-cmd/fonts-/refs/heads/main/SimplerPro_HL-Regular.otf') format('opentype'); font-weight: 400; font-display: swap; }
+  @font-face { font-family: 'SimplerPro'; src: url('https://raw.githubusercontent.com/jkenigsberger-cmd/fonts-/refs/heads/main/SimplerPro_HL-Bold.otf') format('opentype'); font-weight: 700; font-display: swap; }
+  body { margin: 0; background: #fff; }
+</style>
+</head>
+<body><div id="chrono-print-root"></div></body>
+</html>`);
+    printWindow.document.close();
+
+    const container = printWindow.document.getElementById("chrono-print-root");
     ReactDOM.render(
       <ChronologicalDayPrintTemplate dateStr={dateStr} events={events} groupMap={groupMap} spaceMap={spaceMap} />,
       container,
       () => {
-        const style = document.createElement("style");
-        style.innerHTML = `
-          @media print {
-            body > *:not(#chrono-print-root) { display: none !important; }
-            #chrono-print-root { display: block !important; }
-          }
-        `;
-        document.head.appendChild(style);
-        window.print();
         setTimeout(() => {
-          document.body.removeChild(container);
-          document.head.removeChild(style);
-          setPrinting(false);
-        }, 500);
+          printWindow.focus();
+          printWindow.print();
+          setTimeout(() => {
+            printWindow.close();
+            setPrinting(false);
+          }, 800);
+        }, 350);
       }
     );
   };
