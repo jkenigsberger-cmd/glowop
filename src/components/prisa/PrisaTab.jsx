@@ -193,6 +193,7 @@ export default function PrisaTab({ groupId, profile, group }) {
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="REGULAR">{PRISA_TYPE_LABELS.REGULAR}</SelectItem>
+                  <SelectItem value="ONE_AND_HALF">{PRISA_TYPE_LABELS.ONE_AND_HALF}</SelectItem>
                   <SelectItem value="DOUBLE">{PRISA_TYPE_LABELS.DOUBLE}</SelectItem>
                 </SelectContent>
               </Select>
