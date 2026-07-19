@@ -57,7 +57,7 @@ Deno.serve(async (req) => {
       grouped[shift.worker_id] = row;
     }
 
-    const report = Object.values(grouped).map((row) => ({ ...row, total_days: row.dates.size, night_on_call_count: row.night_dates.size, dates: [...row.dates].sort(), night_dates: [...row.night_dates].sort(), estimated_hours: Math.round(row.estimated_hours * 100) / 100, details: row.details.sort((a, b) => a.date.localeCompare(b.date) || a.start_time.localeCompare(b.start_time)) })).sort((a, b) => a.worker_name.localeCompare(b.worker_name, "he"));
+    const report = Object.values(grouped).map((row) => ({ ...row, total_days: row.dates.size, total_shifts: row.details.length, night_on_call_count: row.night_dates.size, dates: [...row.dates].sort(), night_dates: [...row.night_dates].sort(), estimated_hours: Math.round(row.estimated_hours * 100) / 100, details: row.details.sort((a, b) => a.date.localeCompare(b.date) || a.start_time.localeCompare(b.start_time)) })).sort((a, b) => a.worker_name.localeCompare(b.worker_name, "he"));
     return Response.json({ period: { year, month, start, end }, workers: report, disclaimer: "הנתונים הם הערכה לפי סידור העבודה שפורסם ואינם תחליף לדוח הנוכחות הרשמי ב-Connecteam." });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
