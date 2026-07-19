@@ -3,7 +3,7 @@ import { ROW_TYPES, getWeekDays, fmtDM, DAY_NAMES } from "@/lib/workScheduleConf
 import ShiftCard from "@/components/work-schedule/ShiftCard";
 
 // Weekly Excel-like grid: columns = Sunday→Saturday, rows = fixed row types
-export default function ScheduleGrid({ weekStart, shifts, teamFilter, canManage, onAddShift, onEditShift, onCopyShift, onToggleNightOnCall }) {
+export default function ScheduleGrid({ weekStart, shifts, teamFilter, canManage, onAddShift, onEditShift, onCopyShift, onToggleNightOnCall, onCreateOpsMorning }) {
   const days = getWeekDays(weekStart);
   const today = new Date().toISOString().slice(0, 10);
 
@@ -54,6 +54,12 @@ export default function ScheduleGrid({ weekStart, shifts, teamFilter, canManage,
                           n.linked_source_shift_id === s.id &&
                           n.auto_created_from === "OPERATIONS_EVENING_TO_NIGHT_ON_CALL"
                         );
+                        const linkedOpsMorning = shifts.some((n) =>
+                          n.row_type === "OPERATIONS_MORNING" &&
+                          n.status === "PLANNED" &&
+                          n.linked_source_shift_id === s.id &&
+                          n.auto_created_from === "NIGHT_ON_CALL_TO_OPERATIONS_MORNING"
+                        );
                         return (
                           <ShiftCard
                             key={s.id}
@@ -65,6 +71,9 @@ export default function ScheduleGrid({ weekStart, shifts, teamFilter, canManage,
                             showNightOnCallToggle={canManage && s.row_type === "OPERATIONS_EVENING" && s.status === "PLANNED"}
                             nightOnCallLinked={linkedNightOnCall}
                             onToggleNightOnCall={onToggleNightOnCall}
+                            showOpsMorningAction={canManage && s.row_type === "NIGHT_ON_CALL" && s.status === "PLANNED"}
+                            opsMorningLinked={linkedOpsMorning}
+                            onCreateOpsMorning={onCreateOpsMorning}
                           />
                         );
                       })}

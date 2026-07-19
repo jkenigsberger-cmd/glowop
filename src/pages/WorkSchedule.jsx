@@ -5,7 +5,7 @@ import { useRoleContext } from "@/lib/RoleContext";
 import { hasPermission } from "@/lib/roles";
 import { useToast } from "@/components/ui/use-toast";
 import { AlertTriangle, CalendarClock, FileText } from "lucide-react";
-import { getWeekStart, addDays, TEAM_FILTERS, ROW_BY_TYPE } from "@/lib/workScheduleConfig";
+import { getWeekStart, addDays, dayNameOf, TEAM_FILTERS, ROW_BY_TYPE } from "@/lib/workScheduleConfig";
 import { Button } from "@/components/ui/button";
 import WeekToolbar from "@/components/work-schedule/WeekToolbar";
 import ScheduleGrid from "@/components/work-schedule/ScheduleGrid";
@@ -17,6 +17,7 @@ import CopyShiftModal from "@/components/work-schedule/CopyShiftModal";
 import { usePendingWorkScheduleRequests } from "@/hooks/usePendingWorkScheduleRequests";
 
 const NIGHT_ON_CALL_SOURCE = "OPERATIONS_EVENING_TO_NIGHT_ON_CALL";
+const OPS_MORNING_SOURCE = "NIGHT_ON_CALL_TO_OPERATIONS_MORNING";
 
 export default function WorkSchedule() {
   const { role, internalUser } = useRoleContext();
@@ -135,6 +136,45 @@ export default function WorkSchedule() {
     toast({ description: `נוצרו ${response.data.created_count} משמרות · דולגו ${response.data.skipped_count} משמרות שכבר קיימות` });
     setCopyShift(null);
     return response.data;
+  };
+
+  const handleCreateOpsMorning = async (shift) => {
+    if (!canManage || shift.row_type !== "NIGHT_ON_CALL") return;
+    try {
+      const res = await base44.functions.invoke("createOpsMorningFromNightOnCall", { night_shift_id: shift.id });
+      const d = res.data;
+      if (d.status === "created") {
+        invalidate();
+        toast({ description: `נוצרה משמרת תפעול בוקר ל${dayNameOf(addDays(shift.date, 1))} · ${d.worker_name}` });
+        return;
+      }
+      if (d.status === "next_week_missing") {
+        toast({ description: d.message, variant: "destructive" });
+        return;
+      }
+      if (d.status === "duplicate") {
+        toast({ description: d.message });
+        return;
+      }
+      if (d.status === "warning") {
+        const lines = [];
+        if (d.other_workers?.length) lines.push(`כבר קיימת משמרת תפעול בוקר ביום זה: ${d.other_workers.join(", ")}`);
+        if (d.requests?.length) lines.push("לעובד קיימת בקשה / אי זמינות ביום זה");
+        const ok = window.confirm(`${lines.join("\n")}\n\nליצור בכל זאת?`);
+        if (!ok) return;
+        const res2 = await base44.functions.invoke("createOpsMorningFromNightOnCall", { night_shift_id: shift.id, force: true });
+        if (res2.data.status === "created") {
+          invalidate();
+          toast({ description: `נוצרה משמרת תפעול בוקר ל${dayNameOf(addDays(shift.date, 1))}` });
+        } else {
+          toast({ description: res2.data.message || res2.data.error || "שגיאה", variant: "destructive" });
+        }
+        return;
+      }
+      toast({ description: d.message || d.error || "שגיאה", variant: "destructive" });
+    } catch (err) {
+      toast({ description: err.message || "שגיאה ביצירת תפעול בוקר", variant: "destructive" });
+    }
   };
 
   const handleToggleNightOnCall = async (shift, shouldCreate) => {
@@ -303,6 +343,7 @@ export default function WorkSchedule() {
         onEditShift={(shift) => canManage && setModal({ shift })}
         onCopyShift={(shift) => canManage && setCopyShift(shift)}
         onToggleNightOnCall={handleToggleNightOnCall}
+        onCreateOpsMorning={handleCreateOpsMorning}
       />
 
       {copyShift && canManage && (
