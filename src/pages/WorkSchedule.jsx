@@ -125,7 +125,11 @@ export default function WorkSchedule() {
   const handleDeleteShift = async (shift) => {
     if (!canManage) return;
     if (shift.row_type === "OPERATIONS_EVENING") await deleteLinkedNightOnCallShifts(shift);
-    await base44.entities.WorkShift.delete(shift.id);
+    try {
+      await base44.entities.WorkShift.delete(shift.id);
+    } catch {
+      // Shift already removed (stale cache or deleted elsewhere) — refresh to clear the ghost card
+    }
     invalidate();
   };
 
