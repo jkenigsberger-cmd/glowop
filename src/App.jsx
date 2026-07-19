@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Toaster } from "@/components/ui/toaster"
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
@@ -10,7 +9,6 @@ import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import { RoleProvider, useRoleContext } from '@/lib/RoleContext';
 import RouteGuard from '@/components/RouteGuard';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
-import PilotAccessGate, { checkAccess, revokeAccess } from "@/components/PilotAccessGate";
 // Add page imports here
 import Inventory from "./pages/Inventory";
 import Groups from "./pages/Groups.jsx";
@@ -46,15 +44,9 @@ const HomeLanding = () => {
 };
 
 const AuthenticatedApp = () => {
-  const [accessGranted, setAccessGranted] = useState(checkAccess());
   const { isLoadingPublicSettings } = useAuth(); // Auth loading handled by RouteGuard
 
-  // 1. Pilot password gate — always first
-  if (!accessGranted) {
-    return <PilotAccessGate onGranted={() => setAccessGranted(true)} />;
-  }
-
-  // 2. Loading app settings
+  // Loading app settings
   if (isLoadingPublicSettings) {
     return (
       <div className="fixed inset-0 flex items-center justify-center">
@@ -63,7 +55,7 @@ const AuthenticatedApp = () => {
     );
   }
 
-  // 3. Render app — RouteGuard handles auth check + login screen + role check
+  // Render app — RouteGuard handles auth check + login screen + role check
   return (
     <RoleProvider>
       <AppNav />
