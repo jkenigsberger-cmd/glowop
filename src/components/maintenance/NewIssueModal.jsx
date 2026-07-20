@@ -97,13 +97,14 @@ export default function NewIssueModal({ location, user, onClose, onCreated, canM
         const preview = await base44.functions.invoke("manageActivitySpaceBlock", { action: "preview", block: buildBlock(null) });
         if (preview.data?.conflicts?.length) { setBlockConflicts(preview.data.conflicts); setSaving(false); return; }
       }
+      const reportingUser = user?.id ? user : await base44.auth.me();
       const issue = await base44.entities.MaintenanceIssue.create({
         title: getTitle(), description: form.description.trim() || null, category: form.category,
         priority: form.priority, status: "OPEN", site_location_id: location.id,
         activity_space_id: canBlockSpace ? location.source_entity_id : null,
         location_type: location.location_type, location_name: location.display_name,
-        location_section: location.section || null, reported_by_user_id: user?.id,
-        reported_by_name: user?.full_name || user?.email || "לא ידוע",
+        location_section: location.section || null, reported_by_user_id: reportingUser.id,
+        reported_by_name: reportingUser.full_name || reportingUser.email,
         photo_urls: photos.length ? JSON.stringify(photos) : null,
       });
       if (form.block_space) {
