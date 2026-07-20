@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
+import { isPreparationGroupOperational } from '../../shared/quotePreparationConfig.js';
 
 /**
  * Enhanced availability check:
@@ -68,13 +69,14 @@ Deno.serve(async (req) => {
 
     // ── Load all data in parallel ──────────────────────────────────────────────
     const [allGroups, allProfiles, allHolds, allAllocations] = await Promise.all([
-      base44.asServiceRole.entities.Group.filter({ group_type: "LODGING" }),
+      base44.asServiceRole.entities.Group.list("-arrival_date", 1000),
       base44.asServiceRole.entities.OperationalGroupProfile.list(),
       base44.asServiceRole.entities.OperationalHold.filter({ status: "ACTIVE" }),
       base44.asServiceRole.entities.SleepingAllocation.filter({ status: { $in: ["DRAFT", "CONFIRMED"] } }),
     ]);
 
     // Index profiles by group_id for fast lookup
+    const groupById = Object.fromEntries(allGroups.map(g => [g.id, g]));
     const profileByGroupId = {};
     for (const p of allProfiles) profileByGroupId[p.group_id] = p;
 
@@ -109,6 +111,7 @@ Deno.serve(async (req) => {
     // ── Count lodging Groups ───────────────────────────────────────────────────
     const activeStatuses = ["CONFIRMED", "COMPLETED"];
     for (const g of allGroups) {
+      if (g.group_type !== "LODGING" || !isPreparationGroupOperational(g)) continue;
       if (!activeStatuses.includes(g.status)) continue;
       if (g.id === exclude_group_id) continue;
       if (!g.arrival_date) continue;
@@ -159,6 +162,7 @@ Deno.serve(async (req) => {
     // ── Count approved OperationalHolds not already represented by a Group ─────
     for (const h of allHolds) {
       if (h.group_type !== "LODGING") continue;
+      if (h.group_id && !isPreparationGroupOperational(groupById[h.group_id])) continue;
       if (exclude_quote_id && h.quote_id === exclude_quote_id) continue;
       if (h.group_id && countedGroupIds.has(h.group_id)) continue; // already counted as Group
 
@@ -175,6 +179,7 @@ Deno.serve(async (req) => {
     if (group_type === "DAY_USE") {
       const overlappingDayHolds = allHolds.filter(h => {
         if (h.group_type !== "DAY_USE") return false;
+        if (h.group_id && !isPreparationGroupOperational(groupById[h.group_id])) return false;
         if (exclude_quote_id && h.quote_id === exclude_quote_id) return false;
         const hArr = new Date(h.arrival_date);
         const hDep = h.departure_date ? new Date(h.departure_date) : new Date(h.arrival_date);

@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
 import { getMonthDatesSunday, HEB_DAYS_SUN } from "@/lib/calendarWeek";
+import { isOperationalGroup } from "@/lib/quotePreparationFlow";
 
 const fmt = (d) => moment(d).format("YYYY-MM-DD");
 const isSameDay = (a, b) => fmt(a) === fmt(b);
@@ -218,10 +219,12 @@ export default function KitchenCalendar({ onDaySelect }) {
   });
   const { data: groups = [] } = useQuery({
     queryKey: ["kc-groups"],
-    queryFn: () => base44.entities.Group.list("-arrival_date", 300),
+    queryFn: async () => (await base44.entities.Group.list("-arrival_date", 300)).filter(isOperationalGroup),
   });
 
   const groupMap = useMemo(() => Object.fromEntries(groups.map((g) => [g.id, g])), [groups]);
+  const operationalMeals = useMemo(() => meals.filter(m => groupMap[m.group_id]), [meals, groupMap]);
+  const operationalCoffee = useMemo(() => coffeeRequests.filter(r => groupMap[r.group_id]), [coffeeRequests, groupMap]);
   const dates = useMemo(() => getMonthDatesSunday(pivot), [pivot]);
   const currentMonth = pivot.month();
 
@@ -269,8 +272,8 @@ export default function KitchenCalendar({ onDaySelect }) {
               <KitchenDayCell
                 key={date.toISOString()}
                 date={date}
-                meals={meals}
-                coffeeRequests={coffeeRequests}
+                meals={operationalMeals}
+                coffeeRequests={operationalCoffee}
                 isCurrentMonth={date.month() === currentMonth}
                 onClick={setModalDate}
               />
@@ -285,8 +288,8 @@ export default function KitchenCalendar({ onDaySelect }) {
       {modalDate && (
         <KitchenDayModal
           dateStr={modalDate}
-          meals={meals}
-          coffeeRequests={coffeeRequests}
+          meals={operationalMeals}
+          coffeeRequests={operationalCoffee}
           groupMap={groupMap}
           onClose={() => setModalDate(null)}
           onNavigate={handleNavigate}

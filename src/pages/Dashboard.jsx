@@ -163,7 +163,8 @@ export default function Dashboard() {
   const profileByGroupId = useMemo(() => Object.fromEntries(profiles.map(p => [p.group_id, p])), [profiles]);
   const profileById = useMemo(() => Object.fromEntries(profiles.map(p => [p.id, p])), [profiles]);
   const spaceById = useMemo(() => Object.fromEntries(activitySpaces.map(s => [s.id, s])), [activitySpaces]);
-  const allocatedGroupIds = useMemo(() => new Set(allocations.map(a => a.group_id)), [allocations]);
+  const operationalAllocations = useMemo(() => allocations.filter(a => groupById[a.group_id]), [allocations, groupById]);
+  const allocatedGroupIds = useMemo(() => new Set(operationalAllocations.map(a => a.group_id)), [operationalAllocations]);
 
   // ── Date-filtered data ─────────────────────────────────────────────────
   const EXCLUDED = new Set(["CANCELLED", "COMPLETED", "ARCHIVED"]);
@@ -210,13 +211,13 @@ export default function Dashboard() {
   );
 
   const mealsForDate = useMemo(() =>
-    meals.filter(m => m.date === selectedDate),
-    [meals, selectedDate]
+    meals.filter(m => groupById[m.group_id] && m.date === selectedDate),
+    [meals, groupById, selectedDate]
   );
 
   const activitiesForDate = useMemo(() =>
-    activities.filter(a => a.date === selectedDate),
-    [activities, selectedDate]
+    activities.filter(a => groupById[a.group_id] && a.date === selectedDate),
+    [activities, groupById, selectedDate]
   );
 
   const realToday = toDateStr(alertNow);
@@ -234,11 +235,12 @@ export default function Dashboard() {
 
   const activitiesForSpaceBlockAlert = useMemo(() =>
     activities.filter(activity =>
+      groupById[activity.group_id] &&
       activity.date >= selectedDate &&
       activity.date <= spaceBlockAlertEnd &&
       activity.activity_space_id
     ),
-    [activities, selectedDate, spaceBlockAlertEnd]
+    [activities, groupById, selectedDate, spaceBlockAlertEnd]
   );
 
   // ── Stats ──────────────────────────────────────────────────────────────
@@ -255,8 +257,8 @@ export default function Dashboard() {
   const maintenanceIssues = brokenFacilities.length + brokenTents.length;
 
   const pendingHousekeepingProfiles = useMemo(() =>
-    profiles.filter(p => p.sleeping_requirements_completed && !allocatedGroupIds.has(p.group_id)),
-    [profiles, allocatedGroupIds]
+    profiles.filter(p => groupById[p.group_id] && p.sleeping_requirements_completed && !allocatedGroupIds.has(p.group_id)),
+    [profiles, allocatedGroupIds, groupById]
   );
 
   const stats = {
@@ -410,7 +412,7 @@ export default function Dashboard() {
             selectedDate={selectedDate}
             neighborhoods={neighborhoods}
             tents={tents}
-            allocations={allocations}
+            allocations={operationalAllocations}
             groups={groups}
           />
         </Section>

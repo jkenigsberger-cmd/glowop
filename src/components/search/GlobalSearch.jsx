@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Search, X, Users, Layers } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useRoleContext } from "@/lib/RoleContext";
+import { isOperationalGroup } from "@/lib/quotePreparationFlow";
 
 const STATUS_LABELS = {
   DRAFT:     "טיוטה",
@@ -42,7 +43,7 @@ export default function GlobalSearch({ isOpen, onClose }) {
 
   const { data: groups = [] } = useQuery({
     queryKey: ["global-search-groups"],
-    queryFn: () => base44.entities.Group.list("arrival_date", 500),
+    queryFn: async () => (await base44.entities.Group.list("arrival_date", 500)).filter(isOperationalGroup),
     staleTime: 30_000,
     enabled: !isOperationsOnly,
   });

@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { format, parseISO, eachDayOfInterval } from "date-fns";
 import { he } from "date-fns/locale";
 import { PRISA_TYPE_LABELS, PRISA_SLOT_LABELS, PRISA_SLOT_ORDER } from "@/lib/prisaLabels";
+import { isOperationalGroup } from "@/lib/quotePreparationFlow";
 
 // ── constants ──────────────────────────────────────────────────────────────
 const MEAL_ORDER  = { BREAKFAST: 0, LUNCH: 1, DINNER: 2, OTHER: 3 };
@@ -113,7 +114,7 @@ export default function KitchenReport() {
 
   const { data: groups = [] } = useQuery({
     queryKey: ["groups_kitchenReport"],
-    queryFn: () => base44.entities.Group.list(),
+    queryFn: async () => (await base44.entities.Group.list()).filter(isOperationalGroup),
   });
 
   const { data: profiles = [] } = useQuery({
@@ -128,35 +129,35 @@ export default function KitchenReport() {
   const rangeMeals = useMemo(() => {
     if (!startDate) return [];
     return allMeals
-      .filter(m => m.date >= startDate && m.date <= endDate && m.meal_type !== "COFFEE_CORNER")
+      .filter(m => groupMap[m.group_id] && m.date >= startDate && m.date <= endDate && m.meal_type !== "COFFEE_CORNER")
       .sort((a, b) => {
         if (a.date !== b.date) return a.date.localeCompare(b.date);
         const typeCmp = (MEAL_ORDER[a.meal_type] ?? 99) - (MEAL_ORDER[b.meal_type] ?? 99);
         return typeCmp !== 0 ? typeCmp : (a.start_time || "").localeCompare(b.start_time || "");
       });
-  }, [allMeals, startDate, endDate]);
+  }, [allMeals, groupMap, startDate, endDate]);
 
   // CoffeeCornerRequests in date range
   const rangeCoffee = useMemo(() => {
     if (!startDate) return [];
     return allCoffeeRequests
-      .filter(r => r.date >= startDate && r.date <= endDate)
+      .filter(r => groupMap[r.group_id] && r.date >= startDate && r.date <= endDate)
       .sort((a, b) => {
         if (a.date !== b.date) return a.date.localeCompare(b.date);
         return (a.start_time || "").localeCompare(b.start_time || "");
       });
-  }, [allCoffeeRequests, startDate, endDate]);
+  }, [allCoffeeRequests, groupMap, startDate, endDate]);
 
   // PrisaRequests in date range
   const rangePrisa = useMemo(() => {
     if (!startDate) return [];
     return allPrisaRequests
-      .filter(r => r.date >= startDate && r.date <= endDate)
+      .filter(r => groupMap[r.group_id] && r.date >= startDate && r.date <= endDate)
       .sort((a, b) => {
         if (a.date !== b.date) return a.date.localeCompare(b.date);
         return (PRISA_SLOT_ORDER[a.pickup_slot] ?? 99) - (PRISA_SLOT_ORDER[b.pickup_slot] ?? 99);
       });
-  }, [allPrisaRequests, startDate, endDate]);
+  }, [allPrisaRequests, groupMap, startDate, endDate]);
 
   // ── aggregate totals ──────────────────────────────────────────────────────
   const totals = useMemo(() => {

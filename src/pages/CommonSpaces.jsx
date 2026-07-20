@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { sortActivitySpaces } from "@/lib/activitySpaceUtils";
 import { useRoleContext } from "@/lib/RoleContext";
 import { isBlockVisibleOnCalendarDate } from "@/lib/activitySpaceBlocks";
+import { isOperationalGroup } from "@/lib/quotePreparationFlow";
 
 import SpaceOverviewCard from "../components/spaces/SpaceOverviewCard.jsx";
 import SpaceDailyView from "../components/spaces/SpaceDailyView.jsx";
@@ -49,7 +50,7 @@ export default function CommonSpaces() {
 
   const { data: groups = [] } = useQuery({
     queryKey: ["spaces-groups"],
-    queryFn: () => base44.entities.Group.list("-arrival_date", 500),
+    queryFn: async () => (await base44.entities.Group.list("-arrival_date", 500)).filter(isOperationalGroup),
   });
 
   const { data: spaceBlocks = [] } = useQuery({
@@ -67,7 +68,7 @@ export default function CommonSpaces() {
   const spaceItems = useMemo(
     () =>
       scheduleItems
-        .filter((i) => !!i.activity_space_id)
+        .filter((i) => !!i.activity_space_id && !!groupById[i.group_id])
         .map((i) => ({
           ...i,
           groupName: groupById[i.group_id]?.group_name || "—",

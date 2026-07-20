@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
+import { assertOperationalGroup } from '../../shared/quotePreparationConfig.js';
 
 function datesOverlap(a1, a2, b1, b2) {
   return a1 < b2 && b1 < a2;
@@ -50,6 +51,9 @@ Deno.serve(async (req) => {
         debug: { reasonCode: 'SHARED_REASON_MISSING' }
       }, { status: 200 });
     }
+
+    const group = await base44.asServiceRole.entities.Group.get(group_id).catch(() => null);
+    try { assertOperationalGroup(group); } catch (error) { return Response.json({ success: false, error: error.code }, { status: 409 }); }
 
     // ── 1. Load ALL draft allocations for this group from DB (source of truth) ─
     // We do NOT rely solely on frontend-supplied IDs — the frontend cache may be

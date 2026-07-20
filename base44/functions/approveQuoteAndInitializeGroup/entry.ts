@@ -30,7 +30,7 @@ const ALLOWED_ROLES = new Set(['SUPER_ADMIN', 'ADMIN', 'OPERATIONS']);
 // Quote carries client_* / estimated_pax; Group uses contact_* — mapped below.
 function buildGroupFromQuote(quote) {
   const g = { status: 'CONFIRMED' };
-  g.group_name     = quote.client_name || quote.contact_person || quote.quote_number || 'קבוצה חדשה';
+  g.group_name     = quote.group_name || quote.client_name || quote.quote_number || 'קבוצה חדשה';
   // group_type: DAY_USE when quote is day_use OR single-day; else LODGING
   const isSingleDay = quote.arrival_date && (!quote.departure_date || quote.departure_date === quote.arrival_date);
   g.group_type     = quote.quote_type === 'day_use' || isSingleDay ? 'DAY_USE' : 'LODGING';
@@ -38,7 +38,7 @@ function buildGroupFromQuote(quote) {
   g.departure_date = quote.departure_date || quote.arrival_date || undefined;
   if (quote.arrival_time)   g.arrival_time   = quote.arrival_time;
   if (quote.departure_time) g.departure_time = quote.departure_time;
-  if (quote.client_name || quote.contact_person) g.contact_name  = quote.contact_person || quote.client_name;
+  if (quote.contact_person) g.contact_name = quote.contact_person;
   if (quote.client_phone)   g.contact_phone  = quote.client_phone;
   if (quote.client_email)   g.contact_email  = quote.client_email;
   if (quote.internal_notes) g.internal_notes = quote.internal_notes;

@@ -15,6 +15,7 @@ import ReviewAlertCard, { MODULE_LABELS } from "./ReviewAlertCard";
 import GroupedAlertCard from "./GroupedAlertCard";
 import { isAlertInDateWindow } from "@/lib/alertDateWindow";
 import { Bell } from "lucide-react";
+import { isOperationalGroup } from "@/lib/quotePreparationFlow";
 
 export default function ReviewAlertsBanner({ groupId, module, title, grouped = false, dateWindowDays }) {
   const queryClient = useQueryClient();
@@ -62,12 +63,13 @@ export default function ReviewAlertsBanner({ groupId, module, title, grouped = f
 
   // Optional display-only date-window filter (Kitchen). Never mutates alerts.
   const windowActive = typeof dateWindowDays === "number" && !showAll;
+  const operationalAlerts = alerts.filter(a => groupMap[a.group_id] && isOperationalGroup(groupMap[a.group_id]));
   const visibleAlerts = windowActive
-    ? alerts.filter(a => isAlertInDateWindow(a, groupMap[a.group_id], dateWindowDays))
-    : alerts;
-  const hiddenCount = alerts.length - visibleAlerts.length;
+    ? operationalAlerts.filter(a => isAlertInDateWindow(a, groupMap[a.group_id], dateWindowDays))
+    : operationalAlerts;
+  const hiddenCount = operationalAlerts.length - visibleAlerts.length;
 
-  if (alerts.length === 0) return null;
+  if (operationalAlerts.length === 0) return null;
 
   const sectionTitle = title || (
     module

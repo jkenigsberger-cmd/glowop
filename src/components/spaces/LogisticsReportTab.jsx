@@ -11,6 +11,7 @@ import { Printer, Filter, X, Clock, MapPin, Users, Wrench, FileText, Building2 }
 import { Button } from "@/components/ui/button";
 import { equipmentTextSummary } from "@/components/schedule/LogisticsFields";
 import { mergeSharedActivities } from "@/lib/mergeSharedActivities";
+import { isOperationalGroup } from "@/lib/quotePreparationFlow";
 
 moment.locale("he");
 
@@ -271,7 +272,7 @@ export default function LogisticsReportTab() {
   });
   const { data: groups = [] } = useQuery({
     queryKey: ["spaces-groups"],
-    queryFn: () => base44.entities.Group.list("-arrival_date", 500),
+    queryFn: async () => (await base44.entities.Group.list("-arrival_date", 500)).filter(isOperationalGroup),
   });
 
   const spaceById = useMemo(() => Object.fromEntries(rawSpaces.map(s => [s.id, s])), [rawSpaces]);
@@ -286,7 +287,7 @@ export default function LogisticsReportTab() {
     // Enrich all items first, then apply group filter awareness for shared activities
     const enriched = scheduleItems
       .filter(i => {
-        if (!i.activity_space_id) return false;
+        if (!i.activity_space_id || !groupById[i.group_id]) return false;
         if (from && i.date < from) return false;
         if (to   && i.date > to)   return false;
         if (spaceId && i.activity_space_id !== spaceId) return false;

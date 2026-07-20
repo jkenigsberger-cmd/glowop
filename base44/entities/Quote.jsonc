@@ -11,6 +11,10 @@
       "default": false,
       "description": "True only for records created by the controlled quote preparation flow"
     },
+    "group_name": {
+      "type": "string",
+      "description": "Operational group name, kept separate from client organization and contact person"
+    },
     "quote_number": {
       "type": "string"
     },

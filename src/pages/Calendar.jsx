@@ -411,6 +411,12 @@ export default function Calendar() {
     queryFn: () => base44.entities.CoffeeCornerRequest.filter({ status: "ACTIVE" })
   });
 
+  const operationalGroupIds = useMemo(() => new Set(groups.map(g => g.id)), [groups]);
+  const operationalMeals = useMemo(() => meals.filter(m => operationalGroupIds.has(m.group_id)), [meals, operationalGroupIds]);
+  const operationalScheduleItems = useMemo(() => scheduleItems.filter(i => operationalGroupIds.has(i.group_id)), [scheduleItems, operationalGroupIds]);
+  const operationalAlerts = useMemo(() => alerts.filter(a => operationalGroupIds.has(a.group_id)), [alerts, operationalGroupIds]);
+  const operationalCoffee = useMemo(() => coffeeRequests.filter(r => operationalGroupIds.has(r.group_id)), [coffeeRequests, operationalGroupIds]);
+
   const dates = useMemo(
     () => view === "week" ? getWeekDatesSunday(pivot) : getMonthDatesSunday(pivot),
     [pivot, view]
@@ -443,8 +449,8 @@ export default function Calendar() {
         <AgendaView
           pivot={pivot}
           groups={groups}
-          meals={meals}
-          activities={scheduleItems}
+          meals={operationalMeals}
+          activities={operationalScheduleItems}
           onDayClick={handleDayClick}
           onPrev={() => goAgendaDay(-1)}
           onNext={() => goAgendaDay(1)}
@@ -499,9 +505,9 @@ export default function Calendar() {
             <Legend />
 
             {view === "week" ?
-          <WeekView dates={dates} groups={groups} meals={meals} activities={scheduleItems} onClick={handleDayClick} /> :
+          <WeekView dates={dates} groups={groups} meals={operationalMeals} activities={operationalScheduleItems} onClick={handleDayClick} /> :
 
-          <MonthView dates={dates} groups={groups} meals={meals} activities={scheduleItems} pivot={pivot} onClick={handleDayClick} />
+          <MonthView dates={dates} groups={groups} meals={operationalMeals} activities={operationalScheduleItems} pivot={pivot} onClick={handleDayClick} />
           }
           </>
         }
@@ -515,11 +521,11 @@ export default function Calendar() {
         isOpen={!!selectedDate}
         onClose={() => setSelectedDate(null)}
         allGroups={groups}
-        allMeals={meals}
-        allActivities={scheduleItems}
+        allMeals={operationalMeals}
+        allActivities={operationalScheduleItems}
         allSpaces={activitySpaces}
-        allAlerts={alerts}
-        allCoffeeRequests={coffeeRequests} />
+        allAlerts={operationalAlerts}
+        allCoffeeRequests={operationalCoffee} />
       
     </div>);
 

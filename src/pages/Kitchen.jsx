@@ -11,6 +11,7 @@ import KitchenMealCard from "@/components/kitchen/KitchenMealCard";
 import KitchenCoffeeCard from "@/components/kitchen/KitchenCoffeeCard";
 import ReviewAlertsBanner from "@/components/alerts/ReviewAlertsBanner";
 import KitchenCalendar from "@/components/calendar/KitchenCalendar";
+import { isOperationalGroup } from "@/lib/quotePreparationFlow";
 
 const MEAL_ORDER = { BREAKFAST: 0, LUNCH: 1, DINNER: 2, COFFEE_CORNER: 3, OTHER: 4 };
 
@@ -45,7 +46,7 @@ export default function Kitchen() {
   // Load groups + profiles in parallel
   const { data: groups = [] } = useQuery({
     queryKey: ["groups_kitchen"],
-    queryFn: () => base44.entities.Group.list(),
+    queryFn: async () => (await base44.entities.Group.list()).filter(isOperationalGroup),
   });
 
   const { data: profiles = [] } = useQuery({
@@ -69,27 +70,27 @@ export default function Kitchen() {
   // Meals for selected date — exclude COFFEE_CORNER from legacy MealReservation
   const dayMeals = useMemo(() => {
     return allMeals
-      .filter(m => m.date === selectedDate && m.meal_type !== "COFFEE_CORNER")
+      .filter(m => groupMap[m.group_id] && m.date === selectedDate && m.meal_type !== "COFFEE_CORNER")
       .sort((a, b) => {
         const typeCmp = (MEAL_ORDER[a.meal_type] ?? 99) - (MEAL_ORDER[b.meal_type] ?? 99);
         if (typeCmp !== 0) return typeCmp;
         return (a.start_time || "").localeCompare(b.start_time || "");
       });
-  }, [allMeals, selectedDate]);
+  }, [allMeals, groupMap, selectedDate]);
 
   // CoffeeCornerRequests for selected date (new entity)
   const dayCoffeeRequests = useMemo(() => {
     return allCoffeeRequests
-      .filter(r => r.date === selectedDate)
+      .filter(r => groupMap[r.group_id] && r.date === selectedDate)
       .sort((a, b) => (a.start_time || "").localeCompare(b.start_time || ""));
-  }, [allCoffeeRequests, selectedDate]);
+  }, [allCoffeeRequests, groupMap, selectedDate]);
 
   // Legacy COFFEE_CORNER from MealReservation — only show if a matching active CoffeeCornerRequest exists
   // This prevents ghost records from showing when the CoffeeCornerRequest was cancelled but MealReservation was not
   const dayCoffeeLegacy = useMemo(() => {
     const activeCoffeeKey = new Set(
       allCoffeeRequests
-        .filter(r => r.date === selectedDate)
+        .filter(r => groupMap[r.group_id] && r.date === selectedDate)
         .map(r => `${r.group_id}|${r.date}`)
     );
     return allMeals
@@ -99,16 +100,16 @@ export default function Kitchen() {
         activeCoffeeKey.has(`${m.group_id}|${m.date}`)
       )
       .sort((a, b) => (a.start_time || "").localeCompare(b.start_time || ""));
-  }, [allMeals, allCoffeeRequests, selectedDate]);
+  }, [allMeals, allCoffeeRequests, groupMap, selectedDate]);
 
   const dayCoffeeCorners = useMemo(() => [...dayCoffeeRequests, ...dayCoffeeLegacy], [dayCoffeeRequests, dayCoffeeLegacy]);
 
   // PrisaRequests for selected date
   const dayPrisaRequests = useMemo(() => {
     return allPrisaRequests
-      .filter(r => r.date === selectedDate)
+      .filter(r => groupMap[r.group_id] && r.date === selectedDate)
       .sort((a, b) => (PRISA_SLOT_ORDER[a.pickup_slot] ?? 99) - (PRISA_SLOT_ORDER[b.pickup_slot] ?? 99));
-  }, [allPrisaRequests, selectedDate]);
+  }, [allPrisaRequests, groupMap, selectedDate]);
 
   // Group meals by meal type
   const mealsByType = useMemo(() => {

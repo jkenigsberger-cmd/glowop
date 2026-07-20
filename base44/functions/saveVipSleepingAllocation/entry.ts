@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
+import { assertOperationalGroup } from '../../shared/quotePreparationConfig.js';
 
 /**
  * Hotel-night overlap rule:
@@ -183,6 +184,7 @@ Deno.serve(async (req) => {
     } catch (e) {
       console.error('[saveVipSleepingAllocation] Group.filter error:', e?.message);
     }
+    try { assertOperationalGroup(group); } catch (error) { return fail(error.code, 'הקבוצה עדיין אינה פעילה תפעולית', dbg); }
 
     const groupArrivalRaw   = group?.arrival_date   || group?.check_in_date  || group?.start_date  || null;
     const groupDepartureRaw = group?.departure_date || group?.check_out_date || group?.end_date    || null;

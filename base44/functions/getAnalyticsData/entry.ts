@@ -124,6 +124,8 @@ Deno.serve(async req => {
     ]);
     const groups = allGroups.filter(group => validStatuses.includes(group.status));
     const groupsById = Object.fromEntries(groups.map(group => [group.id, group]));
+    const operationalActivities = activities.filter(item => groupsById[item.group_id]);
+    const operationalMeals = meals.filter(item => groupsById[item.group_id]);
     const profilesByGroup = {};
     profiles.forEach(profile => { if (profile.group_id && !profilesByGroup[profile.group_id]) profilesByGroup[profile.group_id] = profile; });
     const selected = summarize(groups, profilesByGroup, period);
@@ -136,19 +138,19 @@ Deno.serve(async req => {
     }
     const spaceMap = Object.fromEntries(spaces.map(space => [space.id, space.name]));
     const spaceCounts = {}, nameCounts = {}, mealCounts = {};
-    activities.forEach(item => { const space = spaceMap[item.activity_space_id] || item.activity_space_code || item.requested_location || "ללא מרחב"; spaceCounts[space] = (spaceCounts[space] || 0) + 1; const name = item.activity_name || "אחר"; nameCounts[name] = (nameCounts[name] || 0) + 1; });
-    meals.forEach(meal => { const current = mealCounts[meal.meal_type] || { count: 0, pax: 0 }; mealCounts[meal.meal_type] = { count: current.count + 1, pax: current.pax + number(meal.pax) }; });
+    operationalActivities.forEach(item => { const space = spaceMap[item.activity_space_id] || item.activity_space_code || item.requested_location || "ללא מרחב"; spaceCounts[space] = (spaceCounts[space] || 0) + 1; const name = item.activity_name || "אחר"; nameCounts[name] = (nameCounts[name] || 0) + 1; });
+    operationalMeals.forEach(meal => { const current = mealCounts[meal.meal_type] || { count: 0, pax: 0 }; mealCounts[meal.meal_type] = { count: current.count + 1, pax: current.pax + number(meal.pax) }; });
     const usage = sleepingUsage(allocations, groupsById, tents, neighborhoods, period);
     const missingPax = selected.rows.filter(row => row.total_pax <= 0).length;
     const unknown = selected.rows.length - selected.kpis.lodging_groups_count - selected.kpis.day_use_groups_count;
     return Response.json({
       period: { mode: period.mode, start: period.start, end: period.end, days: period.days, start_year: period.startYear, start_month: period.startMonth, end_year: period.endYear, end_month: period.endMonth }, constants: { total_fixed_beds: TOTAL_FIXED_BEDS, valid_group_statuses: validStatuses },
-      kpis: { ...selected.kpis, total_activities: activities.length, common_space_activities_count: activities.filter(item => item.activity_space_id).length, total_meals: meals.length, total_meal_pax: meals.reduce((sum, meal) => sum + number(meal.pax), 0) },
+      kpis: { ...selected.kpis, total_activities: operationalActivities.length, common_space_activities_count: operationalActivities.filter(item => item.activity_space_id).length, total_meals: operationalMeals.length, total_meal_pax: operationalMeals.reduce((sum, meal) => sum + number(meal.pax), 0) },
       groups: selected.rows.sort((a, b) => a.arrival_date.localeCompare(b.arrival_date)), monthlyTrend,
       groupTypeDistribution: [{ type: "LODGING", count: selected.kpis.lodging_groups_count }, { type: "DAY_USE", count: selected.kpis.day_use_groups_count }, { type: "OTHER/UNKNOWN", count: unknown }],
-      activities: { total: activities.length, common_space_activities_count: activities.filter(item => item.activity_space_id).length, activities_by_name: Object.entries(nameCounts).map(([name, count]) => ({ name, count })) },
+      activities: { total: operationalActivities.length, common_space_activities_count: operationalActivities.filter(item => item.activity_space_id).length, activities_by_name: Object.entries(nameCounts).map(([name, count]) => ({ name, count })) },
       activitiesBySpace: Object.entries(spaceCounts).map(([space_name, count]) => ({ space_name, count })).sort((a, b) => b.count - a.count),
-      meals: { available: true, total: meals.length, total_pax: meals.reduce((sum, meal) => sum + number(meal.pax), 0), meals_by_type: Object.entries(mealCounts).map(([meal_type, values]) => ({ meal_type, ...values })) },
+      meals: { available: true, total: operationalMeals.length, total_pax: operationalMeals.reduce((sum, meal) => sum + number(meal.pax), 0), meals_by_type: Object.entries(mealCounts).map(([meal_type, values]) => ({ meal_type, ...values })) },
       mealsByType: Object.entries(mealCounts).map(([meal_type, values]) => ({ meal_type, pax: values.pax })),
       neighborhoodUsage: usage.neighborhoodUsage, tentUsage: usage.tentUsage,
       warnings: missingPax ? [{ code: "MISSING_PAX", count: missingPax, message: "קבוצות ללא נתוני משתתפים" }] : [],

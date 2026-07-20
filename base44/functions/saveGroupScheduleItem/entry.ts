@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
+import { assertOperationalGroup, isPreparationGroupOperational } from '../../shared/quotePreparationConfig.js';
 
 const VALID_SPACE_CODES = new Set([
   'bunker_1', 'bunker_2', 'bunker_4', 'bunker_5',
@@ -312,6 +313,7 @@ Deno.serve(async (req) => {
     if (!primaryGroup) {
       return Response.json({ success: false, error: 'הקבוצה לא נמצאה' }, { status: 404 });
     }
+    try { assertOperationalGroup(primaryGroup); } catch (error) { return Response.json({ success: false, error: error.code }, { status: 409 }); }
     if (primaryGroup.arrival_date && primaryGroup.departure_date) {
       if (date < primaryGroup.arrival_date || date > primaryGroup.departure_date) {
         return Response.json({ success: false, error: 'לא ניתן לקבוע פעילות מחוץ לתאריכי הקבוצה' }, { status: 400 });
@@ -356,7 +358,10 @@ Deno.serve(async (req) => {
         status: 'ACTIVE',
       });
 
+      const conflictGroups = await fetchGroupsByIds(base44, [...new Set(existingItems.map(item => item.group_id))]);
+      const operationalGroupIds = new Set(conflictGroups.filter(isPreparationGroupOperational).map(group => group.id));
       const conflicts = existingItems.filter(item => {
+        if (!operationalGroupIds.has(item.group_id)) return false;
         if (excludeItemId && item.id === excludeItemId) return false;
         // Ignore items that are part of the same shared activity
         if (excludeSharedActivityId && item.shared_activity_id === excludeSharedActivityId) return false;
@@ -427,6 +432,7 @@ Deno.serve(async (req) => {
       for (const gid of allGroupIds) {
         const g = groupMap[gid];
         if (!g) return Response.json({ success: false, error: `הקבוצה לא נמצאה: ${gid}` }, { status: 404 });
+        if (!isPreparationGroupOperational(g)) return Response.json({ success: false, error: 'PREPARATION_GROUP_NOT_OPERATIONAL', group_id: gid }, { status: 409 });
         if (g.arrival_date && g.departure_date) {
           const stayStart = g.arrival_date < g.departure_date ? g.arrival_date : g.departure_date;
           const stayEnd   = g.arrival_date < g.departure_date ? g.departure_date : g.arrival_date;

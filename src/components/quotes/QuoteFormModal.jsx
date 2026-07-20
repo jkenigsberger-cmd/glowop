@@ -476,11 +476,8 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
   const { role } = useRoleContext();
   const preparationFlowEnabled = isQuotePreparationEnabled(role);
 
-  // New-group flow: group shell fields
-  // org_name = organization/client/group name (שם קבוצה / ארגון)
-  // contact_name/phone/email = contact person (שם איש קשר) — separate
+  // New-group flow: group shell fields. Group name, client organization and contact stay separate.
   const [groupForm, setGroupForm] = useState({
-    org_name: "",        // organization name — mirrors quote client_name
     group_type: "LODGING",
     contact_name: "", contact_phone: "", contact_email: "", client_tax_id: "",
   });
@@ -489,11 +486,7 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
   const isDayUse = groupType === "DAY_USE";
   const setGroupField = (k, v) => setGroupForm(f => ({ ...f, [k]: v }));
 
-  // When org_name changes, keep quote client_name in sync
-  const handleOrgNameChange = (v) => {
-    setGroupField("org_name", v);
-    setForm(f => ({ ...f, client_name: v }));
-  };
+  const handleGroupNameChange = (v) => setForm(f => ({ ...f, group_name: v }));
 
   // Contact person fields mirror into quote client_phone/email but NOT client_name
   const handleGroupContactChange = (k, v) => {
@@ -506,6 +499,7 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
   const expiryAutoGenRef = useRef(!quote?.valid_until); // true = was auto-generated or empty
 
   const [form, setForm] = useState({
+    group_name:      quote?.group_name      || group?.group_name || "",
     quote_number:    quote?.quote_number    || "",
     version:         quote?.version         || 1,
     status:          quote?.status          || "DRAFT",
@@ -663,7 +657,7 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
         const totalPax = Number(form.estimated_pax || 0);
         const staffPax = Number(form.staff_count || 0);
         const newGroup = await base44.entities.Group.create({
-          group_name: groupForm.org_name || form.client_name,
+          group_name: form.group_name,
           group_type: groupForm.group_type,
           arrival_date: form.arrival_date || undefined,
           departure_date: form.departure_date || undefined,
@@ -708,11 +702,11 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
       else onSaved(savedQuote);
     } catch (error) {
       setSaving(false);
-      toast.error(error?.message === "PREPARATION_INIT_FAILED" ? "יצירת קבוצת ההכנה נכשלה" : "שמירת הצעת המחיר נכשלה");
+      toast.error(error?.message === "FEATURE_DISABLED" ? "זרימת ההכנה מושבתת כרגע" : error?.message === "PREPARATION_INIT_FAILED" ? "יצירת קבוצת ההכנה נכשלה" : "שמירת הצעת המחיר נכשלה");
     }
   };
 
-  const groupNameDisplay = isNewGroupFlow ? (groupForm.group_name || form.client_name) : (group?.group_name || form.client_name);
+  const groupNameDisplay = form.group_name || group?.group_name;
 
   return (
     <Dialog open onOpenChange={onClose}>
@@ -749,7 +743,7 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
                   <div className="grid grid-cols-2 gap-3">
                     <div className="col-span-2 space-y-1">
                       <Label className="text-xs text-slate-500">שם קבוצה / ארגון *</Label>
-                      <Input required value={groupForm.org_name} onChange={e => handleOrgNameChange(e.target.value)} placeholder="שם בית הספר / הארגון" />
+                      <Input required value={form.group_name} onChange={e => handleGroupNameChange(e.target.value)} placeholder="שם הקבוצה התפעולי" />
                     </div>
                     {/* group_type is kept in state but driven by the quoteType pill selector below */}
                     <div className="space-y-1">
@@ -866,6 +860,7 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
 
                 {/* Client fields */}
                 <div className="border-t border-slate-100 pt-3 grid grid-cols-2 gap-3">
+                  {!isNewGroupFlow && quote?.preparation_flow_enabled && <div className="col-span-2 space-y-1"><Label className="text-xs text-slate-500">שם קבוצה</Label><Input required value={form.group_name} onChange={e => handleGroupNameChange(e.target.value)} /></div>}
                   <div className="space-y-1">
                     <Label className="text-xs text-slate-500">שם לקוח / ארגון</Label>
                     <Input value={form.client_name} onChange={e => set("client_name", e.target.value)} />

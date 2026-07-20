@@ -133,8 +133,8 @@ export default function Housekeeping() {
   }, [allocations]);
 
   const confirmedAllocations = useMemo(
-    () => allocations.filter(a => a.status === "CONFIRMED"),
-    [allocations]
+    () => allocations.filter(a => groupsMap[a.group_id] && a.status === "CONFIRMED"),
+    [allocations, groupsMap]
   );
 
   const draftOnlyGroupIds = useMemo(() => {
@@ -241,10 +241,10 @@ export default function Housekeeping() {
       });
 
       const mealsForDate = mealReservations.filter(m =>
-        m.date === date && m.status === "ACTIVE"
+        groupsMap[m.group_id] && m.date === date && m.status === "ACTIVE"
       );
       const scheduleForDate = scheduleItems.filter(s =>
-        s.date === date && s.status === "ACTIVE"
+        groupsMap[s.group_id] && s.date === date && s.status === "ACTIVE"
       );
 
       return {
@@ -254,13 +254,13 @@ export default function Housekeeping() {
         scheduleForDate,
       };
     });
-  }, [dateRange, groups, mealReservations, scheduleItems]);
+  }, [dateRange, groups, groupsMap, mealReservations, scheduleItems]);
 
   // ── Common spaces per-date data ───────────────────────────────────────────────
   const commonSpaceDateData = useMemo(() => {
     const bookableSpaces = activitySpaces.filter(s => s.is_bookable !== false);
     return dateRange.map(date => {
-      const itemsOnDate = scheduleItems.filter(s => s.date === date && s.status === "ACTIVE" && s.activity_space_id);
+      const itemsOnDate = scheduleItems.filter(s => groupsMap[s.group_id] && s.date === date && s.status === "ACTIVE" && s.activity_space_id);
       // Group by space
       const bySpaceId = {};
       itemsOnDate.forEach(item => {
@@ -270,7 +270,7 @@ export default function Housekeeping() {
       const spacesUsed = bookableSpaces.filter(s => bySpaceId[s.id]);
       return { date, bySpaceId, spacesUsed };
     });
-  }, [dateRange, scheduleItems, activitySpaces]);
+  }, [dateRange, scheduleItems, activitySpaces, groupsMap]);
 
   // ── Search + date filters ─────────────────────────────────────────────────────
   const matchGroup = (g) => {

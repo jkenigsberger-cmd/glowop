@@ -16,6 +16,6 @@ Deno.serve(async (req) => {
     return Response.json({ success: true, quote: result.quote, group: result.group, operationalProfile: result.operationalProfile, created_group: result.createdGroup, created_profile: result.createdProfile, warnings: result.warnings });
   } catch (error) {
     console.error('[ensureQuotePreparationGroup]', error?.code || error?.message);
-    return Response.json({ success: false, error: error?.code || 'INTERNAL_ERROR', group_id: error?.group_id, profile_ids: error?.profile_ids }, { status: error?.code ? 409 : 500 });
+    return Response.json({ success: false, error: error?.code || 'INTERNAL_ERROR', quote_id: error?.quote_id, group_id: error?.group_id, profile_ids: error?.profile_ids, recovery: error?.recovery, partial_state: error?.code === 'PROFILE_CREATE_FAILED_RETRYABLE' ? 'QUOTE_LINKED_GROUP_EXISTS_PROFILE_MISSING' : undefined }, { status: error?.code ? 409 : 500 });
   }
 });

@@ -31,9 +31,9 @@ Deno.serve(async (req) => {
     result.group.status = 'CONFIRMED';
     result.quote.status = 'APPROVED';
     auditLog('approve_activate', user, result, beforeQuoteStatus, 'APPROVED');
-    return Response.json({ success: true, status: 'approved', quote_id, group_id: result.group.id, operational_group_profile_id: result.operationalProfile.id, created_group: result.createdGroup, created_profile: result.createdProfile, warnings: result.warnings, integrations_activated: [] });
+    return Response.json({ success: true, status: 'approved', quote_id, group_id: result.group.id, operational_group_profile_id: result.operationalProfile.id, created_group: result.createdGroup, created_profile: result.createdProfile, warnings: result.warnings, integrations_activated: ['GROUP_CONFIRMED', 'OPERATIONAL_PROFILE_READY', 'QUOTE_APPROVED', 'SNAPSHOT_CAPTURED'] });
   } catch (error) {
     console.error('[approveQuoteAndActivateGroup]', error?.code || error?.message);
-    return Response.json({ success: false, error: error?.code || 'INTERNAL_ERROR', profile_ids: error?.profile_ids }, { status: error?.code ? 409 : 500 });
+    return Response.json({ success: false, error: error?.code || 'INTERNAL_ERROR', quote_id: error?.quote_id, group_id: error?.group_id, profile_ids: error?.profile_ids, recovery: error?.recovery, partial_state: error?.code === 'PROFILE_CREATE_FAILED_RETRYABLE' ? 'QUOTE_LINKED_GROUP_EXISTS_PROFILE_MISSING' : undefined }, { status: error?.code ? 409 : 500 });
   }
 });

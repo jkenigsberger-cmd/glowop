@@ -5,6 +5,7 @@
  * Supports partial sync (no GuestFormSubmission) — syncs from Group + OperationalGroupProfile alone.
  */
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
+import { assertOperationalGroup } from '../../shared/quotePreparationConfig.js';
 
 const MEAL_DEFAULTS = {
   BREAKFAST: { start_time: '08:00', end_time: '10:00' },
@@ -67,6 +68,7 @@ Deno.serve(async (req) => {
     step = 'load_group';
     const groupRecords = await base44.asServiceRole.entities.Group.filter({ id: group_id });
     const group = groupRecords[0] || null;
+    try { assertOperationalGroup(group); } catch (error) { return Response.json({ success: false, error: error.code }, { status: 409 }); }
     console.log('[prefillGroupScheduleAndMeals] group_id:', group_id);
 
     // Try to load GuestFormSubmission — NOT required

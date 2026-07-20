@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
+import { assertOperationalGroup } from '../../shared/quotePreparationConfig.js';
 
 Deno.serve(async (req) => {
   try {
@@ -50,6 +51,7 @@ Deno.serve(async (req) => {
     if (!group) {
       return Response.json({ success: false, error: 'הקבוצה לא נמצאה במערכת' }, { status: 404 });
     }
+    try { assertOperationalGroup(group); } catch (error) { return Response.json({ success: false, error: error.code }, { status: 409 }); }
 
     // ── Update Group status → CONFIRMED ───────────────────────────────────
     await base44.asServiceRole.entities.Group.update(resolvedGroupId, { status: 'CONFIRMED' });

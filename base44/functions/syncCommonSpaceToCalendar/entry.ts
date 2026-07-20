@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
+import { assertOperationalGroup } from '../../shared/quotePreparationConfig.js';
 
 const KEREN_HADOR_CALENDAR_ID = 'c_d90deb3b0f276cded4ab5809199860a2b2e99c8ced3c62dc8432cae3261a5583@group.calendar.google.com';
 
@@ -72,6 +73,7 @@ Deno.serve(async (req) => {
     if (!space || !group) {
       return Response.json({ ok: false, error: 'Space or Group not found' }, { status: 404 });
     }
+    try { assertOperationalGroup(group); } catch (error) { return Response.json({ ok: false, error: error.code }, { status: 409 }); }
 
     // Build event summary
     const spaceName = space.name || space.code;

@@ -1,8 +1,10 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.38';
+import { assertQuotePreparationEnabled } from '../../shared/quotePreparationConfig.js';
 
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
+    assertQuotePreparationEnabled();
     const user = await base44.auth.me();
     if (!user) return Response.json({ success: false, error: 'UNAUTHORIZED' }, { status: 401 });
     const internal = await base44.asServiceRole.entities.InternalUser.filter({ email: user.email });
@@ -19,6 +21,6 @@ Deno.serve(async (req) => {
     return Response.json({ success: true, status: 'rejected', quote_id, group_id: quote.group_id, data_deleted: false });
   } catch (error) {
     console.error('[rejectQuotePreparation]', error?.message);
-    return Response.json({ success: false, error: 'INTERNAL_ERROR' }, { status: 500 });
+    return Response.json({ success: false, error: error?.code || 'INTERNAL_ERROR' }, { status: error?.code ? 409 : 500 });
   }
 });

@@ -1,3 +1,5 @@
+import { assertQuotePreparationEnabled } from './quotePreparationConfig.js';
+
 export const OPEN_QUOTE_STATUSES = new Set(['DRAFT', 'SENT']);
 export const isQuoteOpen = (quote) => OPEN_QUOTE_STATUSES.has(String(quote?.status || '').toUpperCase());
 export const isQuoteApproved = (quote) => String(quote?.status || '').toUpperCase() === 'APPROVED';
@@ -10,7 +12,7 @@ export function quoteGroupFields(quote) {
   const participants = nonEmpty(quote.participant_count) ? Number(quote.participant_count) : (total != null && staff != null ? Math.max(0, total - staff) : null);
   const singleDay = quote.quote_type === 'day_use' || (quote.arrival_date && (!quote.departure_date || quote.departure_date === quote.arrival_date));
   const values = {
-    group_name: quote.client_name || quote.contact_person || quote.quote_number || 'קבוצה בהכנה',
+    group_name: quote.group_name || quote.quote_number || 'קבוצה בהכנה',
     group_type: singleDay ? 'DAY_USE' : 'LODGING',
     arrival_date: quote.arrival_date,
     departure_date: quote.departure_date || quote.arrival_date,
@@ -19,7 +21,7 @@ export function quoteGroupFields(quote) {
     total_pax: total,
     staff_count: staff,
     participant_count: participants,
-    contact_name: quote.contact_person || quote.client_name,
+    contact_name: quote.contact_person,
     contact_phone: quote.client_phone,
     contact_email: quote.client_email,
   };
@@ -32,6 +34,7 @@ export function quoteProfileFields(quote) {
 }
 
 export async function ensureQuotePreparation(base44, quoteId) {
+  assertQuotePreparationEnabled();
   const quote = await base44.asServiceRole.entities.Quote.get(quoteId);
   if (!quote) throw Object.assign(new Error('QUOTE_NOT_FOUND'), { code: 'QUOTE_NOT_FOUND' });
   if (!quote.preparation_flow_enabled) throw Object.assign(new Error('NOT_PREPARATION_FLOW'), { code: 'NOT_PREPARATION_FLOW' });
@@ -47,8 +50,14 @@ export async function ensureQuotePreparation(base44, quoteId) {
       ...quoteGroupFields(quote), status: 'DRAFT', quote_preparation_flow: true,
     });
     createdGroup = true;
-    await base44.asServiceRole.entities.Quote.update(quote.id, { group_id: group.id });
-    quote.group_id = group.id;
+    try {
+      await base44.asServiceRole.entities.Quote.update(quote.id, { group_id: group.id });
+      quote.group_id = group.id;
+    } catch (error) {
+      await base44.asServiceRole.entities.Group.delete(group.id).catch(() => {});
+      console.error('[quotePreparationFlow] quote link failed; compensating group delete attempted', JSON.stringify({ quote_id: quote.id, group_id: group.id, error: error?.message }));
+      throw Object.assign(new Error('QUOTE_LINK_FAILED_GROUP_COMPENSATED'), { code: 'QUOTE_LINK_FAILED_GROUP_COMPENSATED', quote_id: quote.id, group_id: group.id, recovery: 'RETRY_ENSURE' });
+    }
   }
 
   if (isQuoteOpen(quote)) {
@@ -62,11 +71,16 @@ export async function ensureQuotePreparation(base44, quoteId) {
   let profile = profiles[0] || null;
   let createdProfile = false;
   if (!profile) {
-    profile = await base44.asServiceRole.entities.OperationalGroupProfile.create({
-      group_id: group.id, quote_id: quote.id, status: 'ACCEPTED', ...quoteProfileFields(quote),
-      is_sleeping_group: group.group_type === 'LODGING',
-    });
-    createdProfile = true;
+    try {
+      profile = await base44.asServiceRole.entities.OperationalGroupProfile.create({
+        group_id: group.id, quote_id: quote.id, status: 'ACCEPTED', ...quoteProfileFields(quote),
+        is_sleeping_group: group.group_type === 'LODGING',
+      });
+      createdProfile = true;
+    } catch (error) {
+      console.error('[quotePreparationFlow] profile create failed; linked partial state is retryable', JSON.stringify({ quote_id: quote.id, group_id: group.id, error: error?.message }));
+      throw Object.assign(new Error('PROFILE_CREATE_FAILED_RETRYABLE'), { code: 'PROFILE_CREATE_FAILED_RETRYABLE', quote_id: quote.id, group_id: group.id, recovery: 'RETRY_ENSURE' });
+    }
   } else {
     const update = isQuoteOpen(quote) ? quoteProfileFields(quote) : {};
     if (!profile.quote_id) update.quote_id = quote.id;
