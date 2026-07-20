@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import {
@@ -338,9 +338,12 @@ function EmptyLocations() {
 
 // ── Main export ───────────────────────────────────────────────────────────────
 export default function Maintenance() {
-  const [view, setView] = useState("main"); // "main" | "openList" | "manager"
-  const [activeSection, setActiveSection] = useState(null);
-  const [activeLocation, setActiveLocation] = useState(null);
+  const [initialNavigation] = useState(() => window.history.state?.maintenance || {
+    view: "main", activeSection: null, activeLocation: null,
+  });
+  const [view, setView] = useState(initialNavigation.view);
+  const [activeSection, setActiveSection] = useState(initialNavigation.activeSection);
+  const [activeLocation, setActiveLocation] = useState(initialNavigation.activeLocation);
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
@@ -385,6 +388,28 @@ export default function Maintenance() {
     qc.invalidateQueries({ queryKey: ["siteLocations"] });
   };
 
+  const applyNavigation = (navigation) => {
+    setView(navigation.view || "main");
+    setActiveSection(navigation.activeSection || null);
+    setActiveLocation(navigation.activeLocation || null);
+  };
+
+  const navigateWithinMaintenance = (navigation) => {
+    window.history.pushState({ ...(window.history.state || {}), maintenance: navigation }, "");
+    applyNavigation(navigation);
+  };
+
+  useEffect(() => {
+    if (!window.history.state?.maintenance) {
+      window.history.replaceState({ ...(window.history.state || {}), maintenance: initialNavigation }, "");
+    }
+    const handlePopState = (event) => {
+      if (event.state?.maintenance) applyNavigation(event.state.maintenance);
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [initialNavigation]);
+
   if (locLoading) {
     return (
       <div className="flex items-center justify-center min-h-[40vh]">
@@ -393,18 +418,14 @@ export default function Maintenance() {
     );
   }
 
-  const handleBack = () => {
-    if (activeLocation) { setActiveLocation(null); return; }
-    if (activeSection) { setActiveSection(null); return; }
-    setView("main");
-  };
+  const handleBack = () => window.history.back();
 
   // ── Manager view ──
   if (view === "manager") {
     return (
       <div className="min-h-screen bg-background" dir="rtl">
         <div className="max-w-2xl mx-auto px-4 py-6 space-y-4">
-          <button onClick={() => setView("main")} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
+          <button onClick={handleBack} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
             <ChevronRight className="w-4 h-4" /> חזרה לתחזוקה
           </button>
           <LocationManagerPanel />
@@ -419,7 +440,7 @@ export default function Maintenance() {
     return (
       <div className="min-h-screen bg-background" dir="rtl">
         <div className="max-w-2xl mx-auto px-4 py-6 space-y-4">
-          <button onClick={() => setView("main")} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
+          <button onClick={handleBack} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
             <ChevronRight className="w-4 h-4" /> חזרה לתחזוקה
           </button>
           <div className="flex items-center justify-between">
@@ -467,7 +488,7 @@ export default function Maintenance() {
             locations={locations}
             openIssues={openIssues}
             onBack={handleBack}
-            onSelectLocation={setActiveLocation}
+            onSelectLocation={(location) => navigateWithinMaintenance({ view: "main", activeSection, activeLocation: location })}
           />
         </div>
       </div>
@@ -481,19 +502,19 @@ export default function Maintenance() {
         <SectionOverview
           locations={locations}
           openIssues={openIssues}
-          onSelectSection={setActiveSection}
-          onViewList={() => setView("openList")}
+          onSelectSection={(section) => navigateWithinMaintenance({ view: "main", activeSection: section, activeLocation: null })}
+          onViewList={() => navigateWithinMaintenance({ view: "openList", activeSection: null, activeLocation: null })}
           isAdmin={isAdmin}
           onSyncClick={handleSync}
           syncing={syncing}
           syncResult={syncResult}
-          onManageLocations={() => setView("manager")}
+          onManageLocations={() => navigateWithinMaintenance({ view: "manager", activeSection: null, activeLocation: null })}
         />
 
         {/* Quick link to open issues list */}
         {openIssues.length > 0 && (
           <button
-            onClick={() => setView("openList")}
+            onClick={() => navigateWithinMaintenance({ view: "openList", activeSection: null, activeLocation: null })}
             className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-dashed border-primary/30 text-primary text-sm font-semibold hover:bg-primary/5 transition-colors"
           >
             <List className="w-4 h-4" />
