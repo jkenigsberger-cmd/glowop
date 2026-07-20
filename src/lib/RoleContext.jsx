@@ -63,7 +63,8 @@ export function RoleProvider({ children }) {
       }
     } catch (err) {
       console.error("Failed to load internal user role:", err);
-      setRoleError("not_found");
+      // Technical failure (network / temporary auth) — NOT the same as "user not registered".
+      setRoleError("load_failed");
       setRole(null);
       setInternalUser(null);
     } finally {

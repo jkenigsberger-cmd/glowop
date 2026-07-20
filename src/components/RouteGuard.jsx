@@ -67,6 +67,23 @@ export default function RouteGuard({ children }) {
     );
   }
 
+  // 3.5 Technical failure loading the role — show retry instead of a false "no permission"
+  if (roleError === "load_failed") {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center" dir="rtl">
+        <div className="text-center space-y-3 max-w-sm">
+          <Loader2 className="w-10 h-10 text-muted-foreground mx-auto" />
+          <h1 className="text-xl font-bold text-foreground">שגיאה זמנית בטעינת ההרשאות</h1>
+          <p className="text-muted-foreground text-sm">לא הצלחנו לאמת את ההרשאות שלך. נסה שוב.</p>
+          <Button onClick={() => window.location.reload()} className="gap-2">
+            נסה שוב
+          </Button>
+          <p className="text-xs text-muted-foreground font-mono">{user.email}</p>
+        </div>
+      </div>
+    );
+  }
+
   // 4. Authenticated but not found in InternalUser
   if (roleError === "not_found" || !role) {
     return (
