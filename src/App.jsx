@@ -34,6 +34,7 @@ import MeetingSummaries from "./pages/MeetingSummaries.jsx";
 import WorkSchedule from "./pages/WorkSchedule.jsx";
 import MyShifts from "./pages/MyShifts.jsx";
 import AnalyticsDashboard from "./pages/AnalyticsDashboard.jsx";
+import Quotes from "./pages/Quotes.jsx";
 
 // Landing page resolver — MAINTENANCE users go straight to the maintenance module,
 // everyone else sees the Dashboard.
@@ -63,6 +64,7 @@ const AuthenticatedApp = () => {
         <Route path="/" element={<RouteGuard><HomeLanding /></RouteGuard>} />
         <Route path="/inventory" element={<RouteGuard><Inventory /></RouteGuard>} />
         <Route path="/groups" element={<RouteGuard><Groups /></RouteGuard>} />
+        <Route path="/quotes" element={<RouteGuard><Quotes /></RouteGuard>} />
         <Route path="/groups/:id" element={<RouteGuard><GroupDetail /></RouteGuard>} />
         <Route path="/groups/:id/operational-summary-print" element={<RouteGuard><OperationalSummaryPrint /></RouteGuard>} />
         <Route path="/daily-print" element={<RouteGuard><DailyOperationalPrint /></RouteGuard>} />

@@ -79,7 +79,7 @@ export default function QuoteStatusActions({ quote, group, onUpdated }) {
     // Quote.status directly.
     let approveRes;
     try {
-      approveRes = await base44.functions.invoke("approveQuoteAndInitializeGroup", { quote_id: quote.id });
+      approveRes = await base44.functions.invoke(quote.preparation_flow_enabled ? "approveQuoteAndActivateGroup" : "approveQuoteAndInitializeGroup", { quote_id: quote.id });
     } catch (invokeErr) {
       console.error("[QuoteStatusActions] approveQuoteAndInitializeGroup invoke failed:", invokeErr?.message);
       toast.error("אישור הצעת המחיר נכשל");
@@ -123,6 +123,13 @@ export default function QuoteStatusActions({ quote, group, onUpdated }) {
     (data.warnings || []).forEach(w => toast.warning(WARNING_MESSAGES[w] || w));
 
     const targetGroupId = data.group_id || group?.id || quote.group_id;
+
+    if (quote.preparation_flow_enabled) {
+      toast.success("הצעת המחיר אושרה");
+      setLoading(false);
+      onUpdated();
+      return;
+    }
 
     // ── Resolve the group for snapshot/hold ─────────────────────────────────
     // On a brand-new group the frontend `group` prop is null, so we fetch the
@@ -187,9 +194,14 @@ export default function QuoteStatusActions({ quote, group, onUpdated }) {
 
   const handleTransition = async (nextStatus) => {
     if (nextStatus !== "APPROVED") {
-      // Non-approval transitions: just update status
       setLoading(true);
-      await base44.entities.Quote.update(quote.id, { status: nextStatus });
+      if (quote.preparation_flow_enabled && nextStatus === "REJECTED") {
+        const reason = window.prompt("סיבת דחייה");
+        if (!reason) { setLoading(false); return; }
+        await base44.functions.invoke("rejectQuotePreparation", { quote_id: quote.id, rejection_reason: reason });
+      } else {
+        await base44.entities.Quote.update(quote.id, { status: nextStatus });
+      }
       setLoading(false);
       onUpdated();
       return;

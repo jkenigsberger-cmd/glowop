@@ -4,11 +4,15 @@
   "properties": {
     "group_id": {
       "type": "string",
-      "description": "FK to Group (required \u2014 Group is the prospect shell)"
+      "description": "Canonical FK from Quote to Group; optional only during controlled preparation initialization"
+    },
+    "preparation_flow_enabled": {
+      "type": "boolean",
+      "default": false,
+      "description": "True only for records created by the controlled quote preparation flow"
     },
     "quote_number": {
-      "type": "string",
-      "description": "Human-readable reference e.g. Q-2026-047"
+      "type": "string"
     },
     "version": {
       "type": "number",
@@ -25,6 +29,21 @@
       ],
       "default": "DRAFT"
     },
+    "approved_at": {
+      "type": "string"
+    },
+    "approved_by": {
+      "type": "string"
+    },
+    "rejected_at": {
+      "type": "string"
+    },
+    "rejected_by": {
+      "type": "string"
+    },
+    "rejection_reason": {
+      "type": "string"
+    },
     "quote_type": {
       "type": "string",
       "enum": [
@@ -32,16 +51,13 @@
         "day_use",
         "custom"
       ],
-      "default": "lodging",
-      "description": "UI catalog type: lodging=\u05e7\u05d1\u05d5\u05e6\u05d4 \u05e2\u05dd \u05dc\u05d9\u05e0\u05d4, day_use=\u05e4\u05e2\u05d9\u05dc\u05d5\u05ea \u05d9\u05d5\u05dd, custom=\u05de\u05d5\u05ea\u05d0\u05dd \u05d0\u05d9\u05e9\u05d9\u05ea"
+      "default": "lodging"
     },
     "client_name": {
-      "type": "string",
-      "description": "Contact/org name at quote time"
+      "type": "string"
     },
     "contact_person": {
-      "type": "string",
-      "description": "Contact person name \u2014 shown in PDF as \u05d0\u05d9\u05e9 \u05e7\u05e9\u05e8"
+      "type": "string"
     },
     "client_phone": {
       "type": "string"
@@ -50,12 +66,10 @@
       "type": "string"
     },
     "client_tax_id": {
-      "type": "string",
-      "description": "\u05d7.\u05e4 / \u05e2.\u05de \u2014 used in documents and guest form pre-fill"
+      "type": "string"
     },
     "client_notes": {
-      "type": "string",
-      "description": "Client-visible notes \u2014 appear in the PDF. Do NOT use for internal notes."
+      "type": "string"
     },
     "arrival_date": {
       "type": "string",
@@ -66,96 +80,75 @@
       "format": "date"
     },
     "arrival_time": {
-      "type": "string",
-      "description": "HH:MM \u2014 estimated arrival time on arrival day (optional)"
+      "type": "string"
     },
     "departure_time": {
-      "type": "string",
-      "description": "HH:MM \u2014 estimated departure time on departure day (optional)"
+      "type": "string"
     },
     "nights": {
-      "type": "number",
-      "description": "Calculated from date range, stored for pricing"
+      "type": "number"
     },
     "estimated_pax": {
-      "type": "number",
-      "description": "Total headcount for pricing"
+      "type": "number"
     },
     "staff_count": {
       "type": "number"
     },
     "participant_count": {
-      "type": "number",
-      "description": "Students / participants"
+      "type": "number"
     },
     "includes_prisa": {
       "type": "boolean",
-      "default": false,
-      "description": "Whether \u05e4\u05e8\u05d9\u05e1\u05d4 (2.5 \u20aa per participant) is included in this quote"
+      "default": false
     },
     "package_lines": {
-      "type": "string",
-      "description": "JSON array \u2014 new catalog packages: [{package_id, option_id, quantity, unit_price, shirley_addon, price_overridden, notes}]"
+      "type": "string"
     },
     "new_addon_lines": {
-      "type": "string",
-      "description": "JSON array \u2014 new catalog addons: [{addon_id, quantity, unit_price, notes}]"
+      "type": "string"
     },
     "student_lodging_lines": {
-      "type": "string",
-      "description": "JSON array (legacy): [{rate_type, pax, nights, rate, total}]"
+      "type": "string"
     },
     "adult_lodging_lines": {
-      "type": "string",
-      "description": "JSON array (legacy): [{tent_type, tent_count, nights, rate_per_tent_per_night, total}]"
+      "type": "string"
     },
     "workshop_lines": {
-      "type": "string",
-      "description": "JSON array (legacy): [{name, audience, rate, total}]"
+      "type": "string"
     },
     "lecture_lines": {
-      "type": "string",
-      "description": "JSON array (legacy): [{name, lecturer, base_price, vat_included, vat_amount, total}]"
+      "type": "string"
     },
     "coffee_corner_pax": {
-      "type": "number",
-      "description": "Number of people for Coffee Corner at \u20aa15/person"
+      "type": "number"
     },
     "addon_lines": {
-      "type": "string",
-      "description": "JSON array (legacy): [{description, quantity, unit_price, total}]"
+      "type": "string"
     },
     "adjustment_lines": {
-      "type": "string",
-      "description": "JSON array of custom flat adjustments: [{description, amount}] \u2014 positive=surcharge, negative=discount"
+      "type": "string"
     },
     "surcharge_lines": {
-      "type": "string",
-      "description": "JSON array of free positive surcharges: [{description, amount}]"
+      "type": "string"
     },
     "subtotal": {
       "type": "number"
     },
     "discount_percent": {
       "type": "number",
-      "default": 0,
-      "description": "Percentage discount applied to subtotal"
+      "default": 0
     },
     "discount_amount": {
-      "type": "number",
-      "description": "Computed: subtotal \u00d7 discount_percent / 100"
+      "type": "number"
     },
     "total_price": {
-      "type": "number",
-      "description": "subtotal - discount_amount"
+      "type": "number"
     },
     "advance_payment": {
-      "type": "number",
-      "description": "30% of total \u2014 computed"
+      "type": "number"
     },
     "balance_payment": {
-      "type": "number",
-      "description": "70% of total \u2014 computed"
+      "type": "number"
     },
     "payment_terms": {
       "type": "string"
@@ -165,16 +158,13 @@
       "format": "date"
     },
     "internal_notes": {
-      "type": "string",
-      "description": "Internal-only notes \u2014 NEVER appear in the client PDF"
+      "type": "string"
     },
     "snapshot": {
-      "type": "string",
-      "description": "JSON snapshot captured only when status transitions to APPROVED"
+      "type": "string"
     }
   },
   "required": [
-    "group_id",
     "status",
     "version"
   ]

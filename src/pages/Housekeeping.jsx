@@ -13,6 +13,7 @@ import ReviewAlertsBanner from "@/components/alerts/ReviewAlertsBanner";
 import SearchBar from "@/components/search/SearchBar";
 import OperationalMonthlyGroupCalendar from "@/components/calendar/OperationalMonthlyGroupCalendar";
 import moment from "moment";
+import { isOperationalGroup } from "@/lib/quotePreparationFlow";
 
 const TODAY = new Date().toISOString().slice(0, 10);
 const DAYS_AHEAD = 7;
@@ -59,7 +60,7 @@ export default function Housekeeping() {
 
   const { data: groups = [] } = useQuery({
     queryKey: ["groups"],
-    queryFn: () => base44.entities.Group.list("-arrival_date", 300),
+    queryFn: async () => (await base44.entities.Group.list("-arrival_date", 300)).filter(isOperationalGroup),
   });
 
   const { data: tents = [] } = useQuery({

@@ -271,8 +271,9 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
       // ── Review alerts (additive, never blocks save) ────────────────────────
       try {
         const groupIsConfirmed = group.status === "CONFIRMED" || group.status === "PENDING_APPROVAL" || group.status === "COMPLETED";
+        const isQuotePreparation = group.quote_preparation_flow && group.status !== "CONFIRMED";
         const isLodging = payload.group_type === "LODGING";
-        if (groupIsConfirmed || existingProfiles.length > 0) {
+        if (!isQuotePreparation && (groupIsConfirmed || existingProfiles.length > 0)) {
           // A. Pax changes
           const paxChanged = PAX_FIELDS.some(f => {
             const oldVal = Number(group[f] ?? 0);

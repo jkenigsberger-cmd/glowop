@@ -73,7 +73,8 @@ Deno.serve(async (req) => {
     ]);
 
     const EXCLUDED = new Set(["CANCELLED", "COMPLETED", "ARCHIVED"]);
-    const groupById = Object.fromEntries(groups.map((g) => [g.id, g]));
+    const operationalGroups = groups.filter((g) => !(g.quote_preparation_flow && g.status !== "CONFIRMED"));
+    const groupById = Object.fromEntries(operationalGroups.map((g) => [g.id, g]));
     const spaceById = Object.fromEntries(spaces.map((s) => [s.id, s]));
 
     const groupName = (id) => groupById[id]?.group_name || "קבוצה";
@@ -84,7 +85,7 @@ Deno.serve(async (req) => {
     };
 
     // ── 1. Groups today ───────────────────────────────────────────────────
-    const activeToday = groups.filter((g) => {
+    const activeToday = operationalGroups.filter((g) => {
       if (EXCLUDED.has(g.status)) return false;
       if (g.group_type === "DAY_USE") return g.arrival_date === date;
       const dep = g.departure_date && g.departure_date.trim() !== "" ? g.departure_date : null;
@@ -96,11 +97,11 @@ Deno.serve(async (req) => {
       .filter((g) => g.arrival_date === date)
       .map((g) => ({ name: g.group_name, type: g.group_type, arrival_time: g.arrival_time || null, pax: paxForGroup(g.id) }));
 
-    const departures = groups
+    const departures = operationalGroups
       .filter((g) => !EXCLUDED.has(g.status) && g.group_type === "LODGING" && g.departure_date === date)
       .map((g) => ({ name: g.group_name, departure_time: g.departure_time || null, pax: paxForGroup(g.id) }));
 
-    const sleeping = groups
+    const sleeping = operationalGroups
       .filter((g) => {
         if (EXCLUDED.has(g.status) || g.group_type !== "LODGING") return false;
         const dep = g.departure_date && g.departure_date.trim() !== "" ? g.departure_date : null;
@@ -116,7 +117,7 @@ Deno.serve(async (req) => {
     const MEAL_LABELS = { BREAKFAST: "ארוחת בוקר", LUNCH: "ארוחת צהריים", DINNER: "ארוחת ערב", COFFEE_CORNER: "פינת קפה", OTHER: "אחר" };
     const MEAL_ORDER = { BREAKFAST: 1, LUNCH: 2, DINNER: 3, COFFEE_CORNER: 4, OTHER: 5 };
     const mealsOut = meals
-      .filter((m) => m.meal_type !== "COFFEE_CORNER")
+      .filter((m) => groupById[m.group_id] && m.meal_type !== "COFFEE_CORNER")
       .map((m) => {
         let diets = null;
         if (m.special_diets_summary) {
@@ -137,6 +138,7 @@ Deno.serve(async (req) => {
 
     // ── 3. Coffee corner ─────────────────────────────────────────────────
     const coffeeOut = coffee
+      .filter((c) => groupById[c.group_id])
       .map((c) => ({
         start_time: c.start_time || null,
         end_time: c.end_time || null,
@@ -150,7 +152,7 @@ Deno.serve(async (req) => {
     // ── 4. Prisa (פריסה) ──────────────────────────────────────────────────
     const PRISA_SLOT = { AFTER_BREAKFAST: "אחרי ארוחת בוקר", AFTER_LUNCH: "אחרי ארוחת צהריים", AFTER_DINNER: "אחרי ארוחת ערב" };
     const PRISA_TYPE = { REGULAR: "רגיל", DOUBLE: "כפול" };
-    const prisaOut = prisa.map((p) => ({
+    const prisaOut = prisa.filter((p) => groupById[p.group_id]).map((p) => ({
       group: groupName(p.group_id),
       slot: PRISA_SLOT[p.pickup_slot] || p.pickup_slot || null,
       type: PRISA_TYPE[p.type] || p.type || null,
@@ -159,7 +161,7 @@ Deno.serve(async (req) => {
 
     // ── 5. Activity spaces — flag those needing attention ────────────────
     const bySpace = {};
-    for (const a of activities) {
+    for (const a of activities.filter((item) => groupById[item.group_id])) {
       const key = a.activity_space_id || `__name__${a.activity_space_code || a.requested_location || "לא משויך"}`;
       if (!bySpace[key]) bySpace[key] = [];
       bySpace[key].push(a);

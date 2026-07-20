@@ -155,6 +155,7 @@ export default function GroupDetail() {
   );
 
   const GROUP_TYPE_LABEL = { LODGING: "לינה", DAY_USE: "פעילות יום" };
+  const isPreparation = group.quote_preparation_flow && group.status !== "CONFIRMED";
 
   return (
     <div className="min-h-screen bg-background" dir="rtl">
@@ -221,10 +222,12 @@ export default function GroupDetail() {
         <div className="max-w-5xl mx-auto px-4 sm:px-6 flex gap-0">
           {[
             { key: "overview", label: "סקירה כללית" },
-            { key: "schedule", label: "📅 לוח זמנים וארוחות" },
-            { key: "coffee", label: "☕ קפה / פריסה" },
-            { key: "sleeping", label: "🛏️ דרישות לינה" },
-            { key: "post-stay", label: "📝 סיכום שהייה" },
+            ...(!isPreparation ? [
+              { key: "schedule", label: "📅 לוח זמנים וארוחות" },
+              { key: "coffee", label: "☕ קפה / פריסה" },
+              { key: "sleeping", label: "🛏️ דרישות לינה" },
+              { key: "post-stay", label: "📝 סיכום שהייה" },
+            ] : []),
           ].map(tab => (
             <button
               key={tab.key}
@@ -263,6 +266,8 @@ export default function GroupDetail() {
         )}
 
         {activeTab === "overview" && <>
+
+        {isPreparation && <div className="bg-violet-50 border border-violet-200 rounded-xl px-4 py-3"><p className="font-semibold text-violet-800">פרופיל בהכנה</p><p className="text-xs text-violet-600 mt-1">הצעת המחיר עדיין פתוחה. ניתן להכין פרטים תפעוליים, אך הקבוצה אינה פעילה ולא תופיע במודולים התפעוליים.</p></div>}
 
         {/* Meal date range warning — shown when active meals exist outside current stay */}
         <RoleGate permission="EDIT_GROUP">
@@ -472,7 +477,7 @@ export default function GroupDetail() {
         </RoleGate>
 
         {/* Operational Profile */}
-        <OperationalProfileDisplay groupId={id} group={group} />
+        <OperationalProfileDisplay groupId={id} group={group} provisional={isPreparation} />
 
         {/* Operational Hold — admin debug card */}
         <OperationalHoldCard groupId={id} />

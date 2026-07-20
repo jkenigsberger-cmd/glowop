@@ -32,7 +32,7 @@ const MEAL_LABELS = { BREAKFAST: "ארוחת בוקר", LUNCH: "ארוחת צה�
 const GENDER_LABELS = { BOYS: "בנים", GIRLS: "בנות", MEN: "גברים", WOMEN: "נשים" };
 const ALLOC_TYPE_LABELS = { STUDENT: "חניכים", STAFF: "צוות/VIP" };
 
-export default function OperationalProfileDisplay({ groupId, group }) {
+export default function OperationalProfileDisplay({ groupId, group, provisional = false }) {
   const { data: profiles = [], isLoading } = useQuery({
     queryKey: ["operationalProfile", groupId],
     queryFn: () => base44.entities.OperationalGroupProfile.filter({ group_id: groupId }),
@@ -116,14 +116,14 @@ export default function OperationalProfileDisplay({ groupId, group }) {
     <section>
       <div className="flex items-center gap-2 mb-3">
         <ShieldCheck className="w-4 h-4 text-emerald-600" />
-        <h2 className="font-semibold text-slate-800">פרופיל תפעולי מאושר</h2>
-        <span className="text-xs bg-emerald-50 text-emerald-700 border border-emerald-200 rounded px-2 py-0.5">מאושר</span>
+        <h2 className="font-semibold text-slate-800">{provisional ? "פרופיל תפעולי בהכנה" : "פרופיל תפעולי מאושר"}</h2>
+        <span className="text-xs bg-emerald-50 text-emerald-700 border border-emerald-200 rounded px-2 py-0.5">{provisional ? "בהכנה" : "מאושר"}</span>
       </div>
 
       <div className="bg-white border border-emerald-200 rounded-xl overflow-hidden">
         {/* Header bar */}
         <div className="bg-emerald-50 px-4 py-2.5 flex items-center justify-between border-b border-emerald-200">
-          <p className="text-xs font-medium text-emerald-700">פרופיל זה הוא האמת התפעולית של הקבוצה</p>
+          <p className="text-xs font-medium text-emerald-700">{provisional ? "הפרופיל נשמר להכנה בלבד ואינו פעיל תפעולית" : "פרופיל זה הוא האמת התפעולית של הקבוצה"}</p>
           {acceptedAt && (
             <p className="text-xs text-emerald-500">
               אושר ע"י {profile.accepted_by || "אדמין"} · {acceptedAt}

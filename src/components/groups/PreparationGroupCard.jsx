@@ -1,0 +1,7 @@
+import { Link } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { CheckCircle, FileText } from "lucide-react";
+
+export default function PreparationGroupCard({ group, quote, profile, canApprove, onApprove }) {
+  return <div className="bg-card border border-violet-200 rounded-xl p-4 space-y-2" dir="rtl"><div className="flex justify-between"><div><p className="font-semibold">{group.group_name}</p><span className="text-xs bg-violet-100 text-violet-700 rounded-full px-2 py-0.5">הצעת מחיר פתוחה</span></div><span className="text-xs text-muted-foreground">{profile ? "פרופיל בהכנה" : "פרופיל חסר"}</span></div><p className="text-xs text-muted-foreground">{group.arrival_date || "—"} — {group.departure_date || "—"} · {group.total_pax || 0} משתתפים · {group.group_type === "LODGING" ? "לינה" : "פעילות יום"}</p><p className="text-xs text-muted-foreground">עודכן {group.updated_date?.slice(0,10) || "—"}</p><div className="flex gap-2"><Button asChild size="sm" variant="outline"><Link to={`/groups/${group.id}`}><FileText className="w-3.5 h-3.5" />פתח פרופיל תפעולי</Link></Button><Button asChild size="sm" variant="ghost"><Link to="/quotes">פתח הצעה</Link></Button>{canApprove && <Button size="sm" onClick={onApprove}><CheckCircle className="w-3.5 h-3.5" />אישור</Button>}</div></div>;
+}

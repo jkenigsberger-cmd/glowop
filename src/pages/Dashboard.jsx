@@ -16,6 +16,7 @@ import DailyStaffBrief from "@/components/dashboard/brief/DailyStaffBrief";
 import { Button } from "@/components/ui/button";
 import { FileText, ChevronRight, ChevronLeft, BedDouble, Sun, Users, LogIn, LogOut, UtensilsCrossed, CalendarDays, AlertTriangle } from "lucide-react";
 import { useRoleContext } from "@/lib/RoleContext";
+import { isOperationalGroup } from "@/lib/quotePreparationFlow";
 
 const toDateStr = (date) => format(date, "yyyy-MM-dd");
 const TODAY = toDateStr(new Date());
@@ -108,7 +109,7 @@ export default function Dashboard() {
   // ── Data fetching ──────────────────────────────────────────────────────
   const { data: groups = [] } = useQuery({
     queryKey: ["groups"],
-    queryFn: () => base44.entities.Group.list("-arrival_date", 300),
+    queryFn: async () => (await base44.entities.Group.list("-arrival_date", 300)).filter(isOperationalGroup),
   });
 
   const { data: profiles = [] } = useQuery({

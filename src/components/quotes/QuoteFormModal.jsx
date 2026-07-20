@@ -12,6 +12,9 @@ import CapacityWarningBanner from "./CapacityWarningBanner";
 import PackageLinesSection from "./PackageLinesSection";
 import AdjustmentsSection, { calcAdjustmentLine, normalizeAdjustmentRow } from "./AdjustmentsSection";
 import { calcPackageLine, calcAddonLine } from "@/lib/quoteCatalog";
+import { useRoleContext } from "@/lib/RoleContext";
+import { isQuotePreparationEnabled, isQuoteOpen } from "@/lib/quotePreparationFlow";
+import { toast } from "sonner";
 
 // ── Catalog ───────────────────────────────────────────────────────────────────
 const STUDENT_LODGING_RATES = {
@@ -470,6 +473,8 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
   const isEdit = !!quote;
   const isNewGroupFlow = !group;
   const navigate = useNavigate();
+  const { role } = useRoleContext();
+  const preparationFlowEnabled = isQuotePreparationEnabled(role);
 
   // New-group flow: group shell fields
   // org_name = organization/client/group name (שם קבוצה / ארגון)
@@ -651,56 +656,60 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
-    let resolvedGroupId = group?.id;
-    if (isNewGroupFlow) {
-      const totalPax = Number(form.estimated_pax || 0);
-      const staffPax = Number(form.staff_count   || 0);
-      const newGroup = await base44.entities.Group.create({
-        // A. org_name → group_name; contact_name is the contact person
-        group_name: groupForm.org_name || form.client_name,
-        group_type: groupForm.group_type,
-        arrival_date: form.arrival_date || undefined, departure_date: form.departure_date || undefined,
+    try {
+      const usePreparationFlow = preparationFlowEnabled && isNewGroupFlow;
+      let resolvedGroupId = group?.id;
+      if (isNewGroupFlow && !usePreparationFlow) {
+        const totalPax = Number(form.estimated_pax || 0);
+        const staffPax = Number(form.staff_count || 0);
+        const newGroup = await base44.entities.Group.create({
+          group_name: groupForm.org_name || form.client_name,
+          group_type: groupForm.group_type,
+          arrival_date: form.arrival_date || undefined,
+          departure_date: form.departure_date || undefined,
+          arrival_time: form.arrival_time || undefined,
+          departure_time: form.departure_time || undefined,
+          total_pax: totalPax || undefined,
+          staff_count: staffPax || undefined,
+          participant_count: Math.max(0, totalPax - staffPax) || undefined,
+          contact_name: groupForm.contact_name || undefined,
+          contact_phone: groupForm.contact_phone || undefined,
+          contact_email: groupForm.contact_email || undefined,
+          status: "DRAFT",
+        });
+        resolvedGroupId = newGroup.id;
+      }
+      const quotePayload = {
+        ...form,
+        ...(resolvedGroupId ? { group_id: resolvedGroupId } : {}),
+        ...(usePreparationFlow ? { preparation_flow_enabled: true, status: "DRAFT" } : {}),
+        student_lodging_lines: isDayUse ? JSON.stringify([]) : JSON.stringify(studentLodging),
+        adult_lodging_lines: isDayUse ? JSON.stringify([]) : JSON.stringify(adultLodging),
+        workshop_lines: JSON.stringify(workshops), lecture_lines: JSON.stringify(lectures),
+        addon_lines: JSON.stringify(addons), adjustment_lines: JSON.stringify(adjustments), surcharge_lines: JSON.stringify([]),
+        package_lines: JSON.stringify(packageLines), new_addon_lines: JSON.stringify(newAddonLines),
+        quote_type: quoteType, contact_person: form.contact_person || undefined, client_notes: form.client_notes || undefined,
         arrival_time: form.arrival_time || undefined, departure_time: form.departure_time || undefined,
-        total_pax: totalPax || undefined, staff_count: staffPax || undefined,
-        participant_count: Math.max(0, totalPax - staffPax) || undefined,
-        contact_name: groupForm.contact_name || undefined,
-        contact_phone: groupForm.contact_phone || undefined,
-        contact_email: groupForm.contact_email || undefined,
-        status: "DRAFT",
-      });
-      resolvedGroupId = newGroup.id;
+        subtotal, discount_amount: discountAmount, total_price, advance_payment: advance, balance_payment: balance,
+        version: Number(form.version), estimated_pax: estimatedPax || undefined, staff_count: staffCount || undefined,
+        participant_count: participantCount || undefined, coffee_corner_pax: coffeeEnabled ? staffCount : 0,
+        includes_prisa: prisaEnabled, discount_percent: Number(form.discount_percent || 0),
+      };
+      const savedQuote = isEdit
+        ? await base44.entities.Quote.update(quote.id, quotePayload)
+        : await base44.entities.Quote.create(quotePayload);
+      if ((usePreparationFlow || quote?.preparation_flow_enabled) && isQuoteOpen(savedQuote)) {
+        const ensured = await base44.functions.invoke("ensureQuotePreparationGroup", { quote_id: savedQuote.id });
+        if (!ensured.data?.success) throw new Error(ensured.data?.error || "PREPARATION_INIT_FAILED");
+        resolvedGroupId = ensured.data.group?.id;
+      }
+      setSaving(false);
+      if (usePreparationFlow && resolvedGroupId) { navigate(`/groups/${resolvedGroupId}`); onClose(); }
+      else onSaved(savedQuote);
+    } catch (error) {
+      setSaving(false);
+      toast.error(error?.message === "PREPARATION_INIT_FAILED" ? "יצירת קבוצת ההכנה נכשלה" : "שמירת הצעת המחיר נכשלה");
     }
-    const quotePayload = {
-      ...form, group_id: resolvedGroupId,
-      student_lodging_lines: isDayUse ? JSON.stringify([]) : JSON.stringify(studentLodging),
-      adult_lodging_lines:   isDayUse ? JSON.stringify([]) : JSON.stringify(adultLodging),
-      workshop_lines:        JSON.stringify(workshops),
-      lecture_lines:         JSON.stringify(lectures),
-      addon_lines:           JSON.stringify(addons),
-      adjustment_lines:      JSON.stringify(adjustments),
-      surcharge_lines:       JSON.stringify([]),
-      package_lines:         JSON.stringify(packageLines),
-      new_addon_lines:       JSON.stringify(newAddonLines),
-      quote_type:            quoteType,
-      contact_person:        form.contact_person || undefined,
-      client_notes:          form.client_notes   || undefined,
-      arrival_time: form.arrival_time || undefined,
-      departure_time: form.departure_time || undefined,
-      subtotal, discount_amount: discountAmount, total_price,
-      advance_payment: advance, balance_payment: balance,
-      version: Number(form.version),
-      estimated_pax: estimatedPax || undefined,
-      staff_count: staffCount || undefined,
-      participant_count: participantCount || undefined,
-      coffee_corner_pax: coffeeEnabled ? staffCount : 0,
-      includes_prisa: prisaEnabled,
-      discount_percent: Number(form.discount_percent || 0),
-    };
-    if (isEdit) await base44.entities.Quote.update(quote.id, quotePayload);
-    else await base44.entities.Quote.create(quotePayload);
-    setSaving(false);
-    if (isNewGroupFlow && resolvedGroupId) { navigate(`/groups/${resolvedGroupId}`); onClose(); }
-    else onSaved();
   };
 
   const groupNameDisplay = isNewGroupFlow ? (groupForm.group_name || form.client_name) : (group?.group_name || form.client_name);
@@ -816,7 +825,7 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs text-slate-500">סטטוס</Label>
-                    <Select value={form.status} onValueChange={v => set("status", v)}>
+                    <Select value={form.status} onValueChange={v => set("status", v)} disabled={quote?.preparation_flow_enabled || (preparationFlowEnabled && isNewGroupFlow)}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>{["DRAFT","SENT","APPROVED","REJECTED","EXPIRED"].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
                     </Select>

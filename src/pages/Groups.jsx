@@ -11,11 +11,17 @@ import RoleGate from "@/components/RoleGate";
 import GroupFilters, { filterGroups } from "@/components/groups/GroupFilters";
 import GroupCard from "@/components/groups/GroupCard";
 import DayGroupHeader, { groupByDay } from "@/components/groups/DayGroupHeader";
+import PreparationGroupCard from "@/components/groups/PreparationGroupCard";
+import { useRoleContext } from "@/lib/RoleContext";
+import { isQuoteOpen, isQuotePreparationEnabled } from "@/lib/quotePreparationFlow";
+import { toast } from "sonner";
 
 const TODAY = new Date().toISOString().slice(0, 10);
 
 export default function Groups() {
   const navigate = useNavigate();
+  const { role } = useRoleContext();
+  const preparationFlowEnabled = isQuotePreparationEnabled(role);
   const [showForm, setShowForm] = useState(false);
   const [showQuoteForm, setShowQuoteForm] = useState(false);
 
@@ -43,6 +49,21 @@ export default function Groups() {
     queryKey: ["groups"],
     queryFn: () => base44.entities.Group.list("arrival_date", 500),
   });
+  const { data: preparationQuotes = [], refetch: refetchQuotes } = useQuery({
+    queryKey: ["preparationQuotes"],
+    queryFn: () => base44.entities.Quote.filter({ preparation_flow_enabled: true }, "-updated_date", 500),
+    enabled: preparationFlowEnabled,
+  });
+  const { data: preparationProfiles = [] } = useQuery({
+    queryKey: ["preparationProfiles"],
+    queryFn: () => base44.entities.OperationalGroupProfile.list("-updated_date", 500),
+    enabled: preparationFlowEnabled,
+  });
+  const openPreparationQuotes = preparationQuotes.filter(isQuoteOpen);
+  const preparationQuoteByGroup = Object.fromEntries(openPreparationQuotes.filter(q => q.group_id).map(q => [q.group_id, q]));
+  const preparationGroupIds = new Set(preparationQuotes.filter(q => q.group_id).map(q => q.group_id));
+  const preparationProfileByGroup = Object.fromEntries(preparationProfiles.map(p => [p.group_id, p]));
+  const preparationGroups = groups.filter(g => preparationQuoteByGroup[g.id] && g.status !== "CONFIRMED" && g.status !== "ARCHIVED");
 
   const isHistoricallyFinished = (g) => {
     if (g.group_type === "LODGING") {
@@ -60,12 +81,13 @@ export default function Groups() {
   };
 
   const active = useMemo(() => {
-    return groups.filter(isCurrentlyActive).sort((a, b) => (a.arrival_date || "").localeCompare(b.arrival_date || ""));
-  }, [groups]);
+    return groups.filter(g => (!preparationGroupIds.has(g.id) || g.status === "CONFIRMED") && isCurrentlyActive(g)).sort((a, b) => (a.arrival_date || "").localeCompare(b.arrival_date || ""));
+  }, [groups, preparationQuotes]);
 
   const history = useMemo(() => {
     return groups
       .filter(g => {
+        if (preparationGroupIds.has(g.id) && g.status !== "CONFIRMED") return false;
         if (g.status === "COMPLETED") return true;
         if (isHistoricallyFinished(g) && g.status !== "ARCHIVED" && g.status !== "CANCELLED") return true;
         return false;
@@ -75,7 +97,7 @@ export default function Groups() {
         const db = b.group_type === "LODGING" ? (b.departure_date || "") : (b.arrival_date || "");
         return db.localeCompare(da);
       });
-  }, [groups]);
+  }, [groups, preparationQuotes]);
 
   const frozen = useMemo(() => {
     return groups.filter(g => g.status === "ARCHIVED").sort((a, b) => (b.archived_at || "").localeCompare(a.archived_at || ""));
@@ -205,6 +227,7 @@ export default function Groups() {
         <Tabs defaultValue="active">
           <TabsList className="mb-4">
             <TabsTrigger value="active">פעילות ({filterGroups(active, filterState).length})</TabsTrigger>
+            {preparationFlowEnabled && <TabsTrigger value="preparation">קבוצות בהכנה ({preparationGroups.length})</TabsTrigger>}
             <TabsTrigger value="history">היסטוריה ({filterGroups(history, filterState).length})</TabsTrigger>
             <TabsTrigger value="frozen">קפואות ({filterGroups(frozen, filterState).length})</TabsTrigger>
           </TabsList>
@@ -212,6 +235,9 @@ export default function Groups() {
           <TabsContent value="active">
             <GroupList items={active} emptyLabel="אין קבוצות פעילות" />
           </TabsContent>
+          {preparationFlowEnabled && <TabsContent value="preparation">
+            <div className="space-y-3">{preparationGroups.map(group => <PreparationGroupCard key={group.id} group={group} quote={preparationQuoteByGroup[group.id]} profile={preparationProfileByGroup[group.id]} canApprove={["SUPER_ADMIN","ADMIN"].includes(role)} onApprove={async () => { const res = await base44.functions.invoke("approveQuoteAndActivateGroup", { quote_id: preparationQuoteByGroup[group.id].id }); if (res.data?.success) { toast.success("ההצעה אושרה והקבוצה הופעלה"); refetch(); refetchQuotes(); } else toast.error("אישור ההצעה נכשל"); }} />)}{!preparationGroups.length && <p className="text-center py-10 text-muted-foreground">אין קבוצות בהכנה</p>}</div>
+          </TabsContent>}
           <TabsContent value="history">
             <GroupList items={history} emptyLabel="אין קבוצות בהיסטוריה" showUnmarkedBadges />
           </TabsContent>

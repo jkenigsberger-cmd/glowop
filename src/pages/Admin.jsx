@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import OrphanCleanupPanel from "@/components/admin/OrphanCleanupPanel";
 import { useRoleContext } from "@/lib/RoleContext";
+import { isQuotePreparationEnabled } from "@/lib/quotePreparationFlow";
 
 const ADMIN_TILES = [
   {
@@ -78,7 +79,7 @@ export default function Admin() {
       {/* Tiles */}
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {ADMIN_TILES.map(({ to, icon: Icon, label, desc, color, iconColor }) => (
+          {ADMIN_TILES.filter(tile => tile.to !== "/quotes" || isQuotePreparationEnabled(role)).map(({ to, icon: Icon, label, desc, color, iconColor }) => (
             <Link
               key={to + label}
               to={to}

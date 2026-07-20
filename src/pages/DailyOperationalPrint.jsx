@@ -4,6 +4,7 @@ import { format, parseISO } from "date-fns";
 import { he } from "date-fns/locale";
 import { Link, useSearchParams } from "react-router-dom";
 import { PRISA_TYPE_LABELS, PRISA_SLOT_LABELS, PRISA_SLOT_ORDER } from "@/lib/prisaLabels";
+import { isOperationalGroup } from "@/lib/quotePreparationFlow";
 
 // ── helpers ────────────────────────────────────────────────────────────────
 function safeJson(str, fallback) {
@@ -51,7 +52,7 @@ export default function DailyOperationalPrint() {
 
   const { data: groups = [] } = useQuery({
     queryKey: ["groups-daily-print"],
-    queryFn: () => base44.entities.Group.list("-arrival_date", 300),
+    queryFn: async () => (await base44.entities.Group.list("-arrival_date", 300)).filter(isOperationalGroup),
   });
 
   const { data: profiles = [] } = useQuery({
@@ -133,13 +134,13 @@ export default function DailyOperationalPrint() {
     return Number(d.lifeThreatening_count) > 0;
   });
 
+  const existingGroupIds = new Set(groups.map(g => g.id));
   const sortedMeals = [...meals]
-    .filter(m => m.meal_type !== "COFFEE_CORNER")
+    .filter(m => existingGroupIds.has(m.group_id) && m.meal_type !== "COFFEE_CORNER")
     .sort((a, b) => (a.start_time || "").localeCompare(b.start_time || ""));
-  const sortedActivities = [...activities].sort((a, b) => (a.start_time || "").localeCompare(b.start_time || ""));
+  const sortedActivities = [...activities].filter(a => existingGroupIds.has(a.group_id)).sort((a, b) => (a.start_time || "").localeCompare(b.start_time || ""));
 
   // Fix A: filter out orphan CoffeeCornerRequests whose parent Group no longer exists
-  const existingGroupIds = new Set(groups.map(g => g.id));
   const sortedCoffee = [...coffeeRequests]
     .filter(r => existingGroupIds.has(r.group_id))
     .sort((a, b) => (a.start_time || "").localeCompare(b.start_time || ""));

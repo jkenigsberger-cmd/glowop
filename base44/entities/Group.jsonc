@@ -57,6 +57,11 @@
     "internal_notes": {
       "type": "string"
     },
+    "quote_preparation_flow": {
+      "type": "boolean",
+      "default": false,
+      "description": "Additive marker for groups created by the controlled quote preparation flow; Quote.group_id remains the canonical relationship"
+    },
     "status": {
       "type": "string",
       "enum": [
