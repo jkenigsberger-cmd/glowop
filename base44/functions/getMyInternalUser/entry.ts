@@ -16,6 +16,7 @@ Deno.serve(async (req) => {
     const match = allUsers.find(u => u.email && u.email.trim().toLowerCase() === normalizedEmail);
 
     if (!match) {
+      console.log('[ACCESS DENIED] email not in InternalUser whitelist:', normalizedEmail);
       return Response.json({ found: false, email: normalizedEmail });
     }
 
