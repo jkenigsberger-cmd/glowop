@@ -1,0 +1,5 @@
+const money = value => `₪${Math.round(Number(value) || 0).toLocaleString("he-IL")}`;
+export default function QuoteOptionPreviewSelector({ mode, hasB, totals, onChange }) {
+  const choices = [{ key: "A", label: "אפשרות א׳" }, ...(hasB ? [{ key: "B", label: "אפשרות ב׳" }, { key: "COMBINED", label: "שתי האפשרויות" }] : [])];
+  return <div className="rounded-xl border border-border bg-card p-3 space-y-2"><p className="text-xs font-semibold text-muted-foreground">תצוגה מקדימה:</p><div className="flex flex-wrap gap-1">{choices.map(choice => <button key={choice.key} type="button" onClick={() => onChange(choice.key)} className={`rounded-md px-2 py-1 text-[11px] ${mode === choice.key ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>{choice.label}</button>)}</div>{mode === "COMBINED" && <div className="space-y-1 text-xs"><div className="flex justify-between"><span>אפשרות א׳</span><strong>{money(totals.A)}</strong></div><div className="flex justify-between"><span>אפשרות ב׳</span><strong>{money(totals.B)}</strong></div></div>}</div>;
+}

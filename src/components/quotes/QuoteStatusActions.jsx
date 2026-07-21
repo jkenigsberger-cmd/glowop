@@ -5,7 +5,10 @@ import { Send, CheckCircle, XCircle, Clock } from "lucide-react";
 import { toast } from "sonner";
 import QuoteStatusBadge from "./QuoteStatusBadge";
 import ApprovalCapacityDialog from "./ApprovalCapacityDialog";
+import QuoteOptionApprovalDialog from "./QuoteOptionApprovalDialog";
 import RoleGate from "@/components/RoleGate";
+import { useRoleContext } from "@/lib/RoleContext";
+import { isQuoteMultiOptionEnabled } from "@/lib/quoteMultiOption";
 
 /**
  * Allowed transitions per the documented quote lifecycle:
@@ -62,14 +65,18 @@ function buildSnapshot(quote, group) {
 }
 
 export default function QuoteStatusActions({ quote, group, onUpdated }) {
+  const { role } = useRoleContext();
+  const multiOptionEnabled = isQuoteMultiOptionEnabled(role);
   const [loading, setLoading] = useState(false);
   const [capacityWarnings, setCapacityWarnings] = useState(null); // non-null = dialog open
   const [pendingApproval, setPendingApproval] = useState(false);
+  const [optionDialogOpen, setOptionDialogOpen] = useState(false);
+  const [approvalOptionKey, setApprovalOptionKey] = useState(null);
 
-  const transitions = TRANSITIONS[quote.status] || [];
+  const transitions = (TRANSITIONS[quote.status] || []).filter(item => !(item.next === "APPROVED" && quote.multi_option_enabled && !multiOptionEnabled));
   if (transitions.length === 0) return null;
 
-  const doApprove = async (overrideWarning, overrideReason) => {
+  const doApprove = async (overrideWarning, overrideReason, selectedOptionKey = approvalOptionKey) => {
     setLoading(true);
     setCapacityWarnings(null);
 
@@ -79,7 +86,7 @@ export default function QuoteStatusActions({ quote, group, onUpdated }) {
     // Quote.status directly.
     let approveRes;
     try {
-      approveRes = await base44.functions.invoke(quote.preparation_flow_enabled ? "approveQuoteAndActivateGroup" : "approveQuoteAndInitializeGroup", { quote_id: quote.id });
+      approveRes = await base44.functions.invoke(quote.preparation_flow_enabled ? "approveQuoteAndActivateGroup" : "approveQuoteAndInitializeGroup", { quote_id: quote.id, selected_option_key: selectedOptionKey || undefined });
     } catch (invokeErr) {
       console.error("[QuoteStatusActions] approveQuoteAndInitializeGroup invoke failed:", invokeErr?.message);
       toast.error("אישור הצעת המחיר נכשל");
@@ -106,6 +113,8 @@ export default function QuoteStatusActions({ quote, group, onUpdated }) {
         OGP_CREATE_FAILED_AFTER_GROUP: "הקבוצה נוצרה/קיימת אך יצירת הפרופיל התפעולי נכשלה — יש לפנות למנהל מערכת",
         QUOTE_LINK_UPDATE_FAILED: "קישור ההצעה לקבוצה/פרופיל נכשל — ההצעה לא אושרה",
         QUOTE_APPROVAL_UPDATE_FAILED: "הפרופיל התפעולי מוכן אך עדכון סטטוס ההצעה נכשל — נסה שוב",
+        SELECTED_OPTION_REQUIRED: "יש לבחור אפשרות מאושרת",
+        QUOTE_ALREADY_APPROVED_WITH_DIFFERENT_OPTION: "ההצעה כבר אושרה עם אפשרות אחרת",
       };
       toast.error(ERROR_MESSAGES[data.error] || "אישור הצעת המחיר נכשל");
       setLoading(false);
@@ -144,15 +153,7 @@ export default function QuoteStatusActions({ quote, group, onUpdated }) {
       }
     }
 
-    // ── Persist the commercial snapshot (NON-status field only) ─────────────
-    // The backend owns the APPROVED status; here we only store the snapshot used
-    // later by the guest-form flow. We never write status from the frontend.
-    try {
-      await base44.entities.Quote.update(quote.id, { snapshot: buildSnapshot(quote, resolvedGroup) });
-    } catch (snapErr) {
-      console.warn("[QuoteStatusActions] snapshot save failed (non-blocking):", snapErr?.message);
-    }
-
+    // The backend owns the selected-option commercial snapshot.
     // Create or update OperationalHold
     const hasMeals = !!resolvedGroup && resolvedGroup.group_type === "LODGING";
     const hasActivities = (() => {
@@ -192,7 +193,7 @@ export default function QuoteStatusActions({ quote, group, onUpdated }) {
     onUpdated();
   };
 
-  const handleTransition = async (nextStatus) => {
+  const handleTransition = async (nextStatus, selectedOptionKey = null) => {
     if (nextStatus !== "APPROVED") {
       setLoading(true);
       if (quote.preparation_flow_enabled && nextStatus === "REJECTED") {
@@ -207,6 +208,11 @@ export default function QuoteStatusActions({ quote, group, onUpdated }) {
       return;
     }
 
+    if (quote.multi_option_enabled && !selectedOptionKey) {
+      setOptionDialogOpen(true);
+      return;
+    }
+    if (selectedOptionKey) setApprovalOptionKey(selectedOptionKey);
     // Approval: run capacity check first
     setPendingApproval(true);
     try {
@@ -222,11 +228,11 @@ export default function QuoteStatusActions({ quote, group, onUpdated }) {
       if (warnings.length > 0) {
         setCapacityWarnings(warnings);
       } else {
-        await doApprove(false, "");
+        await doApprove(false, "", selectedOptionKey);
       }
     } catch {
       // If check fails, proceed without blocking
-      await doApprove(false, "");
+      await doApprove(false, "", selectedOptionKey);
     }
     setPendingApproval(false);
   };
@@ -252,10 +258,17 @@ export default function QuoteStatusActions({ quote, group, onUpdated }) {
         </RoleGate>
       </div>
 
+      <QuoteOptionApprovalDialog
+        quote={quote}
+        open={optionDialogOpen}
+        onClose={() => setOptionDialogOpen(false)}
+        onConfirm={(key) => { setOptionDialogOpen(false); handleTransition("APPROVED", key); }}
+      />
+
       {capacityWarnings && (
         <ApprovalCapacityDialog
           warnings={capacityWarnings}
-          onConfirm={(reason) => doApprove(true, reason)}
+          onConfirm={(reason) => doApprove(true, reason, approvalOptionKey)}
           onCancel={() => setCapacityWarnings(null)}
         />
       )}

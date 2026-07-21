@@ -1,0 +1,68 @@
+{
+  "name": "QuoteOption",
+  "type": "object",
+  "properties": {
+    "quote_id": {
+      "type": "string",
+      "description": "FK to Quote"
+    },
+    "option_key": {
+      "type": "string",
+      "enum": [
+        "A",
+        "B"
+      ]
+    },
+    "label": {
+      "type": "string"
+    },
+    "display_order": {
+      "type": "number"
+    },
+    "option_payload": {
+      "type": "string",
+      "description": "Serialized JSON containing only option-owned Quote fields"
+    },
+    "subtotal": {
+      "type": "number"
+    },
+    "discount_amount": {
+      "type": "number"
+    },
+    "total_price": {
+      "type": "number"
+    },
+    "advance_payment": {
+      "type": "number"
+    },
+    "balance_payment": {
+      "type": "number"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "AVAILABLE",
+        "SELECTED",
+        "NOT_SELECTED"
+      ],
+      "default": "AVAILABLE"
+    },
+    "created_from_option_id": {
+      "type": "string"
+    },
+    "created_by": {
+      "type": "string"
+    },
+    "updated_by": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "quote_id",
+    "option_key",
+    "label",
+    "display_order",
+    "option_payload",
+    "status"
+  ]
+}

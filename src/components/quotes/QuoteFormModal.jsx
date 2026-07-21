@@ -15,7 +15,11 @@ import { calcPackageLine, calcAddonLine } from "@/lib/quoteCatalog";
 import { useRoleContext } from "@/lib/RoleContext";
 import { isQuotePreparationEnabled, isQuoteOpen } from "@/lib/quotePreparationFlow";
 import { getEffectiveQuoteGroupName } from "@/lib/quoteAudience";
+import { isQuoteMultiOptionEnabled } from "@/lib/quoteMultiOption";
+import { extractQuoteOptionPayload, applyOptionPayloadToQuote } from "@/lib/quoteOptions";
 import QuoteAudienceSelector from "./QuoteAudienceSelector";
+import QuoteOptionTabs from "./QuoteOptionTabs";
+import QuoteOptionPreviewSelector from "./QuoteOptionPreviewSelector";
 import { toast } from "sonner";
 
 // ── Catalog ───────────────────────────────────────────────────────────────────
@@ -51,6 +55,7 @@ const COFFEE_CORNER_RATE = 15;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const parse = (str, fallback) => { try { const r = JSON.parse(str); return Array.isArray(r) ? r : fallback; } catch { return fallback; } };
+const parseOptionPayload = str => { try { return JSON.parse(str || "{}"); } catch { return {}; } };
 const fmtMoney = (n) => `₪${Math.round(Number(n) || 0).toLocaleString("he-IL")}`;
 const fmtDate  = (d) => { if (!d) return null; try { return new Date(d).toLocaleDateString("he-IL"); } catch { return d; } };
 
@@ -477,6 +482,7 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
   const navigate = useNavigate();
   const { role } = useRoleContext();
   const preparationFlowEnabled = isQuotePreparationEnabled(role);
+  const multiOptionFeatureEnabled = isQuoteMultiOptionEnabled(role);
 
   // New-group flow: group shell fields. Group name, client organization and contact stay separate.
   const [groupForm, setGroupForm] = useState({
@@ -574,6 +580,11 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
   const [packageLines,   setPackageLines]   = useState(parse(quote?.package_lines,        []));
   const [newAddonLines,  setNewAddonLines]  = useState(parse(quote?.new_addon_lines,      []));
   const [saving, setSaving] = useState(false);
+  const [optionBusy, setOptionBusy] = useState(false);
+  const [activeOptionKey, setActiveOptionKey] = useState("A");
+  const [previewMode, setPreviewMode] = useState("A");
+  const [hasOptionB, setHasOptionB] = useState(false);
+  const [optionDrafts, setOptionDrafts] = useState({});
   const [audienceError, setAudienceError] = useState(false);
   const [availabilityResult, setAvailabilityResult] = useState(null);
   const [checkingAvailability, setCheckingAvailability] = useState(false);
@@ -651,6 +662,78 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
   const advance             = Math.round(total_price * 0.3);
   const balance             = total_price - advance;
 
+  const captureCurrentOptionPayload = () => extractQuoteOptionPayload({
+    package_lines: JSON.stringify(packageLines), new_addon_lines: JSON.stringify(newAddonLines),
+    student_lodging_lines: JSON.stringify(studentLodging), adult_lodging_lines: JSON.stringify(adultLodging),
+    workshop_lines: JSON.stringify(workshops), lecture_lines: JSON.stringify(lectures),
+    coffee_corner_pax: coffeeEnabled ? staffCount : 0, includes_prisa: prisaEnabled,
+    addon_lines: JSON.stringify(addons), adjustment_lines: JSON.stringify(adjustments), surcharge_lines: JSON.stringify([]),
+    discount_percent: Number(form.discount_percent || 0), subtotal, discount_amount: discountAmount,
+    total_price, advance_payment: advance, balance_payment: balance,
+    payment_terms: form.payment_terms, client_notes: form.client_notes,
+  });
+
+  const applyOptionDraft = (payload = {}) => {
+    setPackageLines(parse(payload.package_lines, [])); setNewAddonLines(parse(payload.new_addon_lines, []));
+    setStudentLodging(parse(payload.student_lodging_lines, [])); setAdultLodging(parse(payload.adult_lodging_lines, []));
+    setWorkshops(parse(payload.workshop_lines, [])); setLectures(parse(payload.lecture_lines, []));
+    setAddons(parse(payload.addon_lines, [])); setAdjustments(parse(payload.adjustment_lines, []));
+    setCoffeeEnabled(Number(payload.coffee_corner_pax || 0) > 0); setPrisaEnabled(payload.includes_prisa === true);
+    set("discount_percent", payload.discount_percent ?? 0); set("payment_terms", payload.payment_terms || ""); set("client_notes", payload.client_notes || "");
+  };
+
+  useEffect(() => {
+    if (!multiOptionFeatureEnabled || !quote?.id || !quote.multi_option_enabled) return;
+    base44.entities.QuoteOption.filter({ quote_id: quote.id }).then(rows => {
+      const drafts = Object.fromEntries(rows.map(row => [row.option_key, parseOptionPayload(row.option_payload)]));
+      setOptionDrafts(drafts); setHasOptionB(Boolean(drafts.B));
+    });
+  }, [multiOptionFeatureEnabled, quote?.id, quote?.multi_option_enabled]);
+
+  const switchOption = key => {
+    if (key === activeOptionKey) { setPreviewMode(key); return; }
+    const current = captureCurrentOptionPayload();
+    const target = optionDrafts[key];
+    setOptionDrafts(prev => ({ ...prev, [activeOptionKey]: current }));
+    if (target) applyOptionDraft(target);
+    setActiveOptionKey(key); setPreviewMode(key);
+  };
+
+  const addOptionB = async () => {
+    const current = captureCurrentOptionPayload();
+    if (!quote?.id) {
+      const copied = structuredClone(current);
+      setOptionDrafts({ A: current, B: copied }); setHasOptionB(true); setActiveOptionKey("B"); setPreviewMode("B"); applyOptionDraft(copied);
+      toast.success("אפשרות ב׳ נוצרה כהעתק של אפשרות א׳");
+      return;
+    }
+    setOptionBusy(true);
+    try {
+      const res = await base44.functions.invoke("manageQuoteOptions", { action: "materialize", quote_id: quote.id, option_a_payload: current });
+      const drafts = Object.fromEntries((res.data?.options || []).map(row => [row.option_key, parseOptionPayload(row.option_payload)]));
+      setOptionDrafts(drafts); setHasOptionB(true); setActiveOptionKey("B"); setPreviewMode("B"); applyOptionDraft(drafts.B || current);
+      toast.success("אפשרות ב׳ נוצרה כהעתק של אפשרות א׳");
+    } catch { toast.error("יצירת אפשרות ב׳ נכשלה"); }
+    setOptionBusy(false);
+  };
+
+  const deleteOptionB = async () => {
+    if (!window.confirm("האם למחוק את אפשרות ב׳?\nהנתונים של אפשרות א׳ לא יושפעו.")) return;
+    if (!quote?.id) {
+      const optionA = activeOptionKey === "A" ? captureCurrentOptionPayload() : optionDrafts.A;
+      applyOptionDraft(optionA); setOptionDrafts({ A: optionA }); setActiveOptionKey("A"); setPreviewMode("A"); setHasOptionB(false);
+      return;
+    }
+    setOptionBusy(true);
+    try {
+      const res = await base44.functions.invoke("manageQuoteOptions", { action: "delete_b", quote_id: quote.id });
+      if (!res.data?.success) { setOptionBusy(false); return toast.error(res.data?.error === "APPROVED_OPTION_CANNOT_BE_DELETED" ? "לא ניתן למחוק אפשרות ב׳ שאושרה" : "מחיקת אפשרות ב׳ נכשלה"); }
+      const optionA = activeOptionKey === "A" ? captureCurrentOptionPayload() : optionDrafts.A;
+      applyOptionDraft(optionA); setOptionDrafts({ A: optionA }); setActiveOptionKey("A"); setPreviewMode("A"); setHasOptionB(false);
+    } catch { toast.error("מחיקת אפשרות ב׳ נכשלה"); }
+    setOptionBusy(false);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.quote_audience_type) {
@@ -682,7 +765,9 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
         });
         resolvedGroupId = newGroup.id;
       }
-      const quotePayload = {
+      const activeOptionPayload = captureCurrentOptionPayload();
+      const draftsToSave = { ...optionDrafts, [activeOptionKey]: activeOptionPayload };
+      let quotePayload = {
         ...form,
         client_name: form.client_name.trim(),
         group_name: form.group_name.trim(),
@@ -700,9 +785,14 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
         participant_count: participantCount || undefined, coffee_corner_pax: coffeeEnabled ? staffCount : 0,
         includes_prisa: prisaEnabled, discount_percent: Number(form.discount_percent || 0),
       };
+      if (hasOptionB) quotePayload = applyOptionPayloadToQuote(quotePayload, draftsToSave.A);
       const savedQuote = isEdit
         ? await base44.entities.Quote.update(quote.id, quotePayload)
         : await base44.entities.Quote.create(quotePayload);
+      if (hasOptionB) {
+        const optionsRes = await base44.functions.invoke("manageQuoteOptions", { action: "save", quote_id: savedQuote.id, options: draftsToSave });
+        if (!optionsRes.data?.success) throw new Error(optionsRes.data?.error || "OPTION_SAVE_FAILED");
+      }
       if ((usePreparationFlow || quote?.preparation_flow_enabled) && isQuoteOpen(savedQuote)) {
         const ensured = await base44.functions.invoke("ensureQuotePreparationGroup", { quote_id: savedQuote.id });
         if (!ensured.data?.success) throw new Error(ensured.data?.error || "PREPARATION_INIT_FAILED");
@@ -944,6 +1034,18 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
                 )}
               </SectionCard>
 
+              {multiOptionFeatureEnabled && (
+                <QuoteOptionTabs
+                  active={activeOptionKey}
+                  hasB={hasOptionB}
+                  totals={{ A: activeOptionKey === "A" ? total_price : optionDrafts.A?.total_price, B: activeOptionKey === "B" ? total_price : optionDrafts.B?.total_price }}
+                  onSelect={switchOption}
+                  onAdd={addOptionB}
+                  onDelete={deleteOptionB}
+                  busy={optionBusy}
+                />
+              )}
+
               {/* ── NEW CATALOG PACKAGES ── */}
               <SectionCard icon={Package} title="חבילות ומוצרים" defaultOpen={true}>
                 <PackageLinesSection
@@ -1071,6 +1173,8 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
 
           {/* ── Sidebar — right on desktop, bottom section on mobile ── */}
           <div className="w-full sm:w-72 sm:flex-shrink-0 bg-slate-50 sm:border-r border-t sm:border-t-0 border-slate-200 sm:overflow-y-auto px-4 py-5 space-y-4">
+
+            {multiOptionFeatureEnabled && <QuoteOptionPreviewSelector mode={previewMode} hasB={hasOptionB} totals={{ A: activeOptionKey === "A" ? total_price : optionDrafts.A?.total_price, B: activeOptionKey === "B" ? total_price : optionDrafts.B?.total_price }} onChange={key => key === "COMBINED" ? setPreviewMode(key) : switchOption(key)} />}
 
             <CalendarCard arrival={form.arrival_date} departure={form.departure_date} nights={nights} isDayUse={quoteType === "day_use"} />
 

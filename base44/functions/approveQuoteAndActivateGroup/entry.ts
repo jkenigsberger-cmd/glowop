@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.38';
 import { ensureQuotePreparation, quoteGroupFields, auditLog, isQuoteApproved } from '../../shared/quotePreparation.js';
+import { assertQuoteMultiOptionEnabled, resolveSelectedQuoteOption, buildApprovedOptionSnapshot, markSelectedQuoteOption } from '../../shared/quoteOptions.js';
 
 Deno.serve(async (req) => {
   try {
@@ -9,8 +10,12 @@ Deno.serve(async (req) => {
     const internal = await base44.asServiceRole.entities.InternalUser.filter({ email: user.email });
     const role = internal[0]?.role || user.role;
     if (!['SUPER_ADMIN', 'ADMIN'].includes(role)) return Response.json({ success: false, error: 'FORBIDDEN' }, { status: 403 });
-    const { quote_id } = await req.json();
+    const { quote_id, selected_option_key } = await req.json();
     if (!quote_id) return Response.json({ success: false, error: 'MISSING_QUOTE_ID' }, { status: 400 });
+    const quote = await base44.asServiceRole.entities.Quote.get(quote_id);
+    if (!quote) return Response.json({ success: false, error: 'QUOTE_NOT_FOUND' }, { status: 404 });
+    if (quote.multi_option_enabled) assertQuoteMultiOptionEnabled(role);
+    const selection = await resolveSelectedQuoteOption(base44, quote, selected_option_key);
 
     const result = await ensureQuotePreparation(base44, quote_id);
     const beforeQuoteStatus = result.quote.status;
@@ -20,10 +25,11 @@ Deno.serve(async (req) => {
     }
 
     const previousGroupStatus = result.group.status;
-    const snapshot = JSON.stringify({ capturedAt: new Date().toISOString(), groupName: result.group.group_name, groupType: result.group.group_type, totalPax: result.quote.estimated_pax || 0, staffTotal: result.quote.staff_count || 0, studentsTotal: result.quote.participant_count || 0, total_price: result.quote.total_price || 0 });
+    const snapshot = buildApprovedOptionSnapshot(result.quote, selection, user, { groupId: result.group.id, profileId: result.operationalProfile.id });
     await base44.asServiceRole.entities.Group.update(result.group.id, { ...quoteGroupFields(result.quote), status: 'CONFIRMED', quote_preparation_flow: true });
     try {
-      await base44.asServiceRole.entities.Quote.update(quote_id, { status: 'APPROVED', approved_at: new Date().toISOString(), approved_by: user.email, snapshot });
+      await base44.asServiceRole.entities.Quote.update(quote_id, { status: 'APPROVED', approved_at: new Date().toISOString(), approved_by: user.email, snapshot, approved_option_key: selection.key, approved_option_total_price: Number(selection.effectiveQuote.total_price || 0), approved_option_snapshot: snapshot });
+      if (result.quote.multi_option_enabled) await markSelectedQuoteOption(base44, quote_id, selection.key);
     } catch (error) {
       await base44.asServiceRole.entities.Group.update(result.group.id, { status: previousGroupStatus });
       throw Object.assign(error, { code: 'APPROVAL_ROLLED_BACK' });

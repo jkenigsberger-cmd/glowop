@@ -11,6 +11,25 @@
       "default": false,
       "description": "True only for records created by the controlled quote preparation flow"
     },
+    "multi_option_enabled": {
+      "type": "boolean",
+      "default": false,
+      "description": "True when QuoteOption A and B have been materialized"
+    },
+    "approved_option_key": {
+      "type": "string",
+      "enum": [
+        "A",
+        "B"
+      ]
+    },
+    "approved_option_total_price": {
+      "type": "number"
+    },
+    "approved_option_snapshot": {
+      "type": "string",
+      "description": "Serialized immutable snapshot of the selected commercial option"
+    },
     "group_name": {
       "type": "string",
       "description": "Optional operational group name, kept separate from client organization and contact person"

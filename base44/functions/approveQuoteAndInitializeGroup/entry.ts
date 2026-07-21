@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 import { getEffectiveQuoteGroupName } from '../../shared/quotePreparation.js';
+import { assertQuoteMultiOptionEnabled, resolveSelectedQuoteOption, buildApprovedOptionSnapshot, markSelectedQuoteOption } from '../../shared/quoteOptions.js';
 
 /**
  * approveQuoteAndInitializeGroup
@@ -114,7 +115,7 @@ Deno.serve(async (req) => {
 
     // ── Input ──────────────────────────────────────────────────────────────
     const body = await req.json().catch(() => ({}));
-    const { quote_id } = body;
+    const { quote_id, selected_option_key } = body;
     if (!quote_id || typeof quote_id !== 'string') {
       return Response.json({
         success: false, error: 'MISSING_QUOTE_ID', message: 'חסר מזהה הצעת מחיר (quote_id)',
@@ -130,6 +131,8 @@ Deno.serve(async (req) => {
       }, { status: 404 });
     }
 
+    if (quote.multi_option_enabled) assertQuoteMultiOptionEnabled(effectiveRole);
+    const selection = await resolveSelectedQuoteOption(base44, quote, selected_option_key);
     const warnings = [];
     const alreadyApproved = String(quote.status || '').toUpperCase() === 'APPROVED';
 
@@ -267,7 +270,9 @@ Deno.serve(async (req) => {
     // ── ONLY NOW: mark Quote APPROVED (skip if already approved) ────────────
     if (!alreadyApproved) {
       try {
-        await base44.asServiceRole.entities.Quote.update(quote_id, { status: 'APPROVED' });
+        const approvedSnapshot = buildApprovedOptionSnapshot(quote, selection, user, { groupId: group_id, profileId: ogp.id });
+        await base44.asServiceRole.entities.Quote.update(quote_id, { status: 'APPROVED', approved_at: new Date().toISOString(), approved_by: user.email, approved_option_key: selection.key, approved_option_total_price: Number(selection.effectiveQuote.total_price || 0), approved_option_snapshot: approvedSnapshot, snapshot: approvedSnapshot });
+        if (quote.multi_option_enabled) await markSelectedQuoteOption(base44, quote_id, selection.key);
       } catch (err) {
         console.error('[approveQuoteAndInitializeGroup] quote approval update failed:', err?.message);
         return Response.json({
@@ -290,8 +295,9 @@ Deno.serve(async (req) => {
 
   } catch (error) {
     console.error('[approveQuoteAndInitializeGroup] unexpected error:', error?.message, error?.stack);
+    const code = error?.code || 'INTERNAL_ERROR';
     return Response.json({
-      success: false, error: 'INTERNAL_ERROR', message: 'שגיאה פנימית בשרת — אנא נסה שוב',
-    }, { status: 500 });
+      success: false, error: code, message: code === 'QUOTE_ALREADY_APPROVED_WITH_DIFFERENT_OPTION' ? 'QUOTE_ALREADY_APPROVED_WITH_DIFFERENT_OPTION' : 'שגיאה פנימית בשרת — אנא נסה שוב',
+    }, { status: error?.code ? 409 : 500 });
   }
 });
