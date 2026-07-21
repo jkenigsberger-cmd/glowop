@@ -2,6 +2,7 @@
  * QuotePdfTemplate — single A4 page for quote content + separate terms page.
  * Printable RTL Hebrew via window.print().
  */
+import { getQuoteAudienceContent } from "@/lib/quoteAudience";
 
 const fmt = (n) => Math.round(Number(n) || 0).toLocaleString("he-IL");
 // Unit price: preserve decimals (e.g. 2.5) instead of rounding to a whole number.
@@ -201,7 +202,8 @@ function resolveData(quote, group) {
     clientEmail:  snap?.clientEmail || quote?.client_email || group?.contact_email || "—",
     clientTaxId:  snap?.clientTaxId || quote?.client_tax_id || "",
     contactPerson,
-    groupName:    snap?.groupName   || snap?.group_name    || group?.group_name    || quote?.client_name || "—",
+    groupName:    quote?.group_name?.trim() || "",
+    audience:     getQuoteAudienceContent(quote?.quote_audience_type),
     activityTypeLabel,
     arrival,
     departure,
@@ -337,10 +339,10 @@ function Page1({ d, logoUrl }) {
 
       {/* Intro */}
       <div style={{ textAlign: "center", fontSize: 13, fontWeight: 700, fontFamily: HEADING_FONT, color: BLUE, marginBottom: 6 }}>
-        הצעת מחיר לסמינרים וימי עיון לצוותי חינוך
+        {d.audience.subtitle}
       </div>
       <p style={{ fontSize: 11.5, fontFamily: BODY_FONT, color: "#2a2a2a", lineHeight: 1.7, textAlign: "center", marginBottom: 10 }}>
-        בית הדור הבא מציע מרחב לחיבור, העמקה ודיאלוג. בהמשך לשיחתנו, להלן הצעתנו עבור פעילות לצוותי חינוך:
+        {d.audience.intro}
       </p>
 
       {/* Two columns: client + activity side by side */}

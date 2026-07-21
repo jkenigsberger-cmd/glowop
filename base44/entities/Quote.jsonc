@@ -13,7 +13,7 @@
     },
     "group_name": {
       "type": "string",
-      "description": "Operational group name, kept separate from client organization and contact person"
+      "description": "Optional operational group name, kept separate from client organization and contact person"
     },
     "quote_number": {
       "type": "string"
@@ -56,6 +56,15 @@
         "custom"
       ],
       "default": "lodging"
+    },
+    "quote_audience_type": {
+      "type": "string",
+      "enum": [
+        "EDUCATION_STAFF",
+        "STUDENTS",
+        "SOCIAL_ORGANIZATIONS"
+      ],
+      "description": "Audience category controlling quote PDF subtitle and introduction"
     },
     "client_name": {
       "type": "string"

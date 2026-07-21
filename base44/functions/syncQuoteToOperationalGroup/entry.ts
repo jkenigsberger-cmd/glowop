@@ -11,6 +11,7 @@
  * - Creates review alerts for allocation and kitchen teams when relevant
  */
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
+import { getEffectiveQuoteGroupName } from '../../shared/quotePreparation.js';
 
 Deno.serve(async (req) => {
   try {
@@ -88,8 +89,7 @@ Deno.serve(async (req) => {
     // ── Build Group update payload ─────────────────────────────────────────
     // Only non-empty Quote values are applied — empty/null values never overwrite
     // the operational source of truth.
-    const groupUpdate = {};
-    if (quote.client_name)     groupUpdate.group_name    = quote.client_name;
+    const groupUpdate = { group_name: getEffectiveQuoteGroupName(quote) };
     if (quote.contact_person)  groupUpdate.contact_name  = quote.contact_person;
     if (quote.client_phone)   groupUpdate.contact_phone = quote.client_phone;
     if (quote.client_email)   groupUpdate.contact_email = quote.client_email;

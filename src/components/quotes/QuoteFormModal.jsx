@@ -14,6 +14,8 @@ import AdjustmentsSection, { calcAdjustmentLine, normalizeAdjustmentRow } from "
 import { calcPackageLine, calcAddonLine } from "@/lib/quoteCatalog";
 import { useRoleContext } from "@/lib/RoleContext";
 import { isQuotePreparationEnabled, isQuoteOpen } from "@/lib/quotePreparationFlow";
+import { getEffectiveQuoteGroupName } from "@/lib/quoteAudience";
+import QuoteAudienceSelector from "./QuoteAudienceSelector";
 import { toast } from "sonner";
 
 // ── Catalog ───────────────────────────────────────────────────────────────────
@@ -499,8 +501,9 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
   const expiryAutoGenRef = useRef(!quote?.valid_until); // true = was auto-generated or empty
 
   const [form, setForm] = useState({
-    group_name:      quote?.group_name      || group?.group_name || "",
+    group_name:      quote?.group_name      || "",
     quote_number:    quote?.quote_number    || "",
+    quote_audience_type: quote ? (quote.quote_audience_type || "EDUCATION_STAFF") : "",
     version:         quote?.version         || 1,
     status:          quote?.status          || "DRAFT",
     client_name:     quote?.client_name     || group?.group_name    || "",
@@ -571,6 +574,7 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
   const [packageLines,   setPackageLines]   = useState(parse(quote?.package_lines,        []));
   const [newAddonLines,  setNewAddonLines]  = useState(parse(quote?.new_addon_lines,      []));
   const [saving, setSaving] = useState(false);
+  const [audienceError, setAudienceError] = useState(false);
   const [availabilityResult, setAvailabilityResult] = useState(null);
   const [checkingAvailability, setCheckingAvailability] = useState(false);
 
@@ -649,6 +653,11 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!form.quote_audience_type) {
+      setAudienceError(true);
+      return;
+    }
+    setAudienceError(false);
     setSaving(true);
     try {
       const usePreparationFlow = preparationFlowEnabled && isNewGroupFlow;
@@ -657,7 +666,7 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
         const totalPax = Number(form.estimated_pax || 0);
         const staffPax = Number(form.staff_count || 0);
         const newGroup = await base44.entities.Group.create({
-          group_name: form.group_name,
+          group_name: getEffectiveQuoteGroupName(form),
           group_type: groupForm.group_type,
           arrival_date: form.arrival_date || undefined,
           departure_date: form.departure_date || undefined,
@@ -675,6 +684,8 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
       }
       const quotePayload = {
         ...form,
+        client_name: form.client_name.trim(),
+        group_name: form.group_name.trim(),
         ...(resolvedGroupId ? { group_id: resolvedGroupId } : {}),
         ...(usePreparationFlow ? { preparation_flow_enabled: true, status: "DRAFT" } : {}),
         student_lodging_lines: isDayUse ? JSON.stringify([]) : JSON.stringify(studentLodging),
@@ -706,7 +717,7 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
     }
   };
 
-  const groupNameDisplay = form.group_name || group?.group_name;
+  const groupNameDisplay = form.group_name.trim() || form.client_name.trim() || group?.group_name;
 
   return (
     <Dialog open onOpenChange={onClose}>
@@ -742,8 +753,13 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
                 <SectionCard icon={Users} title="פרטי קבוצה" subtitle="חדש">
                   <div className="grid grid-cols-2 gap-3">
                     <div className="col-span-2 space-y-1">
-                      <Label className="text-xs text-slate-500">שם קבוצה / ארגון *</Label>
-                      <Input required value={form.group_name} onChange={e => handleGroupNameChange(e.target.value)} placeholder="שם הקבוצה התפעולי" />
+                      <Label className="text-xs text-slate-500">שם לקוח / ארגון *</Label>
+                      <Input required value={form.client_name} onChange={e => set("client_name", e.target.value)} />
+                    </div>
+                    <div className="col-span-2 space-y-1">
+                      <Label className="text-xs text-slate-500">שם קבוצה</Label>
+                      <Input value={form.group_name} onChange={e => handleGroupNameChange(e.target.value)} placeholder="שם הקבוצה שתגיע, אם שונה משם הלקוח" />
+                      <p className="text-[11px] text-slate-400">אופציונלי — יש למלא רק אם שם הקבוצה שונה משם הלקוח</p>
                     </div>
                     {/* group_type is kept in state but driven by the quoteType pill selector below */}
                     <div className="space-y-1">
@@ -769,9 +785,15 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
                 </SectionCard>
               )}
 
+              <QuoteAudienceSelector
+                value={form.quote_audience_type}
+                onChange={value => { set("quote_audience_type", value); setAudienceError(false); }}
+                error={audienceError}
+              />
+
               {/* Quote type selector */}
               <div className={`${CARD} px-5 py-4`}>
-                <div className={SEC_TITLE}><Package className="w-4 h-4 text-primary" />סוג הצעת מחיר</div>
+                <div className={SEC_TITLE}><Package className="w-4 h-4 text-primary" />סוג פעילות</div>
                 <div className="flex gap-2 flex-wrap">
                   {[
                     { id: "lodging",  label: "קבוצה עם לינה" },
@@ -860,11 +882,11 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
 
                 {/* Client fields */}
                 <div className="border-t border-slate-100 pt-3 grid grid-cols-2 gap-3">
-                  {!isNewGroupFlow && quote?.preparation_flow_enabled && <div className="col-span-2 space-y-1"><Label className="text-xs text-slate-500">שם קבוצה</Label><Input required value={form.group_name} onChange={e => handleGroupNameChange(e.target.value)} /></div>}
-                  <div className="space-y-1">
-                    <Label className="text-xs text-slate-500">שם לקוח / ארגון</Label>
-                    <Input value={form.client_name} onChange={e => set("client_name", e.target.value)} />
-                  </div>
+                  {!isNewGroupFlow && <div className="col-span-2 space-y-1"><Label className="text-xs text-slate-500">שם קבוצה</Label><Input value={form.group_name} onChange={e => handleGroupNameChange(e.target.value)} placeholder="שם הקבוצה שתגיע, אם שונה משם הלקוח" /><p className="text-[11px] text-slate-400">אופציונלי — יש למלא רק אם שם הקבוצה שונה משם הלקוח</p></div>}
+                  {!isNewGroupFlow && <div className="space-y-1">
+                    <Label className="text-xs text-slate-500">שם לקוח / ארגון *</Label>
+                    <Input required value={form.client_name} onChange={e => set("client_name", e.target.value)} />
+                  </div>}
                   <div className="space-y-1">
                     <Label className="text-xs text-slate-500">איש קשר (מופיע ב-PDF)</Label>
                     <Input value={form.contact_person} onChange={e => set("contact_person", e.target.value)} placeholder="שם מלא של איש הקשר" />

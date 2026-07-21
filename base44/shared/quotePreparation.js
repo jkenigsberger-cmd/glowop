@@ -6,13 +6,17 @@ export const isQuoteApproved = (quote) => String(quote?.status || '').toUpperCas
 
 const nonEmpty = (value) => value !== undefined && value !== null && value !== '';
 
+export function getEffectiveQuoteGroupName(quote) {
+  return quote?.group_name?.trim() || quote?.client_name?.trim() || quote?.quote_number || 'קבוצה בהכנה';
+}
+
 export function quoteGroupFields(quote) {
   const total = nonEmpty(quote.estimated_pax) ? Number(quote.estimated_pax) : null;
   const staff = nonEmpty(quote.staff_count) ? Number(quote.staff_count) : null;
   const participants = nonEmpty(quote.participant_count) ? Number(quote.participant_count) : (total != null && staff != null ? Math.max(0, total - staff) : null);
   const singleDay = quote.quote_type === 'day_use' || (quote.arrival_date && (!quote.departure_date || quote.departure_date === quote.arrival_date));
   const values = {
-    group_name: quote.group_name || quote.quote_number || 'קבוצה בהכנה',
+    group_name: getEffectiveQuoteGroupName(quote),
     group_type: singleDay ? 'DAY_USE' : 'LODGING',
     arrival_date: quote.arrival_date,
     departure_date: quote.departure_date || quote.arrival_date,

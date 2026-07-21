@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
+import { getEffectiveQuoteGroupName } from '../../shared/quotePreparation.js';
 
 /**
  * approveQuoteAndInitializeGroup
@@ -30,7 +31,7 @@ const ALLOWED_ROLES = new Set(['SUPER_ADMIN', 'ADMIN', 'OPERATIONS']);
 // Quote carries client_* / estimated_pax; Group uses contact_* — mapped below.
 function buildGroupFromQuote(quote) {
   const g = { status: 'CONFIRMED' };
-  g.group_name     = quote.group_name || quote.client_name || quote.quote_number || 'קבוצה חדשה';
+  g.group_name     = getEffectiveQuoteGroupName(quote);
   // group_type: DAY_USE when quote is day_use OR single-day; else LODGING
   const isSingleDay = quote.arrival_date && (!quote.departure_date || quote.departure_date === quote.arrival_date);
   g.group_type     = quote.quote_type === 'day_use' || isSingleDay ? 'DAY_USE' : 'LODGING';
