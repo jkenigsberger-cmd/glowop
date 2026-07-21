@@ -1,5 +1,5 @@
 export const QUOTE_PREPARATION_FLOW = true;
-export const QUOTE_PREPARATION_ROLLOUT = "SUPER_ADMIN_ONLY";
+export const QUOTE_PREPARATION_ROLLOUT = "ADMINS";
 
 export function isQuotePreparationEnabled(role) {
   if (!QUOTE_PREPARATION_FLOW) return false;
