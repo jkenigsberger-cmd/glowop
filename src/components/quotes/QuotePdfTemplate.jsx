@@ -40,7 +40,7 @@ const LOGO_URL_FALLBACK   = "https://media.base44.com/images/public/69ea08de3791
 const FOOTER_URL_FALLBACK = "https://media.base44.com/images/public/69ea08de3791d203c52ea3cc/c500ec249_quote-footer-photo.jpg";
 
 // ── Safe resolvers ────────────────────────────────────────────────────────────
-function resolveData(quote, group) {
+export function resolveQuotePdfData(quote, group) {
   let snap = null;
   try { snap = quote?.snapshot ? JSON.parse(quote.snapshot) : null; } catch {}
 
@@ -223,6 +223,7 @@ function resolveData(quote, group) {
     status:       STATUS_HE[quote?.status] || quote?.status || "",
     validUntil:   quote?.valid_until || "",
     clientNotes:  quote?.client_notes || "",
+    optionNotes:  quote?.option_notes || "",
   };
 }
 
@@ -318,155 +319,32 @@ const tdBase = { padding: "7px 10px", borderBottom: "1px solid #dde8f5", fontSiz
 const thBase = { padding: "8px 10px", background: BLUE, color: "#fff", fontWeight: 700, fontSize: 11.5, textAlign: "right", fontFamily: HEADING_FONT };
 
 // ── Page 1: intro + client + activity + pricing + notes ───────────────────────
-function Page1({ d, logoUrl }) {
+export function QuotePricingPage({ d, logoUrl, optionLabel, showShared = true }) {
   const deposit = d.advance || Math.round(d.totalPrice * 0.3);
-  const bal     = d.balance || (d.totalPrice - deposit);
-
-  // Date range display
-  let dateDisplay;
-  if (d.isDayUse) {
-    dateDisplay = fmtDate(d.arrival);
-  } else {
-    const arrivalOk = d.arrival && d.departure && new Date(d.arrival) <= new Date(d.departure);
-    dateDisplay = arrivalOk
-      ? `${fmtDate(d.arrival)} – ${fmtDate(d.departure)}`
-      : fmtDate(d.arrival);
-  }
-
+  const balance = d.balance || (d.totalPrice - deposit);
+  const dateDisplay = d.isDayUse ? fmtDate(d.arrival) : `${fmtDate(d.arrival)} – ${fmtDate(d.departure)}`;
   return (
     <div style={{ ...pageStyle, pageBreakAfter: "always" }}>
-      <CoverHeader quoteNumber={d.quoteNumber} logoUrl={logoUrl} />
-
-      {/* Intro */}
-      <div style={{ textAlign: "center", fontSize: 13, fontWeight: 700, fontFamily: HEADING_FONT, color: BLUE, marginBottom: 6 }}>
-        {d.audience.subtitle}
-      </div>
-      <p style={{ fontSize: 11.5, fontFamily: BODY_FONT, color: "#2a2a2a", lineHeight: 1.7, textAlign: "center", marginBottom: 10 }}>
-        {d.audience.intro}
-      </p>
-
-      {/* Two columns: client + activity side by side */}
-      <div style={{ display: "flex", gap: 16, marginBottom: 0 }}>
-        <div style={{ flex: 1 }}>
-          <SectionHeading>פרטי לקוח</SectionHeading>
-          <DetailTable rows={[
-            { label: "שם לקוח / ארגון", value: d.clientName !== "—" ? d.clientName : d.clientOrg },
-            { label: "איש קשר",         value: d.contactPerson },
-            { label: "טלפון",           value: d.clientPhone },
-            { label: 'דוא"ל',          value: d.clientEmail },
-            { label: "ח.פ / ע.מ",      value: d.clientTaxId },
-          ]} />
+      {showShared ? <>
+        <CoverHeader quoteNumber={d.quoteNumber} logoUrl={logoUrl} />
+        <div style={{ textAlign: "center", fontSize: 13, fontWeight: 700, fontFamily: HEADING_FONT, color: BLUE }}>{d.audience.subtitle}</div>
+        <p style={{ fontSize: 11.5, fontFamily: BODY_FONT, lineHeight: 1.7, textAlign: "center" }}>{d.audience.intro}</p>
+        <div style={{ display: "flex", gap: 16 }}>
+          <div style={{ flex: 1 }}><SectionHeading>פרטי לקוח</SectionHeading><DetailTable rows={[{ label: "שם לקוח / ארגון", value: d.clientName }, { label: "איש קשר", value: d.contactPerson }, { label: "טלפון", value: d.clientPhone }, { label: "דוא״ל", value: d.clientEmail }, { label: "ח.פ / ע.מ", value: d.clientTaxId }]} /></div>
+          <div style={{ flex: 1 }}><SectionHeading>פרטי פעילות</SectionHeading><DetailTable rows={[{ label: "שם קבוצה", value: d.groupName }, { label: "סוג פעילות", value: d.activityTypeLabel }, { label: d.isDayUse ? "תאריך פעילות" : "תאריכים", value: dateDisplay }, { label: "מס׳ לילות", value: d.isDayUse ? null : String(d.nights || "") }, { label: "סה״כ משתתפים", value: String(d.totalPax || "") }]} /></div>
         </div>
-        <div style={{ flex: 1 }}>
-          <SectionHeading>פרטי פעילות</SectionHeading>
-          <DetailTable rows={[
-            { label: "שם קבוצה",     value: d.groupName },
-            { label: "סוג פעילות",    value: d.activityTypeLabel },
-            {
-              label: d.isDayUse ? "תאריך פעילות" : "תאריכים",
-              value: dateDisplay,
-            },
-            { label: "מס׳ לילות",     value: d.isDayUse ? null : (d.nights > 0 ? String(d.nights) : null) },
-            { label: 'סה"כ משתתפים', value: d.totalPax ? String(d.totalPax) : null },
-          ]} />
-        </div>
-      </div>
-
-      {/* Pricing table */}
+      </> : <CompactHeader quoteNumber={d.quoteNumber} logoUrl={logoUrl} />}
+      {optionLabel && <SectionHeading>{optionLabel}</SectionHeading>}
       <SectionHeading>פירוט תמחור</SectionHeading>
-      <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 4 }}>
-        <thead>
-          <tr>
-            <th style={{ ...thBase, width: "44%" }}>פריט</th>
-            <th style={{ ...thBase, textAlign: "center", width: "12%" }}>כמות</th>
-            <th style={{ ...thBase, textAlign: "center", width: "20%" }}>מחיר יחידה</th>
-            <th style={{ ...thBase, textAlign: "left",   width: "24%" }}>סה״כ</th>
-          </tr>
-        </thead>
-        <tbody>
-          {(() => {
-            const rows = [];
-            let prevWasOperator = false;
-            let shownOperatorHeader = false;
-            d.lineItems.forEach((item, i) => {
-              const isNegative = item.isAdjustment && item.total < 0;
-              const isSurcharge = item.isSurcharge;
-              const isOperator = !!item.isOperator;
-              // Insert section header row before first operator item
-              if (isOperator && !shownOperatorHeader) {
-                shownOperatorHeader = true;
-                rows.push(
-                  <tr key={`op-header`} style={{ background: "#f0f7f0" }}>
-                    <td colSpan={4} style={{ ...tdBase, fontWeight: 700, color: "#1a7a4a", fontSize: 11, paddingTop: 8, paddingBottom: 4 }}>כרמלים / אגד</td>
-                  </tr>
-                );
-              }
-              rows.push(
-                <tr key={i} style={{ background: isOperator ? "#f7fcf7" : (i % 2 === 0 ? "#fff" : "#f5f8ff") }}>
-                  <td style={{ ...tdBase }}>
-                     <div style={{ fontWeight: 600 }}>{item.name}</div>
-                     {item.description && <div style={{ fontSize: 10, color: "#555", fontFamily: BODY_FONT, marginTop: 1 }}>{item.description}</div>}
-                   </td>
-                  <td style={{ ...tdBase, textAlign: "center" }}>{item.qty}</td>
-                  <td style={{ ...tdBase, textAlign: "center" }}>₪{fmtUnit(item.unitPrice)}</td>
-                  <td style={{ ...tdBase, textAlign: "left", fontWeight: 600, color: isNegative ? "#c00" : isSurcharge ? "#1a7a4a" : "#111" }}>
-                    {item.vatAmount
-                      ? `₪${fmt(item.unitPrice)} + ₪${fmt(item.vatAmount)} מע״מ`
-                      : isNegative
-                        ? `-₪${fmt(Math.abs(item.total))}`
-                        : `₪${fmt(item.total)}`
-                    }
-                  </td>
-                </tr>
-              );
-            });
-            return rows;
-          })()}
-
-          {d.discountAmt > 0 && (
-            <tr style={{ background: "#f0f4fb" }}>
-              <td colSpan={3} style={{ ...tdBase, fontWeight: 700, textAlign: "right" }}>סה״כ לפני הנחה</td>
-              <td style={{ ...tdBase, textAlign: "left", fontWeight: 700 }}>₪{fmt(d.subtotal)}</td>
-            </tr>
-          )}
-          {d.discountAmt > 0 && (
-            <tr style={{ background: "#fff8f8" }}>
-              <td colSpan={3} style={{ ...tdBase, color: "#c00" }}>
-                הנחה {d.discountPct}%{d.paymentTerms ? ` (${d.paymentTerms})` : ""}
-              </td>
-              <td style={{ ...tdBase, textAlign: "left", color: "#c00", fontWeight: 600 }}>-₪{fmt(d.discountAmt)}</td>
-            </tr>
-          )}
-          <tr style={{ background: "#e8f0fc" }}>
-            <td colSpan={3} style={{ ...tdBase, fontWeight: 800, fontSize: 13, color: BLUE }}>סה״כ לתשלום</td>
-            <td style={{ ...tdBase, textAlign: "left", fontWeight: 800, fontSize: 13, color: BLUE }}>₪{fmt(d.totalPrice)}</td>
-          </tr>
-        </tbody>
-      </table>
-
-      {/* Payment */}
-      <div style={{ marginTop: 12, fontSize: 11.5, fontFamily: BODY_FONT, lineHeight: 1.8 }}>
-        <strong style={{ fontFamily: HEADING_FONT, color: BLUE }}>תנאי תשלום: </strong>
-        מקדמה (30%): <strong>₪{fmt(deposit)}</strong> &nbsp;|&nbsp; יתרה (70%): <strong>₪{fmt(bal)}</strong>
-        {d.paymentTerms && <span> &nbsp;|&nbsp; {d.paymentTerms}</span>}
-      </div>
-
-      {/* Bank */}
-      <div style={{ marginTop: 8, fontSize: 10.5, fontFamily: BODY_FONT, color: "#555", lineHeight: 1.7 }}>
-        <strong style={{ fontFamily: HEADING_FONT }}>ח.פ:</strong> קרן שמש הדור הבא (ע"ר) — 580786812 &nbsp;|&nbsp;
-        <strong style={{ fontFamily: HEADING_FONT }}>בנק הפועלים:</strong> סניף 170 חשבון 368365
-        &nbsp;|&nbsp; גרסה: {d.version} &nbsp;|&nbsp; סטטוס: {d.status}
-      </div>
-
-      {/* Client notes — only if present */}
-      {d.clientNotes && (
-        <>
-          <SectionHeading>הערות</SectionHeading>
-          <div style={{ fontSize: 12, fontFamily: BODY_FONT, color: "#2a2a2a", lineHeight: 1.8, whiteSpace: "pre-wrap" }}>
-            {d.clientNotes}
-          </div>
-        </>
-      )}
+      <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 4 }}><thead><tr><th style={{ ...thBase, width: "44%" }}>פריט</th><th style={{ ...thBase, textAlign: "center" }}>כמות</th><th style={{ ...thBase, textAlign: "center" }}>מחיר יחידה</th><th style={{ ...thBase, textAlign: "left" }}>סה״כ</th></tr></thead><tbody>
+        {d.lineItems.map((item, index) => <tr key={index} style={{ background: index % 2 === 0 ? "#fff" : "#f5f8ff" }}><td style={tdBase}><strong>{item.name}</strong>{item.description && <div style={{ fontSize: 10, color: "#555" }}>{item.description}</div>}</td><td style={{ ...tdBase, textAlign: "center" }}>{item.qty}</td><td style={{ ...tdBase, textAlign: "center" }}>₪{fmtUnit(item.unitPrice)}</td><td style={{ ...tdBase, textAlign: "left", fontWeight: 600 }}>{item.total < 0 ? `-₪${fmt(Math.abs(item.total))}` : `₪${fmt(item.total)}`}</td></tr>)}
+        {d.discountAmt > 0 && <><tr><td colSpan={3} style={tdBase}>סה״כ לפני הנחה</td><td style={{ ...tdBase, textAlign: "left" }}>₪{fmt(d.subtotal)}</td></tr><tr><td colSpan={3} style={{ ...tdBase, color: "#c00" }}>הנחה {d.discountPct}%</td><td style={{ ...tdBase, textAlign: "left", color: "#c00" }}>-₪{fmt(d.discountAmt)}</td></tr></>}
+        <tr style={{ background: "#e8f0fc" }}><td colSpan={3} style={{ ...tdBase, fontWeight: 800, color: BLUE }}>סה״כ לתשלום</td><td style={{ ...tdBase, textAlign: "left", fontWeight: 800, color: BLUE }}>₪{fmt(d.totalPrice)}</td></tr>
+      </tbody></table>
+      <div style={{ marginTop: 12, fontSize: 11.5, fontFamily: BODY_FONT }}><strong style={{ color: BLUE }}>תנאי תשלום: </strong>מקדמה: <strong>₪{fmt(deposit)}</strong> | יתרה: <strong>₪{fmt(balance)}</strong>{d.paymentTerms && <span> | {d.paymentTerms}</span>}</div>
+      <div style={{ marginTop: 8, fontSize: 10.5, color: "#555" }}><strong>ח.פ:</strong> קרן שמש הדור הבא (ע״ר) — 580786812 | <strong>בנק הפועלים:</strong> סניף 170 חשבון 368365 | גרסה: {d.version} | סטטוס: {d.status}</div>
+      {showShared && d.clientNotes && <><SectionHeading>הערות כלליות ללקוח</SectionHeading><div style={{ whiteSpace: "pre-wrap" }}>{d.clientNotes}</div></>}
+      {d.optionNotes && <><SectionHeading>הערות לאפשרות</SectionHeading><div style={{ whiteSpace: "pre-wrap" }}>{d.optionNotes}</div></>}
       <LegalFooter />
     </div>
   );
@@ -495,7 +373,7 @@ function SigLine({ label, wide }) {
   );
 }
 
-function Page2({ logoUrl, quoteNumber, footerUrl }) {
+export function QuoteTermsPage({ logoUrl, quoteNumber, footerUrl }) {
   return (
     <div style={{ ...pageStyle }}>
       <CompactHeader quoteNumber={quoteNumber} logoUrl={logoUrl} />
@@ -620,7 +498,7 @@ const CONTENT_CATALOG = [
   },
 ];
 
-function ContentCatalogPage({ logoUrl, quoteNumber }) {
+export function QuoteContentCatalogPage({ logoUrl, quoteNumber }) {
   return (
     <div style={{ ...pageStyle, pageBreakBefore: "always", padding: "8mm 16mm 36mm 16mm" }}>
       <CompactHeader quoteNumber={quoteNumber} logoUrl={logoUrl} />
@@ -685,12 +563,12 @@ function ContentCatalogPage({ logoUrl, quoteNumber }) {
 
 // ── Main export ───────────────────────────────────────────────────────────────
 export default function QuotePdfTemplate({ quote, group, logoUrl, footerUrl }) {
-  const d = resolveData(quote, group);
+  const d = resolveQuotePdfData(quote, group);
   return (
     <div id="quote-pdf-root" style={{ background: "#fff" }}>
-      <Page1 d={d} logoUrl={logoUrl} />
-      <Page2 logoUrl={logoUrl} quoteNumber={d.quoteNumber} footerUrl={footerUrl} />
-      <ContentCatalogPage logoUrl={logoUrl} quoteNumber={d.quoteNumber} />
+      <QuotePricingPage d={d} logoUrl={logoUrl} />
+      <QuoteTermsPage logoUrl={logoUrl} quoteNumber={d.quoteNumber} footerUrl={footerUrl} />
+      <QuoteContentCatalogPage logoUrl={logoUrl} quoteNumber={d.quoteNumber} />
     </div>
   );
 }

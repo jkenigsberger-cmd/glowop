@@ -581,6 +581,9 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
   const [newAddonLines,  setNewAddonLines]  = useState(parse(quote?.new_addon_lines,      []));
   const [saving, setSaving] = useState(false);
   const [optionBusy, setOptionBusy] = useState(false);
+  const [optionLoading, setOptionLoading] = useState(false);
+  const [optionLoadError, setOptionLoadError] = useState("");
+  const [optionNotes, setOptionNotes] = useState("");
   const [activeOptionKey, setActiveOptionKey] = useState("A");
   const [previewMode, setPreviewMode] = useState("A");
   const [hasOptionB, setHasOptionB] = useState(false);
@@ -670,7 +673,7 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
     addon_lines: JSON.stringify(addons), adjustment_lines: JSON.stringify(adjustments), surcharge_lines: JSON.stringify([]),
     discount_percent: Number(form.discount_percent || 0), subtotal, discount_amount: discountAmount,
     total_price, advance_payment: advance, balance_payment: balance,
-    payment_terms: form.payment_terms, client_notes: form.client_notes,
+    payment_terms: form.payment_terms, option_notes: optionNotes,
   });
 
   const applyOptionDraft = (payload = {}) => {
@@ -679,15 +682,19 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
     setWorkshops(parse(payload.workshop_lines, [])); setLectures(parse(payload.lecture_lines, []));
     setAddons(parse(payload.addon_lines, [])); setAdjustments(parse(payload.adjustment_lines, []));
     setCoffeeEnabled(Number(payload.coffee_corner_pax || 0) > 0); setPrisaEnabled(payload.includes_prisa === true);
-    set("discount_percent", payload.discount_percent ?? 0); set("payment_terms", payload.payment_terms || ""); set("client_notes", payload.client_notes || "");
+    set("discount_percent", payload.discount_percent ?? 0); set("payment_terms", payload.payment_terms || ""); setOptionNotes(payload.option_notes || "");
   };
 
   useEffect(() => {
     if (!multiOptionFeatureEnabled || !quote?.id || !quote.multi_option_enabled) return;
+    setOptionLoading(true); setOptionLoadError("");
     base44.entities.QuoteOption.filter({ quote_id: quote.id }).then(rows => {
-      const drafts = Object.fromEntries(rows.map(row => [row.option_key, parseOptionPayload(row.option_payload)]));
-      setOptionDrafts(drafts); setHasOptionB(Boolean(drafts.B));
-    });
+      const optionA = rows.filter(row => row.option_key === "A"); const optionB = rows.filter(row => row.option_key === "B");
+      if (rows.length !== 2 || optionA.length !== 1 || optionB.length !== 1) throw new Error(optionA.length > 1 || optionB.length > 1 ? "DUPLICATE_QUOTE_OPTION" : "BOTH_OPTIONS_REQUIRED");
+      const drafts = { A: parseOptionPayload(optionA[0].option_payload), B: parseOptionPayload(optionB[0].option_payload) };
+      setOptionDrafts(drafts); setHasOptionB(true); applyOptionDraft(drafts.A);
+    }).catch(error => { setOptionLoadError(error.message); toast.error("טעינת אפשרויות ההצעה נכשלה"); }).finally(() => setOptionLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [multiOptionFeatureEnabled, quote?.id, quote?.multi_option_enabled]);
 
   const switchOption = key => {
@@ -700,6 +707,7 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
   };
 
   const addOptionB = async () => {
+    if (optionBusy || hasOptionB) return;
     const current = captureCurrentOptionPayload();
     if (!quote?.id) {
       const copied = structuredClone(current);
@@ -736,6 +744,7 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (optionLoading || optionLoadError) return toast.error("לא ניתן לשמור לפני טעינת אפשרויות ההצעה");
     if (!form.quote_audience_type) {
       setAudienceError(true);
       return;
@@ -785,7 +794,7 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
         participant_count: participantCount || undefined, coffee_corner_pax: coffeeEnabled ? staffCount : 0,
         includes_prisa: prisaEnabled, discount_percent: Number(form.discount_percent || 0),
       };
-      if (hasOptionB) quotePayload = applyOptionPayloadToQuote(quotePayload, draftsToSave.A);
+      if (hasOptionB) { const legacyOptionA = { ...draftsToSave.A }; delete legacyOptionA.option_notes; quotePayload = applyOptionPayloadToQuote(quotePayload, legacyOptionA); }
       const savedQuote = isEdit
         ? await base44.entities.Quote.update(quote.id, quotePayload)
         : await base44.entities.Quote.create(quotePayload);
@@ -1043,7 +1052,9 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
                   onAdd={addOptionB}
                   onDelete={deleteOptionB}
                   busy={optionBusy}
-                />
+                  loading={optionLoading}
+                  error={optionLoadError}
+                  />
               )}
 
               {/* ── NEW CATALOG PACKAGES ── */}
@@ -1156,7 +1167,9 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
                 </div>
               </div>
 
-              {/* Client-visible notes */}
+              {multiOptionFeatureEnabled && hasOptionB && <div className={`${CARD} px-5 py-4`}><Label className="text-xs text-slate-500 mb-1 block">הערות לאפשרות {activeOptionKey === "A" ? "א׳" : "ב׳"}</Label><Textarea rows={2} value={optionNotes} onChange={e => setOptionNotes(e.target.value)} className="text-sm" /></div>}
+
+              {/* Client-visible shared notes */}
               <div className={`${CARD} px-5 py-4`}>
                 <Label className="text-xs text-slate-500 mb-1 block">הערות ללקוח</Label>
                 <Textarea rows={2} value={form.client_notes} onChange={e => set("client_notes", e.target.value)} className="text-sm" placeholder="הערות שיופיעו בהצעת המחיר ללקוח" />
@@ -1222,7 +1235,7 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
             <Button
               type="submit"
               form="quote-form"
-              disabled={saving}
+              disabled={saving || optionLoading || Boolean(optionLoadError)}
               className="w-full h-11 text-sm font-semibold"
             >
               {saving ? "שומר..." : isEdit ? "שמור הצעת מחיר" : "צור הצעת מחיר"}

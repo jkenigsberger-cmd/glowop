@@ -9,6 +9,7 @@ import { base44 } from "@/api/base44Client";
 import { getEffectiveQuoteForOption } from "@/lib/quoteOptions";
 import { useRoleContext } from "@/lib/RoleContext";
 import { isQuoteMultiOptionEnabled } from "@/lib/quoteMultiOption";
+import { toast } from "sonner";
 
 const LOGO_URL   = "https://media.base44.com/images/public/69ea08de3791d203c52ea3cc/107796e98_quote-logo.png";
 const FOOTER_URL = "https://media.base44.com/images/public/69ea08de3791d203c52ea3cc/c500ec249_quote-footer-photo.jpg";
@@ -43,14 +44,17 @@ export default function QuotePdfButton({ quote, group, size = "sm" }) {
   const [combinedQuotes, setCombinedQuotes] = useState(null);
 
   const handlePrint = async (mode = "A") => {
+    if (printing) return;
     setPrinting(true);
     let optionA = quote; let optionB = null;
-    if (multiOptionEnabled && quote.multi_option_enabled) {
-      const rows = await base44.entities.QuoteOption.filter({ quote_id: quote.id });
-      optionA = getEffectiveQuoteForOption(quote, rows.find(row => row.option_key === "A"));
-      optionB = getEffectiveQuoteForOption(quote, rows.find(row => row.option_key === "B"));
-    }
-    setPrintMode(mode); setPrintQuote(mode === "B" ? optionB : optionA); setCombinedQuotes(optionB ? { A: optionA, B: optionB } : null);
+    try {
+      if (multiOptionEnabled && quote.multi_option_enabled) {
+        const rows = await base44.entities.QuoteOption.filter({ quote_id: quote.id });
+        const a = rows.filter(row => row.option_key === "A"); const b = rows.filter(row => row.option_key === "B");
+        if (rows.length !== 2 || a.length !== 1 || b.length !== 1) throw new Error("INVALID_OPTION_CARDINALITY");
+        optionA = getEffectiveQuoteForOption(quote, a[0]); optionB = getEffectiveQuoteForOption(quote, b[0]);
+      }
+      setPrintMode(mode); setPrintQuote(mode === "B" ? optionB : optionA); setCombinedQuotes(optionB ? { A: optionA, B: optionB } : null);
     // Pre-fetch both images as base64 before rendering the template
     const [logo, footer] = await Promise.all([toBase64(LOGO_URL), toBase64(FOOTER_URL)]);
     setLogoBase64(logo);
@@ -65,6 +69,9 @@ export default function QuotePdfButton({ quote, group, size = "sm" }) {
         setCombinedQuotes(null);
       }, 800);
     }, 400);
+    } catch {
+      setPrinting(false); setCombinedQuotes(null); toast.error("הפקת ה-PDF נכשלה — לא נמצאו שתי אפשרויות תקינות");
+    }
   };
 
   return (
@@ -90,7 +97,7 @@ export default function QuotePdfButton({ quote, group, size = "sm" }) {
           `}</style>
           <div id="quote-pdf-portal">
             {printMode === "COMBINED" && combinedQuotes
-              ? <QuoteCombinedPdfTemplate quote={quote} optionA={combinedQuotes.A} optionB={combinedQuotes.B} logoUrl={logoBase64} />
+              ? <QuoteCombinedPdfTemplate optionA={combinedQuotes.A} optionB={combinedQuotes.B} group={group} logoUrl={logoBase64} footerUrl={footerBase64} />
               : <QuotePdfTemplate quote={printQuote} group={group} logoUrl={logoBase64} footerUrl={footerBase64} />}
           </div>
         </>,

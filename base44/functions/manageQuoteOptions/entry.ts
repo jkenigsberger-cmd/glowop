@@ -1,5 +1,5 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.38';
-import { assertQuoteMultiOptionEnabled, extractQuoteOptionPayload, extractSharedQuoteFields, applyOptionPayloadToQuote, getQuoteOption, duplicateQuoteOption } from '../../shared/quoteOptions.js';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
+import { assertQuoteMultiOptionEnabled, extractQuoteOptionPayload, applyOptionPayloadToQuote, getQuoteOption, getExactQuoteOptions, duplicateQuoteOption } from '../../shared/quoteOptions.js';
 
 const optionRecord = (quoteId, key, payload, user, sourceId) => ({
   quote_id: quoteId, option_key: key, label: key === 'A' ? 'אפשרות א׳' : 'אפשרות ב׳', display_order: key === 'A' ? 1 : 2,
@@ -24,28 +24,15 @@ Deno.serve(async req => {
     const quote = await base44.asServiceRole.entities.Quote.get(quote_id);
     if (!quote) return Response.json({ success: false, error: 'QUOTE_NOT_FOUND' }, { status: 404 });
 
-    if (action === 'duplicate_quote') {
-      const sourceA = await getQuoteOption(base44, quote_id, 'A');
-      const sourceB = await getQuoteOption(base44, quote_id, 'B');
-      const payloadA = sourceA ? JSON.parse(sourceA.option_payload || '{}') : extractQuoteOptionPayload(quote);
-      const duplicatedQuote = await base44.asServiceRole.entities.Quote.create({ ...applyOptionPayloadToQuote(extractSharedQuoteFields(quote), payloadA), status: 'DRAFT', preparation_flow_enabled: false, multi_option_enabled: Boolean(sourceB) });
-      const options = [];
-      if (sourceB) {
-        for (const [key, source] of [['A', sourceA], ['B', sourceB]]) {
-          const copied = duplicateQuoteOption(source, key);
-          options.push(await base44.asServiceRole.entities.QuoteOption.create({ ...copied, quote_id: duplicatedQuote.id, status: 'AVAILABLE', created_by: user.email, updated_by: user.email }));
-        }
-      }
-      return Response.json({ success: true, quote: duplicatedQuote, options, group_id: quote.group_id });
-    }
-
     if (action === 'materialize') {
       let optionA = await getQuoteOption(base44, quote_id, 'A');
       let optionB = await getQuoteOption(base44, quote_id, 'B');
       if (!optionA) optionA = await base44.asServiceRole.entities.QuoteOption.create(optionRecord(quote_id, 'A', body.option_a_payload || extractQuoteOptionPayload(quote), user));
+      optionB = await getQuoteOption(base44, quote_id, 'B');
       if (!optionB) optionB = await base44.asServiceRole.entities.QuoteOption.create({ ...duplicateQuoteOption(optionA, 'B'), quote_id, created_by: user.email, updated_by: user.email });
+      const exact = await getExactQuoteOptions(base44, quote_id);
       await base44.asServiceRole.entities.Quote.update(quote_id, { multi_option_enabled: true });
-      return Response.json({ success: true, options: [optionA, optionB], quote_id, group_id: quote.group_id });
+      return Response.json({ success: true, options: [exact.A, exact.B], quote_id, group_id: quote.group_id });
     }
 
     if (action === 'save') {
@@ -56,8 +43,10 @@ Deno.serve(async req => {
         const data = optionRecord(quote_id, key, body.options[key], user, existing?.created_from_option_id);
         saved.push(existing ? await base44.asServiceRole.entities.QuoteOption.update(existing.id, { ...data, status: existing.status, created_by: existing.created_by }) : await base44.asServiceRole.entities.QuoteOption.create(data));
       }
-      await base44.asServiceRole.entities.Quote.update(quote_id, { ...applyOptionPayloadToQuote({}, body.options.A), multi_option_enabled: true });
-      return Response.json({ success: true, options: saved, quote_id, group_id: quote.group_id });
+      const exact = await getExactQuoteOptions(base44, quote_id);
+      const legacyOptionA = applyOptionPayloadToQuote({}, body.options.A); delete legacyOptionA.option_notes;
+      await base44.asServiceRole.entities.Quote.update(quote_id, { ...legacyOptionA, multi_option_enabled: true });
+      return Response.json({ success: true, options: [exact.A, exact.B], quote_id, group_id: quote.group_id });
     }
 
     if (action === 'delete_b') {
@@ -72,6 +61,7 @@ Deno.serve(async req => {
 
     return Response.json({ success: false, error: 'INVALID_ACTION' }, { status: 400 });
   } catch (error) {
-    return Response.json({ success: false, error: error?.code || error.message }, { status: error?.code === 'FEATURE_NOT_ENABLED_FOR_ROLE' ? 403 : 500 });
+    const status = error?.code === 'FEATURE_NOT_ENABLED_FOR_ROLE' ? 403 : ['DUPLICATE_QUOTE_OPTION', 'BOTH_OPTIONS_REQUIRED'].includes(error?.code) ? 409 : 500;
+    return Response.json({ success: false, error: error?.code || error.message }, { status });
   }
 });

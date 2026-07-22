@@ -274,7 +274,7 @@ export default function QuoteStatusActions({ quote, group, onUpdated }) {
         quote={quote}
         open={optionDialogOpen}
         onClose={() => setOptionDialogOpen(false)}
-        onConfirm={(key) => { setOptionDialogOpen(false); handleTransition("APPROVED", key); }}
+        onConfirm={async (key) => { const success = await handleTransition("APPROVED", key); if (success === false) throw new Error("APPROVAL_FAILED"); setOptionDialogOpen(false); }}
       />
 
       {capacityWarnings && (

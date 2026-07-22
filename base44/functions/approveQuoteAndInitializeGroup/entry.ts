@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { getEffectiveQuoteGroupName } from '../../shared/quotePreparation.js';
 import { assertQuoteMultiOptionEnabled, resolveSelectedQuoteOption, buildApprovedOptionSnapshot, markSelectedQuoteOption } from '../../shared/quoteOptions.js';
 
@@ -31,7 +31,7 @@ const ALLOWED_ROLES = new Set(['SUPER_ADMIN', 'ADMIN', 'OPERATIONS']);
 // Fields mapped Quote → Group, ONLY when creating a NEW Group.
 // Quote carries client_* / estimated_pax; Group uses contact_* — mapped below.
 function buildGroupFromQuote(quote) {
-  const g = { status: 'CONFIRMED' };
+  const g = { status: 'DRAFT' };
   g.group_name     = getEffectiveQuoteGroupName(quote);
   // group_type: DAY_USE when quote is day_use OR single-day; else LODGING
   const isSingleDay = quote.arrival_date && (!quote.departure_date || quote.departure_date === quote.arrival_date);
@@ -61,8 +61,6 @@ async function ensureOgp(base44, group_id, group) {
   if (existing.length === 1) return { ogp: existing[0], created: false };
 
   const profileData = { group_id, status: 'ACCEPTED' };
-  if (group?.arrival_date)   profileData.arrival_date   = group.arrival_date;
-  if (group?.departure_date) profileData.departure_date = group.departure_date;
   if (group?.total_pax != null) profileData.total_pax   = group.total_pax;
   if (group?.internal_notes) profileData.general_notes  = group.internal_notes;
   const created = await base44.asServiceRole.entities.OperationalGroupProfile.create(profileData);
@@ -267,20 +265,17 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ── ONLY NOW: mark Quote APPROVED (skip if already approved) ────────────
-    if (!alreadyApproved) {
-      try {
+    // ── Repair option state first, then approve Quote, then confirm Group ────
+    try {
+      if (quote.multi_option_enabled) await markSelectedQuoteOption(base44, quote_id, selection.key);
+      if (!alreadyApproved) {
         const approvedSnapshot = buildApprovedOptionSnapshot(quote, selection, user, { groupId: group_id, profileId: ogp.id });
         await base44.asServiceRole.entities.Quote.update(quote_id, { status: 'APPROVED', approved_at: new Date().toISOString(), approved_by: user.email, approved_option_key: selection.key, approved_option_total_price: Number(selection.effectiveQuote.total_price || 0), approved_option_snapshot: approvedSnapshot, snapshot: approvedSnapshot });
-        if (quote.multi_option_enabled) await markSelectedQuoteOption(base44, quote_id, selection.key);
-      } catch (err) {
-        console.error('[approveQuoteAndInitializeGroup] quote approval update failed:', err?.message);
-        return Response.json({
-          success: false, error: 'QUOTE_APPROVAL_UPDATE_FAILED',
-          message: 'הקבוצה והפרופיל התפעולי מוכנים אך עדכון סטטוס ההצעה נכשל — נא לנסות שוב',
-          quote_id, group_id, operational_group_profile_id: ogp.id, warnings,
-        }, { status: 500 });
       }
+      if (group.status !== 'CONFIRMED') await base44.asServiceRole.entities.Group.update(group_id, { status: 'CONFIRMED' });
+    } catch (err) {
+      console.error('[approveQuoteAndInitializeGroup] approval repair failed:', err?.message);
+      return Response.json({ success: false, error: err?.code || 'QUOTE_APPROVAL_UPDATE_FAILED', message: 'האישור לא הושלם — ניתן לנסות שוב בבטחה', quote_id, group_id, operational_group_profile_id: ogp.id, warnings }, { status: err?.code ? 409 : 500 });
     }
 
     return Response.json({
