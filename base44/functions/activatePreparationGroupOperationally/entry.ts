@@ -20,14 +20,20 @@ Deno.serve(async req => {
     if (!group.quote_preparation_flow) return Response.json({ success: false, error: 'GROUP_NOT_IN_PREPARATION_FLOW' }, { status: 409 });
     if (!ALLOWED_STATUSES.has(group.status)) return Response.json({ success: false, error: 'GROUP_STATUS_NOT_ALLOWED_FOR_OPERATIONAL_ACTIVATION' }, { status: 409 });
 
-    const { profile } = await ensureExactlyOneOperationalProfile(base44, group);
+    const quotes = await base44.asServiceRole.entities.Quote.filter({ group_id: group.id, preparation_flow_enabled: true }, '-updated_date', 2);
+    if (quotes.length > 1) throw Object.assign(new Error('MULTIPLE_PREPARATION_QUOTES_FOR_GROUP'), { code: 'MULTIPLE_PREPARATION_QUOTES_FOR_GROUP', quote_ids: quotes.map(quote => quote.id) });
+    const quote = quotes[0] || null;
+
+    const ensured = await ensureExactlyOneOperationalProfile(base44, group, 'DUPLICATE_OPERATIONAL_PROFILE', quote ? { quote_id: quote.id } : {});
+    let profile = ensured.profile;
+    if (quote && !profile.quote_id) profile = await base44.asServiceRole.entities.OperationalGroupProfile.update(profile.id, { quote_id: quote.id });
+    else if (quote && String(profile.quote_id) !== String(quote.id)) throw Object.assign(new Error('OPERATIONAL_PROFILE_QUOTE_CONFLICT'), { code: 'OPERATIONAL_PROFILE_QUOTE_CONFLICT', profile_id: profile.id, quote_id: quote.id });
+
     const alreadyActive = group.status === 'CONFIRMED';
     const updatedGroup = alreadyActive ? group : await base44.asServiceRole.entities.Group.update(group.id, { status: 'CONFIRMED' });
-    const quotes = await base44.asServiceRole.entities.Quote.filter({ group_id: group.id, preparation_flow_enabled: true }, '-updated_date', 1);
-
-    return Response.json({ success: true, status: alreadyActive ? 'already_active' : 'activated', group: updatedGroup, profile, quote: quotes[0] || null });
+    return Response.json({ success: true, status: alreadyActive ? 'already_active' : 'activated', quote, group: updatedGroup, profile });
   } catch (error) {
     console.error('[activatePreparationGroupOperationally]', error?.code || error?.message);
-    return Response.json({ success: false, error: error?.code || 'INTERNAL_ERROR', profile_ids: error?.profile_ids }, { status: error?.code ? 409 : 500 });
+    return Response.json({ success: false, error: error?.code || 'INTERNAL_ERROR', profile_ids: error?.profile_ids, quote_ids: error?.quote_ids }, { status: error?.code ? 409 : 500 });
   }
 });

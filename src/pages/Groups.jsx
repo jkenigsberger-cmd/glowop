@@ -237,7 +237,7 @@ export default function Groups() {
             <GroupList items={active} emptyLabel="אין קבוצות פעילות" />
           </TabsContent>
           {preparationFlowEnabled && <TabsContent value="preparation">
-            <div className="space-y-3">{preparationGroups.map(group => <PreparationGroupCard key={group.id} group={group} quote={preparationQuoteByGroup[group.id]} profile={preparationProfileByGroup[group.id]} canActivate={["SUPER_ADMIN","ADMIN"].includes(role)} onActivated={({ quote, group: updatedGroup, profile }) => { updateQuotePreparationCache(queryClient, { quote, group: updatedGroup, profile }); invalidateQuotePreparationCache(queryClient, updatedGroup.id); }} />)}{!preparationGroups.length && <p className="text-center py-10 text-muted-foreground">אין קבוצות בהכנה</p>}</div>
+            <div className="space-y-3">{preparationGroups.map(group => <PreparationGroupCard key={group.id} group={group} quote={preparationQuoteByGroup[group.id]} profile={preparationProfileByGroup[group.id]} canActivate={["SUPER_ADMIN","ADMIN"].includes(role) && group.quote_preparation_flow === true && ["DRAFT", "PENDING_APPROVAL"].includes(group.status)} onActivated={({ quote, group: updatedGroup, profile }) => { updateQuotePreparationCache(queryClient, { quote, group: updatedGroup, profile }); invalidateQuotePreparationCache(queryClient, updatedGroup.id); }} />)}{!preparationGroups.length && <p className="text-center py-10 text-muted-foreground">אין קבוצות בהכנה</p>}</div>
           </TabsContent>}
           <TabsContent value="history">
             <GroupList items={history} emptyLabel="אין קבוצות בהיסטוריה" showUnmarkedBadges />

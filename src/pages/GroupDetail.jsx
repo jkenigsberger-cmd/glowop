@@ -24,6 +24,7 @@ import MechinaUsersSection from "@/components/mechina/MechinaUsersSection";
 import MealDateRangeWarning from "@/components/groups/MealDateRangeWarning";
 import OperationalProfileAction from "@/components/groups/OperationalProfileAction";
 import OperationalActivationAction from "@/components/groups/OperationalActivationAction";
+import QuoteSyncButton from "@/components/quotes/QuoteSyncButton";
 import { updateQuotePreparationCache, invalidateQuotePreparationCache } from "@/lib/quotePreparationCache";
 
 export default function GroupDetail() {
@@ -110,7 +111,8 @@ export default function GroupDetail() {
     </div>
   );
 
-  const isPreparation = group.quote_preparation_flow && group.status !== "CONFIRMED";
+  const isPreparation = group.quote_preparation_flow === true && group.status !== "CONFIRMED";
+  const canActivateOperationally = group.quote_preparation_flow === true && ["DRAFT", "PENDING_APPROVAL"].includes(group.status);
 
   return (
     <div className="min-h-screen bg-background" dir="rtl">
@@ -222,7 +224,7 @@ export default function GroupDetail() {
 
         {activeTab === "overview" && <>
 
-        {isPreparation && <div className="bg-violet-50 border border-violet-200 rounded-xl px-4 py-3 flex items-center justify-between gap-3"><div><p className="font-semibold text-violet-800">קבוצה בהכנה</p><p className="text-xs text-violet-600 mt-1">הקבוצה עדיין אינה פעילה במודולים התפעוליים.</p></div><RoleGate roles={["SUPER_ADMIN", "ADMIN"]}><OperationalActivationAction groupId={id} onActivated={handleOperationalActivation} /></RoleGate></div>}
+        {isPreparation && <div className="bg-violet-50 border border-violet-200 rounded-xl px-4 py-3 flex items-center justify-between gap-3"><div><p className="font-semibold text-violet-800">קבוצה בהכנה</p><p className="text-xs text-violet-600 mt-1">הקבוצה עדיין אינה פעילה במודולים התפעוליים.</p></div>{canActivateOperationally && <RoleGate roles={["SUPER_ADMIN", "ADMIN"]}><OperationalActivationAction groupId={id} onActivated={handleOperationalActivation} /></RoleGate>}</div>}
 
         {/* Meal date range warning — shown when active meals exist outside current stay */}
         <RoleGate permission="EDIT_GROUP">
@@ -307,7 +309,7 @@ export default function GroupDetail() {
 
         {/* Operational Profile */}
         <div id="operational-profile" className="space-y-3">
-          {group.status === "CONFIRMED" && operationalProfile && <div className="flex justify-end"><OperationalProfileAction groupId={id} profile={operationalProfile} onOpen={() => document.getElementById("operational-profile")?.scrollIntoView({ behavior: "smooth" })} /></div>}
+          {group.status === "CONFIRMED" && operationalProfile && <div className="flex justify-end gap-2"><QuoteSyncButton quote={activeQuote} group={group} profile={operationalProfile} onSynced={refetch} /><OperationalProfileAction groupId={id} profile={operationalProfile} onOpen={() => document.getElementById("operational-profile")?.scrollIntoView({ behavior: "smooth" })} /></div>}
           <OperationalProfileDisplay groupId={id} group={group} provisional={isPreparation} />
         </div>
 

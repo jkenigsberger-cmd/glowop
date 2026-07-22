@@ -16,7 +16,8 @@ export default function OperationalActivationAction({ groupId, onActivated }) {
       toast.success("הקבוצה אושרה לתפעול");
     } catch (error) {
       const code = error?.response?.data?.error || error?.message;
-      toast.error(code === "DUPLICATE_OPERATIONAL_PROFILE" ? "נמצאו מספר פרופילים תפעוליים" : "אישור הקבוצה לתפעול נכשל");
+      const messages = { DUPLICATE_OPERATIONAL_PROFILE: "נמצאו מספר פרופילים תפעוליים", MULTIPLE_PREPARATION_QUOTES_FOR_GROUP: "נמצאו מספר הצעות הכנה לקבוצה", OPERATIONAL_PROFILE_QUOTE_CONFLICT: "הפרופיל התפעולי מקושר להצעה אחרת" };
+      toast.error(messages[code] || "אישור הקבוצה לתפעול נכשל");
     } finally {
       setLoading(false);
     }
