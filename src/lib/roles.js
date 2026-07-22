@@ -57,7 +57,7 @@ export const PERMISSIONS = {
   // Group actions
   CREATE_GROUP:      ["SUPER_ADMIN", "ADMIN"],
   EDIT_GROUP:        ["SUPER_ADMIN", "ADMIN"],
-  DELETE_GROUP:      ["SUPER_ADMIN"],
+  DELETE_GROUP:      ["SUPER_ADMIN", "ADMIN"],
   ARCHIVE_GROUP:     ["SUPER_ADMIN", "ADMIN"],
   APPROVE_PROFILE:   ["SUPER_ADMIN", "ADMIN"],
 

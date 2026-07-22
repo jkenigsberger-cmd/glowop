@@ -27,3 +27,12 @@ export function invalidateQuotePreparationCache(queryClient, groupId) {
     queryClient.invalidateQueries({ queryKey: ["operationalProfile", groupId] });
   }
 }
+
+export function invalidateDeletedGroupCache(queryClient, groupId) {
+  const removeGroup = rows => Array.isArray(rows) ? rows.filter(row => row.id !== groupId && row.group_id !== groupId) : rows;
+  ["groups", "quoteCenterGroups", "cal-groups", "global-search-groups", "groups_kitchen", "groups-daily-print", "spaces-groups", "groups_kitchenReport", "kc-groups", "cio-groups"].forEach(key => queryClient.setQueryData([key], removeGroup));
+  queryClient.removeQueries({ queryKey: ["group", groupId] });
+  queryClient.removeQueries({ queryKey: ["quotes", groupId] });
+  queryClient.removeQueries({ queryKey: ["operationalProfile", groupId] });
+  ["quoteCenter", "quoteCenterGroups", "quoteCenterProfiles", "preparationQuotes", "preparationProfiles", "groups", "operationalProfiles", "global-search-groups", "cal-groups", "cal-meals", "cal-schedule", "cal-alerts", "cal-coffee", "groups_kitchen", "profiles_kitchen", "groups-daily-print", "profiles-daily-print", "spaces-groups", "groups_kitchenReport", "profiles_kitchenReport", "kc-groups", "cio-groups", "dashboard", "analytics"].forEach(key => queryClient.invalidateQueries({ queryKey: [key] }));
+}

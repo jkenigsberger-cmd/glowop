@@ -1,9 +1,12 @@
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { base44 } from "@/api/base44Client";
 import { toast } from "sonner";
-import { CheckCircle2, Snowflake, RotateCcw, Trash2, AlertTriangle } from "lucide-react";
+import { CheckCircle2, Snowflake, RotateCcw, Trash2 } from "lucide-react";
 import RoleGate from "@/components/RoleGate";
+import PermanentDeleteConfirmModal from "@/components/groups/PermanentDeleteConfirmModal";
+import { invalidateDeletedGroupCache } from "@/lib/quotePreparationCache";
 
 // ── Confirmation Modal ─────────────────────────────────────────────────────────
 
@@ -96,22 +99,12 @@ const MODAL_CONFIGS = {
     iconColor: "text-emerald-600",
     btnClass: "bg-emerald-600 hover:bg-emerald-700 text-white",
   },
-  delete: {
-    title: "מחיקה מוחלטת",
-    text: "פעולה זו תמחק את הקבוצה ואת כל הנתונים התפעוליים הקשורים אליה. פעולה זו אינה מיועדת לקבוצות שהסתיימו או קבוצות בהמתנה.",
-    debugMarker: "delete handler v3",
-    confirmLabel: "מחק לצמיתות",
-    requireReason: false,
-    Icon: AlertTriangle,
-    iconBg: "bg-red-100",
-    iconColor: "text-red-600",
-    btnClass: "bg-red-600 hover:bg-red-700 text-white",
-  },
 };
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 
 export default function GroupLifecycleActions({ group, onDeleted, onUpdated }) {
+  const queryClient = useQueryClient();
   const [modal, setModal] = useState(null); // "complete" | "freeze" | "reactivate" | "delete"
   const [loading, setLoading] = useState(false);
 
@@ -146,44 +139,29 @@ export default function GroupLifecycleActions({ group, onDeleted, onUpdated }) {
     }
   };
 
-  const handleDelete = async () => {
+  const handleDelete = async (confirmationName) => {
     setLoading(true);
-    console.log("[Delete UI v3] clicked delete", group.id);
     try {
-      console.log("[Delete UI v3] calling deleteGroup");
-      const res = await base44.functions.invoke("deleteGroup", { group_id: group.id });
-      console.log("[Delete UI v3] response", res);
+      const res = await base44.functions.invoke("deleteGroup", {
+        group_id: group.id,
+        confirmation_name: confirmationName,
+      });
       if (res.data?.success) {
+        invalidateDeletedGroupCache(queryClient, group.id);
         setModal(null);
-        toast.success('הקבוצה נמחקה לצמיתות');
-        onDeleted?.();
+        toast.success(res.data.status === "already_deleted" ? "הקבוצה כבר נמחקה" : "הקבוצה וההצעה נמחקו לצמיתות");
+        onDeleted?.(res.data);
       } else {
-        console.error("[Delete UI v2] deleteGroup success false", res.data);
-        toast.error(
-          res.data?.error ||
-          res.data?.debug?.message ||
-          'מחיקת הקבוצה נכשלה'
-        );
+        toast.error(res.data?.error || "מחיקת הקבוצה נכשלה");
       }
-    } catch (err) {
-      const backend = err?.response?.data;
-      console.error("[Delete UI v2] full error", err);
-      console.error("[Delete UI v2] backend error", backend);
-      toast.error(
-        backend?.error ||
-        backend?.debug?.message ||
-        err?.message ||
-        'מחיקת הקבוצה נכשלה'
-      );
+    } catch (error) {
+      toast.error(error?.response?.data?.error || error?.message || "מחיקת הקבוצה נכשלה");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleConfirm = (reason) => {
-    if (modal === 'delete') return handleDelete();
-    return handleLifecycle(modal, reason);
-  };
+  const handleConfirm = (reason) => handleLifecycle(modal, reason);
 
   if (!group) return null;
 
@@ -251,7 +229,15 @@ export default function GroupLifecycleActions({ group, onDeleted, onUpdated }) {
         )}
       </div>
 
-      {modal && (
+      {modal === "delete" && (
+        <PermanentDeleteConfirmModal
+          groupName={group.group_name}
+          loading={loading}
+          onConfirm={handleDelete}
+          onCancel={() => setModal(null)}
+        />
+      )}
+      {modal && modal !== "delete" && (
         <ConfirmModal
           config={MODAL_CONFIGS[modal]}
           onConfirm={handleConfirm}
