@@ -139,17 +139,17 @@ export default function GroupLifecycleActions({ group, onDeleted, onUpdated }) {
     }
   };
 
-  const handleDelete = async (confirmationName) => {
+  const handleDelete = async () => {
     setLoading(true);
     try {
       const res = await base44.functions.invoke("deleteGroup", {
         group_id: group.id,
-        confirmation_name: confirmationName,
+        confirmation_name: group.group_name,
       });
       if (res.data?.success) {
         invalidateDeletedGroupCache(queryClient, group.id);
         setModal(null);
-        toast.success(res.data.status === "already_deleted" ? "הקבוצה כבר נמחקה" : "הקבוצה וההצעה נמחקו לצמיתות");
+        toast.success("הקבוצה נמחקה בהצלחה");
         onDeleted?.(res.data);
       } else {
         toast.error(res.data?.error || "מחיקת הקבוצה נכשלה");
@@ -213,7 +213,7 @@ export default function GroupLifecycleActions({ group, onDeleted, onUpdated }) {
               onClick={() => setModal("delete")}
             >
               <Trash2 className="w-3.5 h-3.5" />
-              מחיקה מוחלטת
+              מחיקה
             </Button>
           </RoleGate>
         </div>
@@ -231,7 +231,6 @@ export default function GroupLifecycleActions({ group, onDeleted, onUpdated }) {
 
       {modal === "delete" && (
         <PermanentDeleteConfirmModal
-          groupName={group.group_name}
           loading={loading}
           onConfirm={handleDelete}
           onCancel={() => setModal(null)}

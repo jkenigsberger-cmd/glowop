@@ -30,7 +30,7 @@ export function invalidateQuotePreparationCache(queryClient, groupId) {
 
 export function invalidateDeletedGroupCache(queryClient, groupId) {
   const removeGroup = rows => Array.isArray(rows) ? rows.filter(row => row.id !== groupId && row.group_id !== groupId) : rows;
-  ["groups", "quoteCenterGroups", "cal-groups", "global-search-groups", "groups_kitchen", "groups-daily-print", "spaces-groups", "groups_kitchenReport", "kc-groups", "cio-groups"].forEach(key => queryClient.setQueryData([key], removeGroup));
+  ["groups", "quoteCenter", "quoteCenterGroups", "quoteCenterProfiles", "preparationQuotes", "preparationProfiles", "operationalProfiles", "cal-groups", "global-search-groups", "groups_kitchen", "groups-daily-print", "spaces-groups", "groups_kitchenReport", "kc-groups", "cio-groups"].forEach(key => queryClient.setQueryData([key], removeGroup));
   queryClient.removeQueries({ queryKey: ["group", groupId] });
   queryClient.removeQueries({ queryKey: ["quotes", groupId] });
   queryClient.removeQueries({ queryKey: ["operationalProfile", groupId] });
