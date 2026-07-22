@@ -21,7 +21,12 @@ export function getEffectiveQuoteForOption(quote, option) {
   return applyOptionPayloadToQuote(quote, payload);
 }
 
-export function duplicateQuoteOption(sourceOption, targetKey = "B") {
-  const payload = typeof sourceOption.option_payload === "string" ? JSON.parse(sourceOption.option_payload || "{}") : sourceOption.option_payload;
-  return { ...sourceOption, id: undefined, option_key: targetKey, label: `אפשרות ${targetKey === "A" ? "א׳" : "ב׳"}`, display_order: targetKey === "A" ? 1 : 2, option_payload: JSON.stringify(structuredClone(payload)), status: "AVAILABLE", created_from_option_id: sourceOption.id };
+export function createEmptyQuoteOption() {
+  return {
+    package_lines: "[]", new_addon_lines: "[]", student_lodging_lines: "[]", adult_lodging_lines: "[]",
+    workshop_lines: "[]", lecture_lines: "[]", coffee_corner_pax: 0, includes_prisa: false,
+    addon_lines: "[]", adjustment_lines: "[]", surcharge_lines: "[]", discount_percent: 0,
+    subtotal: 0, discount_amount: 0, total_price: 0, advance_payment: 0, balance_payment: 0,
+    payment_terms: "", option_notes: "",
+  };
 }

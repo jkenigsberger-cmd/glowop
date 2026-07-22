@@ -16,7 +16,7 @@ import { useRoleContext } from "@/lib/RoleContext";
 import { isQuotePreparationEnabled, isQuoteOpen } from "@/lib/quotePreparationFlow";
 import { getEffectiveQuoteGroupName } from "@/lib/quoteAudience";
 import { isQuoteMultiOptionEnabled } from "@/lib/quoteMultiOption";
-import { extractQuoteOptionPayload, applyOptionPayloadToQuote } from "@/lib/quoteOptions";
+import { extractQuoteOptionPayload, applyOptionPayloadToQuote, createEmptyQuoteOption } from "@/lib/quoteOptions";
 import QuoteAudienceSelector from "./QuoteAudienceSelector";
 import QuoteOptionTabs from "./QuoteOptionTabs";
 import QuoteOptionPreviewSelector from "./QuoteOptionPreviewSelector";
@@ -476,7 +476,7 @@ function PricingCard({ subtotal, discountAmount, discountPct, totalPrice, advanc
 }
 
 // ── Main Modal ────────────────────────────────────────────────────────────────
-export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
+export default function QuoteFormModal({ quote, group, onClose, onSaved, returnToQuotes = false }) {
   const isEdit = !!quote;
   const isNewGroupFlow = !group;
   const navigate = useNavigate();
@@ -581,6 +581,7 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
   const [newAddonLines,  setNewAddonLines]  = useState(parse(quote?.new_addon_lines,      []));
   const [saving, setSaving] = useState(false);
   const [optionBusy, setOptionBusy] = useState(false);
+  const optionCreateLockRef = useRef(false);
   const [optionLoading, setOptionLoading] = useState(false);
   const [optionLoadError, setOptionLoadError] = useState("");
   const [optionNotes, setOptionNotes] = useState("");
@@ -707,22 +708,24 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
   };
 
   const addOptionB = async () => {
-    if (optionBusy || hasOptionB) return;
+    if (optionBusy || hasOptionB || optionCreateLockRef.current) return;
+    optionCreateLockRef.current = true;
     const current = captureCurrentOptionPayload();
     if (!quote?.id) {
-      const copied = structuredClone(current);
-      setOptionDrafts({ A: current, B: copied }); setHasOptionB(true); setActiveOptionKey("B"); setPreviewMode("B"); applyOptionDraft(copied);
-      toast.success("אפשרות ב׳ נוצרה כהעתק של אפשרות א׳");
+      const emptyOptionB = createEmptyQuoteOption("B");
+      setOptionDrafts({ A: current, B: emptyOptionB }); setHasOptionB(true); setActiveOptionKey("B"); setPreviewMode("B"); applyOptionDraft(emptyOptionB);
+      toast.success("אפשרות ב׳ נוצרה כאפשרות חדשה וריקה");
+      optionCreateLockRef.current = false;
       return;
     }
     setOptionBusy(true);
     try {
       const res = await base44.functions.invoke("manageQuoteOptions", { action: "materialize", quote_id: quote.id, option_a_payload: current });
       const drafts = Object.fromEntries((res.data?.options || []).map(row => [row.option_key, parseOptionPayload(row.option_payload)]));
-      setOptionDrafts(drafts); setHasOptionB(true); setActiveOptionKey("B"); setPreviewMode("B"); applyOptionDraft(drafts.B || current);
-      toast.success("אפשרות ב׳ נוצרה כהעתק של אפשרות א׳");
+      setOptionDrafts(drafts); setHasOptionB(true); setActiveOptionKey("B"); setPreviewMode("B"); applyOptionDraft(drafts.B || createEmptyQuoteOption("B"));
+      toast.success("אפשרות ב׳ נוצרה כאפשרות חדשה וריקה");
     } catch { toast.error("יצירת אפשרות ב׳ נכשלה"); }
-    setOptionBusy(false);
+    finally { setOptionBusy(false); optionCreateLockRef.current = false; }
   };
 
   const deleteOptionB = async () => {
@@ -798,18 +801,24 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved }) {
       const savedQuote = isEdit
         ? await base44.entities.Quote.update(quote.id, quotePayload)
         : await base44.entities.Quote.create(quotePayload);
+      let finalSavedQuote = savedQuote;
+      let savedOptions = [];
       if (hasOptionB) {
         const optionsRes = await base44.functions.invoke("manageQuoteOptions", { action: "save", quote_id: savedQuote.id, options: draftsToSave });
         if (!optionsRes.data?.success) throw new Error(optionsRes.data?.error || "OPTION_SAVE_FAILED");
+        savedOptions = optionsRes.data.options || [];
+        finalSavedQuote = { ...savedQuote, multi_option_enabled: true };
       }
       if ((usePreparationFlow || quote?.preparation_flow_enabled) && isQuoteOpen(savedQuote)) {
         const ensured = await base44.functions.invoke("ensureQuotePreparationGroup", { quote_id: savedQuote.id });
         if (!ensured.data?.success) throw new Error(ensured.data?.error || "PREPARATION_INIT_FAILED");
         resolvedGroupId = ensured.data.group?.id;
+        finalSavedQuote = ensured.data.quote || finalSavedQuote;
       }
       setSaving(false);
-      if (usePreparationFlow && resolvedGroupId) { navigate(`/groups/${resolvedGroupId}`); onClose(); }
-      else onSaved(savedQuote);
+      if (returnToQuotes) onSaved(finalSavedQuote, savedOptions);
+      else if (usePreparationFlow && resolvedGroupId) { navigate(`/groups/${resolvedGroupId}`); onClose(); }
+      else onSaved(finalSavedQuote, savedOptions);
     } catch (error) {
       setSaving(false);
       toast.error(error?.message === "FEATURE_DISABLED" ? "זרימת ההכנה מושבתת כרגע" : error?.message === "PREPARATION_INIT_FAILED" ? "יצירת קבוצת ההכנה נכשלה" : "שמירת הצעת המחיר נכשלה");

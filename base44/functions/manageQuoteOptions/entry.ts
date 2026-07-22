@@ -1,5 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
-import { assertQuoteMultiOptionEnabled, extractQuoteOptionPayload, applyOptionPayloadToQuote, getQuoteOption, getExactQuoteOptions, duplicateQuoteOption } from '../../shared/quoteOptions.js';
+import { assertQuoteMultiOptionEnabled, extractQuoteOptionPayload, applyOptionPayloadToQuote, getQuoteOption, getExactQuoteOptions, createEmptyQuoteOption } from '../../shared/quoteOptions.js';
 
 const optionRecord = (quoteId, key, payload, user, sourceId) => ({
   quote_id: quoteId, option_key: key, label: key === 'A' ? 'אפשרות א׳' : 'אפשרות ב׳', display_order: key === 'A' ? 1 : 2,
@@ -29,7 +29,7 @@ Deno.serve(async req => {
       let optionB = await getQuoteOption(base44, quote_id, 'B');
       if (!optionA) optionA = await base44.asServiceRole.entities.QuoteOption.create(optionRecord(quote_id, 'A', body.option_a_payload || extractQuoteOptionPayload(quote), user));
       optionB = await getQuoteOption(base44, quote_id, 'B');
-      if (!optionB) optionB = await base44.asServiceRole.entities.QuoteOption.create({ ...duplicateQuoteOption(optionA, 'B'), quote_id, created_by: user.email, updated_by: user.email });
+      if (!optionB) optionB = await base44.asServiceRole.entities.QuoteOption.create(optionRecord(quote_id, 'B', createEmptyQuoteOption('B'), user));
       const exact = await getExactQuoteOptions(base44, quote_id);
       await base44.asServiceRole.entities.Quote.update(quote_id, { multi_option_enabled: true });
       return Response.json({ success: true, options: [exact.A, exact.B], quote_id, group_id: quote.group_id });

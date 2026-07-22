@@ -46,8 +46,17 @@ export async function getEffectiveQuoteForOption(base44, quote, optionKey) {
   return applyOptionPayloadToQuote(quote, JSON.parse(option.option_payload || '{}'));
 }
 
-export function duplicateQuoteOption(sourceOption, targetKey = 'B') {
-  return { option_key: targetKey, label: targetKey === 'A' ? 'אפשרות א׳' : 'אפשרות ב׳', display_order: targetKey === 'A' ? 1 : 2, option_payload: JSON.stringify(JSON.parse(sourceOption.option_payload || '{}')), subtotal: sourceOption.subtotal || 0, discount_amount: sourceOption.discount_amount || 0, total_price: sourceOption.total_price || 0, advance_payment: sourceOption.advance_payment || 0, balance_payment: sourceOption.balance_payment || 0, status: 'AVAILABLE', created_from_option_id: sourceOption.id };
+export function createEmptyQuoteOption(optionKey = 'B') {
+  const emptyArrays = new Set([
+    'package_lines', 'new_addon_lines', 'student_lodging_lines', 'adult_lodging_lines',
+    'workshop_lines', 'lecture_lines', 'addon_lines', 'adjustment_lines', 'surcharge_lines',
+  ]);
+  return Object.fromEntries(QUOTE_OPTION_FIELDS.map(field => {
+    if (emptyArrays.has(field)) return [field, JSON.stringify([])];
+    if (field === 'includes_prisa') return [field, false];
+    if (field === 'payment_terms' || field === 'option_notes') return [field, ''];
+    return [field, 0];
+  }));
 }
 
 export async function getExactQuoteOptions(base44, quoteId) {
