@@ -14,7 +14,6 @@ import DayGroupHeader, { groupByDay } from "@/components/groups/DayGroupHeader";
 import PreparationGroupCard from "@/components/groups/PreparationGroupCard";
 import { useRoleContext } from "@/lib/RoleContext";
 import { isQuoteOpen, isQuotePreparationEnabled } from "@/lib/quotePreparationFlow";
-import { toast } from "sonner";
 import { updateQuotePreparationCache, invalidateQuotePreparationCache } from "@/lib/quotePreparationCache";
 
 const TODAY = new Date().toISOString().slice(0, 10);
@@ -238,7 +237,7 @@ export default function Groups() {
             <GroupList items={active} emptyLabel="אין קבוצות פעילות" />
           </TabsContent>
           {preparationFlowEnabled && <TabsContent value="preparation">
-            <div className="space-y-3">{preparationGroups.map(group => <PreparationGroupCard key={group.id} group={group} quote={preparationQuoteByGroup[group.id]} profile={preparationProfileByGroup[group.id]} canApprove={["SUPER_ADMIN","ADMIN"].includes(role) && (!preparationQuoteByGroup[group.id]?.multi_option_enabled || role === "SUPER_ADMIN")} onProfileReady={(profile, returnedGroup) => { updateQuotePreparationCache(queryClient, { profile, group: returnedGroup || group }); invalidateQuotePreparationCache(queryClient, group.id); }} onApprove={async (selectedOptionKey) => { const currentQuote = preparationQuoteByGroup[group.id]; const res = await base44.functions.invoke("approveQuoteAndActivateGroup", { quote_id: currentQuote.id, selected_option_key: selectedOptionKey }); if (res.data?.success) { updateQuotePreparationCache(queryClient, { quote: { ...currentQuote, status: "APPROVED", approved_option_key: selectedOptionKey }, group: { ...group, status: "CONFIRMED" }, profile: preparationProfileByGroup[group.id] }); invalidateQuotePreparationCache(queryClient, group.id); toast.success("ההצעה אושרה והקבוצה הופעלה"); return true; } toast.error("אישור ההצעה נכשל"); return false; }} />)}{!preparationGroups.length && <p className="text-center py-10 text-muted-foreground">אין קבוצות בהכנה</p>}</div>
+            <div className="space-y-3">{preparationGroups.map(group => <PreparationGroupCard key={group.id} group={group} quote={preparationQuoteByGroup[group.id]} profile={preparationProfileByGroup[group.id]} canActivate={["SUPER_ADMIN","ADMIN"].includes(role)} onActivated={({ quote, group: updatedGroup, profile }) => { updateQuotePreparationCache(queryClient, { quote, group: updatedGroup, profile }); invalidateQuotePreparationCache(queryClient, updatedGroup.id); }} />)}{!preparationGroups.length && <p className="text-center py-10 text-muted-foreground">אין קבוצות בהכנה</p>}</div>
           </TabsContent>}
           <TabsContent value="history">
             <GroupList items={history} emptyLabel="אין קבוצות בהיסטוריה" showUnmarkedBadges />

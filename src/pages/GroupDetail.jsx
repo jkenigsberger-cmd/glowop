@@ -3,18 +3,12 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { ChevronRight, Calendar, Users, Phone, Mail, Pencil, Plus, FileText, ClipboardList, Copy, Check, ShieldCheck, Printer, Link2 } from "lucide-react";
-import QuotePdfButton from "@/components/quotes/QuotePdfButton";
+import { ChevronRight, Calendar, Users, Phone, Mail, Pencil, Plus, ClipboardList, Check, Printer, Link2 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import GroupStatusBadge from "@/components/groups/GroupStatusBadge";
 import GroupFormModal from "@/components/groups/GroupFormModal";
-import QuoteStatusBadge from "@/components/quotes/QuoteStatusBadge";
-import QuoteFormModal from "@/components/quotes/QuoteFormModal";
-import QuoteStatusActions from "@/components/quotes/QuoteStatusActions";
-import QuoteSyncButton from "@/components/quotes/QuoteSyncButton";
-import { buildQuoteOperationalDiff } from "@/lib/quoteOperationalDiff";
-import { AlertTriangle } from "lucide-react";
+
 import GuestFormSubmissionModal from "@/components/groups/GuestFormSubmissionModal";
 import SubmissionReviewModal from "@/components/groups/SubmissionReviewModal";
 import OperationalProfileDisplay from "@/components/groups/OperationalProfileDisplay";
@@ -29,6 +23,7 @@ import PostStayTab from "@/components/post-stay/PostStayTab";
 import MechinaUsersSection from "@/components/mechina/MechinaUsersSection";
 import MealDateRangeWarning from "@/components/groups/MealDateRangeWarning";
 import OperationalProfileAction from "@/components/groups/OperationalProfileAction";
+import OperationalActivationAction from "@/components/groups/OperationalActivationAction";
 import { updateQuotePreparationCache, invalidateQuotePreparationCache } from "@/lib/quotePreparationCache";
 
 export default function GroupDetail() {
@@ -37,17 +32,10 @@ export default function GroupDetail() {
   const queryClient = useQueryClient();
 
   const [editGroup, setEditGroup] = useState(false);
-  const [showQuoteForm, setShowQuoteForm] = useState(false);
-  const [editQuote, setEditQuote] = useState(null);
   const [showSubmissionForm, setShowSubmissionForm] = useState(false);
   const [editSubmission, setEditSubmission] = useState(null);
   const [reviewSubmission, setReviewSubmission] = useState(null);
-  const [copiedId, setCopiedId] = useState(null);
   const [activeTab, setActiveTab] = useState("overview");
-  const [approvingProfile, setApprovingProfile] = useState(false);
-  // Id of a quote just saved from the edit modal — used to surface the
-  // "operational data differs / not auto-updated" warning right after save.
-  const [justSavedQuoteId, setJustSavedQuoteId] = useState(null);
 
   const { data: group } = useQuery({
     queryKey: ["group", id],
@@ -62,8 +50,8 @@ export default function GroupDetail() {
   });
   const operationalProfile = profiles[0];
 
-  const handleProfileReady = (profile, returnedGroup) => {
-    updateQuotePreparationCache(queryClient, { profile, group: returnedGroup || group });
+  const handleOperationalActivation = ({ quote, group: updatedGroup, profile }) => {
+    updateQuotePreparationCache(queryClient, { quote, group: updatedGroup, profile });
     invalidateQuotePreparationCache(queryClient, id);
     requestAnimationFrame(() => document.getElementById("operational-profile")?.scrollIntoView({ behavior: "smooth" }));
   };
@@ -85,42 +73,6 @@ export default function GroupDetail() {
 
   const activeQuote = quotes.find(q => q.status === "APPROVED") || quotes[0];
 
-  // Post-save reconciliation: after editing a linked quote, compare it against
-  // the operational source of truth (Group + OGP). Differences are surfaced as a
-  // warning — the operational data is NEVER auto-updated on quote save.
-  const justSavedQuote = justSavedQuoteId ? quotes.find(q => q.id === justSavedQuoteId) : null;
-  const postSaveDiffs = justSavedQuote ? buildQuoteOperationalDiff(justSavedQuote, group, operationalProfile) : [];
-
-  const handleApproveProfile = async () => {
-    setApprovingProfile(true);
-    console.log("[Approve Operational Profile] clicked", { groupId: id, profileId: operationalProfile?.id, quoteId: activeQuote?.id });
-    try {
-      const res = await base44.functions.invoke("createOrUpdateOperationalGroupProfile", {
-        group_id: id,
-        quote_id: activeQuote?.id || undefined,
-      });
-      console.log("[Approve Operational Profile] response", res);
-      if (res.data?.success) {
-        toast.success("הפרופיל התפעולי אושר בהצלחה");
-        refetch();
-      } else {
-        toast.error(res.data?.error || "אישור הפרופיל נכשל");
-      }
-    } catch (err) {
-      console.error("[Approve Operational Profile] error", err);
-      console.error("[Approve Operational Profile] backend error", err?.response?.data);
-      toast.error(err?.response?.data?.error || err?.message || "אישור הפרופיל נכשל");
-    } finally {
-      setApprovingProfile(false);
-    }
-  };
-
-  const copyGuestFormLink = (quoteId) => {
-    const url = `${window.location.origin}/guest-form?quote=${quoteId}`;
-    navigator.clipboard.writeText(url);
-    setCopiedId(quoteId);
-    setTimeout(() => setCopiedId(null), 2000);
-  };
 
   // Regenerate + copy a new tokenized direct group link
   const [copiedDirectLink, setCopiedDirectLink] = useState(false);
@@ -158,7 +110,6 @@ export default function GroupDetail() {
     </div>
   );
 
-  const GROUP_TYPE_LABEL = { LODGING: "לינה", DAY_USE: "פעילות יום" };
   const isPreparation = group.quote_preparation_flow && group.status !== "CONFIRMED";
 
   return (
@@ -271,7 +222,7 @@ export default function GroupDetail() {
 
         {activeTab === "overview" && <>
 
-        {isPreparation && <div className="bg-violet-50 border border-violet-200 rounded-xl px-4 py-3"><p className="font-semibold text-violet-800">פרופיל בהכנה</p><p className="text-xs text-violet-600 mt-1">הצעת המחיר עדיין פתוחה. ניתן להכין פרטים תפעוליים, אך הקבוצה אינה פעילה ולא תופיע במודולים התפעוליים.</p></div>}
+        {isPreparation && <div className="bg-violet-50 border border-violet-200 rounded-xl px-4 py-3 flex items-center justify-between gap-3"><div><p className="font-semibold text-violet-800">קבוצה בהכנה</p><p className="text-xs text-violet-600 mt-1">הקבוצה עדיין אינה פעילה במודולים התפעוליים.</p></div><RoleGate roles={["SUPER_ADMIN", "ADMIN"]}><OperationalActivationAction groupId={id} onActivated={handleOperationalActivation} /></RoleGate></div>}
 
         {/* Meal date range warning — shown when active meals exist outside current stay */}
         <RoleGate permission="EDIT_GROUP">
@@ -285,101 +236,14 @@ export default function GroupDetail() {
             <p className="text-xs text-muted-foreground mt-0.5">משתתפים</p>
           </div>
           <div className="bg-card border border-border rounded-xl px-4 py-3 text-center">
-            <p className="text-2xl font-bold">{quotes.length}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">הצעות מחיר</p>
-            {activeQuote && <QuoteStatusBadge status={activeQuote.status} />}
+            <p className="text-2xl font-bold">{operationalProfile ? "✓" : "—"}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">פרופיל תפעולי</p>
           </div>
           <div className="bg-card border border-border rounded-xl px-4 py-3 text-center">
             <p className="text-2xl font-bold">{submissions.length}</p>
             <p className="text-xs text-muted-foreground mt-0.5">טפסי קבלה</p>
           </div>
         </div>
-
-        {/* Post-save reconciliation warning — quote was saved but operational data differs */}
-        {justSavedQuote && postSaveDiffs.length > 0 && (
-          <div className="bg-amber-50 border border-amber-300 rounded-xl px-4 py-3 space-y-2.5">
-            <div className="flex items-start gap-2">
-              <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
-              <div className="space-y-1">
-                <p className="text-sm font-semibold text-amber-800">
-                  ההצעה נשמרה, אך נמצאו הבדלים מול הקבוצה/הפרופיל התפעולי. הנתונים התפעוליים לא עודכנו אוטומטית.
-                </p>
-                <p className="text-xs text-amber-700">
-                  ההצעה היא מסמך מסחרי — הקבוצה והפרופיל התפעולי הם מקור האמת התפעולי ולא משתנים אוטומטית.
-                  כדי להחיל את שינויי ההצעה על התפעול, יש ללחוץ על הכפתור למטה.
-                </p>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2 pr-6">
-              <QuoteSyncButton
-                quote={justSavedQuote}
-                group={group}
-                profile={operationalProfile}
-                onSynced={() => { refetch(); setJustSavedQuoteId(null); }}
-              />
-              <Button size="sm" variant="ghost" className="text-xs h-7 text-amber-700" onClick={() => setJustSavedQuoteId(null)}>
-                סגור
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* Quotes Section */}
-        <section>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold flex items-center gap-2"><FileText className="w-4 h-4" /> הצעות מחיר</h2>
-            <RoleGate permission="CREATE_QUOTE">
-              <Button size="sm" variant="outline" onClick={() => { setEditQuote(null); setShowQuoteForm(true); }} className="gap-1">
-                <Plus className="w-3.5 h-3.5" /> הצעה חדשה
-              </Button>
-            </RoleGate>
-          </div>
-          {quotes.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-4 text-center">אין הצעות מחיר עדיין.</p>
-          ) : (
-            <div className="space-y-2">
-              {quotes.map(q => (
-                <div key={q.id} className="bg-card border border-border rounded-xl px-4 py-3 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <span className="text-sm font-medium">גרסה {q.version}</span>
-                      {q.quote_number && <span className="text-xs text-muted-foreground">{q.quote_number}</span>}
-                      {q.valid_until && <span className="text-xs text-muted-foreground">בתוקף עד {format(new Date(q.valid_until), "dd/MM/yyyy")}</span>}
-                      {q.total_price > 0 && <span className="text-sm font-semibold text-primary">₪{Math.round(q.total_price).toLocaleString()}</span>}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {q.status === "APPROVED" && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => copyGuestFormLink(q.id)}
-                          className={`gap-1 transition-colors ${copiedId === q.id ? "border-green-400 text-green-600 bg-green-50" : ""}`}
-                        >
-                          {copiedId === q.id
-                            ? <><Check className="w-3 h-3" /> הועתק!</>
-                            : <><Copy className="w-3 h-3" /> העתק לינק לטופס לקוח</>
-                          }
-                        </Button>
-                      )}
-                      <RoleGate permission="GENERATE_REPORTS">
-                        <QuotePdfButton quote={q} group={group} />
-                      </RoleGate>
-                      <RoleGate permission="EDIT_QUOTE">
-                        <Button size="sm" variant="ghost" onClick={() => { setEditQuote(q); setShowQuoteForm(true); }} className="gap-1">
-                          <Pencil className="w-3 h-3" /> עריכה
-                        </Button>
-                      </RoleGate>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <QuoteStatusActions quote={q} group={group} onUpdated={refetch} />
-                    <QuoteSyncButton quote={q} group={group} profile={operationalProfile} onSynced={() => { refetch(); setJustSavedQuoteId(null); }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
 
         {/* GuestFormSubmissions Section */}
         <section>
@@ -441,36 +305,9 @@ export default function GroupDetail() {
           )}
         </section>
 
-        {/* Approve operational profile — shown when profile exists but not yet ACCEPTED, or group not yet CONFIRMED */}
-        <RoleGate permission="APPROVE_PROFILE">
-          {operationalProfile && operationalProfile.status !== "ACCEPTED" && (
-            <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
-              <div>
-                <p className="text-sm font-semibold text-blue-800">פרופיל תפעולי ממתין לאישור</p>
-                <p className="text-xs text-blue-600 mt-0.5">לחץ לאישור הפרופיל ומעבר הקבוצה לסטטוס מאושר</p>
-              </div>
-              <Button
-                size="sm"
-                className="gap-1.5 bg-blue-700 hover:bg-blue-800 text-white"
-                onClick={handleApproveProfile}
-                disabled={approvingProfile}
-              >
-                <ShieldCheck className="w-3.5 h-3.5" />
-                {approvingProfile ? "מאשר..." : "אשר פרופיל תפעולי"}
-              </Button>
-            </div>
-          )}
-          {!operationalProfile && group && (
-            <div className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
-              <div><p className="text-sm font-semibold text-slate-700">אין פרופיל תפעולי עדיין</p><p className="text-xs text-slate-500 mt-0.5">ניתן ליצור פרופיל בלי לשנות את מצב הקבוצה או ההצעה</p></div>
-              <OperationalProfileAction groupId={id} profile={operationalProfile} onReady={handleProfileReady} />
-            </div>
-          )}
-        </RoleGate>
-
         {/* Operational Profile */}
         <div id="operational-profile" className="space-y-3">
-          {operationalProfile && <div className="flex justify-end"><OperationalProfileAction groupId={id} profile={operationalProfile} onOpen={() => document.getElementById("operational-profile")?.scrollIntoView({ behavior: "smooth" })} /></div>}
+          {group.status === "CONFIRMED" && operationalProfile && <div className="flex justify-end"><OperationalProfileAction groupId={id} profile={operationalProfile} onOpen={() => document.getElementById("operational-profile")?.scrollIntoView({ behavior: "smooth" })} /></div>}
           <OperationalProfileDisplay groupId={id} group={group} provisional={isPreparation} />
         </div>
 
@@ -500,9 +337,8 @@ export default function GroupDetail() {
         </>}
       </div>
 
-      {/* Modals */}
+      {/* Non-commercial modals */}
       {editGroup && <GroupFormModal group={group} initialProfileDiets={operationalProfile?.special_diets || null} onClose={() => setEditGroup(false)} onSaved={() => { refetch(); setEditGroup(false); }} />}
-      {showQuoteForm && <QuoteFormModal quote={editQuote} group={group} onClose={() => { setShowQuoteForm(false); setEditQuote(null); }} onSaved={() => { if (editQuote?.id) setJustSavedQuoteId(editQuote.id); refetch(); setShowQuoteForm(false); setEditQuote(null); }} />}
       {reviewSubmission && !showSubmissionForm && (
         <SubmissionReviewModal
           submission={reviewSubmission}

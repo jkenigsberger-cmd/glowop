@@ -20,7 +20,7 @@ export function updateQuotePreparationCache(queryClient, { quote, group, profile
 }
 
 export function invalidateQuotePreparationCache(queryClient, groupId) {
-  ["quoteCenter", "quoteCenterGroups", "quoteCenterProfiles", "preparationQuotes", "preparationProfiles", "groups", "operationalProfiles"].forEach(queryKey => queryClient.invalidateQueries({ queryKey: [queryKey] }));
+  ["quoteCenter", "quoteCenterGroups", "quoteCenterProfiles", "preparationQuotes", "preparationProfiles", "groups", "operationalProfiles", "cal-groups", "groups_kitchen", "profiles_kitchen", "global-search-groups", "groups-daily-print", "profiles-daily-print"].forEach(queryKey => queryClient.invalidateQueries({ queryKey: [queryKey] }));
   if (groupId) {
     queryClient.invalidateQueries({ queryKey: ["group", groupId] });
     queryClient.invalidateQueries({ queryKey: ["quotes", groupId] });

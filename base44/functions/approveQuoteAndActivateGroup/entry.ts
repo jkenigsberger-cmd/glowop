@@ -26,10 +26,12 @@ Deno.serve(async (req) => {
     if (!alreadyApproved) await base44.asServiceRole.entities.Quote.update(quote_id, { status: 'APPROVED', approved_at: new Date().toISOString(), approved_by: user.email, snapshot, approved_option_key: selection.key, approved_option_total_price: Number(selection.effectiveQuote.total_price || 0), approved_option_snapshot: snapshot });
     if (result.group.status !== 'CONFIRMED') await base44.asServiceRole.entities.Group.update(result.group.id, { ...quoteGroupFields(result.quote), status: 'CONFIRMED', quote_preparation_flow: true });
 
-    result.group.status = 'CONFIRMED';
-    result.quote.status = 'APPROVED';
-    auditLog(alreadyApproved ? 'approve_repaired' : 'approve_activate', user, result, beforeQuoteStatus, 'APPROVED');
-    return Response.json({ success: true, status: alreadyApproved ? 'already_approved_repaired' : 'approved', quote_id, group_id: result.group.id, operational_group_profile_id: result.operationalProfile.id, created_group: result.createdGroup, created_profile: result.createdProfile, warnings: result.warnings, integrations_activated: ['GROUP_CONFIRMED', 'OPERATIONAL_PROFILE_READY', 'QUOTE_APPROVED', 'SNAPSHOT_CAPTURED'] });
+    const finalQuote = await base44.asServiceRole.entities.Quote.get(quote_id);
+    const finalGroup = await base44.asServiceRole.entities.Group.get(result.group.id);
+    const finalProfiles = await base44.asServiceRole.entities.OperationalGroupProfile.filter({ group_id: result.group.id });
+    if (finalProfiles.length !== 1) throw Object.assign(new Error('DUPLICATE_OPERATIONAL_PROFILE'), { code: 'DUPLICATE_OPERATIONAL_PROFILE', profile_ids: finalProfiles.map(p => p.id) });
+    auditLog(alreadyApproved ? 'approve_repaired' : 'approve_activate', user, { ...result, quote: finalQuote, group: finalGroup }, beforeQuoteStatus, 'APPROVED');
+    return Response.json({ success: true, status: alreadyApproved ? 'already_approved_repaired' : 'approved', quote: finalQuote, group: finalGroup, profile: finalProfiles[0], quote_id, group_id: finalGroup.id, operational_group_profile_id: finalProfiles[0].id, warnings: result.warnings });
   } catch (error) {
     console.error('[approveQuoteAndActivateGroup]', error?.code || error?.message);
     return Response.json({ success: false, error: error?.code || 'INTERNAL_ERROR', quote_id: error?.quote_id, group_id: error?.group_id, profile_ids: error?.profile_ids, recovery: error?.recovery, partial_state: error?.code === 'PROFILE_CREATE_FAILED_RETRYABLE' ? 'QUOTE_LINKED_GROUP_EXISTS_PROFILE_MISSING' : undefined }, { status: error?.code ? 409 : 500 });

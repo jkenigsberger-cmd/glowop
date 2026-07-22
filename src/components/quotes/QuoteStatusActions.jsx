@@ -94,7 +94,7 @@ export default function QuoteStatusActions({ quote, group, onUpdated }) {
       console.error("[QuoteStatusActions] approveQuoteAndInitializeGroup invoke failed:", invokeErr?.message);
       toast.error("אישור הצעת המחיר נכשל");
       setLoading(false);
-      return;
+      return false;
     }
 
     const data = approveRes?.data || {};
@@ -121,7 +121,7 @@ export default function QuoteStatusActions({ quote, group, onUpdated }) {
       };
       toast.error(ERROR_MESSAGES[data.error] || "אישור הצעת המחיר נכשל");
       setLoading(false);
-      return;
+      return false;
     }
 
     // ── Success — show non-blocking warnings if any ─────────────────────────
@@ -134,70 +134,21 @@ export default function QuoteStatusActions({ quote, group, onUpdated }) {
     };
     (data.warnings || []).forEach(w => toast.warning(WARNING_MESSAGES[w] || w));
 
-    const targetGroupId = data.group_id || group?.id || quote.group_id;
-    const approvedQuote = { ...quote, group_id: targetGroupId, status: "APPROVED", approved_option_key: selectedOptionKey || quote.approved_option_key };
-    const confirmedGroup = group ? { ...group, status: "CONFIRMED" } : undefined;
-    updateQuotePreparationCache(queryClient, { quote: approvedQuote, group: confirmedGroup });
+    const targetGroupId = data.group?.id;
+    updateQuotePreparationCache(queryClient, { quote: data.quote, group: data.group, profile: data.profile });
     invalidateQuotePreparationCache(queryClient, targetGroupId);
 
     if (quote.preparation_flow_enabled) {
       toast.success("הצעת המחיר אושרה");
       setLoading(false);
       onUpdated();
-      return;
-    }
-
-    // ── Resolve the group for snapshot/hold ─────────────────────────────────
-    // On a brand-new group the frontend `group` prop is null, so we fetch the
-    // backend-created group by id. This guarantees group_name / group_type are
-    // real values (never empty snapshot, never wrongly-skipped meal hold).
-    let resolvedGroup = group;
-    if (!resolvedGroup && targetGroupId) {
-      try {
-        resolvedGroup = await base44.entities.Group.get(targetGroupId);
-      } catch (grpErr) {
-        console.warn("[QuoteStatusActions] failed to fetch new group (non-blocking):", grpErr?.message);
-      }
-    }
-
-    // The backend owns the selected-option commercial snapshot.
-    // Create or update OperationalHold
-    const hasMeals = !!resolvedGroup && resolvedGroup.group_type === "LODGING";
-    const hasActivities = (() => {
-      try { return JSON.parse(quote.workshop_lines || "[]").length > 0 || JSON.parse(quote.lecture_lines || "[]").length > 0; } catch { return false; }
-    })();
-
-    const holdPayload = {
-      quote_id:    quote.id,
-      group_id:    targetGroupId,
-      arrival_date:   quote.arrival_date,
-      departure_date: quote.departure_date || quote.arrival_date,
-      group_type:     resolvedGroup?.group_type || "LODGING",
-      hold_type:      "SITE_GENERAL",
-      total_pax:      Number(quote.estimated_pax) || 0,
-      participant_count: Number(quote.participant_count) || 0,
-      staff_count:    Number(quote.staff_count) || 0,
-      includes_meals: hasMeals,
-      includes_activities: hasActivities,
-      status:   "ACTIVE",
-      source:   "QUOTE_APPROVAL",
-      override_capacity_warning: overrideWarning,
-      override_reason: overrideReason || "",
-      created_at: new Date().toISOString(),
-    };
-
-    // Prevent duplicates: check for existing ACTIVE hold for this quote
-    const existing = await base44.entities.OperationalHold.filter({ quote_id: quote.id });
-    const activeHold = existing.find(h => h.status === "ACTIVE");
-    if (activeHold) {
-      await base44.entities.OperationalHold.update(activeHold.id, holdPayload);
-    } else {
-      await base44.entities.OperationalHold.create(holdPayload);
+      return true;
     }
 
     toast.success("הצעת המחיר אושרה");
     setLoading(false);
     onUpdated();
+    return true;
   };
 
   const handleTransition = async (nextStatus, selectedOptionKey = null) => {
@@ -227,26 +178,22 @@ export default function QuoteStatusActions({ quote, group, onUpdated }) {
     if (selectedOptionKey) setApprovalOptionKey(selectedOptionKey);
     // Approval: run capacity check first
     setPendingApproval(true);
+    let result;
     try {
       const res = await base44.functions.invoke("checkSiteAvailability", {
-        arrival_date:    quote.arrival_date,
-        departure_date:  quote.departure_date || quote.arrival_date,
-        total_pax:       Number(quote.estimated_pax) || 0,
-        group_type:      group?.group_type || "LODGING",
-        includes_meals:  (group?.group_type || "LODGING") === "LODGING",
-        exclude_quote_id: quote.id,
+        arrival_date: quote.arrival_date, departure_date: quote.departure_date || quote.arrival_date,
+        total_pax: Number(quote.estimated_pax) || 0, group_type: group?.group_type || "LODGING",
+        includes_meals: (group?.group_type || "LODGING") === "LODGING", exclude_quote_id: quote.id,
       });
       const warnings = res.data?.warnings || [];
-      if (warnings.length > 0) {
-        setCapacityWarnings(warnings);
-      } else {
-        await doApprove(false, "", selectedOptionKey);
-      }
+      if (warnings.length > 0) setCapacityWarnings(warnings);
+      else result = await doApprove(false, "", selectedOptionKey);
     } catch {
-      // If check fails, proceed without blocking
-      await doApprove(false, "", selectedOptionKey);
+      result = await doApprove(false, "", selectedOptionKey);
+    } finally {
+      setPendingApproval(false);
     }
-    setPendingApproval(false);
+    return result;
   };
 
   return (

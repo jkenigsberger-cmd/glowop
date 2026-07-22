@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
+import { ensureExactlyOneOperationalProfile } from '../../shared/operationalProfile.js';
 
 /**
  * ensureOperationalGroupProfile
@@ -76,82 +77,23 @@ Deno.serve(async (req) => {
       }, { status: 404 });
     }
 
-    // ── Rule 2: Query existing OGP by group_id ────────────────────────────
-    const existingProfiles = await base44.asServiceRole.entities.OperationalGroupProfile.filter({ group_id });
-
-    // ── Rule 5: More than one profile → critical error, no mutation ───────
-    if (existingProfiles.length > 1) {
-      const profileIds = existingProfiles.map(p => p.id);
-      console.error(`[ensureOperationalGroupProfile] MULTIPLE_OPERATIONAL_PROFILES for group ${group_id}:`, profileIds);
-      return Response.json({
-        success: false,
-        error: 'MULTIPLE_OPERATIONAL_PROFILES',
-        message: 'נמצאו מספר פרופילים תפעוליים לאותה קבוצה — נדרשת בדיקת מנהל',
-        group_id,
-        profile_ids: profileIds,
-        warnings: [`נמצאו ${existingProfiles.length} פרופילים תפעוליים לקבוצה זו: ${profileIds.join(', ')}`],
-      }, { status: 409 });
-    }
-
-    // ── Rule 4: Exactly one profile → return it, do NOT overwrite ─────────
-    if (existingProfiles.length === 1) {
-      const profile = existingProfiles[0];
-      return Response.json({
-        success: true,
-        group_id,
-        operational_group_profile_id: profile.id,
-        status: 'existed',
-        group,
-        profile,
-      });
-    }
-
-    // ── Rule 3: Zero profiles → create a minimal OGP ──────────────────────
-    // Copy only SAFE default fields from Group when available. Never invent data.
-    // status "ACCEPTED" is the schema's only allowed enum value and is required.
-    // accepted_at is intentionally OMITTED here — this profile is auto-ensured,
-    // not explicitly accepted by an admin, so we avoid a misleading timestamp.
-    const profileData = {
-      group_id,
-      status: 'ACCEPTED',
-    };
-    if (group.total_pax      != null)                                profileData.total_pax      = group.total_pax;
-    if (group.internal_notes != null && group.internal_notes !== '') profileData.general_notes  = group.internal_notes;
-
-    const created = await base44.asServiceRole.entities.OperationalGroupProfile.create(profileData);
-    console.log(`[ensureOperationalGroupProfile] created OGP ${created.id} for group ${group_id}`);
-
-    // ── Post-create duplicate safety check (no DB transactions/unique keys) ──
-    // A concurrent call could have created a second OGP. Re-query and verify.
-    const afterCreate = await base44.asServiceRole.entities.OperationalGroupProfile.filter({ group_id });
-    if (afterCreate.length > 1) {
-      const profileIds = afterCreate.map(p => p.id);
-      console.error(`[ensureOperationalGroupProfile] MULTIPLE_OPERATIONAL_PROFILES_AFTER_CREATE for group ${group_id}:`, profileIds);
-      return Response.json({
-        success: false,
-        error: 'MULTIPLE_OPERATIONAL_PROFILES_AFTER_CREATE',
-        message: 'נוצרו מספר פרופילים תפעוליים במקביל — נדרשת בדיקת מנהל (לא נמחק דבר)',
-        group_id,
-        profile_ids: profileIds,
-        warnings: [`נמצאו ${afterCreate.length} פרופילים לאחר יצירה: ${profileIds.join(', ')}`],
-      }, { status: 409 });
-    }
-
+    const ensured = await ensureExactlyOneOperationalProfile(base44, group, 'MULTIPLE_OPERATIONAL_PROFILES');
     return Response.json({
       success: true,
       group_id,
-      operational_group_profile_id: created.id,
-      status: 'created',
+      operational_group_profile_id: ensured.profile.id,
+      status: ensured.created ? 'created' : 'existed',
       group,
-      profile: created,
+      profile: ensured.profile,
     });
 
   } catch (error) {
     console.error('[ensureOperationalGroupProfile] unexpected error:', error?.message, error?.stack);
     return Response.json({
       success: false,
-      error: 'INTERNAL_ERROR',
-      message: 'שגיאה פנימית בשרת — אנא נסה שוב',
-    }, { status: 500 });
+      error: error?.code || 'INTERNAL_ERROR',
+      message: error?.code === 'MULTIPLE_OPERATIONAL_PROFILES' ? 'נמצאו מספר פרופילים תפעוליים לאותה קבוצה — נדרשת בדיקת מנהל' : 'שגיאה פנימית בשרת — אנא נסה שוב',
+      profile_ids: error?.profile_ids,
+    }, { status: error?.code ? 409 : 500 });
   }
 });

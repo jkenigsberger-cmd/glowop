@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { getEffectiveQuoteGroupName } from '../../shared/quotePreparation.js';
+import { ensureExactlyOneOperationalProfile } from '../../shared/operationalProfile.js';
 import { assertQuoteMultiOptionEnabled, resolveSelectedQuoteOption, buildApprovedOptionSnapshot, markSelectedQuoteOption } from '../../shared/quoteOptions.js';
 
 /**
@@ -49,30 +50,9 @@ function buildGroupFromQuote(quote) {
   return g;
 }
 
-// Ensure exactly one OGP for a group (inline, service-role — never the admin HTTP endpoint).
 async function ensureOgp(base44, group_id, group) {
-  const existing = await base44.asServiceRole.entities.OperationalGroupProfile.filter({ group_id });
-  if (existing.length > 1) {
-    const err = new Error('MULTIPLE_OPERATIONAL_PROFILES');
-    err.code = 'MULTIPLE_OPERATIONAL_PROFILES';
-    err.profile_ids = existing.map(p => p.id);
-    throw err;
-  }
-  if (existing.length === 1) return { ogp: existing[0], created: false };
-
-  const profileData = { group_id, status: 'ACCEPTED' };
-  if (group?.total_pax != null) profileData.total_pax   = group.total_pax;
-  if (group?.internal_notes) profileData.general_notes  = group.internal_notes;
-  const created = await base44.asServiceRole.entities.OperationalGroupProfile.create(profileData);
-
-  const after = await base44.asServiceRole.entities.OperationalGroupProfile.filter({ group_id });
-  if (after.length > 1) {
-    const err = new Error('MULTIPLE_OPERATIONAL_PROFILES_AFTER_CREATE');
-    err.code = 'MULTIPLE_OPERATIONAL_PROFILES_AFTER_CREATE';
-    err.profile_ids = after.map(p => p.id);
-    throw err;
-  }
-  return { ogp: created, created: true };
+  const ensured = await ensureExactlyOneOperationalProfile(base44, { ...group, id: group_id }, 'MULTIPLE_OPERATIONAL_PROFILES');
+  return { ogp: ensured.profile, created: ensured.created };
 }
 
 // Derive OGP operational values from Quote (Quote has no boys/girls split).
@@ -160,6 +140,7 @@ Deno.serve(async (req) => {
       }
     }
     const group_id = group.id;
+    const groupAlreadyOperational = group.status === 'CONFIRMED';
 
     // ── Ensure exactly one OGP ──────────────────────────────────────────────
     let ogp = null;
@@ -186,7 +167,7 @@ Deno.serve(async (req) => {
     }
 
     // ── Link Quote → OGP (OGP.quote_id) when empty ──────────────────────────
-    if (isEmpty(ogp.quote_id)) {
+    if (!groupAlreadyOperational && isEmpty(ogp.quote_id)) {
       try {
         await base44.asServiceRole.entities.OperationalGroupProfile.update(ogp.id, { quote_id });
         ogp.quote_id = quote_id;
@@ -198,12 +179,12 @@ Deno.serve(async (req) => {
           quote_id, group_id, operational_group_profile_id: ogp.id,
         }, { status: 500 });
       }
-    } else if (String(ogp.quote_id) !== String(quote_id)) {
+    } else if (!groupAlreadyOperational && String(ogp.quote_id) !== String(quote_id)) {
       warnings.push('QUOTE_OGP_LINK_DIFFERS');
     }
 
     // ── Field mapping into OGP — only newly created OR empty fields ──────────
-    const quoteOgpVals = ogpValuesFromQuote(quote);
+    const quoteOgpVals = groupAlreadyOperational ? {} : ogpValuesFromQuote(quote);
     const ogpUpdate = {};
     for (const [key, val] of Object.entries(quoteOgpVals)) {
       if (ogpJustCreated || isEmpty(ogp[key])) {
@@ -278,15 +259,11 @@ Deno.serve(async (req) => {
       return Response.json({ success: false, error: err?.code || 'QUOTE_APPROVAL_UPDATE_FAILED', message: 'האישור לא הושלם — ניתן לנסות שוב בבטחה', quote_id, group_id, operational_group_profile_id: ogp.id, warnings }, { status: err?.code ? 409 : 500 });
     }
 
-    return Response.json({
-      success: true,
-      quote_id,
-      group_id,
-      operational_group_profile_id: ogp.id,
-      quote_status: 'APPROVED',
-      status: outcomeStatus,
-      ...(warnings.length > 0 ? { warnings } : {}),
-    });
+    const finalQuote = await base44.asServiceRole.entities.Quote.get(quote_id);
+    const finalGroup = await base44.asServiceRole.entities.Group.get(group_id);
+    const finalProfiles = await base44.asServiceRole.entities.OperationalGroupProfile.filter({ group_id });
+    if (finalProfiles.length !== 1) throw Object.assign(new Error('DUPLICATE_OPERATIONAL_PROFILE'), { code: 'DUPLICATE_OPERATIONAL_PROFILE', profile_ids: finalProfiles.map(p => p.id) });
+    return Response.json({ success: true, quote: finalQuote, group: finalGroup, profile: finalProfiles[0], quote_id, group_id, operational_group_profile_id: finalProfiles[0].id, quote_status: finalQuote.status, status: outcomeStatus, ...(warnings.length > 0 ? { warnings } : {}) });
 
   } catch (error) {
     console.error('[approveQuoteAndInitializeGroup] unexpected error:', error?.message, error?.stack);
