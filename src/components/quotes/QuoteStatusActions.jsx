@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { Send, CheckCircle, XCircle, Clock } from "lucide-react";
@@ -9,6 +10,7 @@ import QuoteOptionApprovalDialog from "./QuoteOptionApprovalDialog";
 import RoleGate from "@/components/RoleGate";
 import { useRoleContext } from "@/lib/RoleContext";
 import { isQuoteMultiOptionEnabled } from "@/lib/quoteMultiOption";
+import { updateQuotePreparationCache, invalidateQuotePreparationCache } from "@/lib/quotePreparationCache";
 
 /**
  * Allowed transitions per the documented quote lifecycle:
@@ -66,6 +68,7 @@ function buildSnapshot(quote, group) {
 
 export default function QuoteStatusActions({ quote, group, onUpdated }) {
   const { role } = useRoleContext();
+  const queryClient = useQueryClient();
   const multiOptionEnabled = isQuoteMultiOptionEnabled(role);
   const [loading, setLoading] = useState(false);
   const [capacityWarnings, setCapacityWarnings] = useState(null); // non-null = dialog open
@@ -132,6 +135,10 @@ export default function QuoteStatusActions({ quote, group, onUpdated }) {
     (data.warnings || []).forEach(w => toast.warning(WARNING_MESSAGES[w] || w));
 
     const targetGroupId = data.group_id || group?.id || quote.group_id;
+    const approvedQuote = { ...quote, group_id: targetGroupId, status: "APPROVED", approved_option_key: selectedOptionKey || quote.approved_option_key };
+    const confirmedGroup = group ? { ...group, status: "CONFIRMED" } : undefined;
+    updateQuotePreparationCache(queryClient, { quote: approvedQuote, group: confirmedGroup });
+    invalidateQuotePreparationCache(queryClient, targetGroupId);
 
     if (quote.preparation_flow_enabled) {
       toast.success("הצעת המחיר אושרה");
@@ -196,13 +203,18 @@ export default function QuoteStatusActions({ quote, group, onUpdated }) {
   const handleTransition = async (nextStatus, selectedOptionKey = null) => {
     if (nextStatus !== "APPROVED") {
       setLoading(true);
+      let updatedQuote;
       if (quote.preparation_flow_enabled && nextStatus === "REJECTED") {
         const reason = window.prompt("סיבת דחייה");
         if (!reason) { setLoading(false); return; }
-        await base44.functions.invoke("rejectQuotePreparation", { quote_id: quote.id, rejection_reason: reason });
+        const response = await base44.functions.invoke("rejectQuotePreparation", { quote_id: quote.id, rejection_reason: reason });
+        if (!response.data?.success) { setLoading(false); toast.error("דחיית ההצעה נכשלה"); return; }
+        updatedQuote = { ...quote, status: "REJECTED", rejection_reason: reason };
       } else {
-        await base44.entities.Quote.update(quote.id, { status: nextStatus });
+        updatedQuote = await base44.entities.Quote.update(quote.id, { status: nextStatus });
       }
+      updateQuotePreparationCache(queryClient, { quote: updatedQuote, group });
+      invalidateQuotePreparationCache(queryClient, quote.group_id || group?.id);
       setLoading(false);
       onUpdated();
       return;

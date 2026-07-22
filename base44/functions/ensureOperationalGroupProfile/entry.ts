@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 
 /**
  * ensureOperationalGroupProfile
@@ -33,7 +33,7 @@ Deno.serve(async (req) => {
     }
 
     // Resolve effective role from InternalUser (falls back to platform role)
-    const ALLOWED_ROLES = new Set(['SUPER_ADMIN', 'ADMIN', 'OPERATIONS']);
+    const ALLOWED_ROLES = new Set(['SUPER_ADMIN', 'ADMIN']);
     let effectiveRole = user.role;
     try {
       const internalUsers = await base44.asServiceRole.entities.InternalUser.filter({ email: user.email });
@@ -101,6 +101,8 @@ Deno.serve(async (req) => {
         group_id,
         operational_group_profile_id: profile.id,
         status: 'existed',
+        group,
+        profile,
       });
     }
 
@@ -113,8 +115,6 @@ Deno.serve(async (req) => {
       group_id,
       status: 'ACCEPTED',
     };
-    if (group.arrival_date   != null && group.arrival_date   !== '') profileData.arrival_date   = group.arrival_date;
-    if (group.departure_date != null && group.departure_date !== '') profileData.departure_date = group.departure_date;
     if (group.total_pax      != null)                                profileData.total_pax      = group.total_pax;
     if (group.internal_notes != null && group.internal_notes !== '') profileData.general_notes  = group.internal_notes;
 
@@ -142,6 +142,8 @@ Deno.serve(async (req) => {
       group_id,
       operational_group_profile_id: created.id,
       status: 'created',
+      group,
+      profile: created,
     });
 
   } catch (error) {

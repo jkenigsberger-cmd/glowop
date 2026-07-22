@@ -28,6 +28,8 @@ import CoffeeAndPrisaTab from "@/components/coffee/CoffeeAndPrisaTab";
 import PostStayTab from "@/components/post-stay/PostStayTab";
 import MechinaUsersSection from "@/components/mechina/MechinaUsersSection";
 import MealDateRangeWarning from "@/components/groups/MealDateRangeWarning";
+import OperationalProfileAction from "@/components/groups/OperationalProfileAction";
+import { updateQuotePreparationCache, invalidateQuotePreparationCache } from "@/lib/quotePreparationCache";
 
 export default function GroupDetail() {
   const { id } = useParams();
@@ -60,6 +62,12 @@ export default function GroupDetail() {
   });
   const operationalProfile = profiles[0];
 
+  const handleProfileReady = (profile, returnedGroup) => {
+    updateQuotePreparationCache(queryClient, { profile, group: returnedGroup || group });
+    invalidateQuotePreparationCache(queryClient, id);
+    requestAnimationFrame(() => document.getElementById("operational-profile")?.scrollIntoView({ behavior: "smooth" }));
+  };
+
   const { data: quotes = [] } = useQuery({
     queryKey: ["quotes", id],
     queryFn: () => base44.entities.Quote.filter({ group_id: id }),
@@ -71,12 +79,8 @@ export default function GroupDetail() {
   });
 
   const refetch = () => {
-    queryClient.invalidateQueries({ queryKey: ["group", id] });
-    queryClient.invalidateQueries({ queryKey: ["quotes", id] });
+    invalidateQuotePreparationCache(queryClient, id);
     queryClient.invalidateQueries({ queryKey: ["submissions", id] });
-    queryClient.invalidateQueries({ queryKey: ["operationalProfile", id] });
-    queryClient.invalidateQueries({ queryKey: ["operationalProfiles"] });
-    queryClient.invalidateQueries({ queryKey: ["groups"] });
   };
 
   const activeQuote = quotes.find(q => q.status === "APPROVED") || quotes[0];
@@ -456,28 +460,19 @@ export default function GroupDetail() {
               </Button>
             </div>
           )}
-          {!operationalProfile && group && (group.status === "DRAFT" || group.status === "CONFIRMED") && (
+          {!operationalProfile && group && (
             <div className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
-              <div>
-                <p className="text-sm font-semibold text-slate-700">אין פרופיל תפעולי עדיין</p>
-                <p className="text-xs text-slate-500 mt-0.5">ניתן ליצור פרופיל תפעולי מנתוני הקבוצה/ההצעה</p>
-              </div>
-              <Button
-                size="sm"
-                variant="outline"
-                className="gap-1.5 border-slate-300"
-                onClick={handleApproveProfile}
-                disabled={approvingProfile}
-              >
-                <ShieldCheck className="w-3.5 h-3.5" />
-                {approvingProfile ? "מאשר..." : "צור ואשר פרופיל תפעולי"}
-              </Button>
+              <div><p className="text-sm font-semibold text-slate-700">אין פרופיל תפעולי עדיין</p><p className="text-xs text-slate-500 mt-0.5">ניתן ליצור פרופיל בלי לשנות את מצב הקבוצה או ההצעה</p></div>
+              <OperationalProfileAction groupId={id} profile={operationalProfile} onReady={handleProfileReady} />
             </div>
           )}
         </RoleGate>
 
         {/* Operational Profile */}
-        <OperationalProfileDisplay groupId={id} group={group} provisional={isPreparation} />
+        <div id="operational-profile" className="space-y-3">
+          {operationalProfile && <div className="flex justify-end"><OperationalProfileAction groupId={id} profile={operationalProfile} onOpen={() => document.getElementById("operational-profile")?.scrollIntoView({ behavior: "smooth" })} /></div>}
+          <OperationalProfileDisplay groupId={id} group={group} provisional={isPreparation} />
+        </div>
 
         {/* Operational Hold — admin debug card */}
         <OperationalHoldCard groupId={id} />

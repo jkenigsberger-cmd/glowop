@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Users, Plus, Clock, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -15,11 +15,13 @@ import PreparationGroupCard from "@/components/groups/PreparationGroupCard";
 import { useRoleContext } from "@/lib/RoleContext";
 import { isQuoteOpen, isQuotePreparationEnabled } from "@/lib/quotePreparationFlow";
 import { toast } from "sonner";
+import { updateQuotePreparationCache, invalidateQuotePreparationCache } from "@/lib/quotePreparationCache";
 
 const TODAY = new Date().toISOString().slice(0, 10);
 
 export default function Groups() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { role } = useRoleContext();
   const preparationFlowEnabled = isQuotePreparationEnabled(role);
   const [showForm, setShowForm] = useState(false);
@@ -49,7 +51,7 @@ export default function Groups() {
     queryKey: ["groups"],
     queryFn: () => base44.entities.Group.list("arrival_date", 500),
   });
-  const { data: preparationQuotes = [], refetch: refetchQuotes } = useQuery({
+  const { data: preparationQuotes = [] } = useQuery({
     queryKey: ["preparationQuotes"],
     queryFn: () => base44.entities.Quote.filter({ preparation_flow_enabled: true }, "-updated_date", 500),
     enabled: preparationFlowEnabled,
@@ -236,7 +238,7 @@ export default function Groups() {
             <GroupList items={active} emptyLabel="אין קבוצות פעילות" />
           </TabsContent>
           {preparationFlowEnabled && <TabsContent value="preparation">
-            <div className="space-y-3">{preparationGroups.map(group => <PreparationGroupCard key={group.id} group={group} quote={preparationQuoteByGroup[group.id]} profile={preparationProfileByGroup[group.id]} canApprove={["SUPER_ADMIN","ADMIN"].includes(role) && (!preparationQuoteByGroup[group.id]?.multi_option_enabled || role === "SUPER_ADMIN")} onApprove={async (selectedOptionKey) => { const res = await base44.functions.invoke("approveQuoteAndActivateGroup", { quote_id: preparationQuoteByGroup[group.id].id, selected_option_key: selectedOptionKey }); if (res.data?.success) { toast.success("ההצעה אושרה והקבוצה הופעלה"); refetch(); refetchQuotes(); } else toast.error("אישור ההצעה נכשל"); }} />)}{!preparationGroups.length && <p className="text-center py-10 text-muted-foreground">אין קבוצות בהכנה</p>}</div>
+            <div className="space-y-3">{preparationGroups.map(group => <PreparationGroupCard key={group.id} group={group} quote={preparationQuoteByGroup[group.id]} profile={preparationProfileByGroup[group.id]} canApprove={["SUPER_ADMIN","ADMIN"].includes(role) && (!preparationQuoteByGroup[group.id]?.multi_option_enabled || role === "SUPER_ADMIN")} onProfileReady={(profile, returnedGroup) => { updateQuotePreparationCache(queryClient, { profile, group: returnedGroup || group }); invalidateQuotePreparationCache(queryClient, group.id); }} onApprove={async (selectedOptionKey) => { const currentQuote = preparationQuoteByGroup[group.id]; const res = await base44.functions.invoke("approveQuoteAndActivateGroup", { quote_id: currentQuote.id, selected_option_key: selectedOptionKey }); if (res.data?.success) { updateQuotePreparationCache(queryClient, { quote: { ...currentQuote, status: "APPROVED", approved_option_key: selectedOptionKey }, group: { ...group, status: "CONFIRMED" }, profile: preparationProfileByGroup[group.id] }); invalidateQuotePreparationCache(queryClient, group.id); toast.success("ההצעה אושרה והקבוצה הופעלה"); } else toast.error("אישור ההצעה נכשל"); }} />)}{!preparationGroups.length && <p className="text-center py-10 text-muted-foreground">אין קבוצות בהכנה</p>}</div>
           </TabsContent>}
           <TabsContent value="history">
             <GroupList items={history} emptyLabel="אין קבוצות בהיסטוריה" showUnmarkedBadges />
