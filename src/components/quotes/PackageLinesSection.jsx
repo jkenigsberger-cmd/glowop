@@ -17,6 +17,7 @@ import {
   resolvePackageUnitPrice,
 } from "@/lib/quoteCatalog";
 import ProductInfoPopover from "./ProductInfoPopover";
+import { isPaxLinkedAddon } from "@/lib/quoteQuantityMode";
 
 const fmtMoney = (n) => `₪${Math.round(Number(n) || 0).toLocaleString("he-IL")}`;
 
@@ -48,9 +49,9 @@ function PackageLineRow({ line, index, onUpdate, onRemove, defaultPax }) {
     const newPax = Number(val) || 0;
     if (!line.price_overridden && !isFlexible) {
       const newRate = resolvePackageUnitPrice(pkg.id, line.option_id, newPax);
-      onUpdate(index, { ...line, quantity: newPax, unit_price: newRate });
+      onUpdate(index, { ...line, quantity: newPax, unit_price: newRate, quantity_mode: "MANUAL" });
     } else {
-      onUpdate(index, { ...line, quantity: newPax });
+      onUpdate(index, { ...line, quantity: newPax, quantity_mode: "MANUAL" });
     }
   };
 
@@ -295,7 +296,11 @@ function AddonLineRow({ line, index, onUpdate, onRemove, defaultPax }) {
             type="number"
             min="0"
             value={line.quantity ?? ""}
-            onChange={e => onUpdate(index, { ...line, quantity: Number(e.target.value) || 0 })}
+            onChange={e => onUpdate(index, {
+              ...line,
+              quantity: Number(e.target.value) || 0,
+              ...(isPaxLinkedAddon(line) ? { quantity_mode: "MANUAL" } : {}),
+            })}
           />
         </div>
         <div className="col-span-4 space-y-0.5">
@@ -413,6 +418,7 @@ export default function PackageLinesSection({
         unit_price: defaultRate,
         shirley_addon: false,
         price_overridden: false,
+        quantity_mode: "AUTO",
         notes: "",
       },
     ]);
@@ -428,6 +434,7 @@ export default function PackageLinesSection({
         addon_id: item.id,
         quantity: isFixedUnit ? 1 : Number(defaultPax) || 0,
         unit_price: item.rate ?? item.fixed_price ?? 0,
+        ...(!isFixedUnit ? { quantity_mode: "AUTO" } : {}),
         notes: "",
       },
     ]);
