@@ -23,6 +23,11 @@ function datesOverlap(a1, a2, b1, b2) {
   return a1 < b2 && b1 < a2;
 }
 
+// A stay that already ended (departure_date <= today, exclusive) no longer occupies anything
+function todayLocal() {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Jerusalem" });
+}
+
 function parseDist(json) {
   if (!json) return [];
   try { return JSON.parse(json); } catch { return []; }
@@ -139,8 +144,10 @@ export default function SleepingAllocationTab({ groupId }) {
   const otherNhoodResByNeighborhood = useMemo(() => {
     const map = {};
     if (!arrivalDate || !departureDate) return map;
+    const today = todayLocal();
     allNhoodReservations.forEach(r => {
       if (r.group_id === groupId) return;
+      if (r.departure_date <= today) return; // stay already ended
       if (!datesOverlap(arrivalDate, departureDate, r.arrival_date, r.departure_date)) return;
       map[r.neighborhood_id] = { group_name: groupById[r.group_id]?.group_name || r.group_id, gender_group: r.gender_group };
     });
@@ -151,8 +158,10 @@ export default function SleepingAllocationTab({ groupId }) {
   const vipTentConflictMap = useMemo(() => {
     const map = {};
     if (!arrivalDate || !departureDate) return map;
+    const today = todayLocal();
     allConfirmedAllocations.forEach(oa => {
       if (oa.group_id === groupId) return;
+      if (oa.departure_date <= today) return; // stay already ended
       if (!datesOverlap(arrivalDate, departureDate, oa.arrival_date, oa.departure_date)) return;
       map[oa.tent_id] = { gender_group: oa.gender_group, group_id: oa.group_id };
     });
@@ -165,8 +174,10 @@ export default function SleepingAllocationTab({ groupId }) {
     const map = {};
     if (!arrivalDate || !departureDate) return map;
     const tentById = Object.fromEntries(allTents.map(t => [t.id, t]));
+    const today = todayLocal();
     allConfirmedAllocations.forEach(oa => {
       if (oa.group_id === groupId) return;
+      if (oa.departure_date <= today) return; // stay already ended
       if (!datesOverlap(arrivalDate, departureDate, oa.arrival_date, oa.departure_date)) return;
       if (!oa.neighborhood_id) return;
       if (!map[oa.neighborhood_id]) map[oa.neighborhood_id] = [];

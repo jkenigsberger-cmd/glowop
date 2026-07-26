@@ -88,8 +88,10 @@ Deno.serve(async (req) => {
     const allConfirmed = await base44.asServiceRole.entities.SleepingAllocation.filter({ status: 'CONFIRMED' });
     const allDrafts    = await base44.asServiceRole.entities.SleepingAllocation.filter({ status: 'DRAFT' });
     const finalDraftIds = new Set(finalDraftsToConfirm.map(d => d.id));
+    // Stays that already ended (departure_date <= today, exclusive) no longer block anything
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
     const otherActive  = [...allConfirmed, ...allDrafts].filter(a =>
-      a.group_id !== group_id && !finalDraftIds.has(a.id)
+      a.group_id !== group_id && !finalDraftIds.has(a.id) && a.departure_date > today
     );
 
     // ── 3. Load neighborhoods and tents ──────────────────────────────────────
