@@ -159,6 +159,28 @@ export default function SleepingAllocationTab({ groupId }) {
     return map;
   }, [allConfirmedAllocations, groupId, arrivalDate, departureDate]);
 
+  // Tent-level occupancy by OTHER groups, grouped by neighborhood — makes hidden
+  // conflicts (e.g. alt-tent allocations without a neighborhood reservation) visible
+  const tentConflictsByNeighborhood = useMemo(() => {
+    const map = {};
+    if (!arrivalDate || !departureDate) return map;
+    const tentById = Object.fromEntries(allTents.map(t => [t.id, t]));
+    allConfirmedAllocations.forEach(oa => {
+      if (oa.group_id === groupId) return;
+      if (!datesOverlap(arrivalDate, departureDate, oa.arrival_date, oa.departure_date)) return;
+      if (!oa.neighborhood_id) return;
+      if (!map[oa.neighborhood_id]) map[oa.neighborhood_id] = [];
+      map[oa.neighborhood_id].push({
+        tent_name: tentById[oa.tent_id]?.name || tentById[oa.tent_id]?.tent_number || "?",
+        group_name: groupById[oa.group_id]?.group_name || oa.group_id,
+        arrival_date: oa.arrival_date,
+        departure_date: oa.departure_date,
+        pax: oa.allocated_pax,
+      });
+    });
+    return map;
+  }, [allConfirmedAllocations, groupId, arrivalDate, departureDate, allTents, groupById]);
+
   // Gender split availability
   const hasGenderSplit = (Number(profile?.boys_count) + Number(profile?.girls_count)) > 0;
   const defaultGenderGroup = hasGenderSplit ? "BOYS" : "MIXED";
@@ -474,6 +496,7 @@ export default function SleepingAllocationTab({ groupId }) {
             defaultGenderGroup={defaultGenderGroup}
             profile={profile}
             existingGroupAllocs={myAllocations}
+            occupiedTents={tentConflictsByNeighborhood[hood.id] || []}
             />
           );
         })}

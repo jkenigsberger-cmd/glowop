@@ -45,6 +45,7 @@ export default function StudentNeighborhoodPanel({
   defaultGenderGroup = "BOYS",
   profile = null,
   existingGroupAllocs = [],
+  occupiedTents = [],
 }) {
   const [open, setOpen] = useState(false);
   const [showDistribution, setShowDistribution] = useState(false);
@@ -141,6 +142,17 @@ export default function StudentNeighborhoodPanel({
               </p>
             );
           })()}
+          {/* Tent-level occupancy by other groups (visible even without a neighborhood reservation) */}
+          {occupiedTents.length > 0 && (
+            <div className="mt-1 space-y-0.5">
+              {occupiedTents.map((t, i) => (
+                <p key={i} className="text-[10px] text-red-600 flex items-center gap-1">
+                  <Lock className="w-2.5 h-2.5 shrink-0" />
+                  אוהל {t.tent_name} תפוס ע״י {t.group_name} ({t.arrival_date} — {t.departure_date}, {t.pax} איש)
+                </p>
+              ))}
+            </div>
+          )}
           {/* Shared reason display */}
           {isAlreadyShared && lockByThisGroup.shared_neighborhood_reason && (
             <p className="text-[10px] text-amber-700 mt-0.5">
