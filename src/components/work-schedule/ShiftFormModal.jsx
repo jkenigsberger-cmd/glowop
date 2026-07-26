@@ -7,20 +7,26 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertTriangle, Trash2, Ban } from "lucide-react";
-import { ROW_TYPES, ROW_BY_TYPE, WORKER_TEAMS } from "@/lib/workScheduleConfig";
+import { ROW_TYPES, ROW_BY_TYPE, WORKER_TEAMS, OPERATIONS_MORNING_OPTIONS, getDefaultShiftTimes } from "@/lib/workScheduleConfig";
 import { REQUEST_TYPE_LABELS, REQUEST_STATUS_LABELS } from "@/lib/workScheduleRequestLabels";
 
 const NEW_WORKER = "__new__";
 
 export default function ShiftFormModal({ shift, defaults, workers, requests = [], isPublished, userEmail, onSave, onDelete, onCancelShift, onClose }) {
   const isEdit = !!shift;
+  const initialRowType = shift?.row_type || defaults?.row_type || "OPERATIONS_MORNING";
+  const initialTimes = getDefaultShiftTimes(initialRowType);
+  const initialMorningOption = OPERATIONS_MORNING_OPTIONS.find((option) =>
+    option.start_time === shift?.start_time && option.end_time === shift?.end_time
+  )?.id || "EARLY";
+  const [morningOption, setMorningOption] = useState(initialMorningOption);
   const [form, setForm] = useState({
     date:       shift?.date       || defaults?.date     || "",
-    row_type:   shift?.row_type   || defaults?.row_type || "OPERATIONS_MORNING",
+    row_type:   initialRowType,
     worker_id:  shift?.worker_id  || "",
     worker_count: shift?.worker_count || "",
-    start_time: shift?.start_time || "",
-    end_time:   shift?.end_time   || "",
+    start_time: shift?.start_time || initialTimes.start_time,
+    end_time:   shift?.end_time   || initialTimes.end_time,
     notes:      shift?.notes      || "",
   });
   const [newWorker, setNewWorker] = useState({ full_name: "", phone: "", default_team: "OTHER", internal_user_email: "" });
@@ -28,7 +34,19 @@ export default function ShiftFormModal({ shift, defaults, workers, requests = []
   const [error, setError] = useState("");
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+  const handleRowTypeChange = (rowType) => {
+    const times = getDefaultShiftTimes(rowType);
+    setForm((current) => ({ ...current, row_type: rowType, start_time: times.start_time, end_time: times.end_time }));
+    if (rowType === "OPERATIONS_MORNING") setMorningOption("EARLY");
+  };
+  const handleMorningOptionChange = (optionId) => {
+    const option = OPERATIONS_MORNING_OPTIONS.find((item) => item.id === optionId);
+    if (!option) return;
+    setMorningOption(optionId);
+    setForm((current) => ({ ...current, start_time: option.start_time, end_time: option.end_time }));
+  };
   const row = ROW_BY_TYPE[form.row_type] || {};
+  const isNightGeneratedMorning = shift?.auto_created_from === "NIGHT_ON_CALL_TO_OPERATIONS_MORNING";
   const isActivity = !!row.textOnly;
   const isCountBased = !!row.countBased;
   const isNewWorker = form.worker_id === NEW_WORKER;
@@ -82,8 +100,8 @@ export default function ShiftFormModal({ shift, defaults, workers, requests = []
         worker_id: (isActivity || isCountBased) ? "" : workerId,
         worker_name: (isActivity || isCountBased) ? "" : workerName,
         worker_count: isCountBased ? Number(form.worker_count) : undefined,
-        start_time: (isActivity || isCountBased) ? "" : form.start_time,
-        end_time: (isActivity || isCountBased) ? "" : form.end_time,
+        start_time: isActivity ? "" : form.start_time,
+        end_time: isActivity ? "" : form.end_time,
         notes: form.notes || undefined,
         status: shift?.status || "PLANNED",
       });
@@ -117,7 +135,7 @@ export default function ShiftFormModal({ shift, defaults, workers, requests = []
             </div>
             <div className="space-y-1">
               <Label className="text-xs text-slate-500">אזור / משמרת</Label>
-              <Select value={form.row_type} onValueChange={(v) => set("row_type", v)}>
+              <Select value={form.row_type} onValueChange={handleRowTypeChange}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {ROW_TYPES.map((r) => <SelectItem key={r.type} value={r.type}>{r.label}</SelectItem>)}
@@ -126,17 +144,41 @@ export default function ShiftFormModal({ shift, defaults, workers, requests = []
             </div>
           </div>
 
-          {isCountBased && (
+          {form.row_type === "OPERATIONS_MORNING" && !isNightGeneratedMorning && (
             <div className="space-y-1">
-              <Label className="text-xs text-slate-500">כמות מנקות *</Label>
-              <Input
-                type="number"
-                min="1"
-                value={form.worker_count}
-                onChange={(e) => set("worker_count", e.target.value)}
-                placeholder="לדוגמה: 4"
-              />
+              <Label className="text-xs text-slate-500">אפשרות תפעול בוקר</Label>
+              <Select value={morningOption} onValueChange={handleMorningOptionChange}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {OPERATIONS_MORNING_OPTIONS.map((option) => <SelectItem key={option.id} value={option.id}>{option.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
+          )}
+
+          {isCountBased && (
+            <>
+              <div className="space-y-1">
+                <Label className="text-xs text-slate-500">כמות מנקות *</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  value={form.worker_count}
+                  onChange={(e) => set("worker_count", e.target.value)}
+                  placeholder="לדוגמה: 4"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs text-slate-500">שעת התחלה</Label>
+                  <Input type="time" value={form.start_time} onChange={(e) => set("start_time", e.target.value)} />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-slate-500">שעת סיום</Label>
+                  <Input type="time" value={form.end_time} onChange={(e) => set("end_time", e.target.value)} />
+                </div>
+              </div>
+            </>
           )}
 
           {!isActivity && !isCountBased && (

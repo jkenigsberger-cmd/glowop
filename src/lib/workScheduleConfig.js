@@ -14,6 +14,22 @@ export const ROW_TYPES = [
 
 export const ROW_BY_TYPE = Object.fromEntries(ROW_TYPES.map(r => [r.type, r]));
 
+export const OPERATIONS_MORNING_OPTIONS = [
+  { id: "EARLY", label: "07:00–14:00", start_time: "07:00", end_time: "14:00" },
+  { id: "REGULAR", label: "08:00–16:00", start_time: "08:00", end_time: "16:00" },
+];
+
+export const DEFAULT_SHIFT_TIMES = {
+  OPERATIONS_MORNING: OPERATIONS_MORNING_OPTIONS[0],
+  HOUSEKEEPING_MORNING: { start_time: "08:00", end_time: "16:00" },
+  HOUSEKEEPING_MANAGER: { start_time: "08:00", end_time: "16:00" },
+  OPERATIONS_EVENING: { start_time: "14:00", end_time: "22:00" },
+};
+
+export function getDefaultShiftTimes(rowType) {
+  return DEFAULT_SHIFT_TIMES[rowType] || { start_time: "", end_time: "" };
+}
+
 export const TEAM_FILTERS = [
   { id: "ALL",          label: "הכל" },
   { id: "OPERATIONS",   label: "תפעול" },
