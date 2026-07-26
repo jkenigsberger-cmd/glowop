@@ -15,8 +15,8 @@ export const ROW_TYPES = [
 export const ROW_BY_TYPE = Object.fromEntries(ROW_TYPES.map(r => [r.type, r]));
 
 export const OPERATIONS_MORNING_OPTIONS = [
-  { id: "EARLY", label: "07:00–14:00", start_time: "07:00", end_time: "14:00" },
-  { id: "REGULAR", label: "08:00–16:00", start_time: "08:00", end_time: "16:00" },
+  { id: "EARLY", label: "07:00–16:00", start_time: "07:00", end_time: "16:00" },
+  { id: "REGULAR", label: "08:00–17:00", start_time: "08:00", end_time: "17:00" },
 ];
 
 export const DEFAULT_SHIFT_TIMES = {
