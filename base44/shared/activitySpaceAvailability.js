@@ -1,12 +1,12 @@
-export const ACTIVITY_BUFFER_MINUTES = 15;
+export const ACTIVITY_BUFFER_MINUTES = 0;
 
 export function timeToMinutes(value) {
   const [hours, minutes] = String(value || '').split(':').map(Number);
   return hours * 60 + minutes;
 }
 
-function overlapsWithBuffer(startA, endA, startB, endB) {
-  return startA < endB + ACTIVITY_BUFFER_MINUTES && startB < endA + ACTIVITY_BUFFER_MINUTES;
+function overlaps(startA, endA, startB, endB) {
+  return startA < endB && startB < endA;
 }
 
 function localDateTimeToMinutes(date, time) {
@@ -16,8 +16,8 @@ function localDateTimeToMinutes(date, time) {
 }
 
 function blockOverlaps(block, date, startTime, endTime) {
-  const start = localDateTimeToMinutes(date, startTime) - ACTIVITY_BUFFER_MINUTES;
-  const end = localDateTimeToMinutes(date, endTime) + ACTIVITY_BUFFER_MINUTES;
+  const start = localDateTimeToMinutes(date, startTime);
+  const end = localDateTimeToMinutes(date, endTime);
   const blockStart = localDateTimeToMinutes(block.start_date, block.start_time);
   if (block.is_open_ended) return end > blockStart;
   const blockEnd = localDateTimeToMinutes(block.end_date, block.end_time);
@@ -45,14 +45,14 @@ export async function checkActivitySpaceConflict(base44, input) {
   const groupConflict = rawGroupItems.find((item) => {
     if (excludeGroupItemId && item.id === excludeGroupItemId) return false;
     if (excludeSharedActivityId && item.shared_activity_id === excludeSharedActivityId) return false;
-    return overlapsWithBuffer(timeToMinutes(startTime), timeToMinutes(endTime), timeToMinutes(item.start_time), timeToMinutes(item.end_time));
+    return overlaps(timeToMinutes(startTime), timeToMinutes(endTime), timeToMinutes(item.start_time), timeToMinutes(item.end_time));
   });
   if (groupConflict) return { error: 'SPACE_CONFLICT', space_id: spaceId, space_name: space.name, conflicting_source_type: 'GROUP_SCHEDULE_ITEM', conflicting_source_id: groupConflict.id, conflicting_title: groupConflict.activity_name, start_time: groupConflict.start_time, end_time: groupConflict.end_time, message: 'המרחב כבר תפוס בשעה שנבחרה' };
 
   const assignmentReservationIds = new Set(assignments.map((item) => item.reservation_id));
   const standaloneConflict = standaloneReservations.find((item) =>
     assignmentReservationIds.has(item.id) && item.id !== excludeStandaloneReservationId &&
-    overlapsWithBuffer(timeToMinutes(startTime), timeToMinutes(endTime), timeToMinutes(item.start_time), timeToMinutes(item.end_time))
+    overlaps(timeToMinutes(startTime), timeToMinutes(endTime), timeToMinutes(item.start_time), timeToMinutes(item.end_time))
   );
   if (standaloneConflict) return { error: 'SPACE_CONFLICT', space_id: spaceId, space_name: space.name, conflicting_source_type: 'STANDALONE_ACTIVITY', conflicting_source_id: standaloneConflict.id, conflicting_title: standaloneConflict.title, start_time: standaloneConflict.start_time, end_time: standaloneConflict.end_time, message: 'המרחב כבר תפוס בשעה שנבחרה' };
   return null;
