@@ -3,6 +3,7 @@ import { AlertTriangle, Users, Ban } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BLOCK_REASON_LABELS, doesBlockOverlapReservation } from "@/lib/activitySpaceBlocks";
 import { mergeSharedActivities } from "@/lib/mergeSharedActivities";
+import { ActivityEquipmentLine } from "@/components/schedule/LogisticsFields";
 
 function timeToMinutes(t) {
   if (!t) return 0;
@@ -103,27 +104,25 @@ export default function SpaceDailyView({ spaces, itemsBySpace, blocks = [], date
                       ) : (
                         <>
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-semibold text-slate-800 text-sm">{item.groupName}</span>
-                            {item.pax && (
-                              <span className="text-xs text-slate-400">{item.pax} 👤</span>
-                            )}
+                            {item.standalone ? <span className="text-[10px] bg-purple-100 text-purple-700 font-bold px-2 py-0.5 rounded-full">פעילות כללית</span> : <span className="font-semibold text-slate-800 text-sm">{item.groupName}</span>}
+                            {item.pax && <span className="text-xs text-slate-400">{item.pax} 👤</span>}
                             {conflict && (
                               <span className="flex items-center gap-1 text-[10px] bg-red-100 text-red-700 border border-red-200 px-2 py-0.5 rounded-full font-bold">
                                 <AlertTriangle className="w-2.5 h-2.5" /> {blockConflict ? "התנגשות עם חסימה" : "חפיפה"}
                               </span>
                             )}
                           </div>
-                          <div className="text-xs text-slate-600">{item.activityName || item.activity_name}</div>
-                          {item.notes && (
-                            <div className="text-xs text-slate-400 italic">{item.notes}</div>
-                          )}
+                          <div className="text-xs font-semibold text-slate-700">{item.activityName || item.activity_name}</div>
+                          {item.standalone && <div className="text-xs text-slate-500">{item.date} · {item.spaceNames?.join(", ")}{item.organizer_name ? ` · אחראי: ${item.organizer_name}` : ""}</div>}
+                          {item.notes && <div className="text-xs text-slate-400 italic">{item.notes}</div>}
+                          {item.standalone && <ActivityEquipmentLine item={item} />}
                         </>
                       )}
                     </div>
 
                     {/* Link — only for non-shared (shared has no single group to link to) */}
                     {!item.isShared && (item.standalone ? (
-                      <button type="button" onClick={() => onSelectStandalone?.(item.reservationId)} className="text-xs text-primary hover:underline shrink-0 mt-0.5">פרטים ↗</button>
+                      <button type="button" onClick={() => onSelectStandalone?.(item.reservationId)} className="text-xs text-primary hover:underline shrink-0 mt-0.5">פרטים ועריכה</button>
                     ) : (
                       <Link to={`/groups/${item.groupId || item.group_id}`} className="text-xs text-primary hover:underline shrink-0 mt-0.5">קבוצה ↗</Link>
                     ))}

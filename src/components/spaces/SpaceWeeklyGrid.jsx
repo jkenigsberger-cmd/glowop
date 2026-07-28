@@ -2,6 +2,7 @@ import moment from "moment";
 import "moment/locale/he";
 import { cn } from "@/lib/utils";
 import { isBlockVisibleOnCalendarDate } from "@/lib/activitySpaceBlocks";
+import { equipmentTextSummary } from "@/components/schedule/LogisticsFields";
 
 moment.locale("he");
 
@@ -28,7 +29,7 @@ function heatClass(count) {
 
 const SPACE_TYPE_LABELS = { BUNKER: "בונקר", OHEL_MOED: "אוהל מועד", DINING_HALL: "חדר אוכל" };
 
-export default function SpaceWeeklyGrid({ spaces, allItems, blocks = [], pivot, onSelectDay }) {
+export default function SpaceWeeklyGrid({ spaces, allItems, blocks = [], pivot, onSelectDay, onSelectStandalone }) {
   const weekDates = getWeekDates(pivot);
   const today = moment().format("YYYY-MM-DD");
 
@@ -71,28 +72,36 @@ export default function SpaceWeeklyGrid({ spaces, allItems, blocks = [], pivot, 
               </td>
               {weekDates.map((d) => {
                 const dateStr = d.format("YYYY-MM-DD");
-                const count = allItems.filter(
-                  (i) => i.activity_space_id === space.id && i.date === dateStr
-                ).length;
+                const cellItems = allItems.filter((i) => i.activity_space_id === space.id && i.date === dateStr);
+                const count = cellItems.length;
+                const standaloneItems = cellItems.filter((item, index, rows) => item.standalone && rows.findIndex((row) => row.reservationId === item.reservationId) === index);
                 const blockCount = blocks.filter(block =>
                   block.activity_space_id === space.id && isBlockVisibleOnCalendarDate(block, dateStr)
                 ).length;
                 const hasContent = count > 0 || blockCount > 0;
 
                 return (
-                  <td key={dateStr} className="border border-slate-200 p-1 text-center">
+                  <td key={dateStr} className="border border-slate-200 p-1 text-center align-top">
                     <button
                       type="button"
                       onClick={() => hasContent && onSelectDay(dateStr)}
                       disabled={!hasContent}
-                      className={cn(
-                        "w-full h-10 rounded-lg text-xs font-bold transition-all",
-                        blockCount > 0 ? "bg-amber-100 text-amber-800 border border-amber-300" : heatClass(count),
-                        hasContent && "hover:shadow-md cursor-pointer hover:scale-105"
-                      )}
+                      className={cn("w-full h-10 rounded-lg text-xs font-bold transition-all", blockCount > 0 ? "bg-amber-100 text-amber-800 border border-amber-300" : heatClass(count), hasContent && "hover:shadow-md cursor-pointer")}
                     >
                       {blockCount > 0 ? `חסום${count > 0 ? ` · ${count}` : ""}` : count > 0 ? count : "—"}
                     </button>
+                    {standaloneItems.map((item) => (
+                      <button key={item.reservationId} type="button" onClick={() => onSelectStandalone?.(item.reservationId)} className="mt-1 w-full rounded bg-purple-50 px-1 py-1 text-[9px] text-purple-700 hover:bg-purple-100">
+                        <span className="block font-bold">פעילות כללית</span>
+                        <span className="block truncate font-semibold">{item.activityName}</span>
+                        <span className="block" dir="ltr">{dateStr} · {item.start_time}–{item.end_time}</span>
+                        {item.pax > 0 && <span className="block">{item.pax} משתתפים</span>}
+                        {item.spaceNames?.length > 0 && <span className="block truncate">{item.spaceNames.join(", ")}</span>}
+                        {item.organizer_name && <span className="block truncate">אחראי: {item.organizer_name}</span>}
+                        {equipmentTextSummary(item) && <span className="block truncate">ציוד: {equipmentTextSummary(item)}</span>}
+                        <span className="block font-semibold underline">פרטים ועריכה</span>
+                      </button>
+                    ))}
                   </td>
                 );
               })}

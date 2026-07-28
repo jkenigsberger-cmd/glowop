@@ -4,6 +4,7 @@ import { ChevronDown, ChevronUp, AlertTriangle, CheckCircle2, Clock, Users } fro
 import { cn } from "@/lib/utils";
 import moment from "moment";
 import { mergeSharedActivities } from "@/lib/mergeSharedActivities";
+import { ActivityEquipmentLine } from "@/components/schedule/LogisticsFields";
 
 function timeToMinutes(t) {
   if (!t) return 0;
@@ -21,7 +22,7 @@ const SPACE_TYPE_LABELS = {
   DINING_HALL: "חדר אוכל",
 };
 
-export default function SpaceOverviewCard({ space, items, onSelectDay }) {
+export default function SpaceOverviewCard({ space, items, onSelectDay, onSelectStandalone }) {
   const [expanded, setExpanded] = useState(false);
 
   const today = moment().format("YYYY-MM-DD");
@@ -101,7 +102,7 @@ export default function SpaceOverviewCard({ space, items, onSelectDay }) {
         {nextItem ? (
           <div className="text-xs text-slate-500 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">
             <span className="text-slate-400">הזמנה הבאה: </span>
-            <span className="font-semibold text-slate-700">{nextItem.groupName}</span>
+            <span className="font-semibold text-slate-700">{nextItem.standalone ? nextItem.activityName : nextItem.groupName}</span>
             {" · "}
             <span>{nextItem.date === today ? "היום" : moment(nextItem.date).format("DD/MM")}</span>
             {" · "}
@@ -144,6 +145,15 @@ export default function SpaceOverviewCard({ space, items, onSelectDay }) {
                     </div>
                     <div className="text-slate-400">{item.linkedGroups.map(g => g.groupName).join(", ")}</div>
                   </>
+                ) : item.standalone ? (
+                  <>
+                    <span className="w-fit text-[9px] bg-purple-100 text-purple-700 font-bold px-1.5 py-0.5 rounded-full">פעילות כללית</span>
+                    <div className="font-semibold text-slate-700">{item.activityName || item.activity_name}</div>
+                    {item.pax > 0 && <div className="text-slate-400">{item.pax} 👤</div>}
+                    {item.spaceNames?.length > 0 && <div className="text-slate-400">{item.spaceNames.join(", ")}</div>}
+                    {item.organizer_name && <div className="text-slate-400">אחראי: {item.organizer_name}</div>}
+                    <ActivityEquipmentLine item={item} />
+                  </>
                 ) : (
                   <>
                     <div className="font-semibold text-slate-700">{item.groupName}</div>
@@ -155,14 +165,11 @@ export default function SpaceOverviewCard({ space, items, onSelectDay }) {
               <div className="text-right shrink-0 space-y-0.5">
                 <div className="text-slate-500">{moment(item.date).format("DD/MM")}</div>
                 <div className="text-slate-400">{item.start_time}–{item.end_time}</div>
-                {!item.isShared && (
-                  <Link
-                    to={`/groups/${item.groupId || item.group_id}`}
-                    className="text-primary hover:underline text-[10px]"
-                  >
-                    קבוצה ↗
-                  </Link>
-                )}
+                {!item.isShared && (item.standalone ? (
+                  <button type="button" onClick={() => onSelectStandalone?.(item.reservationId)} className="text-primary hover:underline text-[10px]">פרטים ועריכה</button>
+                ) : (
+                  <Link to={`/groups/${item.groupId || item.group_id}`} className="text-primary hover:underline text-[10px]">קבוצה ↗</Link>
+                ))}
               </div>
             </div>
           ))}

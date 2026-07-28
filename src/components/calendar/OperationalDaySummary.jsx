@@ -497,7 +497,8 @@ export default function OperationalDaySummary({
   );
 
   const dayActivities = useMemo(() =>
-    (allActivities || []).filter(a => a.status === "ACTIVE" && a.date === dateStr),
+    (allActivities || []).filter(a => a.status === "ACTIVE" && a.date === dateStr)
+      .sort((a, b) => (a.start_time || "").localeCompare(b.start_time || "") || (a.end_time || "").localeCompare(b.end_time || "")),
     [allActivities, dateStr]
   );
 
@@ -550,8 +551,8 @@ export default function OperationalDaySummary({
 
         {/* ── Filter pills ── */}
         <div className="shrink-0 px-5 py-3 border-b border-slate-100 bg-white space-y-2">
-          {allGroupsOnDay.length === 0 ? (
-            <p className="text-sm text-slate-400">אין קבוצות ביום זה</p>
+          {allGroupsOnDay.length === 0 && dayActivities.length === 0 ? (
+            <p className="text-sm text-slate-400">אין נתונים ביום זה</p>
           ) : (
             <>
               <div className="space-y-0.5">
@@ -600,7 +601,7 @@ export default function OperationalDaySummary({
 
         {/* ── Scrollable content ── */}
         <div className="overflow-y-auto flex-1 px-5 py-4 space-y-3">
-          {visibleGroups.length === 0 && activeFilter !== "chrono" && !( ["all", "activities"].includes(activeFilter) && dayActivities.some((item) => item.standalone) ) && (
+          {visibleGroups.length === 0 && activeFilter !== "chrono" && activeFilter !== "activities" && !(activeFilter === "all" && dayActivities.some((item) => item.standalone)) && (
             <p className="text-sm text-slate-400 text-center py-8">אין נתונים להצגה</p>
           )}
 
@@ -612,12 +613,16 @@ export default function OperationalDaySummary({
             return <GroupCard key={group.id} group={group} dateStr={dateStr} meals={allMeals} activities={allActivities} spaces={allSpaces} alerts={allAlerts} defaultOpen={defaultOpen} />;
           })}
 
-          {["all", "activities"].includes(activeFilter) && dayActivities.filter((item) => item.standalone).map((item) => (
+          {activeFilter === "all" && dayActivities.filter((item) => item.standalone).map((item) => (
             <button key={`standalone-${item.id}`} type="button" onClick={() => navigate(`/common-spaces?activity=${item.id}`)} className="w-full text-right rounded-xl border border-purple-200 bg-purple-50 px-4 py-3">
               <div className="flex items-center gap-2"><span className="text-xs bg-purple-600 text-white rounded-full px-2 py-0.5">פעילות כללית</span><span className="font-semibold text-sm">{item.activity_name}</span></div>
               <div className="text-xs text-slate-500 mt-1">{item.start_time}–{item.end_time}{item.pax ? ` · ${item.pax} משתתפים` : ""}</div>
             </button>
           ))}
+
+          {activeFilter === "activities" && (
+            <ChronologicalDayView dateStr={dateStr} allGroups={allGroups} allMeals={[]} allActivities={dayActivities} allCoffeeRequests={[]} allSpaces={allSpaces} activitiesOnly />
+          )}
 
           {!useGroupCards && activeFilter !== "chrono" && activeFilter !== "activities" && (
             <GroupedFlatSection

@@ -220,7 +220,7 @@ export function buildChronologicalDayEvents({ dateStr, allGroups, allMeals, allA
 
 // ── Sort events: timed first (ascending), no-time last ────────────────────────
 function sortEvents(events) {
-  const timed   = events.filter(e => e.time).sort((a, b) => a.time.localeCompare(b.time));
+  const timed = events.filter(e => e.time).sort((a, b) => a.time.localeCompare(b.time) || (a.end_time || "").localeCompare(b.end_time || ""));
   const untimed = events.filter(e => !e.time);
   return { timed, untimed };
 }
@@ -277,13 +277,11 @@ function EventRow({ event, groupMap, spaceMap }) {
           {/* Type badge */}
           <span className={cn("inline-flex items-center gap-1 text-[11px] font-semibold rounded-full px-2 py-0.5 leading-none shrink-0", cfg.badge)}>
             <Icon className="w-3 h-3 shrink-0" />
-            {event.type === "meal" ? event.title : cfg.label}
+            {event.standalone ? "פעילות כללית" : event.type === "meal" ? event.title : cfg.label}
           </span>
 
-          {/* Group name */}
-          {groupName && (
-            <span className="text-xs font-semibold text-slate-700 truncate">{groupName}</span>
-          )}
+          {event.type === "activity" && <span className="text-xs font-semibold text-slate-800 truncate">{event.title}</span>}
+          {groupName && !event.standalone && <span className="text-xs text-slate-600 truncate">{groupName}</span>}
 
           {/* Pax */}
           {event.pax > 0 && (
@@ -338,6 +336,7 @@ export default function ChronologicalDayView({
   allActivities,
   allCoffeeRequests,
   allSpaces,
+  activitiesOnly = false,
 }) {
   const groupMap = useMemo(
     () => Object.fromEntries((allGroups || []).map(g => [g.id, g])),
@@ -361,11 +360,9 @@ export default function ChronologicalDayView({
 
   // Resolve group names from groupMap
   const events = useMemo(() =>
-    rawEvents.map(e => ({
-      ...e,
-      group_name: e.group_name || groupMap[e.group_id]?.group_name || null,
-    })),
-    [rawEvents, groupMap]
+    rawEvents.map(e => ({ ...e, group_name: e.group_name || groupMap[e.group_id]?.group_name || null }))
+      .filter((event) => !activitiesOnly || event.type === "activity"),
+    [rawEvents, groupMap, activitiesOnly]
   );
 
   const { timed, untimed } = useMemo(() => sortEvents(events), [events]);

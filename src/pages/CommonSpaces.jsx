@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import moment from "moment";
@@ -18,6 +19,7 @@ import SpaceWeeklyGrid from "../components/spaces/SpaceWeeklyGrid.jsx";
 import LogisticsReportTab from "../components/spaces/LogisticsReportTab.jsx";
 import ActivitySpaceBlocksPanel from "@/components/spaces/ActivitySpaceBlocksPanel";
 import StandaloneActivityModal from "@/components/standalone-activities/StandaloneActivityModal";
+import StandaloneActivitiesTab from "@/components/standalone-activities/StandaloneActivitiesTab";
 import { invalidateStandaloneActivityQueries } from "@/lib/standaloneActivityQueries";
 
 moment.locale("he");
@@ -25,6 +27,7 @@ moment.locale("he");
 export default function CommonSpaces() {
   const { role } = useRoleContext();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [tab, setTab] = useState("overview");
   const [standaloneModal, setStandaloneModal] = useState(null);
   const [selectedDate, setSelectedDate] = useState(moment().format("YYYY-MM-DD"));
@@ -79,29 +82,35 @@ export default function CommonSpaces() {
   }, [standaloneActivities]);
 
   // ── Derived ───────────────────────────────────────────────────────────────
-  const groupById = useMemo(
-    () => Object.fromEntries(groups.map((g) => [g.id, g])),
-    [groups]
-  );
+  const groupById = useMemo(() => Object.fromEntries(groups.map((g) => [g.id, g])), [groups]);
+  const spaceById = useMemo(() => Object.fromEntries(activitySpaces.map((space) => [space.id, space])), [activitySpaces]);
+  const standaloneById = useMemo(() => Object.fromEntries(standaloneActivities.map((item) => [item.id, item])), [standaloneActivities]);
+  const assignmentsByReservation = useMemo(() => {
+    const map = {};
+    standaloneAssignments.forEach((item) => (map[item.reservation_id] ||= []).push(item));
+    return map;
+  }, [standaloneAssignments]);
+  const activeStandaloneActivities = useMemo(() => standaloneActivities
+    .filter((item) => item.status === "ACTIVE")
+    .map((item) => {
+      const assignments = assignmentsByReservation[item.id] || [];
+      return { ...item, assignments, spaceNames: assignments.map((row) => spaceById[row.activity_space_id]?.name).filter(Boolean) };
+    })
+    .sort((a, b) => a.event_date.localeCompare(b.event_date) || a.start_time.localeCompare(b.start_time)),
+  [standaloneActivities, assignmentsByReservation, spaceById]);
 
   // Only items that have an activity_space_id (the common-space source of truth)
   const spaceItems = useMemo(
-    () =>
-      scheduleItems
-        .filter((i) => !!i.activity_space_id && !!groupById[i.group_id])
-        .map((i) => ({
-          ...i,
-          groupName: groupById[i.group_id]?.group_name || "—",
-          groupId: i.group_id,
-        })),
+    () => scheduleItems.filter((i) => !!i.activity_space_id && !!groupById[i.group_id]).map((i) => ({ ...i, groupName: groupById[i.group_id]?.group_name || "—", groupId: i.group_id })),
     [scheduleItems, groupById]
   );
 
   const standaloneSpaceItems = useMemo(() => standaloneAssignments.flatMap((assignment) => {
-    const reservation = standaloneActivities.find((item) => item.id === assignment.reservation_id && item.status === "ACTIVE");
-    if (!reservation) return [];
-    return [{ ...assignment, id: `standalone-${assignment.id}`, reservationId: reservation.id, standalone: true, activity_space_id: assignment.activity_space_id, activity_name: reservation.title, activityName: reservation.title, date: reservation.event_date, start_time: reservation.start_time, end_time: reservation.end_time, pax: reservation.expected_pax, groupName: "פעילות כללית", groupId: null, notes: assignment.notes || reservation.preparation_notes }];
-  }), [standaloneActivities, standaloneAssignments]);
+    const reservation = standaloneById[assignment.reservation_id];
+    if (!reservation || reservation.status !== "ACTIVE") return [];
+    const allAssignments = assignmentsByReservation[reservation.id] || [];
+    return [{ ...assignment, id: `standalone-${assignment.id}`, reservationId: reservation.id, standalone: true, activity_space_id: assignment.activity_space_id, activity_name: reservation.title, activityName: reservation.title, date: reservation.event_date, start_time: reservation.start_time, end_time: reservation.end_time, pax: reservation.expected_pax, organizer_name: reservation.organizer_name, spaceNames: allAssignments.map((row) => spaceById[row.activity_space_id]?.name).filter(Boolean), notes: assignment.notes || reservation.preparation_notes, needs_projector: allAssignments.some((row) => row.needs_projector), needs_screen: allAssignments.some((row) => row.needs_screen), needs_microphone: allAssignments.some((row) => row.needs_microphone), needs_sound: allAssignments.some((row) => row.needs_sound), needs_whiteboard: allAssignments.some((row) => row.needs_whiteboard), needs_chair_circle: allAssignments.some((row) => row.needs_chair_circle), chairs_count: Math.max(0, ...allAssignments.map((row) => Number(row.chairs_count) || 0)), logistics_other: allAssignments.map((row) => row.logistics_other).filter(Boolean).join(", ") }];
+  }), [standaloneAssignments, standaloneById, assignmentsByReservation, spaceById]);
   const allSpaceItems = useMemo(() => [...spaceItems, ...standaloneSpaceItems], [spaceItems, standaloneSpaceItems]);
 
   // Items per space (all dates)
@@ -140,13 +149,21 @@ export default function CommonSpaces() {
   };
   const closeStandaloneModal = () => {
     setStandaloneModal(null);
-    if (new URLSearchParams(window.location.search).has("activity")) window.history.replaceState({}, "", "/common-spaces");
+    if (new URLSearchParams(window.location.search).has("activity")) navigate("/common-spaces", { replace: true });
+  };
+  const selectStandalone = (id) => setStandaloneModal(standaloneById[id] || null);
+  const cancelStandalone = async (activity) => {
+    const reason = window.prompt("סיבת ביטול (אופציונלי)", "");
+    if (reason === null) return;
+    await base44.functions.invoke("cancelStandaloneActivityReservation", { id: activity.id, reason });
+    await invalidateStandaloneActivityQueries(queryClient);
   };
 
   const TABS = [
     { id: "overview",  label: "סקירה כללית" },
     { id: "daily",     label: "יומי" },
     { id: "weekly",    label: "שבועי" },
+    { id: "standalone", label: `פעילויות כלליות (${activeStandaloneActivities.length})` },
     { id: "blocks",    label: "חסימות מרחבים" },
     { id: "logistics", label: "📋 דוח לוגיסטיקה" },
   ];
@@ -165,7 +182,7 @@ export default function CommonSpaces() {
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-1 bg-slate-100 rounded-lg p-1 w-fit">
+        <div className="flex flex-wrap gap-1 bg-slate-100 rounded-lg p-1 w-fit max-w-full">
           {TABS.map((t) => (
             <button
               key={t.id}
@@ -202,6 +219,7 @@ export default function CommonSpaces() {
                     setSelectedDate(date);
                     setTab("daily");
                   }}
+                  onSelectStandalone={selectStandalone}
                 />
               ))}
               {filteredSpaces.length === 0 && (
@@ -248,9 +266,13 @@ export default function CommonSpaces() {
               itemsBySpace={itemsBySpaceForDay}
               blocks={blocksForSelectedDay}
               date={selectedDate}
-              onSelectStandalone={(id) => setStandaloneModal(standaloneActivities.find((item) => item.id === id))}
-            />
+              onSelectStandalone={selectStandalone}
+              />
           </div>
+        )}
+
+        {tab === "standalone" && (
+          <StandaloneActivitiesTab activities={activeStandaloneActivities} onSelect={selectStandalone} onCancel={cancelStandalone} canCancel={["SUPER_ADMIN", "ADMIN"].includes(role)} />
         )}
 
         {tab === "blocks" && (
@@ -288,7 +310,8 @@ export default function CommonSpaces() {
                 blocks={spaceBlocks}
                 pivot={weekPivot}
                 onSelectDay={handleWeeklyDayClick}
-              />
+                onSelectStandalone={selectStandalone}
+                />
             </div>
 
             <p className="text-xs text-slate-400">
@@ -298,7 +321,7 @@ export default function CommonSpaces() {
         )}
 
       </div>
-      {standaloneModal && <StandaloneActivityModal reservation={standaloneModal === "new" ? null : standaloneModal} assignments={standaloneModal === "new" ? [] : standaloneAssignments.filter((item) => item.reservation_id === standaloneModal.id)} spaces={activitySpaces.filter((space) => space.is_bookable !== false && (!space.working_status || space.working_status === "WORKING"))} canEdit={["SUPER_ADMIN", "ADMIN", "OPERATIONS"].includes(role)} canDelete={["SUPER_ADMIN", "ADMIN"].includes(role)} onChanged={async () => invalidateStandaloneActivityQueries(queryClient)} onClose={closeStandaloneModal} />}
+      {standaloneModal && <StandaloneActivityModal reservation={standaloneModal === "new" ? null : standaloneModal} assignments={standaloneModal === "new" ? [] : assignmentsByReservation[standaloneModal.id] || []} spaces={activitySpaces.filter((space) => space.is_bookable !== false && (!space.working_status || space.working_status === "WORKING"))} canEdit={["SUPER_ADMIN", "ADMIN", "OPERATIONS"].includes(role)} canDelete={["SUPER_ADMIN", "ADMIN"].includes(role)} onChanged={async () => invalidateStandaloneActivityQueries(queryClient)} onClose={closeStandaloneModal} />}
     </div>
   );
 }

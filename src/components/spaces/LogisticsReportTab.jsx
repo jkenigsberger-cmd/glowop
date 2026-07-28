@@ -218,8 +218,7 @@ function ActivityCard({ row }) {
       {/* Main info grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-2 text-sm">
         <div>
-          <span className="text-xs text-slate-400 block">קבוצה</span>
-          <span className="font-semibold text-slate-800">{row.standalone ? "סוג: פעילות כללית ללא קבוצה" : row.groupName}</span>
+          {row.standalone ? <span className="inline-block text-[10px] bg-purple-100 text-purple-700 rounded-full px-2 py-0.5 font-semibold">פעילות כללית</span> : <><span className="text-xs text-slate-400 block">קבוצה</span><span className="font-semibold text-slate-800">{row.groupName}</span></>}
         </div>
         <div>
           <span className="text-xs text-slate-400 block">פעילות</span>
@@ -319,10 +318,12 @@ export default function LogisticsReportTab() {
         equipment: equipmentTextSummary(i),
       }));
 
-    const standaloneRows = groupId ? [] : standaloneAssignments.flatMap((assignment) => {
-      const activity = standaloneActivities.find((item) => item.id === assignment.reservation_id);
-      if (!activity || (from && activity.event_date < from) || (to && activity.event_date > to) || (spaceId && assignment.activity_space_id !== spaceId)) return [];
-      return [{ ...assignment, id: `standalone-${assignment.id}`, standalone: true, date: activity.event_date, start_time: activity.start_time, end_time: activity.end_time, activity_name: activity.title, pax: activity.expected_pax, groupName: "פעילות כללית", spaceName: spaceById[assignment.activity_space_id]?.name || "—", equipment: equipmentTextSummary(assignment), notes: [activity.preparation_notes, activity.cleanup_notes, assignment.notes].filter(Boolean).join(" | ") }];
+    const assignmentsByReservation = {};
+    standaloneAssignments.forEach((assignment) => (assignmentsByReservation[assignment.reservation_id] ||= []).push(assignment));
+    const standaloneRows = groupId ? [] : standaloneActivities.flatMap((activity) => {
+      const assignments = assignmentsByReservation[activity.id] || [];
+      if ((from && activity.event_date < from) || (to && activity.event_date > to) || (spaceId && !assignments.some((row) => row.activity_space_id === spaceId))) return [];
+      return [{ id: `standalone-${activity.id}`, standalone: true, date: activity.event_date, start_time: activity.start_time, end_time: activity.end_time, activity_name: activity.title, pax: activity.expected_pax, groupName: "פעילות כללית", spaceName: assignments.map((row) => spaceById[row.activity_space_id]?.name).filter(Boolean).join(", ") || "—", equipment: assignments.map(equipmentTextSummary).filter(Boolean).join(" · "), notes: [activity.preparation_notes, activity.cleanup_notes, ...assignments.map((row) => row.notes)].filter(Boolean).join(" | ") }];
     });
     return [...mergeSharedActivities(enriched), ...standaloneRows]
       .sort((a, b) => a.date.localeCompare(b.date) || (a.start_time || "").localeCompare(b.start_time || ""));
@@ -372,7 +373,7 @@ export default function LogisticsReportTab() {
           </div>
           <table style="width:100%;border-collapse:collapse;border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;">
             <thead><tr>
-              ${["שעה","מרחב","קבוצה","פעילות","משתתפים","ציוד נדרש","הערות"].map(h => `<th style="${th}">${h}</th>`).join("")}
+              ${["שעה","מרחב","שיוך","פעילות","משתתפים","ציוד נדרש","הערות"].map(h => `<th style="${th}">${h}</th>`).join("")}
             </tr></thead>
             <tbody>`;
         dateRows.forEach((r, i) => {
