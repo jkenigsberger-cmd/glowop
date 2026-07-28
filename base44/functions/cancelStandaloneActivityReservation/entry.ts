@@ -1,5 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
-import { STANDALONE_ADMIN_ROLES, resolveStandaloneUser, syncStandaloneCalendar } from '../../shared/standaloneActivity.js';
+import { STANDALONE_ADMIN_ROLES, resolveStandaloneUser, syncStandaloneCalendar, isStandaloneCancelled } from '../../shared/standaloneActivity.js';
 
 export default async function(req) {
   try {
@@ -12,10 +12,14 @@ export default async function(req) {
     if (!body.id) return Response.json({ error: 'MISSING_ID' }, { status: 400 });
     const reservation = await base44.asServiceRole.entities.StandaloneActivityReservation.get(body.id);
     const assignments = await base44.asServiceRole.entities.StandaloneActivitySpaceAssignment.filter({ reservation_id: reservation.id });
+    if (isStandaloneCancelled(reservation)) {
+      const pendingSyncs = await base44.asServiceRole.entities.CalendarSync.filter({ source_type: 'STANDALONE_ACTIVITY', source_id: reservation.id });
+      return Response.json({ success: true, already_cancelled: true, reservation, assignments, calendar_sync_status: pendingSyncs.length ? 'FAILED' : 'SUCCESS' });
+    }
     const updated = await base44.asServiceRole.entities.StandaloneActivityReservation.update(reservation.id, { status: 'CANCELLED', cancellation_reason: String(body.reason || '').trim(), cancelled_by: actor.email, cancelled_at: new Date().toISOString(), updated_by: actor.email });
-    await syncStandaloneCalendar(base44, updated, assignments, true).catch(() => null);
-    return Response.json({ success: true, reservation: updated, assignments });
+    const calendarResult = await syncStandaloneCalendar(base44, updated, assignments, true);
+    return Response.json({ success: true, reservation: updated, assignments, ...calendarResult, partial_success: calendarResult.calendar_sync_status !== 'SUCCESS' });
   } catch (error) {
-    return Response.json({ error: error.message || 'CANCEL_FAILED' }, { status: 500 });
+    return Response.json({ error: error.message || 'CANCEL_FAILED', calendar_sync_status: 'NOT_CONFIGURED' }, { status: 500 });
   }
 }

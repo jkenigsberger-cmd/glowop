@@ -6,5 +6,5 @@ export const STANDALONE_ACTIVITY_KEYS = [
 ];
 
 export function invalidateStandaloneActivityQueries(queryClient) {
-  STANDALONE_ACTIVITY_KEYS.forEach((queryKey) => queryClient.invalidateQueries({ queryKey }));
+  return Promise.all(STANDALONE_ACTIVITY_KEYS.map((queryKey) => queryClient.invalidateQueries({ queryKey })));
 }

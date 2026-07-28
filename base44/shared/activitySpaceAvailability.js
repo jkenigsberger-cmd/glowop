@@ -1,5 +1,3 @@
-import { isPreparationGroupOperational } from './quotePreparationConfig.js';
-
 export const ACTIVITY_BUFFER_MINUTES = 15;
 
 export function timeToMinutes(value) {
@@ -11,23 +9,19 @@ function overlapsWithBuffer(startA, endA, startB, endB) {
   return startA < endB + ACTIVITY_BUFFER_MINUTES && startB < endA + ACTIVITY_BUFFER_MINUTES;
 }
 
-function blockOverlaps(block, date, startTime, endTime) {
-  const start = new Date(`${date}T${startTime}:00+03:00`).getTime() - ACTIVITY_BUFFER_MINUTES * 60000;
-  const end = new Date(`${date}T${endTime}:00+03:00`).getTime() + ACTIVITY_BUFFER_MINUTES * 60000;
-  const blockStart = new Date(`${block.start_date}T${block.start_time}:00+03:00`).getTime();
-  if (block.is_open_ended) return end > blockStart;
-  const blockEnd = new Date(`${block.end_date}T${block.end_time}:00+03:00`).getTime();
-  return start < blockEnd && blockStart < end;
+function localDateTimeToMinutes(date, time) {
+  const [year, month, day] = String(date).split('-').map(Number);
+  const [hour, minute] = String(time).split(':').map(Number);
+  return Date.UTC(year, month - 1, day, hour, minute) / 60000;
 }
 
-async function operationalGroupItems(base44, items) {
-  const ids = [...new Set(items.map((item) => item.group_id).filter(Boolean))];
-  const groups = [];
-  for (const id of ids) {
-    try { groups.push(await base44.asServiceRole.entities.Group.get(id)); } catch { /* ignore deleted group */ }
-  }
-  const operationalIds = new Set(groups.filter(isPreparationGroupOperational).map((group) => group.id));
-  return items.filter((item) => operationalIds.has(item.group_id));
+function blockOverlaps(block, date, startTime, endTime) {
+  const start = localDateTimeToMinutes(date, startTime) - ACTIVITY_BUFFER_MINUTES;
+  const end = localDateTimeToMinutes(date, endTime) + ACTIVITY_BUFFER_MINUTES;
+  const blockStart = localDateTimeToMinutes(block.start_date, block.start_time);
+  if (block.is_open_ended) return end > blockStart;
+  const blockEnd = localDateTimeToMinutes(block.end_date, block.end_time);
+  return start < blockEnd && blockStart < end;
 }
 
 export async function checkActivitySpaceConflict(base44, input) {
@@ -48,8 +42,7 @@ export async function checkActivitySpaceConflict(base44, input) {
   const block = blocks.find((item) => blockOverlaps(item, date, startTime, endTime));
   if (block) return { error: 'SPACE_CONFLICT', space_id: spaceId, space_name: space.name, conflicting_source_type: 'ACTIVITY_SPACE_BLOCK', conflicting_source_id: block.id, conflicting_title: block.reason_notes || 'חסימת מרחב', start_time: block.start_time, end_time: block.is_open_ended ? null : block.end_time, message: 'המרחב כבר תפוס בשעה שנבחרה' };
 
-  const groupItems = await operationalGroupItems(base44, rawGroupItems);
-  const groupConflict = groupItems.find((item) => {
+  const groupConflict = rawGroupItems.find((item) => {
     if (excludeGroupItemId && item.id === excludeGroupItemId) return false;
     if (excludeSharedActivityId && item.shared_activity_id === excludeSharedActivityId) return false;
     return overlapsWithBuffer(timeToMinutes(startTime), timeToMinutes(endTime), timeToMinutes(item.start_time), timeToMinutes(item.end_time));

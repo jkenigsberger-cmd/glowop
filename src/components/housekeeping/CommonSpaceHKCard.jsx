@@ -90,7 +90,7 @@ export default function CommonSpaceHKCard({ space, items = [], groupsMap = {} })
                 <div key={item.id || idx} className="flex items-start justify-between px-3 py-2 bg-white border border-purple-200 rounded-lg gap-2">
                   <div className="flex-1 min-w-0">
                     <div className="font-semibold text-slate-800 truncate">
-                      {item.standalone ? <Link to={`/common-spaces?activity=${item.reservation_id}`} className="hover:underline">פעילות כללית</Link> : group ? <Link to={`/groups/${group.id}`} className="hover:underline">{group.group_name}</Link> : "קבוצה לא ידועה"}
+                      {item.standalone ? <Link to={`/common-spaces?activity=${item.reservation_id}`} className="hover:underline">פעילות כללית</Link> : group ? <Link to={`/groups/${group.id}`} className="hover:underline">{group.group_name}</Link> : "—"}
                     </div>
                     <div className="text-slate-500 mt-0.5">{item.activity_name}</div>
                     {item.preparation_notes && <div className="text-amber-700 mt-1">הכנה: {item.preparation_notes}</div>}

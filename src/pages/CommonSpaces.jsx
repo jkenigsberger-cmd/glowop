@@ -298,7 +298,7 @@ export default function CommonSpaces() {
         )}
 
       </div>
-      {standaloneModal && <StandaloneActivityModal reservation={standaloneModal === "new" ? null : standaloneModal} assignments={standaloneModal === "new" ? [] : standaloneAssignments.filter((item) => item.reservation_id === standaloneModal.id)} spaces={activitySpaces.filter((space) => space.is_bookable !== false && (!space.working_status || space.working_status === "WORKING"))} canDelete={["SUPER_ADMIN", "ADMIN"].includes(role)} onChanged={async () => invalidateStandaloneActivityQueries(queryClient)} onClose={closeStandaloneModal} />}
+      {standaloneModal && <StandaloneActivityModal reservation={standaloneModal === "new" ? null : standaloneModal} assignments={standaloneModal === "new" ? [] : standaloneAssignments.filter((item) => item.reservation_id === standaloneModal.id)} spaces={activitySpaces.filter((space) => space.is_bookable !== false && (!space.working_status || space.working_status === "WORKING"))} canEdit={["SUPER_ADMIN", "ADMIN", "OPERATIONS"].includes(role)} canDelete={["SUPER_ADMIN", "ADMIN"].includes(role)} onChanged={async () => invalidateStandaloneActivityQueries(queryClient)} onClose={closeStandaloneModal} />}
     </div>
   );
 }

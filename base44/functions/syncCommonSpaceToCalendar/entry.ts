@@ -1,7 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 import { assertOperationalGroup } from '../../shared/quotePreparationConfig.js';
-
-const KEREN_HADOR_CALENDAR_ID = 'c_d90deb3b0f276cded4ab5809199860a2b2e99c8ced3c62dc8432cae3261a5583@group.calendar.google.com';
+import { ACTIVITY_CALENDAR_ID, calendarDateTime } from '../../shared/activityCalendar.js';
 
 Deno.serve(async (req) => {
   try {
@@ -35,7 +34,7 @@ Deno.serve(async (req) => {
 
         for (const sr of syncRecords) {
           const res = await fetch(
-            `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(sr.calendar_id || KEREN_HADOR_CALENDAR_ID)}/events/${encodeURIComponent(sr.calendar_event_id)}`,
+            `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(sr.calendar_id || ACTIVITY_CALENDAR_ID)}/events/${encodeURIComponent(sr.calendar_event_id)}`,
             {
               method: 'DELETE',
               headers: { Authorization: `Bearer ${accessToken}` },
@@ -103,16 +102,11 @@ Deno.serve(async (req) => {
 
     const description = parts.join('\n');
 
-    // Timezone: Asia/Jerusalem
-    const dateStr = data.date;
-    const startDateTime = `${dateStr}T${data.start_time}:00+03:00`;
-    const endDateTime = `${dateStr}T${data.end_time}:00+03:00`;
-
     const eventPayload = {
       summary,
       description,
-      start: { dateTime: startDateTime, timeZone: 'Asia/Jerusalem' },
-      end: { dateTime: endDateTime, timeZone: 'Asia/Jerusalem' },
+      start: calendarDateTime(data.date, data.start_time),
+      end: calendarDateTime(data.date, data.end_time),
       location: spaceName,
     };
 
@@ -126,10 +120,10 @@ Deno.serve(async (req) => {
 
     if (syncRecords.length > 0) {
       const sr = syncRecords[0];
-      const calendarId = sr.calendar_id || KEREN_HADOR_CALENDAR_ID;
+      const calendarId = sr.calendar_id || ACTIVITY_CALENDAR_ID;
 
       // If record points to a different calendar, migrate to Keren Hador
-      if (calendarId !== KEREN_HADOR_CALENDAR_ID) {
+      if (calendarId !== ACTIVITY_CALENDAR_ID) {
         // Best-effort delete old event from old calendar
         try {
           await fetch(
@@ -143,7 +137,7 @@ Deno.serve(async (req) => {
 
         // Create new event on Keren Hador
         const res = await fetch(
-          `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(KEREN_HADOR_CALENDAR_ID)}/events`,
+          `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(ACTIVITY_CALENDAR_ID)}/events`,
           {
             method: 'POST',
             headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
@@ -160,7 +154,7 @@ Deno.serve(async (req) => {
         await base44.asServiceRole.entities.CalendarSync.create({
           group_schedule_item_id: itemId,
           calendar_event_id: created.id,
-          calendar_id: KEREN_HADOR_CALENDAR_ID,
+          calendar_id: ACTIVITY_CALENDAR_ID,
         });
 
         return Response.json({ ok: true, action: 'migrated_event', calendar_event_id: created.id });
@@ -168,7 +162,7 @@ Deno.serve(async (req) => {
 
       // Update existing event on Keren Hador
       const res = await fetch(
-        `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(KEREN_HADOR_CALENDAR_ID)}/events/${encodeURIComponent(sr.calendar_event_id)}`,
+        `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(ACTIVITY_CALENDAR_ID)}/events/${encodeURIComponent(sr.calendar_event_id)}`,
         {
           method: 'PATCH',
           headers: {
@@ -187,7 +181,7 @@ Deno.serve(async (req) => {
           console.warn('[syncCommonSpaceToCalendar] Existing Google event missing (', res.status, ') — recreating. Old event id:', sr.calendar_event_id);
 
           const recreateRes = await fetch(
-            `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(KEREN_HADOR_CALENDAR_ID)}/events`,
+            `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(ACTIVITY_CALENDAR_ID)}/events`,
             {
               method: 'POST',
               headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
@@ -203,7 +197,7 @@ Deno.serve(async (req) => {
           // Point the existing sync record at the new event id
           await base44.asServiceRole.entities.CalendarSync.update(sr.id, {
             calendar_event_id: recreated.id,
-            calendar_id: KEREN_HADOR_CALENDAR_ID,
+            calendar_id: ACTIVITY_CALENDAR_ID,
           });
 
           return Response.json({
@@ -222,7 +216,7 @@ Deno.serve(async (req) => {
     } else {
       // Create new event
       const res = await fetch(
-        `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(KEREN_HADOR_CALENDAR_ID)}/events`,
+        `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(ACTIVITY_CALENDAR_ID)}/events`,
         {
           method: 'POST',
           headers: {
@@ -243,7 +237,7 @@ Deno.serve(async (req) => {
       await base44.asServiceRole.entities.CalendarSync.create({
         group_schedule_item_id: itemId,
         calendar_event_id: created.id,
-        calendar_id: KEREN_HADOR_CALENDAR_ID,
+        calendar_id: ACTIVITY_CALENDAR_ID,
       });
 
       return Response.json({ ok: true, action: 'created_event', calendar_event_id: created.id });

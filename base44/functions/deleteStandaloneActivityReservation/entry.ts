@@ -12,12 +12,11 @@ export default async function(req) {
     if (!body.id) return Response.json({ error: 'MISSING_ID' }, { status: 400 });
     const reservation = await base44.asServiceRole.entities.StandaloneActivityReservation.get(body.id);
     const assignments = await base44.asServiceRole.entities.StandaloneActivitySpaceAssignment.filter({ reservation_id: reservation.id });
-    await syncStandaloneCalendar(base44, reservation, assignments, true).catch(() => null);
+    const calendarResult = await syncStandaloneCalendar(base44, reservation, assignments, true);
     await base44.asServiceRole.entities.StandaloneActivitySpaceAssignment.deleteMany({ reservation_id: reservation.id });
-    await base44.asServiceRole.entities.CalendarSync.deleteMany({ source_type: 'STANDALONE_ACTIVITY', source_id: reservation.id });
     await base44.asServiceRole.entities.StandaloneActivityReservation.delete(reservation.id);
-    return Response.json({ success: true, id: reservation.id });
+    return Response.json({ success: true, id: reservation.id, ...calendarResult, partial_success: calendarResult.calendar_sync_status !== 'SUCCESS' });
   } catch (error) {
-    return Response.json({ error: error.message || 'DELETE_FAILED' }, { status: 500 });
+    return Response.json({ error: error.message || 'DELETE_FAILED', calendar_sync_status: 'NOT_CONFIGURED' }, { status: 500 });
   }
 }

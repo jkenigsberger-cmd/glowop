@@ -452,6 +452,7 @@ export default function OperationalDaySummary({
   allGroups, allMeals, allActivities, allSpaces, allAlerts,
   allCoffeeRequests = [],
 }) {
+  const navigate = useNavigate();
   const [activeFilter, setActiveFilter] = useState("all");
 
   const dateStr   = date ? fmt(date) : "";
@@ -612,7 +613,7 @@ export default function OperationalDaySummary({
           })}
 
           {["all", "activities"].includes(activeFilter) && dayActivities.filter((item) => item.standalone).map((item) => (
-            <button key={`standalone-${item.id}`} type="button" onClick={() => window.location.assign(`/common-spaces?activity=${item.id}`)} className="w-full text-right rounded-xl border border-purple-200 bg-purple-50 px-4 py-3">
+            <button key={`standalone-${item.id}`} type="button" onClick={() => navigate(`/common-spaces?activity=${item.id}`)} className="w-full text-right rounded-xl border border-purple-200 bg-purple-50 px-4 py-3">
               <div className="flex items-center gap-2"><span className="text-xs bg-purple-600 text-white rounded-full px-2 py-0.5">פעילות כללית</span><span className="font-semibold text-sm">{item.activity_name}</span></div>
               <div className="text-xs text-slate-500 mt-1">{item.start_time}–{item.end_time}{item.pax ? ` · ${item.pax} משתתפים` : ""}</div>
             </button>

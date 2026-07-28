@@ -1,6 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 import { assertOperationalGroup, isPreparationGroupOperational } from '../../shared/quotePreparationConfig.js';
 import { checkActivitySpaceConflict } from '../../shared/activitySpaceAvailability.js';
+import { ACTIVITY_CALENDAR_ID, calendarDateTime } from '../../shared/activityCalendar.js';
 
 const VALID_SPACE_CODES = new Set([
   'bunker_1', 'bunker_2', 'bunker_4', 'bunker_5',
@@ -11,7 +12,7 @@ const VALID_SPACE_CODES = new Set([
 ]);
 
 // Roles allowed to manage activities (mirrors roles.js MANAGE_ACTIVITIES)
-const MANAGE_ACTIVITIES_ROLES = new Set(['SUPER_ADMIN', 'ADMIN', 'OPERATIONS']);
+const MANAGE_ACTIVITIES_ROLES = new Set(['SUPER_ADMIN', 'ADMIN']);
 const BLOCK_REASON_LABELS = { PAINTING: 'צביעה', MAINTENANCE: 'תחזוקה', REPAIR: 'תיקון', SPECIAL_CLEANING: 'ניקיון מיוחד', TEMPORARILY_CLOSED: 'סגור זמנית', OTHER: 'אחר' };
 
 async function resolveEffectiveRole(base44, user) {
@@ -53,8 +54,6 @@ function reservationOverlapsBlock(block, date, startTime, endTime) {
 // So we mirror the item to Google Calendar DIRECTLY here after every successful
 // create/update, for ALL edit scopes. Google Calendar is only a mirror — the app is
 // the source of truth. Failures are swallowed — never block the activity save.
-const KEREN_HADOR_CALENDAR_ID = 'c_d90deb3b0f276cded4ab5809199860a2b2e99c8ced3c62dc8432cae3261a5583@group.calendar.google.com';
-
 function buildCalendarEventPayload(item, space, group) {
   const spaceName = space.name || space.code;
   const groupName = group.group_name || 'קבוצה';
@@ -80,8 +79,8 @@ function buildCalendarEventPayload(item, space, group) {
   return {
     summary,
     description: parts.join('\n'),
-    start: { dateTime: `${item.date}T${item.start_time}:00+03:00`, timeZone: 'Asia/Jerusalem' },
-    end:   { dateTime: `${item.date}T${item.end_time}:00+03:00`,   timeZone: 'Asia/Jerusalem' },
+    start: calendarDateTime(item.date, item.start_time),
+    end: calendarDateTime(item.date, item.end_time),
     location: spaceName,
   };
 }
@@ -106,7 +105,7 @@ async function syncItemToCalendar(base44, item) {
       if (existingSyncs.length > 0) {
         const sr = existingSyncs[0];
         await fetch(
-          `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(sr.calendar_id || KEREN_HADOR_CALENDAR_ID)}/events/${encodeURIComponent(sr.calendar_event_id)}`,
+          `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(sr.calendar_id || ACTIVITY_CALENDAR_ID)}/events/${encodeURIComponent(sr.calendar_event_id)}`,
           { method: 'DELETE', headers: authHeaders }
         ).catch(() => {});
         await base44.asServiceRole.entities.CalendarSync.delete(sr.id).catch(() => {});
@@ -129,34 +128,34 @@ async function syncItemToCalendar(base44, item) {
       const sr = existingSyncs[0];
       // Update the SAME event → no duplicates
       const res = await fetch(
-        `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(KEREN_HADOR_CALENDAR_ID)}/events/${encodeURIComponent(sr.calendar_event_id)}`,
+        `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(ACTIVITY_CALENDAR_ID)}/events/${encodeURIComponent(sr.calendar_event_id)}`,
         { method: 'PATCH', headers: jsonHeaders, body: JSON.stringify(eventPayload) }
       );
       if (!res.ok) {
         // Missing/deleted Google event → recreate and repoint the sync record
         if (res.status === 404 || res.status === 410) {
           const recreateRes = await fetch(
-            `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(KEREN_HADOR_CALENDAR_ID)}/events`,
+            `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(ACTIVITY_CALENDAR_ID)}/events`,
             { method: 'POST', headers: jsonHeaders, body: JSON.stringify(eventPayload) }
           );
           const recreated = await recreateRes.json();
           if (recreateRes.ok) {
             await base44.asServiceRole.entities.CalendarSync.update(sr.id, {
               calendar_event_id: recreated.id,
-              calendar_id: KEREN_HADOR_CALENDAR_ID,
+              calendar_id: ACTIVITY_CALENDAR_ID,
             });
           }
         }
-      } else if ((sr.calendar_id || KEREN_HADOR_CALENDAR_ID) !== KEREN_HADOR_CALENDAR_ID) {
+      } else if ((sr.calendar_id || ACTIVITY_CALENDAR_ID) !== ACTIVITY_CALENDAR_ID) {
         // Normalize calendar id on the record
-        await base44.asServiceRole.entities.CalendarSync.update(sr.id, { calendar_id: KEREN_HADOR_CALENDAR_ID });
+        await base44.asServiceRole.entities.CalendarSync.update(sr.id, { calendar_id: ACTIVITY_CALENDAR_ID });
       }
       return;
     }
 
     // No sync record → create event + save sync record
     const res = await fetch(
-      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(KEREN_HADOR_CALENDAR_ID)}/events`,
+      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(ACTIVITY_CALENDAR_ID)}/events`,
       { method: 'POST', headers: jsonHeaders, body: JSON.stringify(eventPayload) }
     );
     const created = await res.json();
@@ -164,7 +163,7 @@ async function syncItemToCalendar(base44, item) {
       await base44.asServiceRole.entities.CalendarSync.create({
         group_schedule_item_id: itemId,
         calendar_event_id: created.id,
-        calendar_id: KEREN_HADOR_CALENDAR_ID,
+        calendar_id: ACTIVITY_CALENDAR_ID,
       });
     }
   } catch (e) {
@@ -614,29 +613,19 @@ export default async function(req) {
         result = await base44.asServiceRole.entities.GroupScheduleItem.create(basePayload);
       }
 
-      // Post-write race-condition check
+      // Post-write race-condition check uses the same shared 15-minute rule.
       if (resolvedSpaceId && status !== 'CANCELLED') {
-        const newStart = timeToMinutes(start_time);
-        const newEnd   = timeToMinutes(end_time);
-        const afterItems = await base44.asServiceRole.entities.GroupScheduleItem.filter({
-          activity_space_id: resolvedSpaceId,
+        const postConflict = await checkActivitySpaceConflict(base44, {
+          spaceId: resolvedSpaceId,
           date,
-          status: 'ACTIVE',
+          startTime: start_time,
+          endTime: end_time,
+          excludeGroupItemId: result.id,
+          excludeSharedActivityId: effectiveSharedId,
         });
-        const postConflicts = afterItems.filter(item => {
-          if (item.id === result.id) return false;
-          if (effectiveSharedId && item.shared_activity_id === effectiveSharedId) return false;
-          const eStart = timeToMinutes(item.start_time);
-          const eEnd   = timeToMinutes(item.end_time);
-          return newStart < eEnd && newEnd > eStart;
-        });
-        if (postConflicts.length > 0) {
+        if (postConflict) {
           await base44.asServiceRole.entities.GroupScheduleItem.update(result.id, { status: 'CANCELLED' });
-          const c = postConflicts[0];
-          return Response.json({
-            success: false,
-            error: `המרחב כבר תפוס בשעה הזו. יש לבחור שעה אחרת או מרחב אחר. (התנגשות עם ${c.start_time}–${c.end_time})`
-          }, { status: 409 });
+          return Response.json({ success: false, error: postConflict.message || 'המרחב כבר תפוס בשעה הזו. יש לבחור שעה אחרת או מרחב אחר.', conflict: postConflict }, { status: 409 });
         }
       }
 

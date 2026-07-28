@@ -253,7 +253,7 @@ function EventRow({ event, groupMap, spaceMap }) {
         cfg.bg, cfg.border
       )}
       onClick={handleClick}
-      title="לחץ לפרטי הקבוצה"
+      title={event.standalone ? "לחץ לפרטי הפעילות" : "לחץ לפרטי הקבוצה"}
     >
       {/* Time column */}
       <div className="shrink-0 w-16 text-right">

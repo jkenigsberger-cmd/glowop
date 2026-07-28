@@ -1,6 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { checkActivitySpaceConflict, timeToMinutes } from '../../shared/activitySpaceAvailability.js';
-import { STANDALONE_EDIT_ROLES, resolveStandaloneUser, normalizeAssignments, syncStandaloneCalendar } from '../../shared/standaloneActivity.js';
+import { STANDALONE_EDIT_ROLES, resolveStandaloneUser, normalizeAssignments, syncStandaloneCalendar, isStandaloneCancelled } from '../../shared/standaloneActivity.js';
 
 export default async function(req) {
   try {
@@ -25,12 +25,13 @@ export default async function(req) {
     let existing = null;
     if (body.id) {
       try { existing = await base44.asServiceRole.entities.StandaloneActivityReservation.get(body.id); } catch { return Response.json({ error: 'NOT_FOUND' }, { status: 404 }); }
+      if (isStandaloneCancelled(existing)) return Response.json({ error: 'ACTIVITY_ALREADY_CANCELLED', calendar_sync_status: 'SUCCESS' }, { status: 409 });
     } else if (body.creation_token) {
       const matches = await base44.asServiceRole.entities.StandaloneActivityReservation.filter({ creation_token: body.creation_token });
       existing = matches[0] || null;
       if (existing) {
         const currentAssignments = await base44.asServiceRole.entities.StandaloneActivitySpaceAssignment.filter({ reservation_id: existing.id });
-        return Response.json({ success: true, reservation: existing, assignments: currentAssignments, idempotent: true });
+        return Response.json({ success: true, reservation: existing, assignments: currentAssignments, idempotent: true, calendar_sync_status: 'SUCCESS' });
       }
     }
 
@@ -49,6 +50,7 @@ export default async function(req) {
     };
 
     let reservation;
+    let createdAssignments = [];
     let oldAssignments = [];
     try {
       if (existing) {
@@ -58,22 +60,27 @@ export default async function(req) {
       } else {
         reservation = await base44.asServiceRole.entities.StandaloneActivityReservation.create(payload);
       }
-      const createdAssignments = await base44.asServiceRole.entities.StandaloneActivitySpaceAssignment.bulkCreate(assignments.map((item) => ({ ...item, reservation_id: reservation.id })));
-      await syncStandaloneCalendar(base44, reservation, createdAssignments).catch(() => null);
-      return Response.json({ success: true, reservation, assignments: createdAssignments });
+      createdAssignments = await base44.asServiceRole.entities.StandaloneActivitySpaceAssignment.bulkCreate(assignments.map((item) => ({ ...item, reservation_id: reservation.id })));
     } catch (error) {
+      let compensationFailed = false;
       if (existing) {
-        const { id: oldId, created_date, updated_date, created_by_id, ...oldReservation } = existing;
-        await base44.asServiceRole.entities.StandaloneActivityReservation.update(existing.id, oldReservation).catch(() => null);
-        await base44.asServiceRole.entities.StandaloneActivitySpaceAssignment.deleteMany({ reservation_id: existing.id }).catch(() => null);
-        if (oldAssignments.length) await base44.asServiceRole.entities.StandaloneActivitySpaceAssignment.bulkCreate(oldAssignments.map(({ id, created_date, updated_date, created_by_id, ...item }) => item)).catch(() => null);
+        const { id, created_date, updated_date, created_by_id, ...oldReservation } = existing;
+        try { await base44.asServiceRole.entities.StandaloneActivityReservation.update(existing.id, oldReservation); } catch { compensationFailed = true; }
+        try { await base44.asServiceRole.entities.StandaloneActivitySpaceAssignment.deleteMany({ reservation_id: existing.id }); } catch { compensationFailed = true; }
+        if (oldAssignments.length) {
+          try { await base44.asServiceRole.entities.StandaloneActivitySpaceAssignment.bulkCreate(oldAssignments.map(({ id, created_date, updated_date, created_by_id, ...item }) => item)); } catch { compensationFailed = true; }
+        }
       } else if (reservation?.id) {
-        await base44.asServiceRole.entities.StandaloneActivitySpaceAssignment.deleteMany({ reservation_id: reservation.id }).catch(() => null);
-        await base44.asServiceRole.entities.StandaloneActivityReservation.delete(reservation.id).catch(() => null);
+        try { await base44.asServiceRole.entities.StandaloneActivitySpaceAssignment.deleteMany({ reservation_id: reservation.id }); } catch { compensationFailed = true; }
+        try { await base44.asServiceRole.entities.StandaloneActivityReservation.delete(reservation.id); } catch { compensationFailed = true; }
       }
-      throw error;
+      if (compensationFailed) return Response.json({ error: 'PARTIAL_FAILURE', details: error?.message || 'SAVE_FAILED', calendar_sync_status: 'NOT_CONFIGURED' }, { status: 500 });
+      return Response.json({ error: error?.message || 'SAVE_FAILED', calendar_sync_status: 'NOT_CONFIGURED' }, { status: 500 });
     }
+
+    const calendarResult = await syncStandaloneCalendar(base44, reservation, createdAssignments);
+    return Response.json({ success: true, reservation, assignments: createdAssignments, ...calendarResult, partial_success: calendarResult.calendar_sync_status !== 'SUCCESS' });
   } catch (error) {
-    return Response.json({ error: error.message || 'SAVE_FAILED' }, { status: 500 });
+    return Response.json({ error: error.message || 'SAVE_FAILED', calendar_sync_status: 'NOT_CONFIGURED' }, { status: 500 });
   }
 }
