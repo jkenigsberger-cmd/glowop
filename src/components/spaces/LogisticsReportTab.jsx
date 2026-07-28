@@ -219,7 +219,7 @@ function ActivityCard({ row }) {
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-2 text-sm">
         <div>
           <span className="text-xs text-slate-400 block">קבוצה</span>
-          <span className="font-semibold text-slate-800">{row.groupName}</span>
+          <span className="font-semibold text-slate-800">{row.standalone ? "סוג: פעילות כללית ללא קבוצה" : row.groupName}</span>
         </div>
         <div>
           <span className="text-xs text-slate-400 block">פעילות</span>
@@ -266,6 +266,14 @@ export default function LogisticsReportTab() {
     queryKey: ["spaces-schedule-items"],
     queryFn: () => base44.entities.GroupScheduleItem.filter({ status: "ACTIVE" }),
   });
+  const { data: standaloneActivities = [] } = useQuery({
+    queryKey: ["standaloneActivities"],
+    queryFn: () => base44.entities.StandaloneActivityReservation.filter({ status: "ACTIVE" }),
+  });
+  const { data: standaloneAssignments = [] } = useQuery({
+    queryKey: ["standaloneActivityAssignments"],
+    queryFn: () => base44.entities.StandaloneActivitySpaceAssignment.list("-created_date", 500),
+  });
   const { data: rawSpaces = [] } = useQuery({
     queryKey: ["spaces-list"],
     queryFn: () => base44.entities.ActivitySpace.list(),
@@ -311,10 +319,14 @@ export default function LogisticsReportTab() {
         equipment: equipmentTextSummary(i),
       }));
 
-    // Merge shared activities, then sort
-    return mergeSharedActivities(enriched)
+    const standaloneRows = groupId ? [] : standaloneAssignments.flatMap((assignment) => {
+      const activity = standaloneActivities.find((item) => item.id === assignment.reservation_id);
+      if (!activity || (from && activity.event_date < from) || (to && activity.event_date > to) || (spaceId && assignment.activity_space_id !== spaceId)) return [];
+      return [{ ...assignment, id: `standalone-${assignment.id}`, standalone: true, date: activity.event_date, start_time: activity.start_time, end_time: activity.end_time, activity_name: activity.title, pax: activity.expected_pax, groupName: "פעילות כללית", spaceName: spaceById[assignment.activity_space_id]?.name || "—", equipment: equipmentTextSummary(assignment), notes: [activity.preparation_notes, activity.cleanup_notes, assignment.notes].filter(Boolean).join(" | ") }];
+    });
+    return [...mergeSharedActivities(enriched), ...standaloneRows]
       .sort((a, b) => a.date.localeCompare(b.date) || (a.start_time || "").localeCompare(b.start_time || ""));
-  }, [scheduleItems, from, to, spaceId, groupId, spaceById, groupById]);
+  }, [scheduleItems, standaloneActivities, standaloneAssignments, from, to, spaceId, groupId, spaceById, groupById]);
 
   const byDate = useMemo(() => {
     const map = {};

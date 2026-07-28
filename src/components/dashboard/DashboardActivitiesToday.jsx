@@ -16,7 +16,7 @@ export default function DashboardActivitiesToday({ activities, groupById, spaceB
         return (
           <Link
             key={item.id}
-            to={group ? `/groups/${group.id}` : "#"}
+            to={item.standalone ? `/common-spaces?activity=${item.id}` : group ? `/groups/${group.id}` : "#"}
             className="flex items-center gap-3 bg-card border border-border rounded-xl px-4 py-3 hover:border-primary/30 hover:bg-muted/20 transition-colors"
           >
             <div className="text-xs text-muted-foreground text-center w-12 shrink-0">
@@ -26,11 +26,13 @@ export default function DashboardActivitiesToday({ activities, groupById, spaceB
             <div className="flex-1 min-w-0 space-y-0.5">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-sm font-medium">{item.activity_name}</span>
-                <span className="text-xs text-muted-foreground">{group?.group_name || "—"}</span>
+                <span className="text-xs text-muted-foreground">{item.standalone ? "פעילות כללית" : group?.group_name || "—"}</span>
                 {item.pax > 0 && <span className="text-xs text-muted-foreground">{item.pax} אנשים</span>}
               </div>
               <div className="flex items-center gap-1.5 text-xs flex-wrap">
-                {space ? (
+                {item.standalone && item.spaceNames?.length ? (
+                  <span className="flex items-center gap-0.5 text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5 text-[10px]"><MapPin className="w-2.5 h-2.5" /> {item.spaceNames.join(", ")}</span>
+                ) : space ? (
                   <span className="flex items-center gap-0.5 text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5 text-[10px]">
                     <MapPin className="w-2.5 h-2.5" /> {space.name}
                   </span>

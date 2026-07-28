@@ -203,13 +203,14 @@ export function buildChronologicalDayEvents({ dateStr, allGroups, allMeals, allA
         time: a.start_time || null,
         end_time: a.end_time || null,
         group_id: a.group_id,
-        group_name: null,
+        group_name: a.standalone ? "פעילות כללית" : null,
         title: a.activity_name || "פעילות",
         location: a.activity_space_id || null,
         pax: a.pax || null,
         details: a.notes || null,
-        source_entity: "GroupScheduleItem",
+        source_entity: a.standalone ? "StandaloneActivityReservation" : "GroupScheduleItem",
         source_id: a.id,
+        standalone: !!a.standalone,
         _activity: a,
       });
     });
@@ -234,12 +235,15 @@ function EventRow({ event, groupMap, spaceMap }) {
   const groupName = event.group_name || groupMap[event.group_id]?.group_name || null;
 
   // Resolve space name for activities
-  const spaceName = event.type === "activity" && event._activity?.activity_space_id
-    ? (spaceMap[event._activity.activity_space_id]?.name || null)
-    : event.location || null;
+  const spaceName = event.type === "activity" && event._activity?.space_ids?.length
+    ? event._activity.space_ids.map((id) => spaceMap[id]?.name).filter(Boolean).join(", ")
+    : event.type === "activity" && event._activity?.activity_space_id
+      ? (spaceMap[event._activity.activity_space_id]?.name || null)
+      : event.location || null;
 
   const handleClick = () => {
-    if (event.group_id) navigate(`/groups/${event.group_id}`);
+    if (event.standalone) navigate(`/common-spaces?activity=${event.source_id}`);
+    else if (event.group_id) navigate(`/groups/${event.group_id}`);
   };
 
   return (

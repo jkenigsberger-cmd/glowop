@@ -126,6 +126,14 @@ export default function Dashboard() {
     queryKey: ["allActivities"],
     queryFn: () => base44.entities.GroupScheduleItem.filter({ status: "ACTIVE" }),
   });
+  const { data: standaloneActivities = [] } = useQuery({
+    queryKey: ["standaloneActivities"],
+    queryFn: () => base44.entities.StandaloneActivityReservation.filter({ status: "ACTIVE" }),
+  });
+  const { data: standaloneAssignments = [] } = useQuery({
+    queryKey: ["standaloneActivityAssignments"],
+    queryFn: () => base44.entities.StandaloneActivitySpaceAssignment.list("-created_date", 500),
+  });
 
   const { data: allocations = [] } = useQuery({
     queryKey: ["allAllocations"],
@@ -215,10 +223,14 @@ export default function Dashboard() {
     [meals, groupById, selectedDate]
   );
 
-  const activitiesForDate = useMemo(() =>
-    activities.filter(a => groupById[a.group_id] && a.date === selectedDate),
-    [activities, groupById, selectedDate]
-  );
+  const activitiesForDate = useMemo(() => {
+    const groupActivities = activities.filter(a => groupById[a.group_id] && a.date === selectedDate);
+    const standalone = standaloneActivities.filter(a => a.event_date === selectedDate).map((activity) => {
+      const activityAssignments = standaloneAssignments.filter((assignment) => assignment.reservation_id === activity.id);
+      return { ...activity, standalone: true, activity_name: activity.title, date: activity.event_date, pax: activity.expected_pax, spaceNames: activityAssignments.map((assignment) => spaceById[assignment.activity_space_id]?.name).filter(Boolean) };
+    });
+    return [...groupActivities, ...standalone];
+  }, [activities, standaloneActivities, standaloneAssignments, groupById, spaceById, selectedDate]);
 
   const realToday = toDateStr(alertNow);
   const viewingToday = selectedDate === realToday;

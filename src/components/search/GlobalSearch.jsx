@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
-import { Search, X, Users, Layers } from "lucide-react";
+import { Search, X, Users, Layers, CalendarDays } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useRoleContext } from "@/lib/RoleContext";
 import { isOperationalGroup } from "@/lib/quotePreparationFlow";
@@ -54,6 +54,12 @@ export default function GlobalSearch({ isOpen, onClose }) {
     staleTime: 60_000,
     enabled: !isOperationsOnly,
   });
+  const { data: standaloneActivities = [] } = useQuery({
+    queryKey: ["global-search-standalone"],
+    queryFn: () => base44.entities.StandaloneActivityReservation.list("-event_date", 200),
+    staleTime: 30_000,
+    enabled: !isOperationsOnly,
+  });
 
   useEffect(() => {
     if (isOpen) {
@@ -81,10 +87,15 @@ export default function GlobalSearch({ isOpen, onClose }) {
     ).slice(0, 5);
   }, [spaces, q]);
 
+  const matchedStandalone = useMemo(() => {
+    if (!q) return standaloneActivities.filter((item) => item.status === "ACTIVE").slice(0, 4);
+    return standaloneActivities.filter((item) => [item.title, item.organizer_name, item.description].some((field) => field && field.toLowerCase().includes(q))).slice(0, 5);
+  }, [standaloneActivities, q]);
   const allResults = useMemo(() => [
     ...matchedGroups.map(g => ({ type: "group", data: g })),
     ...matchedSpaces.map(s => ({ type: "space", data: s })),
-  ], [matchedGroups, matchedSpaces]);
+    ...matchedStandalone.map(a => ({ type: "standalone", data: a })),
+  ], [matchedGroups, matchedSpaces, matchedStandalone]);
 
   useEffect(() => { setActiveIdx(0); }, [query]);
 
@@ -93,6 +104,8 @@ export default function GlobalSearch({ isOpen, onClose }) {
       navigate(`/groups/${item.data.id}`);
     } else if (item.type === "space") {
       navigate("/common-spaces");
+    } else if (item.type === "standalone") {
+      navigate(`/common-spaces?activity=${item.data.id}`);
     }
     onClose();
   };
@@ -221,6 +234,7 @@ export default function GlobalSearch({ isOpen, onClose }) {
             </div>
           )}
 
+          {matchedStandalone.length > 0 && <div><div className="flex items-center gap-2 px-4 py-2 bg-slate-50 border-b border-slate-100"><CalendarDays className="w-3.5 h-3.5 text-slate-400" /><span className="text-xs font-semibold text-slate-500">פעילויות כלליות</span></div>{matchedStandalone.map((activity, i) => { const globalIdx = matchedGroups.length + matchedSpaces.length + i; return <button key={activity.id} onClick={() => handleSelect({ type: "standalone", data: activity })} onMouseEnter={() => setActiveIdx(globalIdx)} className={cn("w-full text-right px-4 py-3 border-b border-slate-50", activeIdx === globalIdx ? "bg-primary/5" : "hover:bg-slate-50")}><div className="text-sm font-semibold text-slate-800">{highlight(activity.title, q || "")}</div><div className="text-xs text-slate-400">{activity.event_date} · {activity.start_time}–{activity.end_time} · {activity.status === "CANCELLED" ? "מבוטלת" : "פעילות כללית"}</div></button>; })}</div>}
           {!q && (
             <p className="text-xs text-slate-400 text-center py-4">התחל להקליד לחיפוש מהיר</p>
           )}

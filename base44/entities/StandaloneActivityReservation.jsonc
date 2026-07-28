@@ -1,0 +1,94 @@
+{
+  "name": "StandaloneActivityReservation",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string"
+    },
+    "activity_type": {
+      "type": "string",
+      "enum": [
+        "WORKSHOP",
+        "LECTURE",
+        "MEETING",
+        "EVENT",
+        "OTHER"
+      ],
+      "default": "OTHER"
+    },
+    "description": {
+      "type": "string"
+    },
+    "event_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "start_time": {
+      "type": "string",
+      "description": "HH:MM"
+    },
+    "end_time": {
+      "type": "string",
+      "description": "HH:MM"
+    },
+    "expected_pax": {
+      "type": "number"
+    },
+    "organizer_name": {
+      "type": "string"
+    },
+    "organizer_phone": {
+      "type": "string"
+    },
+    "organizer_email": {
+      "type": "string"
+    },
+    "general_notes": {
+      "type": "string"
+    },
+    "preparation_notes": {
+      "type": "string"
+    },
+    "during_activity_notes": {
+      "type": "string"
+    },
+    "cleanup_notes": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "ACTIVE",
+        "CANCELLED"
+      ],
+      "default": "ACTIVE"
+    },
+    "cancellation_reason": {
+      "type": "string"
+    },
+    "created_by": {
+      "type": "string"
+    },
+    "updated_by": {
+      "type": "string"
+    },
+    "cancelled_by": {
+      "type": "string"
+    },
+    "cancelled_at": {
+      "type": "string"
+    },
+    "creation_token": {
+      "type": "string",
+      "description": "Idempotency token for creation"
+    }
+  },
+  "required": [
+    "title",
+    "activity_type",
+    "event_date",
+    "start_time",
+    "end_time",
+    "status"
+  ]
+}

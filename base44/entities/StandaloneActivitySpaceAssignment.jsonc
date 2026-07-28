@@ -1,0 +1,54 @@
+{
+  "name": "StandaloneActivitySpaceAssignment",
+  "type": "object",
+  "properties": {
+    "reservation_id": {
+      "type": "string",
+      "description": "FK to StandaloneActivityReservation"
+    },
+    "activity_space_id": {
+      "type": "string",
+      "description": "FK to ActivitySpace"
+    },
+    "needs_projector": {
+      "type": "boolean",
+      "default": false
+    },
+    "needs_screen": {
+      "type": "boolean",
+      "default": false
+    },
+    "needs_microphone": {
+      "type": "boolean",
+      "default": false
+    },
+    "needs_sound": {
+      "type": "boolean",
+      "default": false
+    },
+    "needs_whiteboard": {
+      "type": "boolean",
+      "default": false
+    },
+    "needs_chair_circle": {
+      "type": "boolean",
+      "default": false
+    },
+    "chairs_count": {
+      "type": "number"
+    },
+    "setup_layout": {
+      "type": "string"
+    },
+    "logistics_other": {
+      "type": "string"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "reservation_id",
+    "activity_space_id"
+  ]
+}

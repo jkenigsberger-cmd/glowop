@@ -599,7 +599,7 @@ export default function OperationalDaySummary({
 
         {/* ── Scrollable content ── */}
         <div className="overflow-y-auto flex-1 px-5 py-4 space-y-3">
-          {visibleGroups.length === 0 && activeFilter !== "chrono" && (
+          {visibleGroups.length === 0 && activeFilter !== "chrono" && !( ["all", "activities"].includes(activeFilter) && dayActivities.some((item) => item.standalone) ) && (
             <p className="text-sm text-slate-400 text-center py-8">אין נתונים להצגה</p>
           )}
 
@@ -608,21 +608,17 @@ export default function OperationalDaySummary({
             const isCheckout = fmt(group.departure_date) === dateStr;
             const hasAlerts  = (allAlerts || []).some(a => a.group_id === group.id && a.status === "OPEN");
             const defaultOpen = isCheckin || isCheckout || isDayUse(group) || hasAlerts || activeFilter !== "all";
-            return (
-              <GroupCard
-                key={group.id}
-                group={group}
-                dateStr={dateStr}
-                meals={allMeals}
-                activities={allActivities}
-                spaces={allSpaces}
-                alerts={allAlerts}
-                defaultOpen={defaultOpen}
-              />
-            );
+            return <GroupCard key={group.id} group={group} dateStr={dateStr} meals={allMeals} activities={allActivities} spaces={allSpaces} alerts={allAlerts} defaultOpen={defaultOpen} />;
           })}
 
-          {!useGroupCards && activeFilter !== "chrono" && (
+          {["all", "activities"].includes(activeFilter) && dayActivities.filter((item) => item.standalone).map((item) => (
+            <button key={`standalone-${item.id}`} type="button" onClick={() => window.location.assign(`/common-spaces?activity=${item.id}`)} className="w-full text-right rounded-xl border border-purple-200 bg-purple-50 px-4 py-3">
+              <div className="flex items-center gap-2"><span className="text-xs bg-purple-600 text-white rounded-full px-2 py-0.5">פעילות כללית</span><span className="font-semibold text-sm">{item.activity_name}</span></div>
+              <div className="text-xs text-slate-500 mt-1">{item.start_time}–{item.end_time}{item.pax ? ` · ${item.pax} משתתפים` : ""}</div>
+            </button>
+          ))}
+
+          {!useGroupCards && activeFilter !== "chrono" && activeFilter !== "activities" && (
             <GroupedFlatSection
               filter={activeFilter}
               groups={visibleGroups}

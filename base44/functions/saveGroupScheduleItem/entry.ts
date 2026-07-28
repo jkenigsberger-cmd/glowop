@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 import { assertOperationalGroup, isPreparationGroupOperational } from '../../shared/quotePreparationConfig.js';
+import { checkActivitySpaceConflict } from '../../shared/activitySpaceAvailability.js';
 
 const VALID_SPACE_CODES = new Set([
   'bunker_1', 'bunker_2', 'bunker_4', 'bunker_5',
@@ -237,7 +238,7 @@ async function recomputeSharedSnapshot(base44, sharedActivityId) {
   }
 }
 
-Deno.serve(async (req) => {
+export default async function(req) {
   try {
     const base44 = createClientFromRequest(req);
 
@@ -332,49 +333,21 @@ Deno.serve(async (req) => {
     // excludeSharedActivityId: items in same shared activity don't conflict with each other
     const checkConflict = async (spaceId, excludeItemId, excludeSharedActivityId) => {
       if (!spaceId || status === 'CANCELLED') return null;
-
       const spaces = await base44.asServiceRole.entities.ActivitySpace.filter({ id: spaceId });
       const space = spaces[0];
       if (!space) return 'מרחב הפעילות שנבחר אינו קיים.';
       if (!VALID_SPACE_CODES.has(space.code)) return `הקוד "${space.code}" אינו מרחב פעילות תקני.`;
-
-      const newStart = timeToMinutes(start_time);
-      const newEnd   = timeToMinutes(end_time);
-
-      const activeBlocks = await base44.asServiceRole.entities.ActivitySpaceBlock.filter({ activity_space_id: spaceId, status: 'ACTIVE' });
-      const blocking = activeBlocks.find(block => reservationOverlapsBlock(block, date, start_time, end_time));
-      if (blocking) {
-        const reason = BLOCK_REASON_LABELS[blocking.reason_type] || blocking.reason_type;
-        const notes = blocking.reason_notes ? ` — ${blocking.reason_notes}` : '';
-        const range = blocking.is_open_ended
-          ? `${blocking.start_date} ${blocking.start_time} — חסום עד תיקון`
-          : `${blocking.start_date}–${blocking.end_date} ${blocking.start_time}–${blocking.end_time}`;
-        return `המרחב הזה לא זמין בזמן הזה. ${space.name} · ${reason} · ${range}${notes}`;
-      }
-
-      const existingItems = await base44.asServiceRole.entities.GroupScheduleItem.filter({
-        activity_space_id: spaceId,
+      const conflict = await checkActivitySpaceConflict(base44, {
+        spaceId,
         date,
-        status: 'ACTIVE',
+        startTime: start_time,
+        endTime: end_time,
+        excludeGroupItemId: excludeItemId,
+        excludeSharedActivityId,
       });
-
-      const conflictGroups = await fetchGroupsByIds(base44, [...new Set(existingItems.map(item => item.group_id))]);
-      const operationalGroupIds = new Set(conflictGroups.filter(isPreparationGroupOperational).map(group => group.id));
-      const conflicts = existingItems.filter(item => {
-        if (!operationalGroupIds.has(item.group_id)) return false;
-        if (excludeItemId && item.id === excludeItemId) return false;
-        // Ignore items that are part of the same shared activity
-        if (excludeSharedActivityId && item.shared_activity_id === excludeSharedActivityId) return false;
-        const eStart = timeToMinutes(item.start_time);
-        const eEnd   = timeToMinutes(item.end_time);
-        return newStart < eEnd && newEnd > eStart;
-      });
-
-      if (conflicts.length > 0) {
-        const c = conflicts[0];
-        return `המרחב כבר תפוס בשעה הזו. יש לבחור שעה אחרת או מרחב אחר. (התנגשות עם ${c.start_time}–${c.end_time})`;
-      }
-      return null;
+      if (!conflict) return null;
+      const details = conflict.conflicting_title ? ` — ${conflict.conflicting_title} (${conflict.start_time || ''}–${conflict.end_time || ''})` : '';
+      return `${conflict.message || 'המרחב כבר תפוס בשעה שנבחרה'}${details}`;
     };
 
     // Resolve space code
@@ -790,4 +763,4 @@ Deno.serve(async (req) => {
     console.error('[saveGroupScheduleItem] unexpected error:', err?.message, err?.stack);
     return Response.json({ success: false, error: 'שגיאה פנימית בשמירת פעילות', debug: { message: err?.message } }, { status: 500 });
   }
-});
+}

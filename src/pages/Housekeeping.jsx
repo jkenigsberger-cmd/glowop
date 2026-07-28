@@ -88,6 +88,14 @@ export default function Housekeeping() {
     queryKey: ["groupScheduleItems"],
     queryFn: () => base44.entities.GroupScheduleItem.list(),
   });
+  const { data: standaloneActivities = [] } = useQuery({
+    queryKey: ["standaloneActivities"],
+    queryFn: () => base44.entities.StandaloneActivityReservation.filter({ status: "ACTIVE" }),
+  });
+  const { data: standaloneAssignments = [] } = useQuery({
+    queryKey: ["standaloneActivityAssignments"],
+    queryFn: () => base44.entities.StandaloneActivitySpaceAssignment.list("-created_date", 500),
+  });
 
   const { data: activitySpaces = [] } = useQuery({
     queryKey: ["activitySpaces"],
@@ -257,10 +265,15 @@ export default function Housekeeping() {
   }, [dateRange, groups, groupsMap, mealReservations, scheduleItems]);
 
   // ── Common spaces per-date data ───────────────────────────────────────────────
+  const standaloneSpaceItems = useMemo(() => standaloneAssignments.flatMap((assignment) => {
+    const activity = standaloneActivities.find((item) => item.id === assignment.reservation_id);
+    return activity ? [{ ...assignment, id: `standalone-${assignment.id}`, standalone: true, reservation_id: activity.id, date: activity.event_date, start_time: activity.start_time, end_time: activity.end_time, activity_name: activity.title, pax: activity.expected_pax, status: activity.status, preparation_notes: activity.preparation_notes, cleanup_notes: activity.cleanup_notes }] : [];
+  }), [standaloneActivities, standaloneAssignments]);
   const commonSpaceDateData = useMemo(() => {
     const bookableSpaces = activitySpaces.filter(s => s.is_bookable !== false);
     return dateRange.map(date => {
-      const itemsOnDate = scheduleItems.filter(s => groupsMap[s.group_id] && s.date === date && s.status === "ACTIVE" && s.activity_space_id);
+      const groupItems = scheduleItems.filter(s => groupsMap[s.group_id] && s.date === date && s.status === "ACTIVE" && s.activity_space_id);
+      const itemsOnDate = [...groupItems, ...standaloneSpaceItems.filter((item) => item.date === date)];
       // Group by space
       const bySpaceId = {};
       itemsOnDate.forEach(item => {
@@ -270,7 +283,7 @@ export default function Housekeeping() {
       const spacesUsed = bookableSpaces.filter(s => bySpaceId[s.id]);
       return { date, bySpaceId, spacesUsed };
     });
-  }, [dateRange, scheduleItems, activitySpaces, groupsMap]);
+  }, [dateRange, scheduleItems, standaloneSpaceItems, activitySpaces, groupsMap]);
 
   // ── Search + date filters ─────────────────────────────────────────────────────
   const matchGroup = (g) => {

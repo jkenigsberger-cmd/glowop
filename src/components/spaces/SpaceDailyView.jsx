@@ -21,7 +21,7 @@ function isConflicting(item, allDayItems) {
 
 const SPACE_TYPE_LABELS = { BUNKER: "בונקר", OHEL_MOED: "אוהל מועד", DINING_HALL: "חדר אוכל", FIREPLACE: "בולדר" };
 
-export default function SpaceDailyView({ spaces, itemsBySpace, blocks = [], date }) {
+export default function SpaceDailyView({ spaces, itemsBySpace, blocks = [], date, onSelectStandalone }) {
   const hasAnyBooking = spaces.some((s) => (itemsBySpace[s.id] || []).length > 0 || blocks.some(b => b.activity_space_id === s.id));
 
   if (!hasAnyBooking) {
@@ -122,14 +122,11 @@ export default function SpaceDailyView({ spaces, itemsBySpace, blocks = [], date
                     </div>
 
                     {/* Link — only for non-shared (shared has no single group to link to) */}
-                    {!item.isShared && (
-                      <Link
-                        to={`/groups/${item.groupId || item.group_id}`}
-                        className="text-xs text-primary hover:underline shrink-0 mt-0.5"
-                      >
-                        קבוצה ↗
-                      </Link>
-                    )}
+                    {!item.isShared && (item.standalone ? (
+                      <button type="button" onClick={() => onSelectStandalone?.(item.reservationId)} className="text-xs text-primary hover:underline shrink-0 mt-0.5">פרטים ↗</button>
+                    ) : (
+                      <Link to={`/groups/${item.groupId || item.group_id}`} className="text-xs text-primary hover:underline shrink-0 mt-0.5">קבוצה ↗</Link>
+                    ))}
                   </div>
                 );
               })}

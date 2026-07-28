@@ -1,9 +1,9 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import moment from "moment";
 import "moment/locale/he";
-import { Layers, ChevronLeft, ChevronRight } from "lucide-react";
+import { Layers, ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import SearchBar from "@/components/search/SearchBar";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -17,12 +17,16 @@ import SpaceDailyView from "../components/spaces/SpaceDailyView.jsx";
 import SpaceWeeklyGrid from "../components/spaces/SpaceWeeklyGrid.jsx";
 import LogisticsReportTab from "../components/spaces/LogisticsReportTab.jsx";
 import ActivitySpaceBlocksPanel from "@/components/spaces/ActivitySpaceBlocksPanel";
+import StandaloneActivityModal from "@/components/standalone-activities/StandaloneActivityModal";
+import { invalidateStandaloneActivityQueries } from "@/lib/standaloneActivityQueries";
 
 moment.locale("he");
 
 export default function CommonSpaces() {
   const { role } = useRoleContext();
+  const queryClient = useQueryClient();
   const [tab, setTab] = useState("overview");
+  const [standaloneModal, setStandaloneModal] = useState(null);
   const [selectedDate, setSelectedDate] = useState(moment().format("YYYY-MM-DD"));
   const [weekPivot, setWeekPivot] = useState(moment());
   const [spaceSearch, setSpaceSearch] = useState("");
@@ -57,6 +61,22 @@ export default function CommonSpaces() {
     queryKey: ["activity-space-blocks"],
     queryFn: () => base44.entities.ActivitySpaceBlock.list("-start_date", 500),
   });
+  const { data: standaloneActivities = [] } = useQuery({
+    queryKey: ["standaloneActivities"],
+    queryFn: () => base44.entities.StandaloneActivityReservation.list("-event_date", 500),
+  });
+  const { data: standaloneAssignments = [] } = useQuery({
+    queryKey: ["standaloneActivityAssignments"],
+    queryFn: () => base44.entities.StandaloneActivitySpaceAssignment.list("-created_date", 500),
+  });
+
+  useEffect(() => {
+    const activityId = new URLSearchParams(window.location.search).get("activity");
+    if (activityId) {
+      const reservation = standaloneActivities.find((item) => item.id === activityId);
+      if (reservation) setStandaloneModal(reservation);
+    }
+  }, [standaloneActivities]);
 
   // ── Derived ───────────────────────────────────────────────────────────────
   const groupById = useMemo(
@@ -77,25 +97,32 @@ export default function CommonSpaces() {
     [scheduleItems, groupById]
   );
 
+  const standaloneSpaceItems = useMemo(() => standaloneAssignments.flatMap((assignment) => {
+    const reservation = standaloneActivities.find((item) => item.id === assignment.reservation_id && item.status === "ACTIVE");
+    if (!reservation) return [];
+    return [{ ...assignment, id: `standalone-${assignment.id}`, reservationId: reservation.id, standalone: true, activity_space_id: assignment.activity_space_id, activity_name: reservation.title, activityName: reservation.title, date: reservation.event_date, start_time: reservation.start_time, end_time: reservation.end_time, pax: reservation.expected_pax, groupName: "פעילות כללית", groupId: null, notes: assignment.notes || reservation.preparation_notes }];
+  }), [standaloneActivities, standaloneAssignments]);
+  const allSpaceItems = useMemo(() => [...spaceItems, ...standaloneSpaceItems], [spaceItems, standaloneSpaceItems]);
+
   // Items per space (all dates)
   const itemsBySpaceId = useMemo(() => {
     const map = {};
-    spaceItems.forEach((i) => {
+    allSpaceItems.forEach((i) => {
       (map[i.activity_space_id] = map[i.activity_space_id] || []).push(i);
     });
     return map;
-  }, [spaceItems]);
+  }, [allSpaceItems]);
 
   // Items per space for selected date (daily view)
   const itemsBySpaceForDay = useMemo(() => {
     const map = {};
-    spaceItems
+    allSpaceItems
       .filter((i) => i.date === selectedDate)
       .forEach((i) => {
         (map[i.activity_space_id] = map[i.activity_space_id] || []).push(i);
       });
     return map;
-  }, [spaceItems, selectedDate]);
+  }, [allSpaceItems, selectedDate]);
 
   // ── Handlers ─────────────────────────────────────────────────────────────
   const blocksForSelectedDay = useMemo(
@@ -111,6 +138,10 @@ export default function CommonSpaces() {
   const shiftDate = (dir) => {
     setSelectedDate((d) => moment(d).add(dir, "day").format("YYYY-MM-DD"));
   };
+  const closeStandaloneModal = () => {
+    setStandaloneModal(null);
+    if (new URLSearchParams(window.location.search).has("activity")) window.history.replaceState({}, "", "/common-spaces");
+  };
 
   const TABS = [
     { id: "overview",  label: "סקירה כללית" },
@@ -125,14 +156,12 @@ export default function CommonSpaces() {
       <div className="max-w-7xl mx-auto px-3 sm:px-6 py-6 space-y-5">
 
         {/* Page header */}
-        <div>
-          <h1 className="text-xl font-bold flex items-center gap-2">
-            <Layers className="w-5 h-5 text-primary" />
-            מרחבי פעילות
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            צפייה בלבד — עריכה ב-GroupDetail / לוח שנה
-          </p>
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <h1 className="text-xl font-bold flex items-center gap-2"><Layers className="w-5 h-5 text-primary" />מרחבי פעילות</h1>
+            <p className="text-sm text-muted-foreground">פעילויות קבוצתיות וכלליות במרחבים המשותפים</p>
+          </div>
+          {["SUPER_ADMIN", "ADMIN", "OPERATIONS"].includes(role) && <Button onClick={() => setStandaloneModal("new")}><Plus className="w-4 h-4" /> פעילות כללית ללא קבוצה</Button>}
         </div>
 
         {/* Tabs */}
@@ -219,6 +248,7 @@ export default function CommonSpaces() {
               itemsBySpace={itemsBySpaceForDay}
               blocks={blocksForSelectedDay}
               date={selectedDate}
+              onSelectStandalone={(id) => setStandaloneModal(standaloneActivities.find((item) => item.id === id))}
             />
           </div>
         )}
@@ -254,7 +284,7 @@ export default function CommonSpaces() {
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
               <SpaceWeeklyGrid
                 spaces={activitySpaces}
-                allItems={spaceItems}
+                allItems={allSpaceItems}
                 blocks={spaceBlocks}
                 pivot={weekPivot}
                 onSelectDay={handleWeeklyDayClick}
@@ -268,6 +298,7 @@ export default function CommonSpaces() {
         )}
 
       </div>
+      {standaloneModal && <StandaloneActivityModal reservation={standaloneModal === "new" ? null : standaloneModal} assignments={standaloneModal === "new" ? [] : standaloneAssignments.filter((item) => item.reservation_id === standaloneModal.id)} spaces={activitySpaces.filter((space) => space.is_bookable !== false && (!space.working_status || space.working_status === "WORKING"))} canDelete={["SUPER_ADMIN", "ADMIN"].includes(role)} onChanged={async () => invalidateStandaloneActivityQueries(queryClient)} onClose={closeStandaloneModal} />}
     </div>
   );
 }

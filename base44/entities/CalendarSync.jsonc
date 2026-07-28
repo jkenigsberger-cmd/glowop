@@ -4,7 +4,18 @@
   "properties": {
     "group_schedule_item_id": {
       "type": "string",
-      "description": "FK to GroupScheduleItem"
+      "description": "FK to GroupScheduleItem for group activities"
+    },
+    "source_type": {
+      "type": "string",
+      "enum": [
+        "GROUP_SCHEDULE_ITEM",
+        "STANDALONE_ACTIVITY"
+      ]
+    },
+    "source_id": {
+      "type": "string",
+      "description": "Canonical source id for additive calendar sources"
     },
     "calendar_event_id": {
       "type": "string",
@@ -12,11 +23,10 @@
     },
     "calendar_id": {
       "type": "string",
-      "description": "Google Calendar ID (defaults to primary)"
+      "description": "Google Calendar ID"
     }
   },
   "required": [
-    "group_schedule_item_id",
     "calendar_event_id"
   ]
 }

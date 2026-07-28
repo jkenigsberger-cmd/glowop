@@ -32,7 +32,7 @@ function isSensitive(name) {
   return SENSITIVE_NAMES.some((s) => name.includes(s));
 }
 
-Deno.serve(async (req) => {
+export default async function(req) {
   try {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me();
@@ -61,7 +61,7 @@ Deno.serve(async (req) => {
     const nextDateStr = nextDate.toISOString().slice(0, 10);
 
     // ── Read all needed data (read-only) ──────────────────────────────────
-    const [groups, profiles, meals, coffee, prisa, activities, spaces, maintenance] = await Promise.all([
+    const [groups, profiles, meals, coffee, prisa, activities, spaces, maintenance, standaloneActivities, standaloneAssignments] = await Promise.all([
       base44.asServiceRole.entities.Group.list("-arrival_date", 500),
       base44.asServiceRole.entities.OperationalGroupProfile.list("-accepted_at", 500),
       base44.asServiceRole.entities.MealReservation.filter({ date, status: "ACTIVE" }),
@@ -70,6 +70,8 @@ Deno.serve(async (req) => {
       base44.asServiceRole.entities.GroupScheduleItem.filter({ date, status: "ACTIVE" }),
       base44.asServiceRole.entities.ActivitySpace.list("", 500),
       base44.asServiceRole.entities.MaintenanceIssue.filter({ status: { $in: ["OPEN", "IN_PROGRESS", "WAITING_PARTS"] } }, "-created_date", 500),
+      base44.asServiceRole.entities.StandaloneActivityReservation.filter({ event_date: date, status: "ACTIVE" }),
+      base44.asServiceRole.entities.StandaloneActivitySpaceAssignment.list("-created_date", 500),
     ]);
 
     const EXCLUDED = new Set(["CANCELLED", "COMPLETED", "ARCHIVED"]);
@@ -77,7 +79,7 @@ Deno.serve(async (req) => {
     const groupById = Object.fromEntries(operationalGroups.map((g) => [g.id, g]));
     const spaceById = Object.fromEntries(spaces.map((s) => [s.id, s]));
 
-    const groupName = (id) => groupById[id]?.group_name || "קבוצה";
+    const groupName = (id) => String(id || "").startsWith("__standalone__") ? "פעילות כללית" : groupById[id]?.group_name || "קבוצה";
     const paxForGroup = (id) => {
       const p = profiles.find((pr) => pr.group_id === id);
       const g = groupById[id];
@@ -160,8 +162,13 @@ Deno.serve(async (req) => {
     }));
 
     // ── 5. Activity spaces — flag those needing attention ────────────────
+    const standaloneSpaceActivities = standaloneAssignments.flatMap((assignment) => {
+      const reservation = standaloneActivities.find((item) => item.id === assignment.reservation_id);
+      return reservation ? [{ ...assignment, group_id: `__standalone__${reservation.id}`, activity_space_id: assignment.activity_space_id, activity_name: reservation.title, start_time: reservation.start_time, end_time: reservation.end_time, pax: reservation.expected_pax, notes: [reservation.preparation_notes, reservation.cleanup_notes].filter(Boolean).join(" | ") }] : [];
+    });
+    const spaceActivities = [...activities.filter((item) => groupById[item.group_id]), ...standaloneSpaceActivities];
     const bySpace = {};
-    for (const a of activities.filter((item) => groupById[item.group_id])) {
+    for (const a of spaceActivities) {
       const key = a.activity_space_id || `__name__${a.activity_space_code || a.requested_location || "לא משויך"}`;
       if (!bySpace[key]) bySpace[key] = [];
       bySpace[key].push(a);
@@ -251,4 +258,4 @@ Deno.serve(async (req) => {
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
   }
-});
+}

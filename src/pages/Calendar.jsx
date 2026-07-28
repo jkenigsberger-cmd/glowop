@@ -398,6 +398,14 @@ export default function Calendar() {
     queryKey: ["cal-schedule"],
     queryFn: () => base44.entities.GroupScheduleItem.filter({ status: "ACTIVE" })
   });
+  const { data: standaloneActivities = [] } = useQuery({
+    queryKey: ["standaloneActivities"],
+    queryFn: () => base44.entities.StandaloneActivityReservation.filter({ status: "ACTIVE" })
+  });
+  const { data: standaloneAssignments = [] } = useQuery({
+    queryKey: ["standaloneActivityAssignments"],
+    queryFn: () => base44.entities.StandaloneActivitySpaceAssignment.list("-created_date", 500)
+  });
   const { data: activitySpaces = [] } = useQuery({
     queryKey: ["cal-spaces"],
     queryFn: () => base44.entities.ActivitySpace.list()
@@ -413,7 +421,14 @@ export default function Calendar() {
 
   const operationalGroupIds = useMemo(() => new Set(groups.map(g => g.id)), [groups]);
   const operationalMeals = useMemo(() => meals.filter(m => operationalGroupIds.has(m.group_id)), [meals, operationalGroupIds]);
-  const operationalScheduleItems = useMemo(() => scheduleItems.filter(i => operationalGroupIds.has(i.group_id)), [scheduleItems, operationalGroupIds]);
+  const operationalScheduleItems = useMemo(() => {
+    const groupItems = scheduleItems.filter(i => operationalGroupIds.has(i.group_id));
+    const standaloneItems = standaloneActivities.map((activity) => {
+      const assignments = standaloneAssignments.filter((item) => item.reservation_id === activity.id);
+      return { ...activity, standalone: true, date: activity.event_date, activity_name: activity.title, pax: activity.expected_pax, group_name: "פעילות כללית", activity_space_id: assignments[0]?.activity_space_id || null, space_ids: assignments.map((item) => item.activity_space_id), needs_projector: assignments.some((item) => item.needs_projector), needs_screen: assignments.some((item) => item.needs_screen), needs_microphone: assignments.some((item) => item.needs_microphone), needs_sound: assignments.some((item) => item.needs_sound), needs_whiteboard: assignments.some((item) => item.needs_whiteboard), needs_chair_circle: assignments.some((item) => item.needs_chair_circle), chairs_count: Math.max(0, ...assignments.map((item) => Number(item.chairs_count) || 0)), logistics_other: assignments.map((item) => item.logistics_other).filter(Boolean).join(", ") };
+    });
+    return [...groupItems, ...standaloneItems];
+  }, [scheduleItems, standaloneActivities, standaloneAssignments, operationalGroupIds]);
   const operationalAlerts = useMemo(() => alerts.filter(a => operationalGroupIds.has(a.group_id)), [alerts, operationalGroupIds]);
   const operationalCoffee = useMemo(() => coffeeRequests.filter(r => operationalGroupIds.has(r.group_id)), [coffeeRequests, operationalGroupIds]);
 

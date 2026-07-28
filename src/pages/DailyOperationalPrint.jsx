@@ -71,6 +71,15 @@ export default function DailyOperationalPrint() {
     queryFn: () => base44.entities.GroupScheduleItem.filter({ date: dateParam, status: "ACTIVE" }),
     enabled: !!dateParam,
   });
+  const { data: standaloneActivities = [] } = useQuery({
+    queryKey: ["standaloneActivities", dateParam],
+    queryFn: () => base44.entities.StandaloneActivityReservation.filter({ event_date: dateParam, status: "ACTIVE" }),
+    enabled: !!dateParam,
+  });
+  const { data: standaloneAssignments = [] } = useQuery({
+    queryKey: ["standaloneActivityAssignments"],
+    queryFn: () => base44.entities.StandaloneActivitySpaceAssignment.list("-created_date", 500),
+  });
 
   const { data: coffeeRequests = [] } = useQuery({
     queryKey: ["coffee-daily-print", dateParam],
@@ -138,7 +147,11 @@ export default function DailyOperationalPrint() {
   const sortedMeals = [...meals]
     .filter(m => existingGroupIds.has(m.group_id) && m.meal_type !== "COFFEE_CORNER")
     .sort((a, b) => (a.start_time || "").localeCompare(b.start_time || ""));
-  const sortedActivities = [...activities].filter(a => existingGroupIds.has(a.group_id)).sort((a, b) => (a.start_time || "").localeCompare(b.start_time || ""));
+  const standalonePrintActivities = standaloneActivities.map((activity) => {
+    const assigned = standaloneAssignments.filter((assignment) => assignment.reservation_id === activity.id);
+    return { ...activity, standalone: true, activity_name: activity.title, pax: activity.expected_pax, space_names: assigned.map((assignment) => spaceById[assignment.activity_space_id]?.name).filter(Boolean), needs_projector: assigned.some((a) => a.needs_projector), needs_screen: assigned.some((a) => a.needs_screen), needs_microphone: assigned.some((a) => a.needs_microphone), needs_sound: assigned.some((a) => a.needs_sound), needs_whiteboard: assigned.some((a) => a.needs_whiteboard), needs_chair_circle: assigned.some((a) => a.needs_chair_circle), chairs_count: Math.max(0, ...assigned.map((a) => Number(a.chairs_count) || 0)), logistics_other: assigned.map((a) => a.logistics_other).filter(Boolean).join(", "), notes: [activity.preparation_notes, activity.during_activity_notes, activity.cleanup_notes].filter(Boolean).join(" | ") };
+  });
+  const sortedActivities = [...activities.filter(a => existingGroupIds.has(a.group_id)), ...standalonePrintActivities].sort((a, b) => (a.start_time || "").localeCompare(b.start_time || ""));
 
   // Fix A: filter out orphan CoffeeCornerRequests whose parent Group no longer exists
   const sortedCoffee = [...coffeeRequests]
@@ -523,8 +536,8 @@ export default function DailyOperationalPrint() {
                   <div key={item.id} className="activity-card">
                     <div className="activity-time" dir="ltr">{item.start_time}–{item.end_time}</div>
                     <div className="activity-name">{item.activity_name}</div>
-                    {g && <div className="activity-meta">🏕 {g.group_name}</div>}
-                    {space && <div className="activity-meta">📍 {space.name}</div>}
+                    {item.standalone ? <div className="activity-meta">סוג: פעילות כללית ללא קבוצה</div> : g && <div className="activity-meta">🏕 {g.group_name}</div>}
+                    {item.standalone && item.space_names?.length ? <div className="activity-meta">📍 {item.space_names.join(", ")}</div> : space && <div className="activity-meta">📍 {space.name}</div>}
                     {!space && item.requested_location && <div className="activity-meta">📍 {item.requested_location}</div>}
                     {item.pax > 0 && <div className="activity-meta">👥 {item.pax} משתתפים</div>}
                     <div className="activity-equipment">🔧 ציוד: {activityEquipmentText(item) || "אין ציוד מיוחד"}</div>
