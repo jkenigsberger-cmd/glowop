@@ -496,6 +496,11 @@ export default function OperationalDaySummary({
     [allMeals, dateStr, activeCoffeeKeys]
   );
 
+  const dayCoffeeRequests = useMemo(() =>
+    (allCoffeeRequests || []).filter(request => request.status === "ACTIVE" && request.date === dateStr),
+    [allCoffeeRequests, dateStr]
+  );
+
   const dayActivities = useMemo(() =>
     (allActivities || []).filter(a => a.status === "ACTIVE" && a.date === dateStr)
       .sort((a, b) => (a.start_time || "").localeCompare(b.start_time || "") || (a.end_time || "").localeCompare(b.end_time || "")),
@@ -585,7 +590,7 @@ export default function OperationalDaySummary({
                   active={activeFilter === "activities"} onClick={() => handleFilter("activities")} filterKey="activities" />
                 <FilterPill label="התראות" count={dayAlerts.length} icon={AlertTriangle}
                   active={activeFilter === "alerts"} onClick={() => handleFilter("alerts")} filterKey="alerts" />
-                <FilterPill label="סדר יום כרונולוגי" count={dayMeals.length + dayActivities.length + lodgingCheckins.length + lodgingCheckouts.length + dayUseGroups.length} icon={Clock}
+                <FilterPill label="סדר יום כרונולוגי" count={dayMeals.length + dayCoffeeRequests.length + dayActivities.length + lodgingCheckins.length + lodgingCheckouts.length + dayUseGroups.length} icon={Clock}
                   active={activeFilter === "chrono"} onClick={() => handleFilter("chrono")} filterKey="chrono" />
               </div>
             </>

@@ -9,7 +9,13 @@ import { toast } from "sonner";
 import { sortActivitySpaces, getActivitySpaceDisplayName } from "@/lib/activitySpaceUtils";
 import RoleGate from "@/components/RoleGate";
 
-const COFFEE_TYPES = ["פינת קפה רגילה", "פינת קפה ועוגיות", "פינת קפה ומאפה"];
+const COFFEE_TYPES = [
+  { value: "פינת קפה רגילה", label: "פינת קפה רגילה" },
+  { value: "פינת קפה ועוגיות", label: "פינת קפה ועוגיות" },
+  { value: "פינת קפה ומאפה", label: "פינת קפה ומאפה" },
+  { value: "HOT_WATER_THERMOCAN_ONLY", label: "מיחם וטרמוקן בלבד" },
+];
+const coffeeTypeLabel = (value) => value === "HOT_WATER_THERMOCAN_ONLY" ? "מיחם וטרמוקן בלבד" : value || "פינת קפה רגילה";
 
 const EMPTY_FORM = () => ({
   date: "",
@@ -236,7 +242,7 @@ export default function CoffeeCornerTab({ groupId, profile, group }) {
               <Select value={form.coffee_corner_type} onValueChange={v => setForm(f => ({ ...f, coffee_corner_type: v }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {COFFEE_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                  {COFFEE_TYPES.map(({ value, label }) => <SelectItem key={value} value={value}>{label}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -316,7 +322,7 @@ export default function CoffeeCornerTab({ groupId, profile, group }) {
                     <span className="font-semibold text-amber-800 text-sm">פינת קפה</span>
                   </div>
                   <p className="text-xs text-amber-700 font-medium">
-                    סוג: {req.coffee_corner_type || "פינת קפה רגילה"}
+                    סוג: {coffeeTypeLabel(req.coffee_corner_type)}
                   </p>
                   <p className="text-sm text-slate-700 font-medium">
                     {req.date?.split("-").reverse().join("/")}

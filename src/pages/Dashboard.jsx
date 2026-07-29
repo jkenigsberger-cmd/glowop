@@ -14,7 +14,7 @@ import DashboardQuickLinks from "@/components/dashboard/DashboardQuickLinks";
 import OccupancyMap from "@/components/dashboard/OccupancyMap";
 import DailyStaffBrief from "@/components/dashboard/brief/DailyStaffBrief";
 import { Button } from "@/components/ui/button";
-import { FileText, ChevronRight, ChevronLeft, BedDouble, Sun, Users, LogIn, LogOut, UtensilsCrossed, CalendarDays, AlertTriangle } from "lucide-react";
+import { FileText, ChevronRight, ChevronLeft, BedDouble, Sun, Users, LogIn, LogOut, UtensilsCrossed, CalendarDays, AlertTriangle, Coffee } from "lucide-react";
 import { useRoleContext } from "@/lib/RoleContext";
 import { isOperationalGroup } from "@/lib/quotePreparationFlow";
 
@@ -121,6 +121,10 @@ export default function Dashboard() {
     queryKey: ["allMeals"],
     queryFn: () => base44.entities.MealReservation.filter({ status: "ACTIVE" }),
   });
+  const { data: coffeeRequests = [] } = useQuery({
+    queryKey: ["coffeeCornerRequests_dashboard"],
+    queryFn: () => base44.entities.CoffeeCornerRequest.filter({ status: "ACTIVE" }),
+  });
 
   const { data: activities = [] } = useQuery({
     queryKey: ["allActivities"],
@@ -221,6 +225,10 @@ export default function Dashboard() {
   const mealsForDate = useMemo(() =>
     meals.filter(m => groupById[m.group_id] && m.date === selectedDate),
     [meals, groupById, selectedDate]
+  );
+  const coffeeForDate = useMemo(() =>
+    coffeeRequests.filter(request => groupById[request.group_id] && request.date === selectedDate),
+    [coffeeRequests, groupById, selectedDate]
   );
 
   const activitiesForDate = useMemo(() => {
@@ -501,6 +509,12 @@ export default function Dashboard() {
         <Section id={SECTION_IDS.meals} title={`ארוחות (${mealsForDate.length})`} icon={UtensilsCrossed}>
           <DashboardMealsToday meals={mealsForDate} groupById={groupById} profileById={profileById} />
         </Section>
+
+        {coffeeForDate.length > 0 && (
+          <Section title={`פינות קפה (${coffeeForDate.length})`} icon={Coffee}>
+            <DashboardMealsToday meals={coffeeForDate} groupById={groupById} profileById={profileById} />
+          </Section>
+        )}
 
         {/* ── Activities ───────────────────────────────────────────────── */}
         <Section id={SECTION_IDS.activities} title={`פעילויות (${activitiesForDate.length})`} icon={CalendarDays}>

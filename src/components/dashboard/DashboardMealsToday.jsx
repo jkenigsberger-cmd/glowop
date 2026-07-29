@@ -2,11 +2,13 @@ import { Link } from "react-router-dom";
 import { UtensilsCrossed, ChevronLeft } from "lucide-react";
 
 const MEAL_LABELS = { BREAKFAST: "ארוחת בוקר", LUNCH: "ארוחת צהריים", DINNER: "ארוחת ערב", OTHER: "אחר" };
+const coffeeTypeLabel = (value) => value === "HOT_WATER_THERMOCAN_ONLY" ? "מיחם וטרמוקן בלבד" : value || "פינת קפה רגילה";
 const MEAL_COLORS = {
   BREAKFAST: "bg-yellow-50 border-yellow-200 text-yellow-700",
   LUNCH:     "bg-orange-50 border-orange-200 text-orange-700",
   DINNER:    "bg-indigo-50 border-indigo-200 text-indigo-700",
   OTHER:     "bg-slate-50 border-slate-200 text-slate-600",
+  COFFEE_CORNER: "bg-amber-50 border-amber-200 text-amber-700",
 };
 
 function parseDiets(json) {
@@ -30,6 +32,7 @@ export default function DashboardMealsToday({ meals, groupById, profileById }) {
     <div className="space-y-2">
       {sorted.map(meal => {
         const group = groupById[meal.group_id];
+        const isCoffee = !!meal.coffee_corner_type;
         const specialCount = parseDiets(meal.special_diets_summary);
         return (
           <Link
@@ -43,8 +46,8 @@ export default function DashboardMealsToday({ meals, groupById, profileById }) {
             </div>
             <div className="flex-1 min-w-0 space-y-0.5">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className={`text-[10px] font-semibold border rounded-full px-2 py-0.5 ${MEAL_COLORS[meal.meal_type] || MEAL_COLORS.OTHER}`}>
-                  {MEAL_LABELS[meal.meal_type] || meal.meal_type}
+                <span className={`text-[10px] font-semibold border rounded-full px-2 py-0.5 ${isCoffee ? MEAL_COLORS.COFFEE_CORNER : MEAL_COLORS[meal.meal_type] || MEAL_COLORS.OTHER}`}>
+                  {isCoffee ? coffeeTypeLabel(meal.coffee_corner_type) : MEAL_LABELS[meal.meal_type] || meal.meal_type}
                 </span>
                 <span className="text-sm font-medium">{group?.group_name || "—"}</span>
                 <span className="text-xs text-muted-foreground">{meal.pax} אנשים</span>

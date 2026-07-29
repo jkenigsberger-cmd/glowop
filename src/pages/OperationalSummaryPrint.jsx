@@ -29,6 +29,7 @@ const MEAL_LABELS = { BREAKFAST: "ארוחת בוקר", LUNCH: "ארוחת צה�
 const GENDER_LABELS = { BOYS: "בנים", GIRLS: "בנות", MEN: "גברים", WOMEN: "נשים", MIXED: "מעורב" };
 const ALLOC_TYPE_LABELS = { STUDENT: "חניכים", STAFF: "צוות" };
 const GROUP_TYPE_LABELS = { LODGING: "לינה", DAY_USE: "פעילות יום" };
+const coffeeTypeLabel = (value) => value === "HOT_WATER_THERMOCAN_ONLY" ? "מיחם וטרמוקן בלבד" : value || "פינת קפה רגילה";
 
 const DIET_LABELS = [
   { key: "vegetarian_count",     label: "צמחונים",              critical: false },
@@ -73,7 +74,7 @@ function CoffeeCard({ req }) {
     <div className="coffee-card">
       <div className="coffee-date">{req.date?.split("-").reverse().join("/")}</div>
       <div className="coffee-time" dir="ltr">{req.start_time}–{req.end_time}</div>
-      <div className="coffee-type">סוג: {req.coffee_corner_type || "פינת קפה רגילה"}</div>
+      <div className="coffee-type">סוג: {coffeeTypeLabel(req.coffee_corner_type)}</div>
       {req.location_name_snapshot && <div className="coffee-location">📍 {req.location_name_snapshot}</div>}
       <div className="coffee-pax">👥 כמות: {req.pax}</div>
       {req.notes && <div className="coffee-notes">{req.notes}</div>}

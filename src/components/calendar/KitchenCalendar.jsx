@@ -31,6 +31,7 @@ const MEAL_TYPE_COLORS = {
   DINNER:    "text-blue-700",
   OTHER:     "text-slate-600",
 };
+const coffeeTypeLabel = (value) => value === "HOT_WATER_THERMOCAN_ONLY" ? "מיחם וטרמוקן בלבד" : value || "פינת קפה";
 
 // ── Day Detail Modal ──────────────────────────────────────────────────────────
 
@@ -114,7 +115,7 @@ function KitchenDayModal({ dateStr, meals, coffeeRequests, groupMap, onClose, on
             {dayCoffee.map((r) => (
               <div key={r.id} className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 space-y-1">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-medium text-amber-700">{r.coffee_corner_type || "פינת קפה"}</span>
+                  <span className="text-xs font-medium text-amber-700">{coffeeTypeLabel(r.coffee_corner_type)}</span>
                   <span className="text-sm font-bold text-amber-800">{r.pax || "—"} 👤</span>
                 </div>
                 <p className="text-sm font-semibold text-slate-800">{groupMap[r.group_id]?.group_name || "—"}</p>

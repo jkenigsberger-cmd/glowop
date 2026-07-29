@@ -10,6 +10,7 @@ import { isOperationalGroup } from "@/lib/quotePreparationFlow";
 // ── constants ──────────────────────────────────────────────────────────────
 const MEAL_ORDER  = { BREAKFAST: 0, LUNCH: 1, DINNER: 2, OTHER: 3 };
 const MEAL_LABELS = { BREAKFAST: "ארוחת בוקר", LUNCH: "ארוחת צהריים", DINNER: "ארוחת ערב", OTHER: "אחר" };
+const coffeeTypeLabel = (value) => value === "HOT_WATER_THERMOCAN_ONLY" ? "מיחם וטרמוקן בלבד" : value || "פינת קפה רגילה";
 
 const DIET_FIELDS = [
   { key: "vegetarian_count",      label: "צמחונים" },
@@ -777,7 +778,7 @@ export default function KitchenReport() {
                           <td style={{ direction: "ltr" }}>{r.start_time}–{r.end_time}</td>
                           <td>{groupMap[r.group_id]?.group_name || "—"}</td>
                           <td style={{ fontWeight: 600 }}>{r.pax || "—"}</td>
-                          <td>{r.coffee_corner_type || "פינת קפה רגילה"}</td>
+                          <td>{coffeeTypeLabel(r.coffee_corner_type)}</td>
                           <td>{r.location_name_snapshot || "—"}</td>
                           <td style={{ color: "#64748b" }}>{r.notes || "—"}</td>
                         </tr>

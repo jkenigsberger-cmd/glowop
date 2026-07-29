@@ -139,6 +139,7 @@ export default async function(req) {
       .sort((a, b) => (MEAL_ORDER[a.meal_type] || 9) - (MEAL_ORDER[b.meal_type] || 9) || (toMinutes(a.start_time) ?? 0) - (toMinutes(b.start_time) ?? 0));
 
     // ── 3. Coffee corner ─────────────────────────────────────────────────
+    const coffeeTypeLabel = (value) => value === "HOT_WATER_THERMOCAN_ONLY" ? "מיחם וטרמוקן בלבד" : value || null;
     const coffeeOut = coffee
       .filter((c) => groupById[c.group_id])
       .map((c) => ({
@@ -146,7 +147,7 @@ export default async function(req) {
         end_time: c.end_time || null,
         group: groupName(c.group_id),
         pax: c.pax ?? null,
-        type: c.coffee_corner_type || null,
+        type: coffeeTypeLabel(c.coffee_corner_type),
         location: c.location_name_snapshot || null,
       }))
       .sort((a, b) => (toMinutes(a.start_time) ?? 0) - (toMinutes(b.start_time) ?? 0));

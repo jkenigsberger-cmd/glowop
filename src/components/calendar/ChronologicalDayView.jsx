@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 import { ActivityEquipmentLine } from "@/components/schedule/LogisticsFields";
 
 const EXCLUDED = new Set(["CANCELLED", "COMPLETED", "ARCHIVED"]);
+const coffeeTypeLabel = (value) => value === "HOT_WATER_THERMOCAN_ONLY" ? "מיחם וטרמוקן בלבד" : value || null;
 
 const MEAL_TYPE_HEB = {
   BREAKFAST: "ארוחת בוקר",
@@ -187,7 +188,7 @@ export function buildChronologicalDayEvents({ dateStr, allGroups, allMeals, allA
         title: "פינת קפה",
         location: r.location_name_snapshot || null,
         pax: r.pax || null,
-        details: r.coffee_corner_type || null,
+        details: coffeeTypeLabel(r.coffee_corner_type),
         source_entity: "CoffeeCornerRequest",
         source_id: r.id,
       });

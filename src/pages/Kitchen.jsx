@@ -14,6 +14,7 @@ import KitchenCalendar from "@/components/calendar/KitchenCalendar";
 import { isOperationalGroup } from "@/lib/quotePreparationFlow";
 
 const MEAL_ORDER = { BREAKFAST: 0, LUNCH: 1, DINNER: 2, COFFEE_CORNER: 3, OTHER: 4 };
+const coffeeTypeLabel = (value) => value === "HOT_WATER_THERMOCAN_ONLY" ? "מיחם וטרמוקן בלבד" : value || "פינת קפה רגילה";
 
 const TODAY = new Date().toISOString().slice(0, 10);
 
@@ -349,7 +350,7 @@ export default function Kitchen() {
                         <div className="flex items-start justify-between gap-2">
                           <div>
                             <p className="font-semibold text-slate-800 text-sm">{groupMap[req.group_id]?.group_name || "קבוצה לא ידועה"}</p>
-                            <p className="text-xs text-amber-700 font-medium mt-0.5">{req.coffee_corner_type || "פינת קפה רגילה"}</p>
+                            <p className="text-xs text-amber-700 font-medium mt-0.5">{coffeeTypeLabel(req.coffee_corner_type)}</p>
                           </div>
                           <div className="text-right shrink-0">
                             <p className="text-2xl font-bold text-amber-700">{req.pax || "—"}</p>
