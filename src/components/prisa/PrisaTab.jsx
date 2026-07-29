@@ -8,6 +8,9 @@ import { Plus, Sandwich, Pencil, X } from "lucide-react";
 import { toast } from "sonner";
 import RoleGate from "@/components/RoleGate";
 import { PRISA_TYPE_LABELS, PRISA_SLOT_LABELS, computeEffectiveQuantity } from "@/lib/prisaLabels";
+import { resolveMealPax } from "@/lib/mealPax";
+import { invalidatePrisaQueries } from "@/lib/prisaQueries";
+import PrisaCopyModal from "@/components/prisa/PrisaCopyModal";
 
 const EMPTY_FORM = () => ({
   date: "",
@@ -24,6 +27,7 @@ export default function PrisaTab({ groupId, profile, group }) {
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM());
   const [formError, setFormError] = useState(null);
+  const [copySource, setCopySource] = useState(null);
 
   const profileId = profile?.id;
   const arrivalDate = group?.arrival_date || "";
@@ -32,6 +36,7 @@ export default function PrisaTab({ groupId, profile, group }) {
 
   const minDate = arrivalDate;
   const maxDate = groupType === "DAY_USE" ? arrivalDate : (departureDate || arrivalDate);
+  const defaultQuantity = useMemo(() => resolveMealPax(group, profile), [group, profile]);
 
   const { data: requests = [], isError: prisaError } = useQuery({
     queryKey: ["prisaRequests", groupId],
@@ -46,7 +51,11 @@ export default function PrisaTab({ groupId, profile, group }) {
     enabled: !!groupId,
   });
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["prisaRequests", groupId] });
+  const invalidate = () => invalidatePrisaQueries(queryClient, groupId);
+  const handleCopyDone = async (result) => {
+    queryClient.setQueryData(["prisaRequests", groupId], (current = []) => [...current, ...(result.created || [])]);
+    await invalidate();
+  };
 
   const activeRequests = useMemo(() => requests
     .filter(r => r.status === "ACTIVE")
@@ -57,7 +66,7 @@ export default function PrisaTab({ groupId, profile, group }) {
 
   const openAdd = () => {
     setEditingId(null);
-    setForm(EMPTY_FORM());
+    setForm({ ...EMPTY_FORM(), quantity: defaultQuantity != null ? String(defaultQuantity) : "" });
     setFormError(null);
     setFormOpen(true);
   };
@@ -108,16 +117,18 @@ export default function PrisaTab({ groupId, profile, group }) {
       source: "MANUAL",
       status: "ACTIVE",
     };
+    let createdRequest = null;
     if (editingId) {
       await base44.entities.PrisaRequest.update(editingId, payload);
       toast.success("פריסה עודכנה");
     } else {
-      await base44.entities.PrisaRequest.create(payload);
+      createdRequest = await base44.entities.PrisaRequest.create(payload);
       toast.success("פריסה נוספה");
     }
     setSaving(false);
     closeForm();
-    invalidate();
+    await invalidate();
+    if (createdRequest) setCopySource(createdRequest);
   };
 
   const handleCancel = async (req) => {
@@ -243,6 +254,8 @@ export default function PrisaTab({ groupId, profile, group }) {
           </div>
         </div>
       )}
+
+      {copySource && <PrisaCopyModal sourcePrisa={copySource} arrivalDate={arrivalDate} departureDate={departureDate} existingRequests={requests} onClose={() => setCopySource(null)} onDone={handleCopyDone} />}
 
       {/* List */}
       {activeRequests.length === 0 && !formOpen ? (
