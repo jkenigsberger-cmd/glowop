@@ -30,8 +30,41 @@ function hashGroupId(id) {
   return Math.abs(hash);
 }
 
-function getGroupColor(groupId) {
-  return GROUP_COLORS[hashGroupId(groupId) % GROUP_COLORS.length];
+/**
+ * Greedy graph-coloring: assigns colors so groups that overlap in dates
+ * never share a color, while non-overlapping groups may reuse colors.
+ * @param {Array} groupsOnDate — array of { id, arrival_date, departure_date }
+ * @returns {Object} { groupId -> colorHex }
+ */
+function assignColorsByOverlap(groupsOnDate) {
+  const map = {};
+
+  // Sort by hash for deterministic ordering
+  const sorted = [...groupsOnDate].sort((a, b) => hashGroupId(a.id) - hashGroupId(b.id));
+
+  // For each group, collect colors used by already-assigned overlapping groups
+  for (const g of sorted) {
+    const gArrival = g.arrival_date || "";
+    const gDep = g.departure_date || "9999-12-31";
+
+    const usedColors = new Set();
+    for (const [otherId, color] of Object.entries(map)) {
+      const other = sorted.find(s => s.id === otherId);
+      if (!other) continue;
+      const oArrival = other.arrival_date || "";
+      const oDep = other.departure_date || "9999-12-31";
+      // Overlap check: arrival_a < dep_b && arrival_b < dep_a
+      if (gArrival < oDep && oArrival < gDep) {
+        usedColors.add(color);
+      }
+    }
+
+    // Pick first unused color
+    const color = GROUP_COLORS.find(c => !usedColors.has(c)) || GROUP_COLORS[hashGroupId(g.id) % GROUP_COLORS.length];
+    map[g.id] = color;
+  }
+
+  return map;
 }
 
 // ── Tent code parsing (same as NeighborhoodMapCard) ────────────────────────
@@ -292,12 +325,14 @@ export default function OccupancyMap({
     [dateAllocs]
   );
 
-  // Assign colors
+  // Assign colors — greedy coloring so overlapping groups never share a color
   const groupColorMap = useMemo(() => {
-    const map = {};
-    activeGroupIds.forEach(id => { map[id] = getGroupColor(id); });
-    return map;
-  }, [activeGroupIds]);
+    const groupsOnDate = activeGroupIds
+      .map(id => groupById[id])
+      .filter(Boolean)
+      .map(g => ({ id: g.id, arrival_date: g.arrival_date, departure_date: g.departure_date }));
+    return assignColorsByOverlap(groupsOnDate);
+  }, [activeGroupIds, groupById]);
 
   // Sort neighborhoods: non-VIP first by sort_order, VIP last
   const sortedNeighborhoods = useMemo(() =>
