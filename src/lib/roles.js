@@ -27,12 +27,11 @@ export const ROLE_LABELS = {
 // Navigation links each role can see
 // Format: { to, label, icon_name }
 export const ROLE_NAV_LINKS = {
-  SUPER_ADMIN:          ["dashboard", "approved-groups", "calendar", "allocation", "common-spaces", "housekeeping", "kitchen", "maintenance", "admin", "mechina-spaces", "meeting-summaries", "work-schedule"],
-  ADMIN:                ["dashboard", "approved-groups", "calendar", "allocation", "common-spaces", "housekeeping", "kitchen", "maintenance", "admin", "mechina-spaces", "meeting-summaries", "work-schedule"],
+  SUPER_ADMIN:          ["dashboard", "approved-groups", "calendar", "allocation", "common-spaces", "housekeeping", "kitchen", "maintenance", "admin", "mechina-spaces", "meeting-summaries", "work-schedule", "cleaning-hours"],
+  ADMIN:                ["dashboard", "approved-groups", "calendar", "allocation", "common-spaces", "housekeeping", "kitchen", "maintenance", "admin", "mechina-spaces", "meeting-summaries", "work-schedule", "cleaning-hours"],
   OPERATIONS:           ["dashboard", "calendar", "common-spaces", "maintenance", "work-schedule", "my-shifts"],
-  HOUSEKEEPING_MANAGER: ["dashboard", "calendar", "allocation", "housekeeping", "approved-groups", "maintenance", "my-shifts"],
+  HOUSEKEEPING_MANAGER: ["dashboard", "calendar", "allocation", "housekeeping", "approved-groups", "maintenance", "my-shifts", "cleaning-hours"],
   HOUSEKEEPING_STAFF:   ["dashboard", "calendar", "housekeeping", "my-shifts"],
-  HOUSEKEEPING_MANAGER: ["dashboard", "calendar", "allocation", "housekeeping", "approved-groups", "maintenance", "my-shifts"],
   KITCHEN:              ["dashboard", "calendar", "kitchen"],
   MAINTENANCE:          ["common-spaces", "maintenance", "my-shifts"],
   VIEWER:               ["dashboard", "calendar"],

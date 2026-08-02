@@ -45,6 +45,7 @@ const ALL_LINKS = [
   { key: "mechina-spaces",  to: "/mechina-spaces",  label: "בקשות מרחבים",     icon: BookMarked,      group: "primary" },
   { key: "meeting-summaries", to: "/meeting-summaries", label: "סיכומי פגישות", icon: NotebookPen,   group: "primary" },
   { key: "work-schedule",   to: "/work-schedule",   label: "סידור עבודה",      icon: CalendarClock,   group: "ops" },
+  { key: "cleaning-hours",  to: "/cleaning-hours",  label: "שעות עובדות ניקיון", icon: Clock,          group: "ops" },
   { key: "my-shifts",       to: "/my-shifts",       label: "המשמרות שלי",      icon: Clock,           group: "primary" },
 ];
 
@@ -206,7 +207,7 @@ export default function AppNav() {
   const primaryLinks = ALL_LINKS.filter(l => PRIMARY_KEYS.includes(l.key) && allowedKeys.includes(l.key));
 
   // Ops dropdown: housekeeping, kitchen, maintenance, work schedule
-  const OPS_KEYS = ["housekeeping", "kitchen", "maintenance", "work-schedule"];
+  const OPS_KEYS = ["housekeeping", "kitchen", "maintenance", "work-schedule", "cleaning-hours"];
   const opsLinks = ALL_LINKS.filter(l => OPS_KEYS.includes(l.key) && allowedKeys.includes(l.key));
 
   // Admin dropdown items (not from ALL_LINKS — separate)
