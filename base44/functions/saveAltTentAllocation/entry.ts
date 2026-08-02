@@ -154,10 +154,14 @@ Deno.serve(async (req) => {
 
     // ── 5. Conflict check — any group including same group ──────────────────
     // Exception: skip the allocation row being updated (allocation_id).
+    // Exception: ignore allocations that already ended (departure_date <= today) —
+    // guests who already left do not block new allocations going forward.
+    const todayIL = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem' }).format(new Date());
     const allForTent = await base44.asServiceRole.entities.SleepingAllocation.filter({ tent_id });
     const conflicting = allForTent.filter(a =>
       a.status !== 'CANCELLED' &&
       a.id !== allocation_id &&
+      a.departure_date > todayIL &&
       datesOverlap(arrival_date, departure_date, a.arrival_date, a.departure_date)
     );
 

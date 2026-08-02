@@ -568,10 +568,13 @@ export default function AltTentAllocationPanel({
   const occupiedTentIds = useMemo(() => {
     const ids = new Set();
     if (!arrivalDate || !departureDate) return ids;
+    // Allocations that already ended (departure <= today) don't block — guests already left
+    const todayIL = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem" }).format(new Date());
     (allActiveAllocations || []).forEach(a => {
       if (a.status === "CANCELLED") return;
       // Skip this group's own existing alt-tent rows (handled separately in panel)
       if (myAltAllocIds.has(a.id)) return;
+      if (a.departure_date && a.departure_date <= todayIL) return;
       if (a.arrival_date && a.departure_date && a.arrival_date < departureDate && a.departure_date > arrivalDate) {
         ids.add(a.tent_id);
       }
