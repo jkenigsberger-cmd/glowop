@@ -32,10 +32,37 @@ function runSuite(name, helpers) {
     assert.equal(dates.length, 28);
   });
 
-  test(`${name}: invalid periods are rejected`, () => {
-    assert.equal(helpers.validateStayPeriods([{ start_date: "2026-08-01", end_date: "2026-08-07" }, { start_date: "2026-08-07", end_date: "2026-08-09" }]).valid, false);
-    assert.equal(helpers.validateStayPeriods([{ start_date: "2026-08-01", end_date: "2026-08-07" }, { start_date: "2026-08-01", end_date: "2026-08-07" }]).valid, false);
-    assert.equal(helpers.validateStayPeriods([{ start_date: "2026-08-07", end_date: "2026-08-01" }]).valid, false);
+  test(`${name}: active overlaps and duplicates are rejected`, () => {
+    assert.equal(helpers.validateStayPeriods([
+      { start_date: "2026-08-01", end_date: "2026-08-07", status: "ACTIVE" },
+      { start_date: "2026-08-07", end_date: "2026-08-09", status: "ACTIVE" },
+    ]).valid, false);
+    assert.equal(helpers.validateStayPeriods([
+      { start_date: "2026-08-01", end_date: "2026-08-07", status: "ACTIVE" },
+      { start_date: "2026-08-01", end_date: "2026-08-07", status: "ACTIVE" },
+    ]).valid, false);
+    assert.equal(helpers.validateStayPeriods([{ start_date: "2026-08-07", end_date: "2026-08-01", status: "CANCELLED" }]).valid, false);
+  });
+
+  test(`${name}: cancelled history does not block active periods`, () => {
+    const periods = [
+      { start_date: "2026-08-01", end_date: "2026-08-07", status: "CANCELLED" },
+      { start_date: "2026-08-01", end_date: "2026-08-07", status: "ACTIVE" },
+    ];
+    assert.equal(helpers.validateStayPeriods(periods).valid, true);
+  });
+
+  test(`${name}: cancelled periods are excluded from all calculations`, () => {
+    const periods = [
+      { start_date: "2026-08-01", end_date: "2026-08-07", status: "CANCELLED" },
+      { start_date: "2026-08-09", end_date: "2026-08-18", status: "ACTIVE" },
+    ];
+    assert.deepEqual(helpers.deriveStayEnvelope(periods), { start_date: "2026-08-09", end_date: "2026-08-18" });
+    assert.equal(helpers.isDateInsideStayPeriods("2026-08-01", periods), false);
+    assert.equal(helpers.isArrivalDate("2026-08-01", periods), false);
+    assert.equal(helpers.isDepartureDate("2026-08-07", periods), false);
+    assert.equal(helpers.occupiesSleepingNight("2026-08-06", periods), false);
+    assert.equal(helpers.getOperationalStayDates(periods).includes("2026-08-01"), false);
   });
 }
 

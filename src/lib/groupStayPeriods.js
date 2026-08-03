@@ -37,7 +37,6 @@ export function validateStayPeriods(periods) {
 
   const normalized = normalizeStayPeriods(periods);
   const errors = [];
-  const seen = new Set();
 
   normalized.forEach((period, index) => {
     if (!isValidDateString(period.start_date) || !isValidDateString(period.end_date)) {
@@ -45,16 +44,28 @@ export function validateStayPeriods(periods) {
       return;
     }
     if (period.end_date < period.start_date) errors.push({ code: "END_BEFORE_START", index });
+  });
+
+  const active = normalized
+    .map((period, index) => ({ period, index }))
+    .filter(({ period }) => period.status !== "CANCELLED");
+  const seen = new Set();
+
+  active.forEach(({ period, index }) => {
     const key = `${period.start_date}|${period.end_date}`;
     if (seen.has(key)) errors.push({ code: "DUPLICATE_PERIOD", index });
     seen.add(key);
   });
 
-  for (let index = 1; index < normalized.length; index += 1) {
-    const previous = normalized[index - 1];
-    const current = normalized[index];
-    if (isValidDateString(previous.end_date) && isValidDateString(current.start_date) && current.start_date <= previous.end_date) {
-      errors.push({ code: "OVERLAPPING_PERIODS", index, previous_index: index - 1 });
+  for (let position = 1; position < active.length; position += 1) {
+    const previous = active[position - 1];
+    const current = active[position];
+    if (
+      isValidDateString(previous.period.end_date) &&
+      isValidDateString(current.period.start_date) &&
+      current.period.start_date <= previous.period.end_date
+    ) {
+      errors.push({ code: "OVERLAPPING_PERIODS", index: current.index, previous_index: previous.index });
     }
   }
 
