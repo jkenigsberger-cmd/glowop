@@ -80,8 +80,9 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
   const [replanifyPreview, setReplanifyPreview] = useState(null); // impact summary awaiting confirmation
   const [replanifyConfirmed, setReplanifyConfirmed] = useState(false);
 
-  // A modal session is identified by the edited group id (or "create").
-  // Reset every draft when that identity changes; toggling modes does not touch either draft.
+  // Parents open this modal by conditionally mounting it (showForm/editGroup).
+  // A close/reopen therefore creates a fresh component session. This effect only handles
+  // an in-place switch to another group while the same mounted session remains open.
   useEffect(() => {
     const initialForm = createInitialForm(group);
     setForm(initialForm);
@@ -92,13 +93,8 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
     setStayMode(group?.stay_mode === "MULTI_PERIOD" ? "MULTI_PERIOD" : "CONTINUOUS");
     setStayPeriodsDraft([]);
     multiPeriodInitialized.current = false;
-    setDiets(mergeDiets(parseDiets(initialProfileDiets)));
-    setSaving(false);
     setAllocationBlockError(null);
-    setGenderConsistencyError(null);
-    setMealSyncData(null);
-    setReplanifyPreview(null);
-    setReplanifyConfirmed(false);
+  // Profile counts and diets remain owned by their separate asynchronous prefill lifecycle.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [group?.id]);
 
