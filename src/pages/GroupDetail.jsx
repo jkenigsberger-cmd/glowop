@@ -111,7 +111,7 @@ export default function GroupDetail() {
     </div>
   );
 
-  const isPreparation = group.quote_preparation_flow === true && group.status !== "CONFIRMED";
+  const isPreparation = (group.quote_preparation_flow === true && group.status !== "CONFIRMED") || (group.stay_mode === "MULTI_PERIOD" && group.operationally_active === false);
   const canActivateOperationally = group.quote_preparation_flow === true && ["DRAFT", "PENDING_APPROVAL"].includes(group.status);
 
   return (

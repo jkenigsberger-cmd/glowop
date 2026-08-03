@@ -14,14 +14,14 @@ const ERROR_MESSAGES = {
 };
 const formatDate = value => value ? value.split("-").reverse().join(".") : "—";
 
-export default function StayPeriodsEditor({ groupId, periods, onChange }) {
+export default function StayPeriodsEditor({ groupId, periods, onChange, onPreviewChange }) {
   const [preview, setPreview] = useState(null);
   const [checking, setChecking] = useState(false);
   const normalized = useMemo(() => normalizeStayPeriods(periods), [periods]);
   const envelope = deriveStayEnvelope(normalized);
   const localValidation = validateStayPeriods(normalized);
   const operationalDates = getOperationalStayDates(normalized);
-  const update = next => { onChange(next); setPreview(null); };
+  const update = next => { onChange(next); setPreview(null); onPreviewChange?.(false); };
   const visibleErrors = (preview?.errors || []).filter(error => {
     if (error.code !== "OVERLAPPING_PERIODS") return true;
     const current = preview.normalized_periods?.[error.index];
@@ -29,15 +29,17 @@ export default function StayPeriodsEditor({ groupId, periods, onChange }) {
     return !current || !previous || current.start_date !== previous.start_date || current.end_date !== previous.end_date;
   });
   const messages = [...new Set(visibleErrors.map(error => ERROR_MESSAGES[error.code] || error.message).filter(Boolean))];
-  useEffect(() => { setPreview(null); }, [groupId]);
+  useEffect(() => { setPreview(null); onPreviewChange?.(false); }, [groupId]);
   const checkPeriods = async () => {
     setChecking(true);
     try {
       const payloadPeriods = normalized.map(({ _draft_id, ...period }) => period);
       const response = await base44.functions.invoke("previewGroupStayPeriods", { group_id: groupId, periods: payloadPeriods });
       setPreview(response.data);
+      onPreviewChange?.(response.data?.success === true && response.data?.valid === true);
     } catch (error) {
       setPreview({ valid: false, errors: [{ message: error?.response?.data?.error || "בדיקת התקופות נכשלה" }] });
+      onPreviewChange?.(false);
     } finally { setChecking(false); }
   };
   return (

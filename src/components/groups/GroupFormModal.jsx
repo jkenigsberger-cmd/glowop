@@ -13,6 +13,7 @@ import { syncExistingOperationalPaxForGroup } from "@/lib/syncOperationalPax";
 import MealSyncAfterDateChangeModal from "@/components/groups/MealSyncAfterDateChangeModal";
 import GroupAvailabilityChecker from "@/components/groups/GroupAvailabilityChecker";
 import StayPeriodsEditor from "@/components/groups/StayPeriodsEditor";
+import { toast } from "sonner";
 
 // Fields that trigger pax-related alerts when changed
 const PAX_FIELDS = ["total_pax", "participant_count", "staff_count", "boys_count", "girls_count"];
@@ -43,7 +44,9 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
     arrival_time: group?.arrival_time || "", departure_time: group?.departure_time || "",
   });
   const [stayPeriodsDraft, setStayPeriodsDraft] = useState([]);
+  const [multiPeriodPreviewValid, setMultiPeriodPreviewValid] = useState(false);
   const multiPeriodInitialized = useRef(false);
+  const multiPeriodIdempotencyKey = useRef(crypto.randomUUID());
 
   // ── Prefill operational numbers from the OperationalGroupProfile (source of truth) ──
   // Operational pax lives on the OGP, not on stale Group fields. On edit, read the OGP
@@ -92,7 +95,9 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
     });
     setStayMode(group?.stay_mode === "MULTI_PERIOD" ? "MULTI_PERIOD" : "CONTINUOUS");
     setStayPeriodsDraft([]);
+    setMultiPeriodPreviewValid(false);
     multiPeriodInitialized.current = false;
+    multiPeriodIdempotencyKey.current = crypto.randomUUID();
     setAllocationBlockError(null);
   // Profile counts and diets remain owned by their separate asynchronous prefill lifecycle.
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -132,9 +137,11 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
           setStayPeriodsDraft([{ _draft_id: crypto.randomUUID(), start_date: continuousDraft.arrival_date, end_date: continuousDraft.departure_date, arrival_time: continuousDraft.arrival_time, departure_time: continuousDraft.departure_time, status: "ACTIVE" }]);
         }
       }
+      setMultiPeriodPreviewValid(false);
       setStayMode("MULTI_PERIOD");
       return;
     }
+    setMultiPeriodPreviewValid(false);
     setStayMode("CONTINUOUS");
     setForm(current => ({ ...current, ...continuousDraft }));
   };
@@ -158,7 +165,67 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
     setGenderConsistencyError(null);
 
     if (stayMode === "MULTI_PERIOD") {
-      setAllocationBlockError("שמירת קבוצת מכינה תופעל בשלב הבא. בשלב זה ניתן לבדוק את התקופות בלבד.");
+      if (isEdit) {
+        setAllocationBlockError("עריכת תקופות השהייה תופעל בשלב הבא");
+        return;
+      }
+      if (!multiPeriodPreviewValid) {
+        setAllocationBlockError("יש לבצע בדיקת תקופות תקינה לאחר השינוי האחרון לפני השמירה.");
+        return;
+      }
+      if (!String(form.group_name || "").trim()) {
+        setAllocationBlockError("יש להזין שם קבוצה.");
+        return;
+      }
+      setSaving(true);
+      try {
+        const numberValue = value => value === "" || value == null ? 0 : Number(value);
+        const groupData = {
+          group_name: form.group_name,
+          group_type: "LODGING",
+          total_pax: numberValue(form.total_pax),
+          staff_count: numberValue(form.staff_count),
+          participant_count: participantCount,
+          boys_count: numberValue(form.boys_count),
+          girls_count: numberValue(form.girls_count),
+          contact_name: form.contact_name,
+          contact_phone: form.contact_phone,
+          contact_email: form.contact_email,
+          internal_notes: form.internal_notes,
+        };
+        const hasAnyDiet = Object.entries(diets).some(([key, value]) => key === "diet_notes" ? !!value : Number(value) > 0);
+        const operationalProfileData = {
+          total_pax: groupData.total_pax,
+          participant_count: groupData.participant_count,
+          staff_count: groupData.staff_count,
+          boys_count: groupData.boys_count,
+          girls_count: groupData.girls_count,
+          general_notes: groupData.internal_notes || null,
+          ...(hasAnyDiet ? { special_diets: JSON.stringify(diets) } : {}),
+        };
+        const periods = stayPeriodsDraft.map(({ _draft_id, ...period }) => period);
+        const response = await base44.functions.invoke("createMultiPeriodGroupDraft", {
+          group_data: groupData,
+          operational_profile_data: operationalProfileData,
+          periods,
+          idempotency_key: multiPeriodIdempotencyKey.current,
+        });
+        const data = response.data || {};
+        if (!data.success) {
+          setAllocationBlockError(data.partial_failure
+            ? `השמירה הושלמה חלקית בשלב ${Object.entries(data.phases || {}).find(([, value]) => value === "FAILED")?.[0] || "לא ידוע"}. ניתן לנסות שוב בבטחה.`
+            : data.message || "שמירת טיוטת המכינה נכשלה.");
+          return;
+        }
+        queryClient.invalidateQueries({ queryKey: ["groups"] });
+        toast.success("טיוטת המכינה נשמרה בהצלחה");
+        onSaved(data.group_id);
+      } catch (error) {
+        const data = error?.response?.data;
+        setAllocationBlockError(data?.message || "שמירת טיוטת המכינה נכשלה. ניתן לנסות שוב.");
+      } finally {
+        setSaving(false);
+      }
       return;
     }
 
@@ -492,6 +559,7 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
   };
 
   const isDayUse = form.group_type === "DAY_USE";
+  const isExistingIsolatedMultiPeriod = isEdit && group?.stay_mode === "MULTI_PERIOD" && group?.operationally_active === false;
 
   if (mealSyncData) {
     return (
@@ -549,7 +617,7 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
               )}
             </div>
             <label className="flex items-center gap-2 cursor-pointer w-fit">
-              <input type="checkbox" checked={stayMode === "MULTI_PERIOD"} onChange={e => handleStayModeChange(e.target.checked)} className="h-4 w-4 accent-primary" />
+              <input type="checkbox" checked={stayMode === "MULTI_PERIOD"} onChange={e => handleStayModeChange(e.target.checked)} disabled={isExistingIsolatedMultiPeriod} className="h-4 w-4 accent-primary disabled:opacity-50" />
               <span className="font-medium">קבוצת מכינה</span>
             </label>
           </div>
@@ -562,8 +630,15 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
               <div className="space-y-1"><Label>שעת הגעה <span className="text-slate-400 font-normal text-[11px]">(אופציונלי)</span></Label><Input type="time" value={continuousDraft.arrival_time} onChange={e => setContinuousField("arrival_time", e.target.value)} placeholder="לדוגמה 15:00" /></div>
               <div className="space-y-1"><Label>שעת יציאה <span className="text-slate-400 font-normal text-[11px]">(אופציונלי)</span></Label><Input type="time" value={continuousDraft.departure_time} onChange={e => setContinuousField("departure_time", e.target.value)} placeholder="לדוגמה 11:00" /></div>
             </div>
+          ) : isExistingIsolatedMultiPeriod ? (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              עריכת תקופות השהייה תופעל בשלב הבא
+            </div>
           ) : (
-            <StayPeriodsEditor groupId={group?.id} periods={stayPeriodsDraft} onChange={setStayPeriodsDraft} />
+            <div className="space-y-2">
+              <StayPeriodsEditor groupId={group?.id} periods={stayPeriodsDraft} onChange={setStayPeriodsDraft} onPreviewChange={setMultiPeriodPreviewValid} />
+              <p className="text-xs text-violet-700">הקבוצה תישמר כטיוטה ולא תופיע עדיין במודולים התפעוליים</p>
+            </div>
           )}
 
           {/* Participant counts */}
@@ -698,6 +773,10 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
               onClick={() => { setReplanifyConfirmed(true); setReplanifyPreview(null); document.getElementById("group-form").requestSubmit(); }}
             >
               {saving ? "שומר..." : "מאשר את השינוי ושומר"}
+            </Button>
+          ) : stayMode === "MULTI_PERIOD" ? (
+            <Button type="submit" form="group-form" disabled={saving || isEdit || !multiPeriodPreviewValid}>
+              {saving ? "שומר..." : isEdit ? "עריכת תקופות בשלב הבא" : "שמירת טיוטת מכינה"}
             </Button>
           ) : (
             <Button type="submit" form="group-form" disabled={saving}>{saving ? "שומר..." : isEdit ? "שמור" : "צור קבוצה"}</Button>
