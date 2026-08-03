@@ -14,6 +14,14 @@
       ],
       "default": "LODGING"
     },
+    "stay_mode": {
+      "type": "string",
+      "enum": [
+        "CONTINUOUS",
+        "MULTI_PERIOD"
+      ],
+      "default": "CONTINUOUS"
+    },
     "arrival_date": {
       "type": "string",
       "format": "date"

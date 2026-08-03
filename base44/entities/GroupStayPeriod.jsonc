@@ -1,0 +1,43 @@
+{
+  "name": "GroupStayPeriod",
+  "type": "object",
+  "properties": {
+    "group_id": {
+      "type": "string",
+      "description": "FK to Group"
+    },
+    "start_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "end_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "arrival_time": {
+      "type": "string",
+      "description": "HH:MM"
+    },
+    "departure_time": {
+      "type": "string",
+      "description": "HH:MM"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "ACTIVE",
+        "CANCELLED"
+      ],
+      "default": "ACTIVE"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "group_id",
+    "start_date",
+    "end_date",
+    "status"
+  ]
+}
