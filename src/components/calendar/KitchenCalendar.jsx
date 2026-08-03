@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
 import { getMonthDatesSunday, HEB_DAYS_SUN } from "@/lib/calendarWeek";
-import { isOperationalGroup } from "@/lib/quotePreparationFlow";
+import { isGroupOperationallyEnabled } from "@/lib/groupOperationalIsolation";
 
 const fmt = (d) => moment(d).format("YYYY-MM-DD");
 const isSameDay = (a, b) => fmt(a) === fmt(b);
@@ -220,7 +220,8 @@ export default function KitchenCalendar({ onDaySelect }) {
   });
   const { data: groups = [] } = useQuery({
     queryKey: ["kc-groups"],
-    queryFn: async () => (await base44.entities.Group.list("-arrival_date", 300)).filter(isOperationalGroup),
+    queryFn: () => base44.entities.Group.list("-arrival_date", 300),
+    select: items => items.filter(isGroupOperationallyEnabled),
   });
 
   const groupMap = useMemo(() => Object.fromEntries(groups.map((g) => [g.id, g])), [groups]);

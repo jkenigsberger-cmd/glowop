@@ -4,12 +4,13 @@ import { Button } from "@/components/ui/button";
 import { Download } from "lucide-react";
 import { buildChronologicalDayEvents } from "@/components/calendar/ChronologicalDayView";
 import ChronologicalDayPrintTemplate from "@/components/calendar/ChronologicalDayPrintTemplate";
+import { isGroupOperationallyEnabled } from "@/lib/groupOperationalIsolation";
 
 export default function ChronologicalDayPdfButton({ dateStr, allGroups, allMeals, allActivities, allCoffeeRequests, allSpaces }) {
   const [printing, setPrinting] = useState(false);
 
   const groupMap = useMemo(
-    () => Object.fromEntries((allGroups || []).map((g) => [g.id, g])),
+    () => Object.fromEntries((allGroups || []).filter(isGroupOperationallyEnabled).map((g) => [g.id, g])),
     [allGroups]
   );
   const spaceMap = useMemo(

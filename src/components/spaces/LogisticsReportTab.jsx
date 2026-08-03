@@ -11,7 +11,7 @@ import { Printer, Filter, X, Clock, MapPin, Users, Wrench, FileText, Building2 }
 import { Button } from "@/components/ui/button";
 import { equipmentTextSummary } from "@/components/schedule/LogisticsFields";
 import { mergeSharedActivities } from "@/lib/mergeSharedActivities";
-import { isOperationalGroup } from "@/lib/quotePreparationFlow";
+import { isGroupOperationallyEnabled } from "@/lib/groupOperationalIsolation";
 
 moment.locale("he");
 
@@ -279,7 +279,8 @@ export default function LogisticsReportTab() {
   });
   const { data: groups = [] } = useQuery({
     queryKey: ["spaces-groups"],
-    queryFn: async () => (await base44.entities.Group.list("-arrival_date", 500)).filter(isOperationalGroup),
+    queryFn: () => base44.entities.Group.list("-arrival_date", 500),
+    select: items => items.filter(isGroupOperationallyEnabled),
   });
 
   const spaceById = useMemo(() => Object.fromEntries(rawSpaces.map(s => [s.id, s])), [rawSpaces]);

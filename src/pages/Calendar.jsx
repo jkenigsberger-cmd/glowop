@@ -6,7 +6,7 @@ import "moment/locale/he";
 import { ChevronLeft, ChevronRight, CalendarDays, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { isOperationalGroup } from "@/lib/quotePreparationFlow";
+import { isGroupOperationallyEnabled } from "@/lib/groupOperationalIsolation";
 import CheckInOutCalendar from "../components/calendar/CheckInOutCalendar.jsx";
 import OperationalDaySummary from "../components/calendar/OperationalDaySummary.jsx";
 import { getWeekDatesSunday, getMonthDatesSunday, HEB_DAYS_SUN } from "@/lib/calendarWeek";
@@ -388,7 +388,8 @@ export default function Calendar() {
 
   const { data: groups = [] } = useQuery({
     queryKey: ["cal-groups"],
-    queryFn: async () => (await base44.entities.Group.list("-arrival_date", 500)).filter(isOperationalGroup)
+    queryFn: () => base44.entities.Group.list("-arrival_date", 500),
+    select: items => items.filter(isGroupOperationallyEnabled),
   });
   const { data: meals = [] } = useQuery({
     queryKey: ["cal-meals"],

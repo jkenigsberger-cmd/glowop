@@ -12,6 +12,7 @@ import moment from "moment";
 import "moment/locale/he";
 import { ChevronLeft, ChevronRight, ArrowDownToLine, ArrowUpFromLine, Moon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { isGroupOperationallyEnabled } from "@/lib/groupOperationalIsolation";
 
 moment.locale("he");
 
@@ -33,6 +34,7 @@ function buildCalendarGrid(pivot) {
 // Groups relevant to a given date: staying / arriving / departing
 function groupsForDate(groups, dateStr) {
   return groups.filter(g => {
+    if (!isGroupOperationallyEnabled(g)) return false;
     const arr = g.arrival_date;
     const dep = g.departure_date;
     if (!arr) return false;

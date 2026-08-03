@@ -7,6 +7,7 @@ import { he } from "date-fns/locale";
 import { CheckCircle2, Clock, Calendar, Users, ChevronLeft, BedDouble, CalendarDays } from "lucide-react";
 import GroupFilters, { filterGroups } from "@/components/groups/GroupFilters";
 import DayGroupHeader, { groupByDay } from "@/components/groups/DayGroupHeader";
+import { isGroupOperationallyEnabled } from "@/lib/groupOperationalIsolation";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -100,7 +101,7 @@ export default function ApprovedGroups() {
     // First filter profiles to only CONFIRMED groups
     const confirmed = profiles.filter(p => {
       const g = groupById[p.group_id];
-      return g && g.status === "CONFIRMED";
+      return g && isGroupOperationallyEnabled(g) && g.status === "CONFIRMED";
     });
 
     // Then apply search/filter using the group data

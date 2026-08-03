@@ -70,6 +70,11 @@
       "default": false,
       "description": "Additive marker for groups created by the controlled quote preparation flow; Quote.group_id remains the canonical relationship"
     },
+    "operationally_active": {
+      "type": "boolean",
+      "default": true,
+      "description": "When false, the Group remains administratively available but is excluded from operational modules and calculations"
+    },
     "status": {
       "type": "string",
       "enum": [

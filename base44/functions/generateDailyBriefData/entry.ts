@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
+import { isGroupOperationallyEnabled } from '../../shared/groupOperationalIsolation.js';
 
 // generateDailyBriefData — READ-ONLY.
 // Reads operational data for a single date and returns a structured summary object.
@@ -75,7 +76,7 @@ export default async function(req) {
     ]);
 
     const EXCLUDED = new Set(["CANCELLED", "COMPLETED", "ARCHIVED"]);
-    const operationalGroups = groups.filter((g) => !(g.quote_preparation_flow && g.status !== "CONFIRMED"));
+    const operationalGroups = groups.filter(isGroupOperationallyEnabled);
     const groupById = Object.fromEntries(operationalGroups.map((g) => [g.id, g]));
     const spaceById = Object.fromEntries(spaces.map((s) => [s.id, s]));
 

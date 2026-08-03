@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.38';
+import { isGroupOperationallyEnabled } from '../../shared/groupOperationalIsolation.js';
 
 const ANALYTICS_VALID_GROUP_STATUSES = ["CONFIRMED", "COMPLETED"];
 const TOTAL_FIXED_BEDS = 345;
@@ -122,7 +123,7 @@ Deno.serve(async req => {
       base44.asServiceRole.entities.ActivitySpace.list("name", 500), base44.asServiceRole.entities.SleepingAllocation.list("-arrival_date", 5000),
       base44.asServiceRole.entities.Tent.list("code", 1000), base44.asServiceRole.entities.Neighborhood.list("sort_order", 500),
     ]);
-    const groups = allGroups.filter(group => validStatuses.includes(group.status));
+    const groups = allGroups.filter(group => isGroupOperationallyEnabled(group) && validStatuses.includes(group.status));
     const groupsById = Object.fromEntries(groups.map(group => [group.id, group]));
     const operationalActivities = activities.filter(item => groupsById[item.group_id]);
     const operationalMeals = meals.filter(item => groupsById[item.group_id]);

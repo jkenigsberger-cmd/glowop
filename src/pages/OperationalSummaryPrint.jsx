@@ -2,7 +2,7 @@ import { useParams, Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
 import { format, parseISO, eachDayOfInterval, isWithinInterval } from "date-fns";
-import { isOperationalGroup } from "@/lib/quotePreparationFlow";
+import { isGroupOperationallyEnabled } from "@/lib/groupOperationalIsolation";
 import { he } from "date-fns/locale";
 
 // ── helpers ────────────────────────────────────────────────────────────────
@@ -238,7 +238,7 @@ export default function OperationalSummaryPrint() {
   const group = groupArr[0];
   const profile = profiles[0];
 
-  if (!group || !isOperationalGroup(group)) {
+  if (!group || !isGroupOperationallyEnabled(group)) {
     return (
       <div style={{ padding: 40, fontFamily: "Arial", direction: "rtl" }}>
         <p>{group ? "הקבוצה עדיין אינה פעילה תפעולית" : "טוען נתוני קבוצה..."}</p>

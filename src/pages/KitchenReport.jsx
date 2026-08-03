@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { format, parseISO, eachDayOfInterval } from "date-fns";
 import { he } from "date-fns/locale";
 import { PRISA_TYPE_LABELS, PRISA_SLOT_LABELS, PRISA_SLOT_ORDER } from "@/lib/prisaLabels";
-import { isOperationalGroup } from "@/lib/quotePreparationFlow";
+import { isGroupOperationallyEnabled } from "@/lib/groupOperationalIsolation";
 
 // ── constants ──────────────────────────────────────────────────────────────
 const MEAL_ORDER  = { BREAKFAST: 0, LUNCH: 1, DINNER: 2, OTHER: 3 };
@@ -115,7 +115,8 @@ export default function KitchenReport() {
 
   const { data: groups = [] } = useQuery({
     queryKey: ["groups_kitchenReport"],
-    queryFn: async () => (await base44.entities.Group.list()).filter(isOperationalGroup),
+    queryFn: () => base44.entities.Group.list(),
+    select: items => items.filter(isGroupOperationallyEnabled),
   });
 
   const { data: profiles = [] } = useQuery({

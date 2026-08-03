@@ -11,7 +11,7 @@ import KitchenMealCard from "@/components/kitchen/KitchenMealCard";
 import KitchenCoffeeCard from "@/components/kitchen/KitchenCoffeeCard";
 import ReviewAlertsBanner from "@/components/alerts/ReviewAlertsBanner";
 import KitchenCalendar from "@/components/calendar/KitchenCalendar";
-import { isOperationalGroup } from "@/lib/quotePreparationFlow";
+import { isGroupOperationallyEnabled } from "@/lib/groupOperationalIsolation";
 
 const MEAL_ORDER = { BREAKFAST: 0, LUNCH: 1, DINNER: 2, COFFEE_CORNER: 3, OTHER: 4 };
 const coffeeTypeLabel = (value) => value === "HOT_WATER_THERMOCAN_ONLY" ? "מיחם וטרמוקן בלבד" : value || "פינת קפה רגילה";
@@ -47,7 +47,8 @@ export default function Kitchen() {
   // Load groups + profiles in parallel
   const { data: groups = [] } = useQuery({
     queryKey: ["groups_kitchen"],
-    queryFn: async () => (await base44.entities.Group.list()).filter(isOperationalGroup),
+    queryFn: () => base44.entities.Group.list(),
+    select: items => items.filter(isGroupOperationallyEnabled),
   });
 
   const { data: profiles = [] } = useQuery({

@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
 import { getMonthDatesSunday, getWeekDatesSunday, HEB_DAYS_SUN } from "@/lib/calendarWeek";
-import { isOperationalGroup } from "@/lib/quotePreparationFlow";
+import { isGroupOperationallyEnabled } from "@/lib/groupOperationalIsolation";
 
 const fmt = (d) => moment(d).format("YYYY-MM-DD");
 const isSameDay = (a, b) => fmt(a) === fmt(b);
@@ -23,7 +23,8 @@ const STATUS_HEB = { DRAFT: "טיוטה", PENDING_APPROVAL: "בהמתנה", CONF
 function useGroups() {
   return useQuery({
     queryKey: ["cio-groups"],
-    queryFn: async () => (await base44.entities.Group.list("-arrival_date", 500)).filter(isOperationalGroup),
+    queryFn: () => base44.entities.Group.list("-arrival_date", 500),
+    select: items => items.filter(isGroupOperationallyEnabled),
   });
 }
 

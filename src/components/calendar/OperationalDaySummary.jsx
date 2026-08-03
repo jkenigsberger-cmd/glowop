@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { ActivityEquipmentLine } from "@/components/schedule/LogisticsFields";
 import ChronologicalDayView from "./ChronologicalDayView";
 import ChronologicalDayPdfButton from "./ChronologicalDayPdfButton";
+import { isGroupOperationallyEnabled } from "@/lib/groupOperationalIsolation";
 
 moment.locale("he");
 
@@ -457,10 +458,11 @@ export default function OperationalDaySummary({
 
   const dateStr   = date ? fmt(date) : "";
   const dateLabel = date ? moment(date).format("dddd, D בMMMM YYYY") : "";
+  const operationalGroupIds = useMemo(() => new Set((allGroups || []).filter(isGroupOperationallyEnabled).map(g => g.id)), [allGroups]);
 
   const { lodgingCheckins, lodgingCheckouts, dayUseGroups, staying, allGroupsOnDay } = useMemo(() => {
     if (!dateStr) return { lodgingCheckins: [], lodgingCheckouts: [], dayUseGroups: [], staying: [], allGroupsOnDay: [] };
-    const groups = (allGroups || []).filter(g => !EXCLUDED.has(g.status) && g.arrival_date && g.departure_date);
+    const groups = (allGroups || []).filter(g => isGroupOperationallyEnabled(g) && !EXCLUDED.has(g.status) && g.arrival_date && g.departure_date);
 
     // Lodging check-ins: LODGING groups arriving today
     const lodgingCheckins  = groups.filter(g => !isDayUse(g) && fmt(g.arrival_date)   === dateStr);
@@ -488,23 +490,23 @@ export default function OperationalDaySummary({
 
   const dayMeals = useMemo(() =>
     (allMeals || []).filter(m => {
-      if (m.status !== "ACTIVE" || m.date !== dateStr) return false;
+      if (!operationalGroupIds.has(m.group_id) || m.status !== "ACTIVE" || m.date !== dateStr) return false;
       // Filter out ghost COFFEE_CORNER MealReservations with no matching active CoffeeCornerRequest
       if (m.meal_type === "COFFEE_CORNER" && !activeCoffeeKeys.has(`${m.group_id}|${m.date}`)) return false;
       return true;
     }),
-    [allMeals, dateStr, activeCoffeeKeys]
+    [allMeals, dateStr, activeCoffeeKeys, operationalGroupIds]
   );
 
   const dayCoffeeRequests = useMemo(() =>
-    (allCoffeeRequests || []).filter(request => request.status === "ACTIVE" && request.date === dateStr),
-    [allCoffeeRequests, dateStr]
+    (allCoffeeRequests || []).filter(request => operationalGroupIds.has(request.group_id) && request.status === "ACTIVE" && request.date === dateStr),
+    [allCoffeeRequests, dateStr, operationalGroupIds]
   );
 
   const dayActivities = useMemo(() =>
-    (allActivities || []).filter(a => a.status === "ACTIVE" && a.date === dateStr)
+    (allActivities || []).filter(a => (a.standalone || operationalGroupIds.has(a.group_id)) && a.status === "ACTIVE" && a.date === dateStr)
       .sort((a, b) => (a.start_time || "").localeCompare(b.start_time || "") || (a.end_time || "").localeCompare(b.end_time || "")),
-    [allActivities, dateStr]
+    [allActivities, dateStr, operationalGroupIds]
   );
 
   const groupIdsOnDay = useMemo(() => new Set(allGroupsOnDay.map(g => g.id)), [allGroupsOnDay]);

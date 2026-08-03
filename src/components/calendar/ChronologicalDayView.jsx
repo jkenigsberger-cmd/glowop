@@ -16,6 +16,7 @@ import { useNavigate } from "react-router-dom";
 import { ArrowDownCircle, ArrowUpCircle, UtensilsCrossed, CalendarDays, Sun, Coffee } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ActivityEquipmentLine } from "@/components/schedule/LogisticsFields";
+import { isGroupOperationallyEnabled } from "@/lib/groupOperationalIsolation";
 
 const EXCLUDED = new Set(["CANCELLED", "COMPLETED", "ARCHIVED"]);
 const coffeeTypeLabel = (value) => value === "HOT_WATER_THERMOCAN_ONLY" ? "מיחם וטרמוקן בלבד" : value || null;
@@ -89,10 +90,11 @@ const TYPE_CONFIG = {
 // ── Build normalized chronological events ─────────────────────────────────────
 export function buildChronologicalDayEvents({ dateStr, allGroups, allMeals, allActivities, allCoffeeRequests, activeCoffeeKeys }) {
   const events = [];
+  const operationalGroupIds = new Set((allGroups || []).filter(isGroupOperationallyEnabled).map(g => g.id));
 
   // 1. Group arrivals & departures
   (allGroups || [])
-    .filter(g => !EXCLUDED.has(g.status) && g.arrival_date)
+    .filter(g => isGroupOperationallyEnabled(g) && !EXCLUDED.has(g.status) && g.arrival_date)
     .forEach(g => {
       const isDayUse = g.group_type === "DAY_USE";
 
@@ -154,7 +156,7 @@ export function buildChronologicalDayEvents({ dateStr, allGroups, allMeals, allA
 
   // 2. Meals (excluding coffee corner — handled separately)
   (allMeals || [])
-    .filter(m => m.status === "ACTIVE" && m.date === dateStr && m.meal_type !== "COFFEE_CORNER")
+    .filter(m => operationalGroupIds.has(m.group_id) && m.status === "ACTIVE" && m.date === dateStr && m.meal_type !== "COFFEE_CORNER")
     .forEach(m => {
       events.push({
         id: `meal-${m.id}`,
@@ -176,7 +178,7 @@ export function buildChronologicalDayEvents({ dateStr, allGroups, allMeals, allA
 
   // 3. Coffee corner requests
   (allCoffeeRequests || [])
-    .filter(r => r.status === "ACTIVE" && r.date === dateStr)
+    .filter(r => operationalGroupIds.has(r.group_id) && r.status === "ACTIVE" && r.date === dateStr)
     .forEach(r => {
       events.push({
         id: `coffee-${r.id}`,
@@ -196,7 +198,7 @@ export function buildChronologicalDayEvents({ dateStr, allGroups, allMeals, allA
 
   // 4. Schedule items / activities
   (allActivities || [])
-    .filter(a => a.status === "ACTIVE" && a.date === dateStr)
+    .filter(a => (a.standalone || operationalGroupIds.has(a.group_id)) && a.status === "ACTIVE" && a.date === dateStr)
     .forEach(a => {
       events.push({
         id: `activity-${a.id}`,
@@ -340,7 +342,7 @@ export default function ChronologicalDayView({
   activitiesOnly = false,
 }) {
   const groupMap = useMemo(
-    () => Object.fromEntries((allGroups || []).map(g => [g.id, g])),
+    () => Object.fromEntries((allGroups || []).filter(isGroupOperationallyEnabled).map(g => [g.id, g])),
     [allGroups]
   );
   const spaceMap = useMemo(

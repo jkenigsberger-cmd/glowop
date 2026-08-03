@@ -11,7 +11,7 @@ import { computeAllocationCounts } from "@/lib/allocationCounts";
 import OperationalMonthlyGroupCalendar from "@/components/calendar/OperationalMonthlyGroupCalendar";
 import { useNavigate } from "react-router-dom";
 import moment from "moment";
-import { isOperationalGroup } from "@/lib/quotePreparationFlow";
+import { isGroupOperationallyEnabled } from "@/lib/groupOperationalIsolation";
 
 const TODAY = new Date().toISOString().slice(0, 10);
 
@@ -239,7 +239,8 @@ export default function Allocation() {
 
   const { data: groups = [], isLoading: loadingGroups } = useQuery({
     queryKey: ["groups"],
-    queryFn: async () => (await base44.entities.Group.list("-arrival_date", 300)).filter(isOperationalGroup),
+    queryFn: () => base44.entities.Group.list("-arrival_date", 300),
+    select: items => items.filter(isGroupOperationallyEnabled),
   });
 
   const { data: profiles = [], isLoading: loadingProfiles } = useQuery({

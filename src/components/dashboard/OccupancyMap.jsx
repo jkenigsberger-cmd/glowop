@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { BedDouble, MapPin } from "lucide-react";
 import OccupancyTent from "./OccupancyTent";
+import { isGroupOperationallyEnabled } from "@/lib/groupOperationalIsolation";
 
 /**
  * Group color palette — deterministic assignment based on group_id hash.
@@ -300,16 +301,17 @@ export default function OccupancyMap({
   allocations = [],
   groups = [],
 }) {
-  const groupById = useMemo(() => Object.fromEntries(groups.map(g => [g.id, g])), [groups]);
+  const groupById = useMemo(() => Object.fromEntries(groups.filter(isGroupOperationallyEnabled).map(g => [g.id, g])), [groups]);
 
   // Filter allocations: CONFIRMED + date range covers selectedDate
   const dateAllocs = useMemo(() =>
     allocations.filter(a =>
+      groupById[a.group_id] &&
       a.status === "CONFIRMED" &&
       a.arrival_date <= selectedDate &&
       a.departure_date > selectedDate
     ),
-    [allocations, selectedDate]
+    [allocations, selectedDate, groupById]
   );
 
   // Build tent → allocation lookup

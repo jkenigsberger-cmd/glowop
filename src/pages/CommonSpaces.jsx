@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 import { sortActivitySpaces } from "@/lib/activitySpaceUtils";
 import { useRoleContext } from "@/lib/RoleContext";
 import { isBlockVisibleOnCalendarDate } from "@/lib/activitySpaceBlocks";
-import { isOperationalGroup } from "@/lib/quotePreparationFlow";
+import { isGroupOperationallyEnabled } from "@/lib/groupOperationalIsolation";
 
 import SpaceOverviewCard from "../components/spaces/SpaceOverviewCard.jsx";
 import SpaceDailyView from "../components/spaces/SpaceDailyView.jsx";
@@ -57,7 +57,8 @@ export default function CommonSpaces() {
 
   const { data: groups = [] } = useQuery({
     queryKey: ["spaces-groups"],
-    queryFn: async () => (await base44.entities.Group.list("-arrival_date", 500)).filter(isOperationalGroup),
+    queryFn: () => base44.entities.Group.list("-arrival_date", 500),
+    select: items => items.filter(isGroupOperationallyEnabled),
   });
 
   const { data: spaceBlocks = [] } = useQuery({
