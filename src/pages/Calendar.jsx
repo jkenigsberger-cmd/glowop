@@ -26,6 +26,7 @@ const MEAL_ORDER = { BREAKFAST: 0, LUNCH: 1, DINNER: 2, COFFEE_CORNER: 3, OTHER:
 const isDayUse = (g) => g.group_type === "DAY_USE";
 
 function getDaySummary(dateStr, groups, meals, activities) {
+  const operationalGroupIds = new Set(groups.map((group) => group.id));
   const activeGroups = groups.filter((g) => !EXCLUDED_STATUSES.has(g.status) && g.arrival_date && g.departure_date);
   // Lodging check-ins/outs/staying
   const checkins = activeGroups.filter((g) => !isDayUse(g) && fmtDay(g.arrival_date) === dateStr);
@@ -36,7 +37,7 @@ function getDaySummary(dateStr, groups, meals, activities) {
   const onSite = [...checkins, ...staying];
   const totalPax = [...onSite, ...dayUseGroups].reduce((s, g) => s + (Number(g.total_pax) || 0), 0);
 
-  const dayMeals = meals.filter((m) => m.status === "ACTIVE" && m.date === dateStr && m.meal_type !== "COFFEE_CORNER");
+  const dayMeals = meals.filter((m) => operationalGroupIds.has(m.group_id) && m.status === "ACTIVE" && m.date === dateStr && m.meal_type !== "COFFEE_CORNER");
   const mealsByType = {};
   dayMeals.forEach((m) => {
     const t = m.meal_type || "OTHER";
@@ -45,7 +46,7 @@ function getDaySummary(dateStr, groups, meals, activities) {
     mealsByType[t].pax += Number(m.pax) || 0;
   });
 
-  const dayActivities = activities.filter((i) => i.status === "ACTIVE" && i.date === dateStr);
+  const dayActivities = activities.filter((i) => (i.standalone || operationalGroupIds.has(i.group_id)) && i.status === "ACTIVE" && i.date === dateStr);
 
   return { checkins, checkouts, staying, dayUseGroups, onSite, totalPax, mealsByType, dayMeals, dayActivities };
 }

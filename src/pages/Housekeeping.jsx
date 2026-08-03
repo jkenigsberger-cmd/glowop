@@ -110,18 +110,21 @@ export default function Housekeeping() {
 
   // ── Lookup maps ───────────────────────────────────────────────────────────────
   const groupsMap        = useMemo(() => Object.fromEntries(groups.map(g => [g.id, g])), [groups]);
+  const operationalGroupIds = useMemo(() => new Set(groups.map(g => g.id)), [groups]);
+  const operationalAllocations = useMemo(() => allocations.filter(a => operationalGroupIds.has(a.group_id)), [allocations, operationalGroupIds]);
+  const operationalNhoodReservations = useMemo(() => nhoodReservations.filter(r => operationalGroupIds.has(r.group_id)), [nhoodReservations, operationalGroupIds]);
   const tentsMap         = useMemo(() => Object.fromEntries(tents.map(t => [t.id, t])), [tents]);
   const neighborhoodsMap = useMemo(() => Object.fromEntries(neighborhoods.map(n => [n.id, n])), [neighborhoods]);
   const spacesMap        = useMemo(() => Object.fromEntries(activitySpaces.map(s => [s.id, s])), [activitySpaces]);
 
   const nhoodResByGroup = useMemo(() => {
     const map = {};
-    nhoodReservations.forEach(r => {
+    operationalNhoodReservations.forEach(r => {
       if (!map[r.group_id]) map[r.group_id] = [];
       map[r.group_id].push(r);
     });
     return map;
-  }, [nhoodReservations]);
+  }, [operationalNhoodReservations]);
 
   const profilesByGroup = useMemo(() => {
     const map = {};
@@ -134,33 +137,33 @@ export default function Housekeeping() {
 
   const draftAllocsByGroup = useMemo(() => {
     const map = {};
-    allocations.filter(a => a.status === "DRAFT").forEach(a => {
+    operationalAllocations.filter(a => a.status === "DRAFT").forEach(a => {
       if (!map[a.group_id]) map[a.group_id] = [];
       map[a.group_id].push(a);
     });
     return map;
-  }, [allocations]);
+  }, [operationalAllocations]);
 
   const confirmedAllocations = useMemo(
-    () => allocations.filter(a => groupsMap[a.group_id] && a.status === "CONFIRMED"),
-    [allocations, groupsMap]
+    () => operationalAllocations.filter(a => a.status === "CONFIRMED"),
+    [operationalAllocations]
   );
 
   const draftOnlyGroupIds = useMemo(() => {
     const confirmedGroupIds = new Set(confirmedAllocations.map(a => a.group_id));
-    const draftGroupIds     = new Set(allocations.filter(a => a.status === "DRAFT").map(a => a.group_id));
+    const draftGroupIds     = new Set(operationalAllocations.filter(a => a.status === "DRAFT").map(a => a.group_id));
     const result = new Set();
     draftGroupIds.forEach(id => { if (!confirmedGroupIds.has(id)) result.add(id); });
     return result;
-  }, [allocations, confirmedAllocations]);
+  }, [operationalAllocations, confirmedAllocations]);
 
   const nhoodOnlyGroupIds = useMemo(() => {
-    const anyAllocGroupIds = new Set(allocations.filter(a => a.status !== "CANCELLED").map(a => a.group_id));
-    const nhoodGroupIds    = new Set(nhoodReservations.map(r => r.group_id));
+    const anyAllocGroupIds = new Set(operationalAllocations.filter(a => a.status !== "CANCELLED").map(a => a.group_id));
+    const nhoodGroupIds    = new Set(operationalNhoodReservations.map(r => r.group_id));
     const result = new Set();
     nhoodGroupIds.forEach(id => { if (!anyAllocGroupIds.has(id)) result.add(id); });
     return result;
-  }, [allocations, nhoodReservations]);
+  }, [operationalAllocations, operationalNhoodReservations]);
 
   // ── Date range ────────────────────────────────────────────────────────────────
   const dateRange = useMemo(() => {
@@ -176,8 +179,8 @@ export default function Housekeeping() {
     // Only lodging groups (have sleeping allocations OR group_type === LODGING)
     const lodgingGroupIds = new Set([
       ...confirmedAllocations.map(a => a.group_id),
-      ...allocations.filter(a => a.status === "DRAFT").map(a => a.group_id),
-      ...nhoodReservations.map(r => r.group_id),
+      ...operationalAllocations.filter(a => a.status === "DRAFT").map(a => a.group_id),
+      ...operationalNhoodReservations.map(r => r.group_id),
       ...groups.filter(g => g.group_type === "LODGING").map(g => g.id),
     ]);
 
@@ -231,7 +234,7 @@ export default function Housekeeping() {
         hasActivity,
       };
     });
-  }, [dateRange, confirmedAllocations, allocations, groups, nhoodReservations, draftOnlyGroupIds, nhoodOnlyGroupIds]);
+  }, [dateRange, confirmedAllocations, operationalAllocations, groups, operationalNhoodReservations, draftOnlyGroupIds, nhoodOnlyGroupIds]);
 
   // ── Day-use per-date data ─────────────────────────────────────────────────────
   const dayUseDateData = useMemo(() => {

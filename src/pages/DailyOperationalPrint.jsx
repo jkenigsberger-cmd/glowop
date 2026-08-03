@@ -120,6 +120,7 @@ export default function DailyOperationalPrint() {
   const spaceById = Object.fromEntries(activitySpaces.map(s => [s.id, s]));
   const tentById = Object.fromEntries(tents.map(t => [t.id, t]));
   const neighborhoodById = Object.fromEntries(neighborhoods.map(n => [n.id, n]));
+  const operationalGroupIds = new Set(groups.map(g => g.id));
 
   const EXCLUDED = new Set(["CANCELLED", "COMPLETED", "ARCHIVED"]);
 
@@ -135,7 +136,7 @@ export default function DailyOperationalPrint() {
   });
 
   // Sleeping allocations active tonight
-  const allocsTonight = allocations.filter(a => a.arrival_date <= dateParam && a.departure_date > dateParam);
+  const allocsTonight = allocations.filter(a => operationalGroupIds.has(a.group_id) && a.arrival_date <= dateParam && a.departure_date > dateParam);
   const allocGroupIds = new Set(allocsTonight.map(a => a.group_id));
 
   // Collect all-groups critical allergies
@@ -145,23 +146,22 @@ export default function DailyOperationalPrint() {
     return Number(d.lifeThreatening_count) > 0;
   });
 
-  const existingGroupIds = new Set(groups.map(g => g.id));
   const sortedMeals = [...meals]
-    .filter(m => existingGroupIds.has(m.group_id) && m.meal_type !== "COFFEE_CORNER")
+    .filter(m => operationalGroupIds.has(m.group_id) && m.meal_type !== "COFFEE_CORNER")
     .sort((a, b) => (a.start_time || "").localeCompare(b.start_time || ""));
   const standalonePrintActivities = standaloneActivities.map((activity) => {
     const assigned = standaloneAssignments.filter((assignment) => assignment.reservation_id === activity.id);
     return { ...activity, standalone: true, activity_name: activity.title, pax: activity.expected_pax, space_names: assigned.map((assignment) => spaceById[assignment.activity_space_id]?.name).filter(Boolean), needs_projector: assigned.some((a) => a.needs_projector), needs_screen: assigned.some((a) => a.needs_screen), needs_microphone: assigned.some((a) => a.needs_microphone), needs_sound: assigned.some((a) => a.needs_sound), needs_whiteboard: assigned.some((a) => a.needs_whiteboard), needs_chair_circle: assigned.some((a) => a.needs_chair_circle), chairs_count: Math.max(0, ...assigned.map((a) => Number(a.chairs_count) || 0)), logistics_other: assigned.map((a) => a.logistics_other).filter(Boolean).join(", "), notes: [activity.preparation_notes, activity.during_activity_notes, activity.cleanup_notes].filter(Boolean).join(" | ") };
   });
-  const sortedActivities = [...activities.filter(a => existingGroupIds.has(a.group_id)), ...standalonePrintActivities].sort((a, b) => (a.start_time || "").localeCompare(b.start_time || ""));
+  const sortedActivities = [...activities.filter(a => operationalGroupIds.has(a.group_id)), ...standalonePrintActivities].sort((a, b) => (a.start_time || "").localeCompare(b.start_time || ""));
 
   // Fix A: filter out orphan CoffeeCornerRequests whose parent Group no longer exists
   const sortedCoffee = [...coffeeRequests]
-    .filter(r => existingGroupIds.has(r.group_id))
+    .filter(r => operationalGroupIds.has(r.group_id))
     .sort((a, b) => (a.start_time || "").localeCompare(b.start_time || ""));
 
   const sortedPrisa = [...prisaRequests]
-    .filter(r => existingGroupIds.has(r.group_id))
+    .filter(r => operationalGroupIds.has(r.group_id))
     .sort((a, b) => (PRISA_SLOT_ORDER[a.pickup_slot] ?? 99) - (PRISA_SLOT_ORDER[b.pickup_slot] ?? 99));
 
   const prisaSlotTotals = sortedPrisa.reduce((acc, r) => {
