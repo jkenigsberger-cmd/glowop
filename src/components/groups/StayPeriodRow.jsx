@@ -3,12 +3,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 export default function StayPeriodRow({ period, index, onChange, onRemove }) {
-  const set = (field, value) => onChange(index, { ...period, [field]: value });
+  const set = (field, value) => onChange(period._draft_id, { ...period, [field]: value });
   return (
     <div className="rounded-lg border border-border bg-card p-3 space-y-3">
       <div className="flex items-center justify-between">
         <p className="font-semibold">תקופה {index + 1}</p>
-        <Button type="button" variant="ghost" size="sm" onClick={() => onRemove(index)}>הסרת תקופה</Button>
+        <Button type="button" variant="ghost" size="sm" onClick={() => onRemove(period._draft_id)}>הסרת תקופה</Button>
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1"><Label>מתאריך</Label><Input type="date" value={period.start_date} onChange={e => set("start_date", e.target.value)} /></div>

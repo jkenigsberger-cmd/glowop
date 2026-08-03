@@ -19,26 +19,21 @@ const PAX_FIELDS = ["total_pax", "participant_count", "staff_count", "boys_count
 // Fields that trigger date-related alerts when changed
 const DATE_FIELDS = ["arrival_date", "departure_date"];
 
+const createInitialForm = group => ({
+  group_name: group?.group_name || "", group_type: group?.group_type || "LODGING",
+  arrival_date: group?.arrival_date || "", departure_date: group?.departure_date || "",
+  arrival_time: group?.arrival_time || "", departure_time: group?.departure_time || "",
+  total_pax: group?.total_pax ?? "", staff_count: group?.staff_count ?? "",
+  boys_count: group?.boys_count ?? "", girls_count: group?.girls_count ?? "",
+  contact_name: group?.contact_name || "", contact_phone: group?.contact_phone || "",
+  contact_email: group?.contact_email || "", internal_notes: group?.internal_notes || "",
+  status: group ? (group.status || "CONFIRMED") : "CONFIRMED",
+});
+
 export default function GroupFormModal({ group, onClose, onSaved, initialProfileDiets = null }) {
   const isEdit = !!group;
   const queryClient = useQueryClient();
-  const [form, setForm] = useState({
-    group_name:    group?.group_name    || "",
-    group_type:    group?.group_type    || "LODGING",
-    arrival_date:  group?.arrival_date  || "",
-    departure_date: group?.departure_date || "",
-    arrival_time:  group?.arrival_time  || "",
-    departure_time: group?.departure_time || "",
-    total_pax:     group?.total_pax     ?? "",
-    staff_count:   group?.staff_count   ?? "",
-    boys_count:    group?.boys_count    ?? "",
-    girls_count:   group?.girls_count   ?? "",
-    contact_name:  group?.contact_name  || "",
-    contact_phone: group?.contact_phone || "",
-    contact_email: group?.contact_email || "",
-    internal_notes: group?.internal_notes || "",
-    status:        isEdit ? (group?.status || "CONFIRMED") : "CONFIRMED",
-  });
+  const [form, setForm] = useState(() => createInitialForm(group));
   // Dietary data — pre-loaded from profile.special_diets when editing
   const [diets, setDiets] = useState(() => mergeDiets(parseDiets(initialProfileDiets)));
   const [saving, setSaving] = useState(false);
@@ -85,6 +80,28 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
   const [replanifyPreview, setReplanifyPreview] = useState(null); // impact summary awaiting confirmation
   const [replanifyConfirmed, setReplanifyConfirmed] = useState(false);
 
+  // A modal session is identified by the edited group id (or "create").
+  // Reset every draft when that identity changes; toggling modes does not touch either draft.
+  useEffect(() => {
+    const initialForm = createInitialForm(group);
+    setForm(initialForm);
+    setContinuousDraft({
+      arrival_date: initialForm.arrival_date, departure_date: initialForm.departure_date,
+      arrival_time: initialForm.arrival_time, departure_time: initialForm.departure_time,
+    });
+    setStayMode(group?.stay_mode === "MULTI_PERIOD" ? "MULTI_PERIOD" : "CONTINUOUS");
+    setStayPeriodsDraft([]);
+    multiPeriodInitialized.current = false;
+    setDiets(mergeDiets(parseDiets(initialProfileDiets)));
+    setSaving(false);
+    setAllocationBlockError(null);
+    setGenderConsistencyError(null);
+    setMealSyncData(null);
+    setReplanifyPreview(null);
+    setReplanifyConfirmed(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [group?.id]);
+
   // Reset the replanification confirmation whenever the dates are edited again
   useEffect(() => {
     setReplanifyPreview(null);
@@ -116,7 +133,7 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
       if (!multiPeriodInitialized.current) {
         multiPeriodInitialized.current = true;
         if (continuousDraft.arrival_date && continuousDraft.departure_date) {
-          setStayPeriodsDraft([{ start_date: continuousDraft.arrival_date, end_date: continuousDraft.departure_date, arrival_time: continuousDraft.arrival_time, departure_time: continuousDraft.departure_time, status: "ACTIVE" }]);
+          setStayPeriodsDraft([{ _draft_id: crypto.randomUUID(), start_date: continuousDraft.arrival_date, end_date: continuousDraft.departure_date, arrival_time: continuousDraft.arrival_time, departure_time: continuousDraft.departure_time, status: "ACTIVE" }]);
         }
       }
       setStayMode("MULTI_PERIOD");
