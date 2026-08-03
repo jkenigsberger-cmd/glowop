@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -12,6 +12,7 @@ import { upsertReviewAlert } from "@/lib/reviewAlerts";
 import { syncExistingOperationalPaxForGroup } from "@/lib/syncOperationalPax";
 import MealSyncAfterDateChangeModal from "@/components/groups/MealSyncAfterDateChangeModal";
 import GroupAvailabilityChecker from "@/components/groups/GroupAvailabilityChecker";
+import StayPeriodsEditor from "@/components/groups/StayPeriodsEditor";
 
 // Fields that trigger pax-related alerts when changed
 const PAX_FIELDS = ["total_pax", "participant_count", "staff_count", "boys_count", "girls_count"];
@@ -41,6 +42,13 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
   // Dietary data — pre-loaded from profile.special_diets when editing
   const [diets, setDiets] = useState(() => mergeDiets(parseDiets(initialProfileDiets)));
   const [saving, setSaving] = useState(false);
+  const [stayMode, setStayMode] = useState(group?.stay_mode === "MULTI_PERIOD" ? "MULTI_PERIOD" : "CONTINUOUS");
+  const [continuousDraft, setContinuousDraft] = useState({
+    arrival_date: group?.arrival_date || "", departure_date: group?.departure_date || "",
+    arrival_time: group?.arrival_time || "", departure_time: group?.departure_time || "",
+  });
+  const [stayPeriodsDraft, setStayPeriodsDraft] = useState([]);
+  const multiPeriodInitialized = useRef(false);
 
   // ── Prefill operational numbers from the OperationalGroupProfile (source of truth) ──
   // Operational pax lives on the OGP, not on stale Group fields. On edit, read the OGP
@@ -99,6 +107,24 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
 
   // ── Field setters with auto-fill logic ───────────────────────────────────
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const setContinuousField = (key, value) => {
+    setContinuousDraft(draft => ({ ...draft, [key]: value }));
+    set(key, value);
+  };
+  const handleStayModeChange = checked => {
+    if (checked) {
+      if (!multiPeriodInitialized.current) {
+        multiPeriodInitialized.current = true;
+        if (continuousDraft.arrival_date && continuousDraft.departure_date) {
+          setStayPeriodsDraft([{ start_date: continuousDraft.arrival_date, end_date: continuousDraft.departure_date, arrival_time: continuousDraft.arrival_time, departure_time: continuousDraft.departure_time, status: "ACTIVE" }]);
+        }
+      }
+      setStayMode("MULTI_PERIOD");
+      return;
+    }
+    setStayMode("CONTINUOUS");
+    setForm(current => ({ ...current, ...continuousDraft }));
+  };
 
   const handleBoysChange = (val) => {
     const boys = Math.max(0, Math.min(Number(val || 0), participantCount));
@@ -117,6 +143,11 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
     e.preventDefault();
     setAllocationBlockError(null);
     setGenderConsistencyError(null);
+
+    if (stayMode === "MULTI_PERIOD") {
+      setAllocationBlockError("שמירת קבוצת מכינה תופעל בשלב הבא. בשלב זה ניתן לבדוק את התקופות בלבד.");
+      return;
+    }
 
     // ── Guard: for LODGING groups with participant_count > 0, boys+girls must equal participant_count
     // One gender can be 0 (e.g. all boys or all girls), but both empty or a mismatch is not allowed.
@@ -504,27 +535,23 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
                 </div>
               )}
             </div>
+            <label className="flex items-center gap-2 cursor-pointer w-fit">
+              <input type="checkbox" checked={stayMode === "MULTI_PERIOD"} onChange={e => handleStayModeChange(e.target.checked)} className="h-4 w-4 accent-primary" />
+              <span className="font-medium">קבוצת מכינה</span>
+            </label>
           </div>
 
           {/* Dates */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <Label>תאריך הגעה *</Label>
-              <Input type="date" value={form.arrival_date} onChange={e => set("arrival_date", e.target.value)} required />
+          {stayMode === "CONTINUOUS" ? (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1"><Label>תאריך הגעה *</Label><Input type="date" value={continuousDraft.arrival_date} onChange={e => setContinuousField("arrival_date", e.target.value)} required /></div>
+              <div className="space-y-1"><Label>{isDayUse ? "תאריך האירוע" : "תאריך עזיבה"}</Label><Input type="date" value={continuousDraft.departure_date} onChange={e => setContinuousField("departure_date", e.target.value)} /></div>
+              <div className="space-y-1"><Label>שעת הגעה <span className="text-slate-400 font-normal text-[11px]">(אופציונלי)</span></Label><Input type="time" value={continuousDraft.arrival_time} onChange={e => setContinuousField("arrival_time", e.target.value)} placeholder="לדוגמה 15:00" /></div>
+              <div className="space-y-1"><Label>שעת יציאה <span className="text-slate-400 font-normal text-[11px]">(אופציונלי)</span></Label><Input type="time" value={continuousDraft.departure_time} onChange={e => setContinuousField("departure_time", e.target.value)} placeholder="לדוגמה 11:00" /></div>
             </div>
-            <div className="space-y-1">
-              <Label>{isDayUse ? "תאריך האירוע" : "תאריך עזיבה"}</Label>
-              <Input type="date" value={form.departure_date} onChange={e => set("departure_date", e.target.value)} />
-            </div>
-            <div className="space-y-1">
-              <Label>שעת הגעה <span className="text-slate-400 font-normal text-[11px]">(אופציונלי)</span></Label>
-              <Input type="time" value={form.arrival_time} onChange={e => set("arrival_time", e.target.value)} placeholder="לדוגמה 15:00" />
-            </div>
-            <div className="space-y-1">
-              <Label>שעת יציאה <span className="text-slate-400 font-normal text-[11px]">(אופציונלי)</span></Label>
-              <Input type="time" value={form.departure_time} onChange={e => set("departure_time", e.target.value)} placeholder="לדוגמה 11:00" />
-            </div>
-          </div>
+          ) : (
+            <StayPeriodsEditor groupId={group?.id} periods={stayPeriodsDraft} onChange={setStayPeriodsDraft} />
+          )}
 
           {/* Participant counts */}
           <div className="grid grid-cols-3 gap-3">
@@ -563,17 +590,19 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
           </div>
 
           {/* Live site availability check — same logic as the Quote flow */}
-          <GroupAvailabilityChecker
-            groupType={form.group_type}
-            arrivalDate={form.arrival_date}
-            departureDate={form.departure_date}
-            totalPax={form.total_pax}
-            staffCount={staffCount}
-            participantCount={participantCount}
-            boysCount={boysCount}
-            girlsCount={girlsCount}
-            excludeGroupId={isEdit ? group?.id : undefined}
-          />
+          {stayMode === "CONTINUOUS" && (
+            <GroupAvailabilityChecker
+              groupType={form.group_type}
+              arrivalDate={form.arrival_date}
+              departureDate={form.departure_date}
+              totalPax={form.total_pax}
+              staffCount={staffCount}
+              participantCount={participantCount}
+              boysCount={boysCount}
+              girlsCount={girlsCount}
+              excludeGroupId={isEdit ? group?.id : undefined}
+            />
+          )}
 
           {genderConsistencyError && (
             <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 whitespace-pre-line">
