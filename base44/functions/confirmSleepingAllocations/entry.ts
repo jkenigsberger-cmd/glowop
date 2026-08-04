@@ -93,7 +93,7 @@ export default async function(req) {
       return Response.json({ success: false, error: 'יש לסמן את דרישות הלינה כמוכנות לפני אישור השיבוץ' }, { status: 200 });
     }
     const activeGroupAllocations = allGroupAllocations.filter(a => a.status !== 'CANCELLED');
-    const hasStaffAllocations = activeGroupAllocations.some(a => a.allocation_type === 'STAFF');
+    const hasStaffAllocations = finalDraftsToConfirm.some(a => a.allocation_type === 'STAFF');
     const staffSplitValid = profile.staff_men_count != null && profile.staff_women_count != null &&
       Number(profile.staff_men_count) + Number(profile.staff_women_count) === Number(profile.staff_count || 0);
     if (hasStaffAllocations && !staffSplitValid) {

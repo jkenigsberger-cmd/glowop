@@ -1,19 +1,75 @@
 export const QUANTITY_FIELDS = ['total_pax', 'participant_count', 'staff_count', 'boys_count', 'girls_count'];
+export const SLEEPING_QUANTITY_FIELDS = ['participant_count', 'staff_count', 'boys_count', 'girls_count'];
+export const AUTOMATIC_MEAL_SOURCES = new Set(['groupSync', 'guestForm']);
+export const AUTOMATIC_COFFEE_SOURCES = new Set(['external_form']);
+export const AUTOMATIC_ACTIVITY_SOURCES = new Set(['groupSync']);
 
-export function validateQuantityPayload(quantities, groupType) {
-  if (!quantities || typeof quantities !== 'object') return 'חסרים נתוני כמויות';
+export function normalizeQuantities(record) {
+  return Object.fromEntries(QUANTITY_FIELDS.map(field => [field, Number(record?.[field] ?? 0)]));
+}
+
+export function validateQuantityPayload(quantities, groupType, source = 'ADMIN_EDIT') {
+  if (!quantities || typeof quantities !== 'object') return { message: 'חסרים נתוני כמויות', rule: 'QUANTITIES_OBJECT_REQUIRED' };
   for (const field of QUANTITY_FIELDS) {
     const value = quantities[field];
-    if (!Number.isFinite(value) || !Number.isInteger(value)) return `השדה ${field} חייב להיות מספר שלם`;
-    if (value < 0) return `השדה ${field} לא יכול להיות שלילי`;
+    if (!Number.isFinite(value) || !Number.isInteger(value) || value < 0) {
+      return { message: `השדה ${field} חייב להיות מספר שלם ולא שלילי`, rule: 'FINITE_NON_NEGATIVE_INTEGER' };
+    }
   }
-  if (quantities.total_pax !== quantities.participant_count + quantities.staff_count) {
-    return 'סה״כ האנשים חייב להיות שווה למספר החניכים ועוד מספר אנשי הצוות';
-  }
-  if (groupType === 'LODGING' && quantities.participant_count > 0 && quantities.boys_count + quantities.girls_count !== quantities.participant_count) {
-    return 'חלוקת הבנים והבנות חייבת להיות שווה למספר החניכים';
+  if (source === 'ADMIN_EDIT') {
+    const derivedParticipants = Math.max(0, quantities.total_pax - quantities.staff_count);
+    if (quantities.participant_count !== derivedParticipants) {
+      return { message: 'מספר החניכים חייב להתאים לחישוב הקיים בטופס עריכת קבוצה: max(0, סה״כ פחות צוות)', rule: 'GROUP_FORM_DERIVED_PARTICIPANTS' };
+    }
+    if (groupType === 'LODGING' && quantities.participant_count > 0 && quantities.boys_count + quantities.girls_count !== quantities.participant_count) {
+      return { message: 'בקבוצת לינה עם חניכים, חלוקת הבנים והבנות חייבת להתאים למספר החניכים כפי שנדרש בטופס עריכת קבוצה', rule: 'GROUP_FORM_LODGING_GENDER_SPLIT' };
+    }
   }
   return null;
+}
+
+export async function quantityRequestFingerprint(source, groupId, quantities) {
+  const normalized = JSON.stringify({
+    source: String(source || '').trim().toUpperCase(),
+    group_id: String(groupId || '').trim(),
+    quantities: normalizeQuantities(quantities),
+  });
+  const bytes = new TextEncoder().encode(normalized);
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return [...new Uint8Array(digest)].map(value => value.toString(16).padStart(2, '0')).join('');
+}
+
+export function operationDecision(operations, fingerprint) {
+  if ((operations || []).length > 1) return { action: 'CONFLICT', error: 'CONCURRENT_DUPLICATE_OPERATIONS' };
+  const operation = operations?.[0] || null;
+  if (!operation) return { action: 'CREATE' };
+  if (operation.request_fingerprint !== fingerprint) return { action: 'CONFLICT', error: 'IDEMPOTENCY_REQUEST_CONFLICT' };
+  if (operation.status === 'IN_PROGRESS') return { action: 'CONFLICT', error: 'IDEMPOTENCY_OPERATION_IN_PROGRESS' };
+  if (operation.status === 'COMPLETED') return { action: 'REPLAY', operation };
+  return { action: 'RESUME', operation };
+}
+
+export function classifyMealSource(source) {
+  if (AUTOMATIC_MEAL_SOURCES.has(source)) return 'AUTOMATIC';
+  if (source === 'manual') return 'MANUAL';
+  return 'UNKNOWN';
+}
+
+export function classifyCoffeeSource(source) {
+  if (AUTOMATIC_COFFEE_SOURCES.has(source)) return 'AUTOMATIC';
+  if (source === 'manual') return 'MANUAL';
+  return 'UNKNOWN';
+}
+
+export function classifyActivitySource(record) {
+  if (record?.split_group_id || record?.shared_activity_id || record?.quote_item_id) return 'SPECIAL';
+  if (AUTOMATIC_ACTIVITY_SOURCES.has(record?.source)) return 'AUTOMATIC';
+  if (record?.source === 'manual') return 'MANUAL';
+  return 'UNKNOWN';
+}
+
+export function changedQuantityFields(previous, requested) {
+  return QUANTITY_FIELDS.filter(field => Number(previous?.[field] ?? 0) !== Number(requested?.[field] ?? 0));
 }
 
 export function israelNowParts(now = new Date()) {
@@ -35,9 +91,7 @@ export function serviceTiming(record, nowParts) {
     : { eligible: false, reason: 'TODAY_STARTED' };
 }
 
-export function quantitySnapshot(record) {
-  return Object.fromEntries(QUANTITY_FIELDS.map(field => [field, Number(record?.[field] ?? 0)]));
-}
+export const quantitySnapshot = normalizeQuantities;
 
 export function generalMealQuantity(snapshot) {
   const participants = snapshot?.participant_count;

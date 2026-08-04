@@ -10,13 +10,12 @@ import { Textarea } from "@/components/ui/textarea";
 import DietaryFields, { EMPTY_DIETS, parseDiets, mergeDiets } from "@/components/shared/DietaryFields";
 import { upsertReviewAlert } from "@/lib/reviewAlerts";
 import { invalidateQuantitySyncQueries } from "@/lib/quantitySyncQueries";
+import { QUANTITY_FIELDS, quantitySnapshot, latestEffectiveQuantities, quantitiesChanged, isLifecycleExit } from "@/lib/groupQuantitySync";
 import MealSyncAfterDateChangeModal from "@/components/groups/MealSyncAfterDateChangeModal";
 import GroupAvailabilityChecker from "@/components/groups/GroupAvailabilityChecker";
 import StayPeriodsEditor from "@/components/groups/StayPeriodsEditor";
 import { toast } from "sonner";
 
-// Fields that trigger pax-related alerts when changed
-const PAX_FIELDS = ["total_pax", "participant_count", "staff_count", "boys_count", "girls_count"];
 // Fields that trigger date-related alerts when changed
 const DATE_FIELDS = ["arrival_date", "departure_date"];
 
@@ -48,6 +47,8 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
   const multiPeriodInitialized = useRef(false);
   const multiPeriodIdempotencyKey = useRef(crypto.randomUUID());
   const quantitySyncIdempotencyKey = useRef(crypto.randomUUID());
+  const effectiveQuantitiesRef = useRef(quantitySnapshot(group));
+  const quantitySyncSavedRef = useRef(false);
 
   // If legacy Group/OGP values diverge, prefill from whichever record was updated most recently.
   // The central admin save then writes the same validated quantities to both records.
@@ -60,6 +61,7 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
         const prof = profiles[0];
         if (!prof || cancelled) return;
         const profileIsLatest = (prof.updated_date || "") > (group.updated_date || "");
+        effectiveQuantitiesRef.current = latestEffectiveQuantities(group, prof);
         if (profileIsLatest) {
           setForm(f => ({
             ...f,
@@ -102,6 +104,8 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
     multiPeriodInitialized.current = false;
     multiPeriodIdempotencyKey.current = crypto.randomUUID();
     quantitySyncIdempotencyKey.current = crypto.randomUUID();
+    effectiveQuantitiesRef.current = quantitySnapshot(group);
+    quantitySyncSavedRef.current = false;
     setAllocationBlockError(null);
   // Profile counts and diets remain owned by their separate asynchronous prefill lifecycle.
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -233,9 +237,15 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
       return;
     }
 
-    // ── Guard: for LODGING groups with participant_count > 0, boys+girls must equal participant_count
-    // One gender can be 0 (e.g. all boys or all girls), but both empty or a mismatch is not allowed.
-    if (form.group_type === "LODGING" && participantCount > 0) {
+    const submittedQuantityPreview = {
+      total_pax: totalPax, participant_count: participantCount, staff_count: staffCount,
+      boys_count: boysCount, girls_count: girlsCount,
+    };
+    const statusChangingToLifecycle = isEdit && isLifecycleExit(group, form.status);
+    const quantitiesChangedForEdit = isEdit && quantitiesChanged(effectiveQuantitiesRef.current, submittedQuantityPreview);
+
+    // Reuse the existing lodging rule only when quantities are actually being edited.
+    if (!statusChangingToLifecycle && (!isEdit || quantitiesChangedForEdit) && form.group_type === "LODGING" && participantCount > 0) {
       const genderSum = boysCount + girlsCount;
       if (genderSum === 0) {
         setGenderConsistencyError(
@@ -259,7 +269,7 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
       (form.departure_date !== (group.departure_date || ""))
     );
 
-    if (groupDatesChanged && !replanifyConfirmed) {
+    if (!statusChangingToLifecycle && groupDatesChanged && !replanifyConfirmed) {
       setSaving(true);
       const previewRes = await base44.functions.invoke("replanifyGroupDates", {
         group_id: group.id,
@@ -297,11 +307,11 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
     }
 
     const profilePaxFields = {
-      total_pax: payload.total_pax ?? null,
-      participant_count: payload.participant_count ?? null,
-      staff_count: payload.staff_count ?? null,
-      boys_count: payload.boys_count ?? null,
-      girls_count: payload.girls_count ?? null,
+      total_pax: payload.total_pax ?? 0,
+      participant_count: payload.participant_count ?? 0,
+      staff_count: payload.staff_count ?? 0,
+      boys_count: payload.boys_count ?? 0,
+      girls_count: payload.girls_count ?? 0,
     };
 
     // Only save dietary data if at least one field is non-zero or has notes
@@ -309,89 +319,90 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
     const dietPayload = hasAnyDiet ? { special_diets: JSON.stringify(diets) } : {};
 
     if (isEdit) {
-      let quantityData = null;
-      try {
-        const quantityResponse = await base44.functions.invoke("updateGroupOperationalQuantities", {
-          group_id: group.id,
-          quantities: profilePaxFields,
-          source: "ADMIN_EDIT",
-          idempotency_key: quantitySyncIdempotencyKey.current,
-        });
-        quantityData = quantityResponse.data || {};
-      } catch (error) {
-        quantityData = error?.response?.data || {};
-      }
-      if (!quantityData?.success) {
-        const failedPhase = Object.entries(quantityData?.phases || {}).find(([, value]) => value === "FAILED")?.[0];
-        setSaving(false);
-        setAllocationBlockError(
-          quantityData?.message ||
-          (failedPhase ? `סנכרון הכמויות נכשל בשלב ${failedPhase}. ניתן לנסות שוב בבטחה.` : "סנכרון הכמויות נכשל. לא ניתן לדווח על שמירה מלאה.")
-        );
-        return;
-      }
-      const staffSplitWarning = quantityData.warnings?.find(message => message.includes("מספר אנשי הצוות השתנה"));
-      if (staffSplitWarning) toast.warning(staffSplitWarning);
-
       const nonQuantityPayload = Object.fromEntries(
-        Object.entries(payload).filter(([key]) => !PAX_FIELDS.includes(key))
+        Object.entries(payload).filter(([key]) => !QUANTITY_FIELDS.includes(key))
       );
 
-      // If status is changing to CANCELLED or ARCHIVED, delegate to lifecycle function
-      // so all operational resources are properly released — never update status directly.
-      const statusChangingToLifecycle =
-        payload.status !== group.status &&
-        (payload.status === "CANCELLED" || payload.status === "ARCHIVED");
-
+      // Cancellation/archive owns the dependent-record cascade. Never propagate quantities first.
       if (statusChangingToLifecycle) {
-        const action = payload.status === "CANCELLED" ? "cancel" : "freeze";
-        const res = await base44.functions.invoke("updateGroupLifecycle", {
-          group_id: group.id,
-          action,
-          reason: payload.internal_notes || "",
-        });
-        if (!res.data?.success) {
+        try {
+          const action = payload.status === "CANCELLED" ? "cancel" : "freeze";
+          const res = await base44.functions.invoke("updateGroupLifecycle", {
+            group_id: group.id, action, reason: payload.internal_notes || "",
+          });
+          if (!res.data?.success) throw new Error(res.data?.message || "עדכון מחזור החיים נכשל");
+          const { status: _status, ...payloadWithoutStatus } = nonQuantityPayload;
+          await base44.entities.Group.update(group.id, payloadWithoutStatus);
+          await Promise.all([
+            queryClient.invalidateQueries({ queryKey: ["group", group.id] }),
+            queryClient.invalidateQueries({ queryKey: ["groups"] }),
+          ]);
           setSaving(false);
-          return;
+          onSaved();
+        } catch (error) {
+          setSaving(false);
+          setAllocationBlockError(error?.message || "עדכון מחזור החיים נכשל.");
         }
-        // Still save the non-status fields (name, contact, notes, etc.)
-        const { status: _s, ...payloadWithoutStatus } = nonQuantityPayload;
-        await base44.entities.Group.update(group.id, payloadWithoutStatus);
-        await invalidateQuantitySyncQueries(queryClient, group.id);
-        setSaving(false);
-        onSaved();
         return;
       }
 
-      // Apply the date re-planification cascade (already previewed/confirmed above)
-      if (groupDatesChanged) {
-        const applyRes = await base44.functions.invoke("replanifyGroupDates", {
-          group_id: group.id,
-          new_arrival_date: form.arrival_date,
-          new_departure_date: form.group_type === "DAY_USE" ? form.arrival_date : form.departure_date,
-          dry_run: false,
-        });
-        if (!applyRes.data?.success) {
+      if (quantitiesChangedForEdit) {
+        let quantityData = null;
+        try {
+          const quantityResponse = await base44.functions.invoke("updateGroupOperationalQuantities", {
+            group_id: group.id,
+            quantities: profilePaxFields,
+            source: "ADMIN_EDIT",
+            idempotency_key: quantitySyncIdempotencyKey.current,
+          });
+          quantityData = quantityResponse.data || {};
+        } catch (error) {
+          quantityData = error?.response?.data || {};
+        }
+        if (!quantityData?.success) {
+          const failedPhase = Object.entries(quantityData?.phases || {}).find(([, value]) => value === "FAILED")?.[0];
           setSaving(false);
-          setAllocationBlockError("עדכון התאריכים נכשל. אנא נסה שוב.");
+          setAllocationBlockError(quantityData?.message || (failedPhase
+            ? `סנכרון הכמויות נכשל בשלב ${failedPhase}. ניתן לנסות שוב בבטחה.`
+            : "סנכרון הכמויות נכשל. לא ניתן לדווח על שמירה מלאה."));
           return;
         }
+        effectiveQuantitiesRef.current = quantitySnapshot(profilePaxFields);
+        quantitySyncSavedRef.current = true;
+        await invalidateQuantitySyncQueries(queryClient, group.id);
+        const staffSplitWarning = quantityData.warnings?.find(message => message.includes("מספר אנשי הצוות השתנה"));
+        if (staffSplitWarning) toast.warning(staffSplitWarning);
       }
 
-      await base44.entities.Group.update(group.id, nonQuantityPayload);
+      let existingProfiles = [];
+      try {
+        if (groupDatesChanged) {
+          const applyRes = await base44.functions.invoke("replanifyGroupDates", {
+            group_id: group.id,
+            new_arrival_date: form.arrival_date,
+            new_departure_date: form.group_type === "DAY_USE" ? form.arrival_date : form.departure_date,
+            dry_run: false,
+          });
+          if (!applyRes.data?.success) throw new Error("עדכון התאריכים נכשל. אנא נסה שוב.");
+        }
 
-      // Keep non-quantity OperationalGroupProfile fields in sync; quantities are owned by the central function.
-      const existingProfiles = await base44.entities.OperationalGroupProfile.filter({ group_id: group.id });
-      if (existingProfiles.length > 0) {
-        const prof = existingProfiles[0];
-        // Do not overwrite richer GuestForm dietary data with empty manual values
-        const existingDiets = parseDiets(prof.special_diets);
-        const shouldUpdateDiets = hasAnyDiet || !existingDiets;
-
-        await base44.entities.OperationalGroupProfile.update(prof.id, {
-          is_sleeping_group: payload.group_type === "LODGING",
-          ...(shouldUpdateDiets ? dietPayload : {}),
-        });
+        await base44.entities.Group.update(group.id, nonQuantityPayload);
+        existingProfiles = await base44.entities.OperationalGroupProfile.filter({ group_id: group.id });
+        if (existingProfiles.length > 0) {
+          const prof = existingProfiles[0];
+          const existingDiets = parseDiets(prof.special_diets);
+          const shouldUpdateDiets = hasAnyDiet || !existingDiets;
+          await base44.entities.OperationalGroupProfile.update(prof.id, {
+            is_sleeping_group: payload.group_type === "LODGING",
+            ...(shouldUpdateDiets ? dietPayload : {}),
+          });
+        }
+      } catch (error) {
+        setSaving(false);
+        setAllocationBlockError(quantitySyncSavedRef.current
+          ? `הכמויות נשמרו, אך שמירת שאר פרטי הקבוצה נכשלה: ${error?.message || "שגיאה לא ידועה"}. ניתן לנסות שוב; סנכרון הכמויות לא יורץ מחדש.`
+          : `שמירת פרטי הקבוצה נכשלה: ${error?.message || "שגיאה לא ידועה"}`);
+        return;
       }
 
       // ── Review alerts (additive, never blocks save) ────────────────────────
@@ -400,42 +411,9 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
         const isQuotePreparation = group.quote_preparation_flow && group.status !== "CONFIRMED";
         const isLodging = payload.group_type === "LODGING";
         if (!isQuotePreparation && (groupIsConfirmed || existingProfiles.length > 0)) {
-          // A. Pax changes
-          const paxChanged = PAX_FIELDS.some(f => {
-            const oldVal = Number(group[f] ?? 0);
-            const newVal = Number(payload[f] ?? 0);
-            return oldVal !== newVal;
-          });
-          if (paxChanged) {
-            const oldPax = Number(group.total_pax ?? 0);
-            const newPax = Number(payload.total_pax ?? 0);
-            const diff   = newPax - oldPax;
-            const diffTxt = diff > 0 ? `נוספו ${diff} אנשים.` : diff < 0 ? `ירדו ${Math.abs(diff)} אנשים.` : "";
-            const prev = Object.fromEntries(PAX_FIELDS.map(f => [f, group[f] ?? null]));
-            const next = Object.fromEntries(PAX_FIELDS.map(f => [f, payload[f] ?? null]));
-            if (isLodging) {
-              const msg = `מספר האנשים בקבוצה השתנה מ-${oldPax} ל-${newPax}.${diffTxt ? " " + diffTxt : ""} יש לבדוק דרישות לינה, שיבוץ לינה ומטבח.`;
-              await upsertReviewAlert(group.id, "SLEEPING_REQUIREMENTS", "GROUP_PAX_CHANGED", "שינוי בפרטי הקבוצה דורש בדיקה", msg, prev, next);
-              await upsertReviewAlert(group.id, "ALLOCATION",            "GROUP_PAX_CHANGED", "שינוי בפרטי הקבוצה דורש בדיקה", msg, prev, next);
-              await upsertReviewAlert(group.id, "KITCHEN",               "GROUP_PAX_CHANGED", "שינוי בפרטי הקבוצה דורש בדיקה", msg, prev, next);
+          // Quantity-change review is created once by the central backend after propagation succeeds.
 
-              // Extra alert if active sleeping allocations already exist
-              const activeAllocs = await base44.entities.SleepingAllocation.filter({
-                group_id: group.id,
-                status: { $in: ["DRAFT", "CONFIRMED"] },
-              });
-              if (activeAllocs.length > 0) {
-                const allocMsg = "כמות המשתתפים / חלוקת בנים-בנות השתנתה לאחר שכבר קיים שיבוץ לינה.\nיש לבדוק ולעדכן את השיבוץ.";
-                await upsertReviewAlert(group.id, "ALLOCATION", "ALLOCATION_CHANGED", "שינוי בפרטי הקבוצה — שיבוץ הלינה דורש עדכון", allocMsg, prev, next);
-              }
-            } else {
-              // DAY_USE — only kitchen alert for pax changes
-              const msg = `מספר האנשים בקבוצה השתנה מ-${oldPax} ל-${newPax}.${diffTxt ? " " + diffTxt : ""} יש לבדוק את תכנון המטבח.`;
-              await upsertReviewAlert(group.id, "KITCHEN", "GROUP_PAX_CHANGED", "שינוי בפרטי הקבוצה דורש בדיקה", msg, prev, next);
-            }
-          }
-
-          // B. Date changes
+          // Date changes
           const datesChanged = DATE_FIELDS.some(f => (group[f] || "") !== (payload[f] || ""));
           if (datesChanged) {
             const prev = { arrival_date: group.arrival_date, departure_date: group.departure_date };
@@ -543,8 +521,10 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
       onSaved(newGroupId);
       return;
     }
-    // Refresh only query keys affected by the quantity synchronization.
-    await invalidateQuantitySyncQueries(queryClient, group.id);
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["group", group.id] }),
+      queryClient.invalidateQueries({ queryKey: ["groups"] }),
+    ]);
 
     // ── Check for out-of-range meals after departure date shortening ────────
     if (isEdit && payload.departure_date && group.departure_date) {
