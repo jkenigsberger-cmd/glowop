@@ -17,6 +17,9 @@ export default function TentAllocationModal({ tent, neighborhood, groupId, profi
   });
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const staffSplitValid = profile?.staff_men_count != null && profile?.staff_women_count != null &&
+    Number(profile.staff_men_count) + Number(profile.staff_women_count) === Number(profile.staff_count || 0);
+  const staffAllocationBlocked = form.allocation_type === "STAFF" && !staffSplitValid;
 
   const genderOptions = form.allocation_type === "STUDENT"
     ? [{ value: "BOYS", label: "בנים 👦" }, { value: "GIRLS", label: "בנות 👧" }]
@@ -28,7 +31,7 @@ export default function TentAllocationModal({ tent, neighborhood, groupId, profi
   };
 
   const handleSave = () => {
-    if (form.allocated_pax < 1 || form.allocated_pax > tent.capacity) return;
+    if (staffAllocationBlocked || form.allocated_pax < 1 || form.allocated_pax > tent.capacity) return;
     onSave({
       tent_id: tent.id,
       neighborhood_id: neighborhood.id,
@@ -103,12 +106,16 @@ export default function TentAllocationModal({ tent, neighborhood, groupId, profi
             />
           </div>
 
+          {staffAllocationBlocked && (
+            <p className="text-xs text-red-600">יש להשלים את חלוקת הצוות לגברים ונשים לפני סימון דרישות הלינה כמוכנות</p>
+          )}
+
           <div className="flex gap-2 justify-end pt-1">
             <Button type="button" variant="outline" size="sm" onClick={onClose}>ביטול</Button>
             <Button
               size="sm"
               onClick={handleSave}
-              disabled={form.allocated_pax < 1 || form.allocated_pax > tent.capacity}
+              disabled={staffAllocationBlocked || form.allocated_pax < 1 || form.allocated_pax > tent.capacity}
             >
               הוסף כטיוטה
             </Button>

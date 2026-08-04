@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import DietaryFields, { EMPTY_DIETS, parseDiets, mergeDiets } from "@/components/shared/DietaryFields";
 import { upsertReviewAlert } from "@/lib/reviewAlerts";
-import { syncExistingOperationalPaxForGroup } from "@/lib/syncOperationalPax";
+import { invalidateQuantitySyncQueries } from "@/lib/quantitySyncQueries";
 import MealSyncAfterDateChangeModal from "@/components/groups/MealSyncAfterDateChangeModal";
 import GroupAvailabilityChecker from "@/components/groups/GroupAvailabilityChecker";
 import StayPeriodsEditor from "@/components/groups/StayPeriodsEditor";
@@ -47,10 +47,10 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
   const [multiPeriodPreviewValid, setMultiPeriodPreviewValid] = useState(false);
   const multiPeriodInitialized = useRef(false);
   const multiPeriodIdempotencyKey = useRef(crypto.randomUUID());
+  const quantitySyncIdempotencyKey = useRef(crypto.randomUUID());
 
-  // ── Prefill operational numbers from the OperationalGroupProfile (source of truth) ──
-  // Operational pax lives on the OGP, not on stale Group fields. On edit, read the OGP
-  // once (read-only — never mutates the DB) and fill any pax field the OGP provides.
+  // If legacy Group/OGP values diverge, prefill from whichever record was updated most recently.
+  // The central admin save then writes the same validated quantities to both records.
   useEffect(() => {
     if (!isEdit || !group?.id) return;
     let cancelled = false;
@@ -59,13 +59,16 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
         const profiles = await base44.entities.OperationalGroupProfile.filter({ group_id: group.id });
         const prof = profiles[0];
         if (!prof || cancelled) return;
-        setForm(f => ({
-          ...f,
-          total_pax:   prof.total_pax   != null ? prof.total_pax   : f.total_pax,
-          staff_count: prof.staff_count != null ? prof.staff_count : f.staff_count,
-          boys_count:  prof.boys_count  != null ? prof.boys_count  : f.boys_count,
-          girls_count: prof.girls_count != null ? prof.girls_count : f.girls_count,
-        }));
+        const profileIsLatest = (prof.updated_date || "") > (group.updated_date || "");
+        if (profileIsLatest) {
+          setForm(f => ({
+            ...f,
+            total_pax:   prof.total_pax   != null ? prof.total_pax   : f.total_pax,
+            staff_count: prof.staff_count != null ? prof.staff_count : f.staff_count,
+            boys_count:  prof.boys_count  != null ? prof.boys_count  : f.boys_count,
+            girls_count: prof.girls_count != null ? prof.girls_count : f.girls_count,
+          }));
+        }
         // Also prefill diets from the OGP if the caller didn't already supply them
         if (initialProfileDiets == null && prof.special_diets) {
           setDiets(mergeDiets(parseDiets(prof.special_diets)));
@@ -98,6 +101,7 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
     setMultiPeriodPreviewValid(false);
     multiPeriodInitialized.current = false;
     multiPeriodIdempotencyKey.current = crypto.randomUUID();
+    quantitySyncIdempotencyKey.current = crypto.randomUUID();
     setAllocationBlockError(null);
   // Profile counts and diets remain owned by their separate asynchronous prefill lifecycle.
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -305,6 +309,34 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
     const dietPayload = hasAnyDiet ? { special_diets: JSON.stringify(diets) } : {};
 
     if (isEdit) {
+      let quantityData = null;
+      try {
+        const quantityResponse = await base44.functions.invoke("updateGroupOperationalQuantities", {
+          group_id: group.id,
+          quantities: profilePaxFields,
+          source: "ADMIN_EDIT",
+          idempotency_key: quantitySyncIdempotencyKey.current,
+        });
+        quantityData = quantityResponse.data || {};
+      } catch (error) {
+        quantityData = error?.response?.data || {};
+      }
+      if (!quantityData?.success) {
+        const failedPhase = Object.entries(quantityData?.phases || {}).find(([, value]) => value === "FAILED")?.[0];
+        setSaving(false);
+        setAllocationBlockError(
+          quantityData?.message ||
+          (failedPhase ? `סנכרון הכמויות נכשל בשלב ${failedPhase}. ניתן לנסות שוב בבטחה.` : "סנכרון הכמויות נכשל. לא ניתן לדווח על שמירה מלאה.")
+        );
+        return;
+      }
+      const staffSplitWarning = quantityData.warnings?.find(message => message.includes("מספר אנשי הצוות השתנה"));
+      if (staffSplitWarning) toast.warning(staffSplitWarning);
+
+      const nonQuantityPayload = Object.fromEntries(
+        Object.entries(payload).filter(([key]) => !PAX_FIELDS.includes(key))
+      );
+
       // If status is changing to CANCELLED or ARCHIVED, delegate to lifecycle function
       // so all operational resources are properly released — never update status directly.
       const statusChangingToLifecycle =
@@ -323,8 +355,9 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
           return;
         }
         // Still save the non-status fields (name, contact, notes, etc.)
-        const { status: _s, ...payloadWithoutStatus } = payload;
+        const { status: _s, ...payloadWithoutStatus } = nonQuantityPayload;
         await base44.entities.Group.update(group.id, payloadWithoutStatus);
+        await invalidateQuantitySyncQueries(queryClient, group.id);
         setSaving(false);
         onSaved();
         return;
@@ -345,20 +378,9 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
         }
       }
 
-      await base44.entities.Group.update(group.id, payload);
+      await base44.entities.Group.update(group.id, nonQuantityPayload);
 
-      // Sync existing operational pax if total_pax changed
-      const oldTotalPax = Number(group.total_pax ?? 0);
-      const newTotalPax = Number(payload.total_pax ?? 0);
-      if (newTotalPax > 0 && newTotalPax !== oldTotalPax) {
-        try {
-          await syncExistingOperationalPaxForGroup(group.id, newTotalPax);
-        } catch (syncErr) {
-          console.warn("[GroupFormModal] pax sync failed (non-blocking):", syncErr?.message);
-        }
-      }
-
-      // Keep OperationalGroupProfile in sync with group pax edits + dietary
+      // Keep non-quantity OperationalGroupProfile fields in sync; quantities are owned by the central function.
       const existingProfiles = await base44.entities.OperationalGroupProfile.filter({ group_id: group.id });
       if (existingProfiles.length > 0) {
         const prof = existingProfiles[0];
@@ -366,19 +388,7 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
         const existingDiets = parseDiets(prof.special_diets);
         const shouldUpdateDiets = hasAnyDiet || !existingDiets;
 
-        // Always sync beds_needed from the validated boys/girls counts
-        const bedsUpdate = payload.group_type === "LODGING"
-          ? { boys_beds_needed: payload.boys_count ?? null, girls_beds_needed: payload.girls_count ?? null }
-          : {};
-
-        const staffTotalChanged = Number(prof.staff_count ?? 0) !== Number(payload.staff_count ?? 0);
-        const existingStaffGenderSum = Number(prof.staff_men_count ?? 0) + Number(prof.staff_women_count ?? 0);
-        const clearIncompatibleStaffSplit = staffTotalChanged && existingStaffGenderSum !== Number(payload.staff_count ?? 0);
-
         await base44.entities.OperationalGroupProfile.update(prof.id, {
-          ...profilePaxFields,
-          ...bedsUpdate,
-          ...(clearIncompatibleStaffSplit ? { staff_men_count: null, staff_women_count: null } : {}),
           is_sleeping_group: payload.group_type === "LODGING",
           ...(shouldUpdateDiets ? dietPayload : {}),
         });
@@ -533,11 +543,8 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
       onSaved(newGroupId);
       return;
     }
-    // Invalidate kitchen and group-detail profile queries so all views refresh immediately
-    queryClient.invalidateQueries({ queryKey: ["groups"] });
-    queryClient.invalidateQueries({ queryKey: ["profiles_kitchen"] });
-    queryClient.invalidateQueries({ queryKey: ["profiles_kitchenReport"] });
-    queryClient.invalidateQueries({ queryKey: ["operationalProfile"] });
+    // Refresh only query keys affected by the quantity synchronization.
+    await invalidateQuantitySyncQueries(queryClient, group.id);
 
     // ── Check for out-of-range meals after departure date shortening ────────
     if (isEdit && payload.departure_date && group.departure_date) {

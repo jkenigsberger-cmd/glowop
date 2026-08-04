@@ -10,7 +10,7 @@ function getOperationalMaxPax(tent) {
   return tent.capacity || 8;
 }
 
-Deno.serve(async (req) => {
+export default async function(req) {
   try {
     const base44 = createClientFromRequest(req);
 
@@ -54,6 +54,11 @@ Deno.serve(async (req) => {
 
     const group = await base44.asServiceRole.entities.Group.get(group_id).catch(() => null);
     try { assertOperationalGroup(group); } catch (error) { return Response.json({ success: false, error: error.code }, { status: 409 }); }
+    const profiles = await base44.asServiceRole.entities.OperationalGroupProfile.filter({ group_id });
+    if (profiles.length !== 1) {
+      return Response.json({ success: false, error: 'נדרש פרופיל תפעולי יחיד ותקין לפני אישור שיבוץ' }, { status: 200 });
+    }
+    const profile = profiles[0];
 
     // ── 1. Load ALL draft allocations for this group from DB (source of truth) ─
     // We do NOT rely solely on frontend-supplied IDs — the frontend cache may be
@@ -83,6 +88,28 @@ Deno.serve(async (req) => {
         }
       }, { status: 200 });
     }
+
+    if (profile.sleeping_requirements_completed !== true) {
+      return Response.json({ success: false, error: 'יש לסמן את דרישות הלינה כמוכנות לפני אישור השיבוץ' }, { status: 200 });
+    }
+    const activeGroupAllocations = allGroupAllocations.filter(a => a.status !== 'CANCELLED');
+    const hasStaffAllocations = activeGroupAllocations.some(a => a.allocation_type === 'STAFF');
+    const staffSplitValid = profile.staff_men_count != null && profile.staff_women_count != null &&
+      Number(profile.staff_men_count) + Number(profile.staff_women_count) === Number(profile.staff_count || 0);
+    if (hasStaffAllocations && !staffSplitValid) {
+      return Response.json({ success: false, error: 'יש להשלים את חלוקת הצוות לגברים ונשים לפני סימון דרישות הלינה כמוכנות' }, { status: 200 });
+    }
+    const sumPax = rows => rows.reduce((sum, item) => sum + (Number(item.allocated_pax) || 0), 0);
+    const staffAllocated = sumPax(activeGroupAllocations.filter(a => a.allocation_type === 'STAFF'));
+    const studentAllocated = sumPax(activeGroupAllocations.filter(a => a.allocation_type === 'STUDENT'));
+    const boysAllocated = sumPax(activeGroupAllocations.filter(a => a.allocation_type === 'STUDENT' && a.gender_group === 'BOYS'));
+    const girlsAllocated = sumPax(activeGroupAllocations.filter(a => a.allocation_type === 'STUDENT' && a.gender_group === 'GIRLS'));
+    const quantityErrors = [];
+    if (staffAllocated > Number(profile.staff_count || 0)) quantityErrors.push(`שובצו ${staffAllocated} אנשי צוות אך הדרישה הנוכחית היא ${profile.staff_count || 0}`);
+    if (studentAllocated > Number(profile.participant_count || 0)) quantityErrors.push(`שובצו ${studentAllocated} חניכים אך הדרישה הנוכחית היא ${profile.participant_count || 0}`);
+    if (boysAllocated > Number(profile.boys_count || 0)) quantityErrors.push(`שובצו ${boysAllocated} בנים אך הדרישה הנוכחית היא ${profile.boys_count || 0}`);
+    if (girlsAllocated > Number(profile.girls_count || 0)) quantityErrors.push(`שובצו ${girlsAllocated} בנות אך הדרישה הנוכחית היא ${profile.girls_count || 0}`);
+    if (quantityErrors.length > 0) return Response.json({ success: false, errors: quantityErrors }, { status: 200 });
 
     // ── 2. Load other groups' allocations for conflict checking ──────────────
     const allConfirmed = await base44.asServiceRole.entities.SleepingAllocation.filter({ status: 'CONFIRMED' });
@@ -233,4 +260,4 @@ Deno.serve(async (req) => {
       debug: { reasonCode: 'UNEXPECTED_EXCEPTION', message: err?.message }
     }, { status: 500 });
   }
-});
+}

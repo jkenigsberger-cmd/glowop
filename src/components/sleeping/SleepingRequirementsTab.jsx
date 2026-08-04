@@ -151,12 +151,12 @@ export default function SleepingRequirementsTab({ groupId, profile, group }) {
   // ── save ──────────────────────────────────────────────────────────────────
   const handleSave = async (markComplete = null) => {
     if (!profile) { toast.error("אין פרופיל תפעולי"); return; }
-    if (staffGenderMismatch) {
-      toast.error(`יש לחלק בדיוק ${staffTotalVal} אנשי צוות בין גברים לנשים`);
-      return;
-    }
 
     if (markComplete === true) {
+      if (staffGenderMismatch) {
+        toast.error("יש להשלים את חלוקת הצוות לגברים ונשים לפני סימון דרישות הלינה כמוכנות");
+        return;
+      }
       if (hardBlocked) { toast.error("יש שגיאות קריטיות — לא ניתן לסמן כמוכן"); return; }
       if (hasSoftWarnings) {
         if (!window.confirm("יש פערים בחלוקת האוהלים. האם לסמן כמוכן בכל זאת?")) return;
@@ -296,7 +296,7 @@ export default function SleepingRequirementsTab({ groupId, profile, group }) {
             <ShieldAlert className="w-4 h-4" /> שגיאות קריטיות — חסום סימון כמוכן
           </p>
           {studentOverMax  && <p className="text-xs text-red-600">• יש שורת חלוקה תלמידים עם יותר מ-{STUDENT_CAPACITY} לאוהל</p>}
-          {staffGenderMismatch && <p className="text-xs text-red-600">• חלוקת צוות לגברים ונשים חייבת להיות שווה לסה״כ צוות ({staffTotalVal})</p>}
+          {staffGenderMismatch && <p className="text-xs text-red-600">• יש להשלים את חלוקת הצוות לגברים ונשים לפני סימון דרישות הלינה כמוכנות</p>}
           {vipExceedsMax   && <p className="text-xs text-red-600">• סה"כ שורות VIP ({vipRows.length}) חורג מהמקסימום ({VIP_TOTAL_TENTS})</p>}
           {vipOverPaxRow   && <p className="text-xs text-red-600">• יש שורת VIP עם יותר מ-{VIP_MAX_PER_TENT} אנשים לאוהל (מקסימום 4 לאוהל VIP)</p>}
           {vipMissingData  && <p className="text-xs text-red-600">• יש שורת VIP עם מגדר או מספר אנשים חסר</p>}
