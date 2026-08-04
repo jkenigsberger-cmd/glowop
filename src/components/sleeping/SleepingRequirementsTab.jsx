@@ -85,6 +85,8 @@ export default function SleepingRequirementsTab({ groupId, profile, group }) {
     housekeeping_sleeping_notes: "",
     sleeping_requirements_completed: false,
     staff_alt_tent_notes: "",
+    staff_men_count: null,
+    staff_women_count: null,
   });
 
   const [boysDist,    setBoysDist]  = useState([]);
@@ -107,11 +109,13 @@ export default function SleepingRequirementsTab({ groupId, profile, group }) {
       housekeeping_sleeping_notes:  profile.housekeeping_sleeping_notes  ?? "",
       sleeping_requirements_completed: !!profile.sleeping_requirements_completed,
       staff_alt_tent_notes: profile.staff_alt_tent_notes ?? "",
+      staff_men_count: profile.staff_men_count ?? null,
+      staff_women_count: profile.staff_women_count ?? null,
     });
     setBoysDist( parseDist(profile.boys_tent_distribution_json));
     setGirlsDist(parseDist(profile.girls_tent_distribution_json));
     setVipRows(  parseDist(profile.vip_tent_requirements_json));
-  }, [profile?.id]);
+  }, [profile?.id, profile?.updated_date]);
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -127,9 +131,12 @@ export default function SleepingRequirementsTab({ groupId, profile, group }) {
   const vipExceedsMax  = vipRows.length > VIP_TOTAL_TENTS;
   const vipOverPaxRow  = vipRows.some(r => r.people_count > VIP_MAX_PER_TENT);
   const vipMissingData = vipRows.some(r => !r.gender_group || !r.people_count);
+  const staffTotalVal = Number(profile?.staff_count) || 0;
+  const staffGenderSum = Number(form.staff_men_count || 0) + Number(form.staff_women_count || 0);
+  const staffGenderMismatch = staffGenderSum !== staffTotalVal;
 
   // Hard blocks for "סמן כמוכן"
-  const hardBlocked = studentOverMax || vipExceedsMax || vipOverPaxRow || vipMissingData;
+  const hardBlocked = studentOverMax || vipExceedsMax || vipOverPaxRow || vipMissingData || staffGenderMismatch;
 
   // Derive read-only bed counts from profile (source of truth = GroupFormModal)
   const boysBedsNeeded  = profile?.boys_beds_needed  ?? profile?.boys_count  ?? null;
@@ -144,6 +151,10 @@ export default function SleepingRequirementsTab({ groupId, profile, group }) {
   // ── save ──────────────────────────────────────────────────────────────────
   const handleSave = async (markComplete = null) => {
     if (!profile) { toast.error("אין פרופיל תפעולי"); return; }
+    if (staffGenderMismatch) {
+      toast.error(`יש לחלק בדיוק ${staffTotalVal} אנשי צוות בין גברים לנשים`);
+      return;
+    }
 
     if (markComplete === true) {
       if (hardBlocked) { toast.error("יש שגיאות קריטיות — לא ניתן לסמן כמוכן"); return; }
@@ -170,6 +181,8 @@ export default function SleepingRequirementsTab({ groupId, profile, group }) {
         accessibility_sleeping_notes: form.accessibility_sleeping_notes,
         housekeeping_sleeping_notes:  form.housekeeping_sleeping_notes,
         staff_alt_tent_notes:         form.staff_alt_tent_notes ?? "",
+        staff_men_count:               form.staff_men_count,
+        staff_women_count:             form.staff_women_count,
         boys_tent_distribution_json:  JSON.stringify(boysDist),
         girls_tent_distribution_json: JSON.stringify(girlsDist),
         vip_tent_requirements_json:   JSON.stringify(vipRows),
@@ -283,6 +296,7 @@ export default function SleepingRequirementsTab({ groupId, profile, group }) {
             <ShieldAlert className="w-4 h-4" /> שגיאות קריטיות — חסום סימון כמוכן
           </p>
           {studentOverMax  && <p className="text-xs text-red-600">• יש שורת חלוקה תלמידים עם יותר מ-{STUDENT_CAPACITY} לאוהל</p>}
+          {staffGenderMismatch && <p className="text-xs text-red-600">• חלוקת צוות לגברים ונשים חייבת להיות שווה לסה״כ צוות ({staffTotalVal})</p>}
           {vipExceedsMax   && <p className="text-xs text-red-600">• סה"כ שורות VIP ({vipRows.length}) חורג מהמקסימום ({VIP_TOTAL_TENTS})</p>}
           {vipOverPaxRow   && <p className="text-xs text-red-600">• יש שורת VIP עם יותר מ-{VIP_MAX_PER_TENT} אנשים לאוהל (מקסימום 4 לאוהל VIP)</p>}
           {vipMissingData  && <p className="text-xs text-red-600">• יש שורת VIP עם מגדר או מספר אנשים חסר</p>}
@@ -297,6 +311,9 @@ export default function SleepingRequirementsTab({ groupId, profile, group }) {
         girlsDist={girlsDist}
         staffAltTentPax={liveAltTentPax}
         staffAltTentNotes={form.staff_alt_tent_notes}
+        staffMen={form.staff_men_count}
+        staffWomen={form.staff_women_count}
+        onStaffGenderChange={(men, women) => setForm(current => ({ ...current, staff_men_count: men, staff_women_count: women }))}
       />
 
       {/* Part B+C+D — Students */}

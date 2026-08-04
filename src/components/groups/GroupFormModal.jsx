@@ -293,11 +293,11 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
     }
 
     const profilePaxFields = {
-      total_pax: payload.total_pax || null,
-      participant_count: payload.participant_count || null,
-      staff_count: payload.staff_count || null,
-      boys_count: payload.boys_count || null,
-      girls_count: payload.girls_count || null,
+      total_pax: payload.total_pax ?? null,
+      participant_count: payload.participant_count ?? null,
+      staff_count: payload.staff_count ?? null,
+      boys_count: payload.boys_count ?? null,
+      girls_count: payload.girls_count ?? null,
     };
 
     // Only save dietary data if at least one field is non-zero or has notes
@@ -371,9 +371,14 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
           ? { boys_beds_needed: payload.boys_count ?? null, girls_beds_needed: payload.girls_count ?? null }
           : {};
 
+        const staffTotalChanged = Number(prof.staff_count ?? 0) !== Number(payload.staff_count ?? 0);
+        const existingStaffGenderSum = Number(prof.staff_men_count ?? 0) + Number(prof.staff_women_count ?? 0);
+        const clearIncompatibleStaffSplit = staffTotalChanged && existingStaffGenderSum !== Number(payload.staff_count ?? 0);
+
         await base44.entities.OperationalGroupProfile.update(prof.id, {
           ...profilePaxFields,
           ...bedsUpdate,
+          ...(clearIncompatibleStaffSplit ? { staff_men_count: null, staff_women_count: null } : {}),
           is_sleeping_group: payload.group_type === "LODGING",
           ...(shouldUpdateDiets ? dietPayload : {}),
         });
@@ -529,6 +534,7 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
       return;
     }
     // Invalidate kitchen and group-detail profile queries so all views refresh immediately
+    queryClient.invalidateQueries({ queryKey: ["groups"] });
     queryClient.invalidateQueries({ queryKey: ["profiles_kitchen"] });
     queryClient.invalidateQueries({ queryKey: ["profiles_kitchenReport"] });
     queryClient.invalidateQueries({ queryKey: ["operationalProfile"] });
