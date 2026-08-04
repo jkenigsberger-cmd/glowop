@@ -6,9 +6,9 @@ export function quantitySnapshot(record) {
   return snapshot;
 }
 
-export function latestEffectiveQuantities(group, profile) {
-  const profileIsLatest = !!profile && (profile.updated_date || "") > (group?.updated_date || "");
-  return quantitySnapshot(profileIsLatest ? profile : group);
+export function quantityRecordsDiffer(group, profile) {
+  if (!group || !profile) return false;
+  return QUANTITY_FIELDS.some(field => Number(group[field] ?? 0) !== Number(profile[field] ?? 0));
 }
 
 export function quantitiesChanged(current, requested) {

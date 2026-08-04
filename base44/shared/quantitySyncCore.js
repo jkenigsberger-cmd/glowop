@@ -3,6 +3,7 @@ export const SLEEPING_QUANTITY_FIELDS = ['participant_count', 'staff_count', 'bo
 export const AUTOMATIC_MEAL_SOURCES = new Set(['groupSync', 'guestForm']);
 export const AUTOMATIC_COFFEE_SOURCES = new Set(['external_form']);
 export const AUTOMATIC_ACTIVITY_SOURCES = new Set(['groupSync']);
+export const STALE_OPERATION_MS = 5 * 60 * 1000;
 
 export function normalizeQuantities(record) {
   return Object.fromEntries(QUANTITY_FIELDS.map(field => [field, Number(record?.[field] ?? 0)]));
@@ -39,14 +40,30 @@ export async function quantityRequestFingerprint(source, groupId, quantities) {
   return [...new Uint8Array(digest)].map(value => value.toString(16).padStart(2, '0')).join('');
 }
 
-export function operationDecision(operations, fingerprint) {
-  if ((operations || []).length > 1) return { action: 'CONFLICT', error: 'CONCURRENT_DUPLICATE_OPERATIONS' };
+export function operationDecision(operations, fingerprint, nowMs = Date.now()) {
+  if ((operations || []).length > 1) return {
+    action: 'CONFLICT', error: 'CONCURRENT_DUPLICATE_OPERATIONS',
+    duplicate_operation_ids: operations.map(item => item.id),
+  };
   const operation = operations?.[0] || null;
   if (!operation) return { action: 'CREATE' };
   if (operation.request_fingerprint !== fingerprint) return { action: 'CONFLICT', error: 'IDEMPOTENCY_REQUEST_CONFLICT' };
-  if (operation.status === 'IN_PROGRESS') return { action: 'CONFLICT', error: 'IDEMPOTENCY_OPERATION_IN_PROGRESS' };
+  if (operation.status === 'IN_PROGRESS') {
+    const updatedMs = Date.parse(operation.updated_date || '');
+    const stale = Number.isFinite(updatedMs) && nowMs - updatedMs >= STALE_OPERATION_MS;
+    return stale
+      ? { action: 'RESUME', operation, resumed_from_stale: true }
+      : { action: 'CONFLICT', error: 'IDEMPOTENCY_OPERATION_IN_PROGRESS' };
+  }
   if (operation.status === 'COMPLETED') return { action: 'REPLAY', operation };
-  return { action: 'RESUME', operation };
+  return { action: 'RESUME', operation, resumed_from_stale: false };
+}
+
+export function operationFailureStatus(phases) {
+  const workSucceeded = Object.entries(phases || {}).some(([name, value]) =>
+    name !== 'operation' && (value === 'OK' || value === 'REQUIRED')
+  );
+  return workSucceeded ? 'PARTIAL' : 'FAILED';
 }
 
 export function classifyMealSource(source) {
@@ -66,6 +83,22 @@ export function classifyActivitySource(record) {
   if (AUTOMATIC_ACTIVITY_SOURCES.has(record?.source)) return 'AUTOMATIC';
   if (record?.source === 'manual') return 'MANUAL';
   return 'UNKNOWN';
+}
+
+export function activityPaxDecision(record, previous, requested) {
+  if (record?.pax == null || record.pax === '') return { action: 'PRESERVE', reason: 'activity-specific quantity' };
+  const pax = Number(record.pax);
+  const oldTotals = new Set([Number(previous?.group?.total_pax), Number(previous?.profile?.total_pax)]);
+  const oldParticipants = new Set([Number(previous?.group?.participant_count), Number(previous?.profile?.participant_count)]);
+  const matchesTotal = oldTotals.has(pax);
+  const matchesParticipants = oldParticipants.has(pax);
+  if (matchesTotal && matchesParticipants && Number(requested.total_pax) !== Number(requested.participant_count)) {
+    return { action: 'PRESERVE', warning: 'AMBIGUOUS_ACTIVITY_QUANTITY_SOURCE', reason: 'ambiguous total/participant source' };
+  }
+  if (matchesTotal && !matchesParticipants) return { action: 'UPDATE', target: Number(requested.total_pax), basis: 'total_pax' };
+  if (matchesParticipants && !matchesTotal) return { action: 'UPDATE', target: Number(requested.participant_count), basis: 'participant_count' };
+  if (matchesTotal && matchesParticipants) return { action: 'UPDATE', target: Number(requested.total_pax), basis: 'equal total_pax/participant_count' };
+  return { action: 'PRESERVE', reason: 'activity-specific quantity' };
 }
 
 export function changedQuantityFields(previous, requested) {

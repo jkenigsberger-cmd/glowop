@@ -2,9 +2,9 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import {
   QUANTITY_FIELDS, SLEEPING_QUANTITY_FIELDS, validateQuantityPayload,
   normalizeQuantities, quantityRequestFingerprint, operationDecision,
-  classifyMealSource, classifyCoffeeSource, classifyActivitySource,
+  classifyMealSource, classifyCoffeeSource, classifyActivitySource, activityPaxDecision,
   changedQuantityFields, israelNowParts, serviceTiming, generalMealQuantity,
-  activeAllocationSummary,
+  activeAllocationSummary, operationFailureStatus,
 } from '../../shared/quantitySyncCore.js';
 
 const ALLOWED_ROLES = new Set(['ADMIN', 'SUPER_ADMIN']);
@@ -19,6 +19,7 @@ function baseResult(groupId) {
     success: false, group_id: groupId || null,
     phases: Object.fromEntries(PHASE_NAMES.map(name => [name, 'PENDING'])),
     updated: [], preserved_manual: [], skipped_historical: [], warnings: [],
+    resumed_from_stale: false,
   };
 }
 
@@ -29,9 +30,14 @@ async function resolveRole(base44, user) {
 }
 
 async function saveOperation(base44, operation, phases, status, errorMessage = null) {
-  return await base44.asServiceRole.entities.GroupQuantitySyncOperation.update(operation.id, {
-    phases_json: JSON.stringify(phases), status, error_message: errorMessage || '',
-  });
+  try {
+    return await base44.asServiceRole.entities.GroupQuantitySyncOperation.update(operation.id, {
+      phases_json: JSON.stringify(phases), status, error_message: errorMessage || '',
+    });
+  } catch (error) {
+    error.code = 'OPERATION_STATUS_UPDATE_FAILED';
+    throw error;
+  }
 }
 
 function classifyTiming(record, result, entityName, nowParts) {
@@ -114,8 +120,6 @@ async function inspectPrisa(base44, groupId, result, nowParts) {
 
 async function syncActivities(base44, groupId, previous, quantities, result, nowParts) {
   const rows = await base44.asServiceRole.entities.GroupScheduleItem.filter({ group_id: groupId });
-  const oldTotals = new Set([Number(previous.group.total_pax), Number(previous.profile.total_pax)]);
-  const oldParticipants = new Set([Number(previous.group.participant_count), Number(previous.profile.participant_count)]);
   const updates = [];
   for (const row of rows) {
     if (!classifyTiming(row, result, 'GroupScheduleItem', nowParts)) continue;
@@ -126,16 +130,15 @@ async function syncActivities(base44, groupId, previous, quantities, result, now
       if (classification === 'UNKNOWN') result.warnings.push(`GroupScheduleItem ${row.id}: מקור לא מוכר נשמר ללא שינוי`);
       continue;
     }
-    let target = null;
-    if (oldParticipants.has(Number(row.pax))) target = quantities.participant_count;
-    else if (oldTotals.has(Number(row.pax))) target = quantities.total_pax;
-    if (target == null) {
-      result.preserved_manual.push({ entity: 'GroupScheduleItem', id: row.id, field: 'pax', value: row.pax, reason: 'activity-specific quantity' });
+    const decision = activityPaxDecision(row, previous, quantities);
+    if (decision.action === 'PRESERVE') {
+      result.preserved_manual.push({ entity: 'GroupScheduleItem', id: row.id, field: 'pax', value: row.pax, reason: decision.reason });
+      if (decision.warning && !result.warnings.includes(decision.warning)) result.warnings.push(decision.warning);
       continue;
     }
-    if (!sameNumber(row.pax, target)) {
-      updates.push({ id: row.id, pax: target });
-      result.updated.push(descriptor('GroupScheduleItem', row, 'pax', row.pax, target, row.source));
+    if (!sameNumber(row.pax, decision.target)) {
+      updates.push({ id: row.id, pax: decision.target });
+      result.updated.push(descriptor('GroupScheduleItem', row, 'pax', row.pax, decision.target, decision.basis));
     }
   }
   if (updates.length) await base44.asServiceRole.entities.GroupScheduleItem.bulkUpdate(updates);
@@ -159,8 +162,10 @@ async function upsertQuantityReviewAlert(base44, groupId, previous, quantities, 
 export default async function(req) {
   const result = baseResult(null);
   let operation = null;
+  let base44 = null;
+  let resumedFromStale = false;
   try {
-    const base44 = createClientFromRequest(req);
+    base44 = createClientFromRequest(req);
     const user = await base44.auth.me();
     if (!user) return Response.json({ ...result, error: 'UNAUTHORIZED', message: 'נדרשת התחברות' }, { status: 401 });
     const role = await resolveRole(base44, user);
@@ -184,8 +189,17 @@ export default async function(req) {
     const profile = profiles[0];
     const fingerprint = await quantityRequestFingerprint(source, groupId, requested);
     const matching = await base44.asServiceRole.entities.GroupQuantitySyncOperation.filter({ group_id: groupId, idempotency_key: idempotencyKey });
-    const decision = operationDecision(matching, fingerprint);
-    if (decision.action === 'CONFLICT') return Response.json({ ...result, error: decision.error, message: 'מפתח השמירה כבר נמצא בשימוש בבקשה אחרת או מקבילה' }, { status: 409 });
+    const decision = operationDecision(matching, fingerprint, Date.now());
+    if (decision.action === 'CONFLICT') {
+      const duplicateIds = decision.duplicate_operation_ids || [];
+      return Response.json({
+        ...result, error: decision.error,
+        message: decision.error === 'CONCURRENT_DUPLICATE_OPERATIONS'
+          ? 'נמצאו מספר רישומי פעולה עם אותו מפתח. לא בוצע עדכון; נדרש תיקון מנהל ידני.'
+          : 'מפתח השמירה כבר נמצא בשימוש בבקשה אחרת או בפעולה שעדיין מתבצעת.',
+        ...(duplicateIds.length ? { duplicate_operation_ids: duplicateIds, repair_required: true } : {}),
+      }, { status: 409 });
+    }
     if (decision.action === 'REPLAY') {
       const phases = safeJson(decision.operation.phases_json, result.phases);
       return Response.json({ ...result, success: true, phases, idempotent_retry: true, operation_status: 'COMPLETED' });
@@ -194,6 +208,8 @@ export default async function(req) {
     let previous;
     if (decision.action === 'RESUME') {
       operation = decision.operation;
+      resumedFromStale = decision.resumed_from_stale === true;
+      result.resumed_from_stale = resumedFromStale;
       previous = safeJson(operation.previous_quantities_json, null);
       if (!previous?.group || !previous?.profile) return Response.json({ ...result, error: 'INVALID_OPERATION_SNAPSHOT', message: 'תמונת הכמויות המקורית אינה תקינה' }, { status: 409 });
       result.phases = safeJson(operation.phases_json, result.phases);
@@ -208,7 +224,16 @@ export default async function(req) {
         phases_json: JSON.stringify(result.phases), status: 'IN_PROGRESS', error_message: '',
       });
       const afterCreate = await base44.asServiceRole.entities.GroupQuantitySyncOperation.filter({ group_id: groupId, idempotency_key: idempotencyKey });
-      if (afterCreate.length !== 1) return Response.json({ ...result, error: 'CONCURRENT_DUPLICATE_OPERATIONS', message: 'זוהתה שמירה מקבילה עם אותו מפתח; לא בוצע עדכון כמויות' }, { status: 409 });
+      if (afterCreate.length !== 1) {
+        const duplicateIds = afterCreate.map(item => item.id);
+        try {
+          operation = await saveOperation(base44, operation, result.phases, 'FAILED', 'CONCURRENT_DUPLICATE_OPERATIONS_REPAIR_REQUIRED');
+        } catch (statusError) {
+          console.error('[updateGroupOperationalQuantities] duplicate status update failed', statusError);
+          return Response.json({ ...result, error: 'OPERATION_STATUS_UPDATE_FAILED', message: 'זוהתה כפילות וגם עדכון סטטוס הפעולה נכשל; נדרש תיקון מנהל ידני.', duplicate_operation_ids: duplicateIds, repair_required: true, details: statusError.message }, { status: 500 });
+        }
+        return Response.json({ ...result, error: 'CONCURRENT_DUPLICATE_OPERATIONS', message: 'נמצאו מספר רישומי פעולה עם אותו מפתח. לא בוצע עדכון; נדרש תיקון מנהל ידני.', duplicate_operation_ids: duplicateIds, repair_required: true }, { status: 409 });
+      }
     }
     result.phases.operation = 'OK';
     operation = await saveOperation(base44, operation, result.phases, 'IN_PROGRESS');
@@ -293,8 +318,22 @@ export default async function(req) {
     const failed = Object.values(result.phases).some(value => value === 'FAILED' || value === 'PENDING');
     result.success = !failed;
     operation = await saveOperation(base44, operation, result.phases, failed ? 'PARTIAL' : 'COMPLETED', failed ? 'One or more phases failed' : null);
-    return Response.json({ ...result, partial_failure: failed, idempotent_retry: decision.action === 'RESUME', operation_status: failed ? 'PARTIAL' : 'COMPLETED', request_fingerprint: fingerprint }, { status: failed ? 500 : 200 });
+    return Response.json({ ...result, partial_failure: failed, idempotent_retry: decision.action === 'RESUME', resumed_from_stale: resumedFromStale, operation_status: failed ? 'PARTIAL' : 'COMPLETED', request_fingerprint: fingerprint }, { status: failed ? 500 : 200 });
   } catch (error) {
+    if (operation && base44) {
+      const failureStatus = operationFailureStatus(result.phases);
+      try {
+        operation = await saveOperation(base44, operation, result.phases, failureStatus, error.message);
+      } catch (statusError) {
+        console.error('[updateGroupOperationalQuantities] operation status update failed', { original: error.message, statusError: statusError.message, operationId: operation.id });
+        return Response.json({ ...result, error: 'OPERATION_STATUS_UPDATE_FAILED', message: 'הפעולה נכשלה וגם עדכון סטטוס פעולת הסנכרון נכשל. נדרש תיקון מנהל.', intended_operation_status: failureStatus, operation_id: operation.id, details: statusError.message, original_error: error.message }, { status: 500 });
+      }
+      if (error.code === 'OPERATION_STATUS_UPDATE_FAILED') {
+        console.error('[updateGroupOperationalQuantities] operation checkpoint update failed', { error: error.message, operationId: operation.id, fallbackStatus: failureStatus });
+        return Response.json({ ...result, error: 'OPERATION_STATUS_UPDATE_FAILED', message: 'עדכון מצב הביניים של פעולת הסנכרון נכשל; הפעולה סומנה במצב סופי ונדרש לבדוק אותה.', details: error.message, operation_status: failureStatus, operation_id: operation.id, resumed_from_stale: resumedFromStale }, { status: 500 });
+      }
+      return Response.json({ ...result, error: 'INTERNAL_ERROR', message: 'שגיאה פנימית בעדכון הכמויות', details: error.message, operation_status: failureStatus, operation_id: operation.id, resumed_from_stale: resumedFromStale }, { status: 500 });
+    }
     return Response.json({ ...result, error: 'INTERNAL_ERROR', message: 'שגיאה פנימית בעדכון הכמויות', details: error.message }, { status: 500 });
   }
 }

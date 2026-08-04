@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import DietaryFields, { EMPTY_DIETS, parseDiets, mergeDiets } from "@/components/shared/DietaryFields";
 import { upsertReviewAlert } from "@/lib/reviewAlerts";
 import { invalidateQuantitySyncQueries } from "@/lib/quantitySyncQueries";
-import { QUANTITY_FIELDS, quantitySnapshot, latestEffectiveQuantities, quantitiesChanged, isLifecycleExit } from "@/lib/groupQuantitySync";
+import { QUANTITY_FIELDS, quantitySnapshot, quantityRecordsDiffer, quantitiesChanged, isLifecycleExit } from "@/lib/groupQuantitySync";
 import MealSyncAfterDateChangeModal from "@/components/groups/MealSyncAfterDateChangeModal";
 import GroupAvailabilityChecker from "@/components/groups/GroupAvailabilityChecker";
 import StayPeriodsEditor from "@/components/groups/StayPeriodsEditor";
@@ -49,34 +49,25 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
   const quantitySyncIdempotencyKey = useRef(crypto.randomUUID());
   const effectiveQuantitiesRef = useRef(quantitySnapshot(group));
   const quantitySyncSavedRef = useRef(false);
+  const [quantityDivergence, setQuantityDivergence] = useState(false);
 
-  // If legacy Group/OGP values diverge, prefill from whichever record was updated most recently.
-  // The central admin save then writes the same validated quantities to both records.
+  // Group is the ADMIN Edit authority. OGP is read only to detect mirror divergence
+  // and to load its non-quantity dietary fields; updated_date never selects quantities.
   useEffect(() => {
     if (!isEdit || !group?.id) return;
     let cancelled = false;
+    effectiveQuantitiesRef.current = quantitySnapshot(group);
     (async () => {
       try {
         const profiles = await base44.entities.OperationalGroupProfile.filter({ group_id: group.id });
         const prof = profiles[0];
         if (!prof || cancelled) return;
-        const profileIsLatest = (prof.updated_date || "") > (group.updated_date || "");
-        effectiveQuantitiesRef.current = latestEffectiveQuantities(group, prof);
-        if (profileIsLatest) {
-          setForm(f => ({
-            ...f,
-            total_pax:   prof.total_pax   != null ? prof.total_pax   : f.total_pax,
-            staff_count: prof.staff_count != null ? prof.staff_count : f.staff_count,
-            boys_count:  prof.boys_count  != null ? prof.boys_count  : f.boys_count,
-            girls_count: prof.girls_count != null ? prof.girls_count : f.girls_count,
-          }));
-        }
-        // Also prefill diets from the OGP if the caller didn't already supply them
+        setQuantityDivergence(quantityRecordsDiffer(group, prof));
         if (initialProfileDiets == null && prof.special_diets) {
           setDiets(mergeDiets(parseDiets(prof.special_diets)));
         }
       } catch (err) {
-        console.warn("[GroupFormModal] failed to prefill from OGP (non-blocking):", err?.message);
+        console.warn("[GroupFormModal] failed to inspect OGP (non-blocking):", err?.message);
       }
     })();
     return () => { cancelled = true; };
@@ -106,6 +97,7 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
     quantitySyncIdempotencyKey.current = crypto.randomUUID();
     effectiveQuantitiesRef.current = quantitySnapshot(group);
     quantitySyncSavedRef.current = false;
+    setQuantityDivergence(false);
     setAllocationBlockError(null);
   // Profile counts and diets remain owned by their separate asynchronous prefill lifecycle.
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -369,6 +361,7 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
         }
         effectiveQuantitiesRef.current = quantitySnapshot(profilePaxFields);
         quantitySyncSavedRef.current = true;
+        setQuantityDivergence(false);
         await invalidateQuantitySyncQueries(queryClient, group.id);
         const staffSplitWarning = quantityData.warnings?.find(message => message.includes("מספר אנשי הצוות השתנה"));
         if (staffSplitWarning) toast.warning(staffSplitWarning);
@@ -635,6 +628,11 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
           )}
 
           {/* Participant counts */}
+          {quantityDivergence && (
+            <div className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+              נמצאה אי-התאמה בין כמויות הקבוצה לפרופיל התפעולי. שינוי הכמויות ושמירה יעדכנו את שניהם.
+            </div>
+          )}
           <div className="grid grid-cols-3 gap-3">
             <div className="space-y-1">
               <Label>סה"כ</Label>
