@@ -12,7 +12,6 @@ import GroupFilters, { filterGroups } from "@/components/groups/GroupFilters";
 import GroupCard from "@/components/groups/GroupCard";
 import DayGroupHeader, { groupByDay } from "@/components/groups/DayGroupHeader";
 import PreparationGroupCard from "@/components/groups/PreparationGroupCard";
-import MechinaDraftCard from "@/components/groups/MechinaDraftCard";
 import { useRoleContext } from "@/lib/RoleContext";
 import { isQuoteOpen, isQuotePreparationEnabled } from "@/lib/quotePreparationFlow";
 import { updateQuotePreparationCache, invalidateQuotePreparationCache } from "@/lib/quotePreparationCache";
@@ -66,9 +65,6 @@ export default function Groups() {
   const preparationGroupIds = new Set(preparationQuotes.filter(q => q.group_id).map(q => q.group_id));
   const preparationProfileByGroup = Object.fromEntries(preparationProfiles.map(p => [p.group_id, p]));
   const preparationGroups = groups.filter(g => preparationQuoteByGroup[g.id] && g.status !== "CONFIRMED" && g.status !== "ARCHIVED");
-  const mechinaDrafts = groups.filter(g => g.stay_mode === "MULTI_PERIOD" && g.operationally_active === false && !["CANCELLED", "ARCHIVED", "COMPLETED"].includes(g.status));
-  const mechinaDraftIds = new Set(mechinaDrafts.map(g => g.id));
-  const canViewMechinaDrafts = ["SUPER_ADMIN", "ADMIN"].includes(role);
 
   const isHistoricallyFinished = (g) => {
     if (g.group_type === "LODGING") {
@@ -86,13 +82,12 @@ export default function Groups() {
   };
 
   const active = useMemo(() => {
-    return groups.filter(g => !mechinaDraftIds.has(g.id) && (!preparationGroupIds.has(g.id) || g.status === "CONFIRMED") && isCurrentlyActive(g)).sort((a, b) => (a.arrival_date || "").localeCompare(b.arrival_date || ""));
+    return groups.filter(g => (!preparationGroupIds.has(g.id) || g.status === "CONFIRMED") && isCurrentlyActive(g)).sort((a, b) => (a.arrival_date || "").localeCompare(b.arrival_date || ""));
   }, [groups, preparationQuotes]);
 
   const history = useMemo(() => {
     return groups
       .filter(g => {
-        if (mechinaDraftIds.has(g.id)) return false;
         if (preparationGroupIds.has(g.id) && g.status !== "CONFIRMED") return false;
         if (g.status === "COMPLETED") return true;
         if (isHistoricallyFinished(g) && g.status !== "ARCHIVED" && g.status !== "CANCELLED") return true;
@@ -229,13 +224,6 @@ export default function Groups() {
             onClearAll={clearAll}
           />
         </div>
-
-        {canViewMechinaDrafts && mechinaDrafts.length > 0 && (
-          <section className="mb-5 space-y-3">
-            <h2 className="text-base font-semibold">מכינות בהכנה</h2>
-            <div className="space-y-2">{mechinaDrafts.map(group => <MechinaDraftCard key={group.id} group={group} />)}</div>
-          </section>
-        )}
 
         <Tabs defaultValue="active">
           <TabsList className="mb-4">

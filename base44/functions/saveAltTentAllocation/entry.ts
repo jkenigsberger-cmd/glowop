@@ -28,7 +28,7 @@ function fail(reasonCode, errorMsg, dbg) {
 
 const ALT_TENT_MARKER = '__alt_tent__';
 
-export default async function(req) {
+Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
 
@@ -107,11 +107,6 @@ export default async function(req) {
     const profile  = profiles[0] || null;
     if (!profile || profile.group_id !== group_id) {
       return fail('PROFILE_NOT_FOUND', 'חסרים פרטי קבוצה או פרופיל תפעולי', dbg);
-    }
-    const staffSplitValid = profile.staff_men_count != null && profile.staff_women_count != null &&
-      Number(profile.staff_men_count) + Number(profile.staff_women_count) === Number(profile.staff_count || 0);
-    if (!staffSplitValid) {
-      return fail('STAFF_GENDER_SPLIT_REQUIRED', 'יש להשלים את חלוקת הצוות לגברים ונשים לפני סימון דרישות הלינה כמוכנות', dbg);
     }
 
     // ── Load Group for authoritative dates (Group is source of truth) ──────────
@@ -208,4 +203,4 @@ export default async function(req) {
     console.error('[saveAltTentAllocation] UNEXPECTED_EXCEPTION:', unexpectedErr?.message, unexpectedErr?.stack);
     return Response.json({ success: false, error: 'שגיאה פנימית בשמירת אוהל חילופי', debug: { reasonCode: 'UNEXPECTED_EXCEPTION', message: unexpectedErr?.message } }, { status: 500 });
   }
-}
+});

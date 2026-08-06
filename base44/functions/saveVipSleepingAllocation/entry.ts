@@ -23,7 +23,7 @@ function fail(reasonCode, errorMsg, dbg) {
   return Response.json({ success: false, error: errorMsg, debug: { reasonCode, ...dbg } }, { status: 200 });
 }
 
-export default async function(req) {
+Deno.serve(async (req) => {
   // ── Top-level try/catch: catches any unexpected exception ─────────────────
   try {
     const base44 = createClientFromRequest(req);
@@ -174,11 +174,6 @@ export default async function(req) {
 
     if (!profile || profile.group_id !== group_id) {
       return fail('PROFILE_NOT_FOUND', 'חסרים פרטי קבוצה או פרופיל תפעולי', dbg);
-    }
-    const staffSplitValid = profile.staff_men_count != null && profile.staff_women_count != null &&
-      Number(profile.staff_men_count) + Number(profile.staff_women_count) === Number(profile.staff_count || 0);
-    if (!staffSplitValid) {
-      return fail('STAFF_GENDER_SPLIT_REQUIRED', 'יש להשלים את חלוקת הצוות לגברים ונשים לפני סימון דרישות הלינה כמוכנות', dbg);
     }
 
     // ── Load Group for authoritative dates (Group is source of truth) ──────────
@@ -352,4 +347,4 @@ export default async function(req) {
       },
     }, { status: 500 });
   }
-}
+});

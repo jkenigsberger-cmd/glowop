@@ -9,13 +9,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import DietaryFields, { EMPTY_DIETS, parseDiets, mergeDiets } from "@/components/shared/DietaryFields";
 import { upsertReviewAlert } from "@/lib/reviewAlerts";
-import { invalidateQuantitySyncQueries } from "@/lib/quantitySyncQueries";
-import { QUANTITY_FIELDS, quantitySnapshot, quantityRecordsDiffer, quantitiesChanged, isLifecycleExit } from "@/lib/groupQuantitySync";
+import { syncExistingOperationalPaxForGroup } from "@/lib/syncOperationalPax";
 import MealSyncAfterDateChangeModal from "@/components/groups/MealSyncAfterDateChangeModal";
 import GroupAvailabilityChecker from "@/components/groups/GroupAvailabilityChecker";
 import StayPeriodsEditor from "@/components/groups/StayPeriodsEditor";
-import { toast } from "sonner";
 
+// Fields that trigger pax-related alerts when changed
+const PAX_FIELDS = ["total_pax", "participant_count", "staff_count", "boys_count", "girls_count"];
 // Fields that trigger date-related alerts when changed
 const DATE_FIELDS = ["arrival_date", "departure_date"];
 
@@ -43,31 +43,32 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
     arrival_time: group?.arrival_time || "", departure_time: group?.departure_time || "",
   });
   const [stayPeriodsDraft, setStayPeriodsDraft] = useState([]);
-  const [multiPeriodPreviewValid, setMultiPeriodPreviewValid] = useState(false);
   const multiPeriodInitialized = useRef(false);
-  const multiPeriodIdempotencyKey = useRef(crypto.randomUUID());
-  const quantitySyncIdempotencyKey = useRef(crypto.randomUUID());
-  const effectiveQuantitiesRef = useRef(quantitySnapshot(group));
-  const quantitySyncSavedRef = useRef(false);
-  const [quantityDivergence, setQuantityDivergence] = useState(false);
 
-  // Group is the ADMIN Edit authority. OGP is read only to detect mirror divergence
-  // and to load its non-quantity dietary fields; updated_date never selects quantities.
+  // ── Prefill operational numbers from the OperationalGroupProfile (source of truth) ──
+  // Operational pax lives on the OGP, not on stale Group fields. On edit, read the OGP
+  // once (read-only — never mutates the DB) and fill any pax field the OGP provides.
   useEffect(() => {
     if (!isEdit || !group?.id) return;
     let cancelled = false;
-    effectiveQuantitiesRef.current = quantitySnapshot(group);
     (async () => {
       try {
         const profiles = await base44.entities.OperationalGroupProfile.filter({ group_id: group.id });
         const prof = profiles[0];
         if (!prof || cancelled) return;
-        setQuantityDivergence(quantityRecordsDiffer(group, prof));
+        setForm(f => ({
+          ...f,
+          total_pax:   prof.total_pax   != null ? prof.total_pax   : f.total_pax,
+          staff_count: prof.staff_count != null ? prof.staff_count : f.staff_count,
+          boys_count:  prof.boys_count  != null ? prof.boys_count  : f.boys_count,
+          girls_count: prof.girls_count != null ? prof.girls_count : f.girls_count,
+        }));
+        // Also prefill diets from the OGP if the caller didn't already supply them
         if (initialProfileDiets == null && prof.special_diets) {
           setDiets(mergeDiets(parseDiets(prof.special_diets)));
         }
       } catch (err) {
-        console.warn("[GroupFormModal] failed to inspect OGP (non-blocking):", err?.message);
+        console.warn("[GroupFormModal] failed to prefill from OGP (non-blocking):", err?.message);
       }
     })();
     return () => { cancelled = true; };
@@ -91,13 +92,7 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
     });
     setStayMode(group?.stay_mode === "MULTI_PERIOD" ? "MULTI_PERIOD" : "CONTINUOUS");
     setStayPeriodsDraft([]);
-    setMultiPeriodPreviewValid(false);
     multiPeriodInitialized.current = false;
-    multiPeriodIdempotencyKey.current = crypto.randomUUID();
-    quantitySyncIdempotencyKey.current = crypto.randomUUID();
-    effectiveQuantitiesRef.current = quantitySnapshot(group);
-    quantitySyncSavedRef.current = false;
-    setQuantityDivergence(false);
     setAllocationBlockError(null);
   // Profile counts and diets remain owned by their separate asynchronous prefill lifecycle.
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -137,11 +132,9 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
           setStayPeriodsDraft([{ _draft_id: crypto.randomUUID(), start_date: continuousDraft.arrival_date, end_date: continuousDraft.departure_date, arrival_time: continuousDraft.arrival_time, departure_time: continuousDraft.departure_time, status: "ACTIVE" }]);
         }
       }
-      setMultiPeriodPreviewValid(false);
       setStayMode("MULTI_PERIOD");
       return;
     }
-    setMultiPeriodPreviewValid(false);
     setStayMode("CONTINUOUS");
     setForm(current => ({ ...current, ...continuousDraft }));
   };
@@ -165,79 +158,13 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
     setGenderConsistencyError(null);
 
     if (stayMode === "MULTI_PERIOD") {
-      if (isEdit) {
-        setAllocationBlockError("עריכת תקופות השהייה תופעל בשלב הבא");
-        return;
-      }
-      if (!multiPeriodPreviewValid) {
-        setAllocationBlockError("יש לבצע בדיקת תקופות תקינה לאחר השינוי האחרון לפני השמירה.");
-        return;
-      }
-      if (!String(form.group_name || "").trim()) {
-        setAllocationBlockError("יש להזין שם קבוצה.");
-        return;
-      }
-      setSaving(true);
-      try {
-        const numberValue = value => value === "" || value == null ? 0 : Number(value);
-        const groupData = {
-          group_name: form.group_name,
-          group_type: "LODGING",
-          total_pax: numberValue(form.total_pax),
-          staff_count: numberValue(form.staff_count),
-          participant_count: participantCount,
-          boys_count: numberValue(form.boys_count),
-          girls_count: numberValue(form.girls_count),
-          contact_name: form.contact_name,
-          contact_phone: form.contact_phone,
-          contact_email: form.contact_email,
-          internal_notes: form.internal_notes,
-        };
-        const hasAnyDiet = Object.entries(diets).some(([key, value]) => key === "diet_notes" ? !!value : Number(value) > 0);
-        const operationalProfileData = {
-          total_pax: groupData.total_pax,
-          participant_count: groupData.participant_count,
-          staff_count: groupData.staff_count,
-          boys_count: groupData.boys_count,
-          girls_count: groupData.girls_count,
-          general_notes: groupData.internal_notes || null,
-          ...(hasAnyDiet ? { special_diets: JSON.stringify(diets) } : {}),
-        };
-        const periods = stayPeriodsDraft.map(({ _draft_id, ...period }) => period);
-        const response = await base44.functions.invoke("createMultiPeriodGroupDraft", {
-          group_data: groupData,
-          operational_profile_data: operationalProfileData,
-          periods,
-          idempotency_key: multiPeriodIdempotencyKey.current,
-        });
-        const data = response.data || {};
-        if (!data.success) {
-          setAllocationBlockError(data.partial_failure
-            ? `השמירה הושלמה חלקית בשלב ${Object.entries(data.phases || {}).find(([, value]) => value === "FAILED")?.[0] || "לא ידוע"}. ניתן לנסות שוב בבטחה.`
-            : data.message || "שמירת טיוטת המכינה נכשלה.");
-          return;
-        }
-        queryClient.invalidateQueries({ queryKey: ["groups"] });
-        toast.success("טיוטת המכינה נשמרה בהצלחה");
-        onSaved(data.group_id);
-      } catch (error) {
-        const data = error?.response?.data;
-        setAllocationBlockError(data?.message || "שמירת טיוטת המכינה נכשלה. ניתן לנסות שוב.");
-      } finally {
-        setSaving(false);
-      }
+      setAllocationBlockError("שמירת קבוצת מכינה תופעל בשלב הבא. בשלב זה ניתן לבדוק את התקופות בלבד.");
       return;
     }
 
-    const submittedQuantityPreview = {
-      total_pax: totalPax, participant_count: participantCount, staff_count: staffCount,
-      boys_count: boysCount, girls_count: girlsCount,
-    };
-    const statusChangingToLifecycle = isEdit && isLifecycleExit(group, form.status);
-    const quantitiesChangedForEdit = isEdit && quantitiesChanged(effectiveQuantitiesRef.current, submittedQuantityPreview);
-
-    // Reuse the existing lodging rule only when quantities are actually being edited.
-    if (!statusChangingToLifecycle && (!isEdit || quantitiesChangedForEdit) && form.group_type === "LODGING" && participantCount > 0) {
+    // ── Guard: for LODGING groups with participant_count > 0, boys+girls must equal participant_count
+    // One gender can be 0 (e.g. all boys or all girls), but both empty or a mismatch is not allowed.
+    if (form.group_type === "LODGING" && participantCount > 0) {
       const genderSum = boysCount + girlsCount;
       if (genderSum === 0) {
         setGenderConsistencyError(
@@ -261,7 +188,7 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
       (form.departure_date !== (group.departure_date || ""))
     );
 
-    if (!statusChangingToLifecycle && groupDatesChanged && !replanifyConfirmed) {
+    if (groupDatesChanged && !replanifyConfirmed) {
       setSaving(true);
       const previewRes = await base44.functions.invoke("replanifyGroupDates", {
         group_id: group.id,
@@ -299,11 +226,11 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
     }
 
     const profilePaxFields = {
-      total_pax: payload.total_pax ?? 0,
-      participant_count: payload.participant_count ?? 0,
-      staff_count: payload.staff_count ?? 0,
-      boys_count: payload.boys_count ?? 0,
-      girls_count: payload.girls_count ?? 0,
+      total_pax: payload.total_pax || null,
+      participant_count: payload.participant_count || null,
+      staff_count: payload.staff_count || null,
+      boys_count: payload.boys_count || null,
+      girls_count: payload.girls_count || null,
     };
 
     // Only save dietary data if at least one field is non-zero or has notes
@@ -311,91 +238,78 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
     const dietPayload = hasAnyDiet ? { special_diets: JSON.stringify(diets) } : {};
 
     if (isEdit) {
-      const nonQuantityPayload = Object.fromEntries(
-        Object.entries(payload).filter(([key]) => !QUANTITY_FIELDS.includes(key))
-      );
+      // If status is changing to CANCELLED or ARCHIVED, delegate to lifecycle function
+      // so all operational resources are properly released — never update status directly.
+      const statusChangingToLifecycle =
+        payload.status !== group.status &&
+        (payload.status === "CANCELLED" || payload.status === "ARCHIVED");
 
-      // Cancellation/archive owns the dependent-record cascade. Never propagate quantities first.
       if (statusChangingToLifecycle) {
-        try {
-          const action = payload.status === "CANCELLED" ? "cancel" : "freeze";
-          const res = await base44.functions.invoke("updateGroupLifecycle", {
-            group_id: group.id, action, reason: payload.internal_notes || "",
-          });
-          if (!res.data?.success) throw new Error(res.data?.message || "עדכון מחזור החיים נכשל");
-          const { status: _status, ...payloadWithoutStatus } = nonQuantityPayload;
-          await base44.entities.Group.update(group.id, payloadWithoutStatus);
-          await Promise.all([
-            queryClient.invalidateQueries({ queryKey: ["group", group.id] }),
-            queryClient.invalidateQueries({ queryKey: ["groups"] }),
-          ]);
+        const action = payload.status === "CANCELLED" ? "cancel" : "freeze";
+        const res = await base44.functions.invoke("updateGroupLifecycle", {
+          group_id: group.id,
+          action,
+          reason: payload.internal_notes || "",
+        });
+        if (!res.data?.success) {
           setSaving(false);
-          onSaved();
-        } catch (error) {
-          setSaving(false);
-          setAllocationBlockError(error?.message || "עדכון מחזור החיים נכשל.");
-        }
-        return;
-      }
-
-      if (quantitiesChangedForEdit) {
-        let quantityData = null;
-        try {
-          const quantityResponse = await base44.functions.invoke("updateGroupOperationalQuantities", {
-            group_id: group.id,
-            quantities: profilePaxFields,
-            source: "ADMIN_EDIT",
-            idempotency_key: quantitySyncIdempotencyKey.current,
-          });
-          quantityData = quantityResponse.data || {};
-        } catch (error) {
-          quantityData = error?.response?.data || {};
-        }
-        if (!quantityData?.success) {
-          const failedPhase = Object.entries(quantityData?.phases || {}).find(([, value]) => value === "FAILED")?.[0];
-          setSaving(false);
-          setAllocationBlockError(quantityData?.message || (failedPhase
-            ? `סנכרון הכמויות נכשל בשלב ${failedPhase}. ניתן לנסות שוב בבטחה.`
-            : "סנכרון הכמויות נכשל. לא ניתן לדווח על שמירה מלאה."));
           return;
         }
-        effectiveQuantitiesRef.current = quantitySnapshot(profilePaxFields);
-        quantitySyncSavedRef.current = true;
-        setQuantityDivergence(false);
-        await invalidateQuantitySyncQueries(queryClient, group.id);
-        const staffSplitWarning = quantityData.warnings?.find(message => message.includes("מספר אנשי הצוות השתנה"));
-        if (staffSplitWarning) toast.warning(staffSplitWarning);
+        // Still save the non-status fields (name, contact, notes, etc.)
+        const { status: _s, ...payloadWithoutStatus } = payload;
+        await base44.entities.Group.update(group.id, payloadWithoutStatus);
+        setSaving(false);
+        onSaved();
+        return;
       }
 
-      let existingProfiles = [];
-      try {
-        if (groupDatesChanged) {
-          const applyRes = await base44.functions.invoke("replanifyGroupDates", {
-            group_id: group.id,
-            new_arrival_date: form.arrival_date,
-            new_departure_date: form.group_type === "DAY_USE" ? form.arrival_date : form.departure_date,
-            dry_run: false,
-          });
-          if (!applyRes.data?.success) throw new Error("עדכון התאריכים נכשל. אנא נסה שוב.");
+      // Apply the date re-planification cascade (already previewed/confirmed above)
+      if (groupDatesChanged) {
+        const applyRes = await base44.functions.invoke("replanifyGroupDates", {
+          group_id: group.id,
+          new_arrival_date: form.arrival_date,
+          new_departure_date: form.group_type === "DAY_USE" ? form.arrival_date : form.departure_date,
+          dry_run: false,
+        });
+        if (!applyRes.data?.success) {
+          setSaving(false);
+          setAllocationBlockError("עדכון התאריכים נכשל. אנא נסה שוב.");
+          return;
         }
+      }
 
-        await base44.entities.Group.update(group.id, nonQuantityPayload);
-        existingProfiles = await base44.entities.OperationalGroupProfile.filter({ group_id: group.id });
-        if (existingProfiles.length > 0) {
-          const prof = existingProfiles[0];
-          const existingDiets = parseDiets(prof.special_diets);
-          const shouldUpdateDiets = hasAnyDiet || !existingDiets;
-          await base44.entities.OperationalGroupProfile.update(prof.id, {
-            is_sleeping_group: payload.group_type === "LODGING",
-            ...(shouldUpdateDiets ? dietPayload : {}),
-          });
+      await base44.entities.Group.update(group.id, payload);
+
+      // Sync existing operational pax if total_pax changed
+      const oldTotalPax = Number(group.total_pax ?? 0);
+      const newTotalPax = Number(payload.total_pax ?? 0);
+      if (newTotalPax > 0 && newTotalPax !== oldTotalPax) {
+        try {
+          await syncExistingOperationalPaxForGroup(group.id, newTotalPax);
+        } catch (syncErr) {
+          console.warn("[GroupFormModal] pax sync failed (non-blocking):", syncErr?.message);
         }
-      } catch (error) {
-        setSaving(false);
-        setAllocationBlockError(quantitySyncSavedRef.current
-          ? `הכמויות נשמרו, אך שמירת שאר פרטי הקבוצה נכשלה: ${error?.message || "שגיאה לא ידועה"}. ניתן לנסות שוב; סנכרון הכמויות לא יורץ מחדש.`
-          : `שמירת פרטי הקבוצה נכשלה: ${error?.message || "שגיאה לא ידועה"}`);
-        return;
+      }
+
+      // Keep OperationalGroupProfile in sync with group pax edits + dietary
+      const existingProfiles = await base44.entities.OperationalGroupProfile.filter({ group_id: group.id });
+      if (existingProfiles.length > 0) {
+        const prof = existingProfiles[0];
+        // Do not overwrite richer GuestForm dietary data with empty manual values
+        const existingDiets = parseDiets(prof.special_diets);
+        const shouldUpdateDiets = hasAnyDiet || !existingDiets;
+
+        // Always sync beds_needed from the validated boys/girls counts
+        const bedsUpdate = payload.group_type === "LODGING"
+          ? { boys_beds_needed: payload.boys_count ?? null, girls_beds_needed: payload.girls_count ?? null }
+          : {};
+
+        await base44.entities.OperationalGroupProfile.update(prof.id, {
+          ...profilePaxFields,
+          ...bedsUpdate,
+          is_sleeping_group: payload.group_type === "LODGING",
+          ...(shouldUpdateDiets ? dietPayload : {}),
+        });
       }
 
       // ── Review alerts (additive, never blocks save) ────────────────────────
@@ -404,9 +318,42 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
         const isQuotePreparation = group.quote_preparation_flow && group.status !== "CONFIRMED";
         const isLodging = payload.group_type === "LODGING";
         if (!isQuotePreparation && (groupIsConfirmed || existingProfiles.length > 0)) {
-          // Quantity-change review is created once by the central backend after propagation succeeds.
+          // A. Pax changes
+          const paxChanged = PAX_FIELDS.some(f => {
+            const oldVal = Number(group[f] ?? 0);
+            const newVal = Number(payload[f] ?? 0);
+            return oldVal !== newVal;
+          });
+          if (paxChanged) {
+            const oldPax = Number(group.total_pax ?? 0);
+            const newPax = Number(payload.total_pax ?? 0);
+            const diff   = newPax - oldPax;
+            const diffTxt = diff > 0 ? `נוספו ${diff} אנשים.` : diff < 0 ? `ירדו ${Math.abs(diff)} אנשים.` : "";
+            const prev = Object.fromEntries(PAX_FIELDS.map(f => [f, group[f] ?? null]));
+            const next = Object.fromEntries(PAX_FIELDS.map(f => [f, payload[f] ?? null]));
+            if (isLodging) {
+              const msg = `מספר האנשים בקבוצה השתנה מ-${oldPax} ל-${newPax}.${diffTxt ? " " + diffTxt : ""} יש לבדוק דרישות לינה, שיבוץ לינה ומטבח.`;
+              await upsertReviewAlert(group.id, "SLEEPING_REQUIREMENTS", "GROUP_PAX_CHANGED", "שינוי בפרטי הקבוצה דורש בדיקה", msg, prev, next);
+              await upsertReviewAlert(group.id, "ALLOCATION",            "GROUP_PAX_CHANGED", "שינוי בפרטי הקבוצה דורש בדיקה", msg, prev, next);
+              await upsertReviewAlert(group.id, "KITCHEN",               "GROUP_PAX_CHANGED", "שינוי בפרטי הקבוצה דורש בדיקה", msg, prev, next);
 
-          // Date changes
+              // Extra alert if active sleeping allocations already exist
+              const activeAllocs = await base44.entities.SleepingAllocation.filter({
+                group_id: group.id,
+                status: { $in: ["DRAFT", "CONFIRMED"] },
+              });
+              if (activeAllocs.length > 0) {
+                const allocMsg = "כמות המשתתפים / חלוקת בנים-בנות השתנתה לאחר שכבר קיים שיבוץ לינה.\nיש לבדוק ולעדכן את השיבוץ.";
+                await upsertReviewAlert(group.id, "ALLOCATION", "ALLOCATION_CHANGED", "שינוי בפרטי הקבוצה — שיבוץ הלינה דורש עדכון", allocMsg, prev, next);
+              }
+            } else {
+              // DAY_USE — only kitchen alert for pax changes
+              const msg = `מספר האנשים בקבוצה השתנה מ-${oldPax} ל-${newPax}.${diffTxt ? " " + diffTxt : ""} יש לבדוק את תכנון המטבח.`;
+              await upsertReviewAlert(group.id, "KITCHEN", "GROUP_PAX_CHANGED", "שינוי בפרטי הקבוצה דורש בדיקה", msg, prev, next);
+            }
+          }
+
+          // B. Date changes
           const datesChanged = DATE_FIELDS.some(f => (group[f] || "") !== (payload[f] || ""));
           if (datesChanged) {
             const prev = { arrival_date: group.arrival_date, departure_date: group.departure_date };
@@ -514,10 +461,10 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
       onSaved(newGroupId);
       return;
     }
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["group", group.id] }),
-      queryClient.invalidateQueries({ queryKey: ["groups"] }),
-    ]);
+    // Invalidate kitchen and group-detail profile queries so all views refresh immediately
+    queryClient.invalidateQueries({ queryKey: ["profiles_kitchen"] });
+    queryClient.invalidateQueries({ queryKey: ["profiles_kitchenReport"] });
+    queryClient.invalidateQueries({ queryKey: ["operationalProfile"] });
 
     // ── Check for out-of-range meals after departure date shortening ────────
     if (isEdit && payload.departure_date && group.departure_date) {
@@ -545,7 +492,6 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
   };
 
   const isDayUse = form.group_type === "DAY_USE";
-  const isExistingIsolatedMultiPeriod = isEdit && group?.stay_mode === "MULTI_PERIOD" && group?.operationally_active === false;
 
   if (mealSyncData) {
     return (
@@ -603,7 +549,7 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
               )}
             </div>
             <label className="flex items-center gap-2 cursor-pointer w-fit">
-              <input type="checkbox" checked={stayMode === "MULTI_PERIOD"} onChange={e => handleStayModeChange(e.target.checked)} disabled={isExistingIsolatedMultiPeriod} className="h-4 w-4 accent-primary disabled:opacity-50" />
+              <input type="checkbox" checked={stayMode === "MULTI_PERIOD"} onChange={e => handleStayModeChange(e.target.checked)} className="h-4 w-4 accent-primary" />
               <span className="font-medium">קבוצת מכינה</span>
             </label>
           </div>
@@ -616,23 +562,11 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
               <div className="space-y-1"><Label>שעת הגעה <span className="text-slate-400 font-normal text-[11px]">(אופציונלי)</span></Label><Input type="time" value={continuousDraft.arrival_time} onChange={e => setContinuousField("arrival_time", e.target.value)} placeholder="לדוגמה 15:00" /></div>
               <div className="space-y-1"><Label>שעת יציאה <span className="text-slate-400 font-normal text-[11px]">(אופציונלי)</span></Label><Input type="time" value={continuousDraft.departure_time} onChange={e => setContinuousField("departure_time", e.target.value)} placeholder="לדוגמה 11:00" /></div>
             </div>
-          ) : isExistingIsolatedMultiPeriod ? (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-              עריכת תקופות השהייה תופעל בשלב הבא
-            </div>
           ) : (
-            <div className="space-y-2">
-              <StayPeriodsEditor groupId={group?.id} periods={stayPeriodsDraft} onChange={setStayPeriodsDraft} onPreviewChange={setMultiPeriodPreviewValid} />
-              <p className="text-xs text-violet-700">הקבוצה תישמר כטיוטה ולא תופיע עדיין במודולים התפעוליים</p>
-            </div>
+            <StayPeriodsEditor groupId={group?.id} periods={stayPeriodsDraft} onChange={setStayPeriodsDraft} />
           )}
 
           {/* Participant counts */}
-          {quantityDivergence && (
-            <div className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded px-3 py-2">
-              נמצאה אי-התאמה בין כמויות הקבוצה לפרופיל התפעולי. שינוי הכמויות ושמירה יעדכנו את שניהם.
-            </div>
-          )}
           <div className="grid grid-cols-3 gap-3">
             <div className="space-y-1">
               <Label>סה"כ</Label>
@@ -764,10 +698,6 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
               onClick={() => { setReplanifyConfirmed(true); setReplanifyPreview(null); document.getElementById("group-form").requestSubmit(); }}
             >
               {saving ? "שומר..." : "מאשר את השינוי ושומר"}
-            </Button>
-          ) : stayMode === "MULTI_PERIOD" ? (
-            <Button type="submit" form="group-form" disabled={saving || isEdit || !multiPeriodPreviewValid}>
-              {saving ? "שומר..." : isEdit ? "עריכת תקופות בשלב הבא" : "שמירת טיוטת מכינה"}
             </Button>
           ) : (
             <Button type="submit" form="group-form" disabled={saving}>{saving ? "שומר..." : isEdit ? "שמור" : "צור קבוצה"}</Button>

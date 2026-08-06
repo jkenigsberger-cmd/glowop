@@ -572,26 +572,23 @@ export default function SleepingAllocationTab({ groupId }) {
         // Unified counts for partial allocation warning
         const unifiedCounts  = computeAllocationCounts(myAllocations, profile);
         const isPartialAlloc = unifiedCounts.totalRequired > 0 && unifiedCounts.totalRemaining > 0;
-        const isOverAllocated = unifiedCounts.totalRequired > 0 && unifiedCounts.totalAllocated > unifiedCounts.totalRequired;
 
         // A: All specific tents confirmed
         if (confirmedAllocs.length > 0 && draftAllocs.length === 0) {
           return (
             <div className={`flex items-center gap-3 rounded-xl px-4 py-3 ${
-              isOverAllocated
-                ? "bg-red-50 border border-red-300"
-                : isPartialAlloc
+              isPartialAlloc
                 ? "bg-amber-50 border border-amber-300"
                 : "bg-emerald-50 border border-emerald-300"
             }`}>
-              {isOverAllocated || isPartialAlloc ? (
-                <AlertTriangle className={`w-5 h-5 shrink-0 ${isOverAllocated ? "text-red-600" : "text-amber-600"}`} />
+              {isPartialAlloc ? (
+                <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
               ) : (
                 <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
               )}
               <div className="flex-1">
-                <p className={`text-sm font-semibold ${isOverAllocated ? "text-red-800" : isPartialAlloc ? "text-amber-800" : "text-emerald-800"}`}>
-                  {isOverAllocated ? "שיבוץ אינו תואם לכמויות הנוכחיות — נדרשת בדיקה" : isPartialAlloc ? "שיבוץ חלקי — מאושר" : "שיבוץ לפי אוהלים — מאושר"}
+                <p className={`text-sm font-semibold ${isPartialAlloc ? "text-amber-800" : "text-emerald-800"}`}>
+                  {isPartialAlloc ? "שיבוץ חלקי — מאושר" : "שיבוץ לפי אוהלים — מאושר"}
                 </p>
                 <p className={`text-xs ${isPartialAlloc ? "text-amber-700" : "text-emerald-600"}`}>
                   {totalAssigned} משתתפים · {tentCount} אוהלים · {confirmedAllocs.length} שורות מאושרות
@@ -699,7 +696,7 @@ export default function SleepingAllocationTab({ groupId }) {
                         : "bg-emerald-700 hover:bg-emerald-800"
                     }`}
                     onClick={() => handleConfirmAllocations()}
-                    disabled={saving || isOverAllocated}
+                    disabled={saving}
                   >
                     <CheckCircle2 className="w-4 h-4" />
                     {saving ? "מאשר..." : isPartialAlloc ? "אשר שיבוץ חלקי" : "אשר שיבוץ לינה"}

@@ -65,10 +65,6 @@
     "internal_notes": {
       "type": "string"
     },
-    "creation_token": {
-      "type": "string",
-      "description": "Persistent idempotency token for retry-safe dedicated creation flows"
-    },
     "quote_preparation_flow": {
       "type": "boolean",
       "default": false,
