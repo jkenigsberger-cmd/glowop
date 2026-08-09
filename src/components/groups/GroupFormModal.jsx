@@ -13,6 +13,7 @@ import { syncExistingOperationalPaxForGroup } from "@/lib/syncOperationalPax";
 import MealSyncAfterDateChangeModal from "@/components/groups/MealSyncAfterDateChangeModal";
 import GroupAvailabilityChecker from "@/components/groups/GroupAvailabilityChecker";
 import StayPeriodsEditor from "@/components/groups/StayPeriodsEditor";
+import { loadMultiPeriodDraftPeriods, saveMultiPeriodDraft } from "@/lib/multiPeriodDraft";
 
 // Fields that trigger pax-related alerts when changed
 const PAX_FIELDS = ["total_pax", "participant_count", "staff_count", "boys_count", "girls_count"];
@@ -43,6 +44,7 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
     arrival_time: group?.arrival_time || "", departure_time: group?.departure_time || "",
   });
   const [stayPeriodsDraft, setStayPeriodsDraft] = useState([]);
+  const [periodsLoading, setPeriodsLoading] = useState(false);
   const multiPeriodInitialized = useRef(false);
 
   // ── Prefill operational numbers from the OperationalGroupProfile (source of truth) ──
@@ -79,6 +81,17 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
   const [mealSyncData, setMealSyncData] = useState(null); // { outOfRangeMeals, newDeparture }
   const [replanifyPreview, setReplanifyPreview] = useState(null); // impact summary awaiting confirmation
   const [replanifyConfirmed, setReplanifyConfirmed] = useState(false);
+
+  useEffect(() => {
+    if (!isEdit || group?.stay_mode !== "MULTI_PERIOD" || !group?.id) return;
+    let cancelled = false;
+    setPeriodsLoading(true);
+    loadMultiPeriodDraftPeriods(group.id)
+      .then(periods => { if (!cancelled) setStayPeriodsDraft(periods); })
+      .catch(error => { if (!cancelled) setAllocationBlockError(error?.message || "טעינת תקופות השהייה נכשלה"); })
+      .finally(() => { if (!cancelled) setPeriodsLoading(false); });
+    return () => { cancelled = true; };
+  }, [isEdit, group?.id, group?.stay_mode]);
 
   // Parents open this modal by conditionally mounting it (showForm/editGroup).
   // A close/reopen therefore creates a fresh component session. This effect only handles
@@ -158,7 +171,58 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
     setGenderConsistencyError(null);
 
     if (stayMode === "MULTI_PERIOD") {
-      setAllocationBlockError("שמירת קבוצת מכינה תופעל בשלב הבא. בשלב זה ניתן לבדוק את התקופות בלבד.");
+      if (periodsLoading) return;
+      setSaving(true);
+      try {
+        const numberOrNull = value => value === "" || value == null ? null : Number(value);
+        const groupData = {
+          group_name: form.group_name,
+          group_type: form.group_type,
+          total_pax: numberOrNull(form.total_pax),
+          staff_count: numberOrNull(form.staff_count),
+          participant_count: participantCount,
+          boys_count: numberOrNull(form.boys_count),
+          girls_count: numberOrNull(form.girls_count),
+          contact_name: form.contact_name || null,
+          contact_phone: form.contact_phone || null,
+          contact_email: form.contact_email || null,
+          internal_notes: form.internal_notes || null,
+        };
+        const hasAnyDiet = Object.entries(diets).some(([key, value]) => key === "diet_notes" ? !!value : Number(value) > 0);
+        const result = await saveMultiPeriodDraft({
+          groupId: isEdit ? group.id : null,
+          groupData,
+          ogpData: {
+            total_pax: groupData.total_pax,
+            staff_count: groupData.staff_count,
+            participant_count: groupData.participant_count,
+            boys_count: groupData.boys_count,
+            girls_count: groupData.girls_count,
+            general_notes: groupData.internal_notes,
+            boys_beds_needed: groupData.boys_count,
+            girls_beds_needed: groupData.girls_count,
+            ...(hasAnyDiet ? { special_diets: JSON.stringify(diets) } : {}),
+          },
+          periods: stayPeriodsDraft,
+        });
+        if (!result?.success) {
+          const message = result?.error === "MIN_TWO_ACTIVE_PERIODS"
+            ? "יש להוסיף לפחות שתי תקופות שהייה תקינות"
+            : result?.error === "INVALID_PERIODS"
+              ? "תקופות השהייה אינן תקינות או חופפות"
+              : "שמירת טיוטת המכינה נכשלה. לא נשמרו נתונים חלקיים.";
+          setAllocationBlockError(message);
+          return;
+        }
+        queryClient.invalidateQueries({ queryKey: ["groups"] });
+        queryClient.invalidateQueries({ queryKey: ["group", result.group.id] });
+        queryClient.invalidateQueries({ queryKey: ["operationalProfile", result.group.id] });
+        onSaved(isEdit ? undefined : result.group.id);
+      } catch (error) {
+        setAllocationBlockError(error?.response?.data?.message || error?.message || "שמירת טיוטת המכינה נכשלה");
+      } finally {
+        setSaving(false);
+      }
       return;
     }
 
@@ -562,6 +626,8 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
               <div className="space-y-1"><Label>שעת הגעה <span className="text-slate-400 font-normal text-[11px]">(אופציונלי)</span></Label><Input type="time" value={continuousDraft.arrival_time} onChange={e => setContinuousField("arrival_time", e.target.value)} placeholder="לדוגמה 15:00" /></div>
               <div className="space-y-1"><Label>שעת יציאה <span className="text-slate-400 font-normal text-[11px]">(אופציונלי)</span></Label><Input type="time" value={continuousDraft.departure_time} onChange={e => setContinuousField("departure_time", e.target.value)} placeholder="לדוגמה 11:00" /></div>
             </div>
+          ) : periodsLoading ? (
+            <p className="text-sm text-muted-foreground">טוען תקופות שהייה...</p>
           ) : (
             <StayPeriodsEditor groupId={group?.id} periods={stayPeriodsDraft} onChange={setStayPeriodsDraft} />
           )}
@@ -700,7 +766,7 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
               {saving ? "שומר..." : "מאשר את השינוי ושומר"}
             </Button>
           ) : (
-            <Button type="submit" form="group-form" disabled={saving}>{saving ? "שומר..." : isEdit ? "שמור" : "צור קבוצה"}</Button>
+            <Button type="submit" form="group-form" disabled={saving || (stayMode === "MULTI_PERIOD" && periodsLoading)}>{saving ? "שומר..." : isEdit ? "שמור" : "צור קבוצה"}</Button>
           )}
         </div>
       </DialogContent>
