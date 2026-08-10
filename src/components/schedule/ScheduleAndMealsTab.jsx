@@ -1275,6 +1275,7 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
         sourceMeal={duplicateSourceMeal}
         arrivalDate={arrivalDate}
         departureDate={departureDate}
+        group={group}
         existingMeals={mealItems}
         onClose={() => setDuplicateSourceMeal(null)}
         onDone={invalidate}

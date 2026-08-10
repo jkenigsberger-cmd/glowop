@@ -7,12 +7,14 @@ import { Button } from "@/components/ui/button";
 import { CalendarDays, Copy, Check, X } from "lucide-react";
 import { toast } from "sonner";
 import { buildStayDates, dayOfWeekHe, fmtDate, buildDuplicatePayload } from "@/lib/mealDuplication";
+import { getOperationalStayDates } from "@/lib/groupStayPeriods";
+import useGroupStayPeriods from "@/hooks/useGroupStayPeriods";
 
 const MEAL_LABELS = { BREAKFAST: "ארוחת בוקר", LUNCH: "ארוחת צהריים", DINNER: "ארוחת ערב", OTHER: "אחר" };
 
 // STEP: "choose" | "select" | "confirm"
 export default function DuplicateMealModal({
-  open, onClose, sourceMeal, arrivalDate, departureDate, existingMeals = [], onDone,
+  open, onClose, sourceMeal, arrivalDate, departureDate, group, existingMeals = [], onDone,
 }) {
   const [step, setStep] = useState("choose");
   const [selectedDates, setSelectedDates] = useState([]);
@@ -20,6 +22,10 @@ export default function DuplicateMealModal({
 
   const mealTypeLabel = MEAL_LABELS[sourceMeal?.meal_type] || sourceMeal?.meal_type || "";
   const hasStayDates = !!arrivalDate && !!departureDate && departureDate >= arrivalDate;
+  const isMultiPeriod = group?.stay_mode === "MULTI_PERIOD";
+  const { periodsByGroupId } = useGroupStayPeriods(group ? [group] : []);
+  const periods = isMultiPeriod && group ? (periodsByGroupId[group.id] || []) : [];
+  const hasEligibleDates = isMultiPeriod ? periods.length > 0 : hasStayDates;
 
   // Set of dates (this group + this meal type) that already have an active meal
   const takenDates = useMemo(() => {
@@ -33,10 +39,20 @@ export default function DuplicateMealModal({
   }, [existingMeals, sourceMeal]);
 
   // All stay dates except the original meal date
+  // MULTI_PERIOD: only dates from ACTIVE GroupStayPeriod records (no gap dates)
+  // CONTINUOUS: inclusive arrival→departure envelope (unchanged)
   const candidateDates = useMemo(() => {
-    if (!hasStayDates || !sourceMeal) return [];
-    return buildStayDates(arrivalDate, departureDate).filter(d => d !== sourceMeal.date);
-  }, [arrivalDate, departureDate, hasStayDates, sourceMeal]);
+    if (!sourceMeal) return [];
+    let dates;
+    if (isMultiPeriod) {
+      if (periods.length === 0) return [];
+      dates = getOperationalStayDates(periods);
+    } else {
+      if (!hasStayDates) return [];
+      dates = buildStayDates(arrivalDate, departureDate);
+    }
+    return dates.filter(d => d !== sourceMeal.date);
+  }, [arrivalDate, departureDate, hasStayDates, sourceMeal, isMultiPeriod, periods]);
 
   const availableDates = candidateDates.filter(d => !takenDates.has(d));
 
@@ -89,7 +105,7 @@ export default function DuplicateMealModal({
         </DialogHeader>
 
         {/* Missing stay dates */}
-        {!hasStayDates ? (
+        {!hasEligibleDates ? (
           <div className="py-4 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3">
             חסרים תאריכי שהייה לקבוצה — לא ניתן להעתיק לכל השהייה
           </div>
