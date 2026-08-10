@@ -12,6 +12,8 @@ import { ActivityEquipmentLine } from "@/components/schedule/LogisticsFields";
 import ChronologicalDayView from "./ChronologicalDayView";
 import ChronologicalDayPdfButton from "./ChronologicalDayPdfButton";
 import { isGroupOperationallyEnabled } from "@/lib/groupOperationalIsolation";
+import { classifyGroupsForDate, isGroupArrivalOnDate, isGroupDepartureOnDate } from "@/lib/groupDateReaders";
+import useGroupStayPeriods from "@/hooks/useGroupStayPeriods";
 
 moment.locale("he");
 
@@ -30,13 +32,13 @@ const EXCLUDED = new Set(["CANCELLED", "COMPLETED", "ARCHIVED"]);
 const isDayUse = (group) => group.group_type === "DAY_USE";
 
 // ── Movement label — split by group_type ─────────────────────────────────────
-function movementLabel(group, dateStr) {
+function movementLabel(group, dateStr, periods = []) {
   if (isDayUse(group)) {
     return { label: "באי יום", color: "bg-teal-100 text-teal-700" };
   }
-  // Lodging groups
-  const isCheckin  = fmt(group.arrival_date)   === dateStr;
-  const isCheckout = fmt(group.departure_date)  === dateStr;
+  // Lodging groups — period-aware for MULTI_PERIOD
+  const isCheckin  = isGroupArrivalOnDate(group, dateStr, periods);
+  const isCheckout = isGroupDepartureOnDate(group, dateStr, periods);
   if (isCheckin && isCheckout) return { label: "צ׳ק-אין + צ׳ק-אאוט לינה", color: "bg-purple-100 text-purple-700" };
   if (isCheckin)               return { label: "צ׳ק-אין לינה",             color: "bg-emerald-100 text-emerald-700" };
   if (isCheckout)              return { label: "צ׳ק-אאוט לינה",            color: "bg-orange-100 text-orange-700" };
@@ -65,11 +67,11 @@ function DietBadges({ specialDietsSummary }) {
 }
 
 // ── Group card ────────────────────────────────────────────────────────────────
-function GroupCard({ group, dateStr, meals, activities, spaces, alerts, defaultOpen, highlightSection }) {
+function GroupCard({ group, dateStr, meals, activities, spaces, alerts, periods = [], defaultOpen, highlightSection }) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(defaultOpen);
 
-  const mv = movementLabel(group, dateStr);
+  const mv = movementLabel(group, dateStr, periods);
   const spaceById = useMemo(() => Object.fromEntries((spaces || []).map(s => [s.id, s])), [spaces]);
   const isDay = isDayUse(group);
 
@@ -92,8 +94,8 @@ function GroupCard({ group, dateStr, meals, activities, spaces, alerts, defaultO
     [alerts, group.id]
   );
 
-  const isCheckin  = fmt(group.arrival_date)  === dateStr;
-  const isCheckout = fmt(group.departure_date) === dateStr;
+  const isCheckin  = isGroupArrivalOnDate(group, dateStr, periods);
+  const isCheckout = isGroupDepartureOnDate(group, dateStr, periods);
 
   // Border color by group type
   const borderCls = isDay
@@ -328,7 +330,7 @@ function FilterPill({ label, count, icon: Icon, active, onClick, filterKey }) {
 }
 
 // ── Flat grouped view (meals / activities / alerts / dayuse) ──────────────────
-function GroupedFlatSection({ filter, groups, dateStr, meals, activities, spaces, alerts }) {
+function GroupedFlatSection({ filter, groups, dateStr, meals, activities, spaces, alerts, periodsByGroupId = {} }) {
   const spaceById = useMemo(() => Object.fromEntries((spaces || []).map(s => [s.id, s])), [spaces]);
 
   const groupsWithContent = useMemo(() => {
@@ -358,9 +360,10 @@ function GroupedFlatSection({ filter, groups, dateStr, meals, activities, spaces
     <div className="space-y-4">
       {groupsWithContent.map(({ group, groupMeals, groupActivities, groupAlerts }) => {
         const isDay = isDayUse(group);
+        const periods = periodsByGroupId[group.id] || [];
         const dotCls = isDay ? "bg-teal-500"
-          : fmt(group.arrival_date) === dateStr ? "bg-emerald-500"
-          : fmt(group.departure_date) === dateStr ? "bg-orange-500"
+          : isGroupArrivalOnDate(group, dateStr, periods) ? "bg-emerald-500"
+          : isGroupDepartureOnDate(group, dateStr, periods) ? "bg-orange-500"
           : "bg-blue-400";
 
         return (
@@ -459,27 +462,26 @@ export default function OperationalDaySummary({
   const dateStr   = date ? fmt(date) : "";
   const dateLabel = date ? moment(date).format("dddd, D בMMMM YYYY") : "";
   const operationalGroupIds = useMemo(() => new Set((allGroups || []).filter(isGroupOperationallyEnabled).map(g => g.id)), [allGroups]);
+  const { periodsByGroupId } = useGroupStayPeriods(allGroups || []);
 
   const { lodgingCheckins, lodgingCheckouts, dayUseGroups, staying, allGroupsOnDay } = useMemo(() => {
     if (!dateStr) return { lodgingCheckins: [], lodgingCheckouts: [], dayUseGroups: [], staying: [], allGroupsOnDay: [] };
     const groups = (allGroups || []).filter(g => isGroupOperationallyEnabled(g) && !EXCLUDED.has(g.status) && g.arrival_date && g.departure_date);
 
-    // Lodging check-ins: LODGING groups arriving today
-    const lodgingCheckins  = groups.filter(g => !isDayUse(g) && fmt(g.arrival_date)   === dateStr);
-    // Lodging check-outs: LODGING groups departing today
-    const lodgingCheckouts = groups.filter(g => !isDayUse(g) && fmt(g.departure_date) === dateStr);
+    // Lodging: period-aware classification for MULTI_PERIOD groups
+    const lodgingGroups = groups.filter(g => !isDayUse(g));
+    const { arrivals: lodgingCheckins, departures: lodgingCheckouts, staying: lodgingStaying } = classifyGroupsForDate(lodgingGroups, dateStr, periodsByGroupId);
+    const staying = lodgingStaying;
     // Day-use groups: DAY_USE groups active today
     const dayUseGroups = groups.filter(g => isDayUse(g) && fmt(g.arrival_date) === dateStr);
-    // Staying lodging groups (neither arriving nor departing today)
-    const staying = groups.filter(g => !isDayUse(g) && fmt(g.arrival_date) < dateStr && fmt(g.departure_date) > dateStr);
 
     // All groups on site today (deduped)
     const seen = new Set();
-    const allGroupsOnDay = [...lodgingCheckins, ...lodgingCheckouts.filter(g => fmt(g.arrival_date) !== dateStr), ...staying, ...dayUseGroups]
+    const allGroupsOnDay = [...lodgingCheckins, ...lodgingCheckouts.filter(g => !lodgingCheckins.includes(g)), ...staying, ...dayUseGroups]
       .filter(g => { if (seen.has(g.id)) return false; seen.add(g.id); return true; });
 
     return { lodgingCheckins, lodgingCheckouts, dayUseGroups, staying, allGroupsOnDay };
-  }, [allGroups, dateStr]);
+  }, [allGroups, dateStr, periodsByGroupId]);
 
   // Build a set of group+date keys that have an active CoffeeCornerRequest
   const activeCoffeeKeys = useMemo(() => {
@@ -613,11 +615,12 @@ export default function OperationalDaySummary({
           )}
 
           {useGroupCards && visibleGroups.map(group => {
-            const isCheckin  = fmt(group.arrival_date)  === dateStr;
-            const isCheckout = fmt(group.departure_date) === dateStr;
+            const periods = periodsByGroupId[group.id] || [];
+            const isCheckin  = isGroupArrivalOnDate(group, dateStr, periods);
+            const isCheckout = isGroupDepartureOnDate(group, dateStr, periods);
             const hasAlerts  = (allAlerts || []).some(a => a.group_id === group.id && a.status === "OPEN");
             const defaultOpen = isCheckin || isCheckout || isDayUse(group) || hasAlerts || activeFilter !== "all";
-            return <GroupCard key={group.id} group={group} dateStr={dateStr} meals={allMeals} activities={allActivities} spaces={allSpaces} alerts={allAlerts} defaultOpen={defaultOpen} />;
+            return <GroupCard key={group.id} group={group} dateStr={dateStr} meals={allMeals} activities={allActivities} spaces={allSpaces} alerts={allAlerts} periods={periods} defaultOpen={defaultOpen} />;
           })}
 
           {activeFilter === "all" && dayActivities.filter((item) => item.standalone).map((item) => (
@@ -640,6 +643,7 @@ export default function OperationalDaySummary({
               activities={allActivities}
               spaces={allSpaces}
               alerts={allAlerts}
+              periodsByGroupId={periodsByGroupId}
             />
           )}
 
