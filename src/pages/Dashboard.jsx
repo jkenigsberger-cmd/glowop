@@ -17,6 +17,8 @@ import { Button } from "@/components/ui/button";
 import { FileText, ChevronRight, ChevronLeft, BedDouble, Sun, Users, LogIn, LogOut, UtensilsCrossed, CalendarDays, AlertTriangle, Coffee } from "lucide-react";
 import { useRoleContext } from "@/lib/RoleContext";
 import { isGroupOperationallyEnabled } from "@/lib/groupOperationalIsolation";
+import { isGroupOnDashboardDate } from "@/lib/groupDateReaders";
+import useGroupStayPeriods from "@/hooks/useGroupStayPeriods";
 
 const toDateStr = (date) => format(date, "yyyy-MM-dd");
 const TODAY = toDateStr(new Date());
@@ -113,6 +115,8 @@ export default function Dashboard() {
     select: items => items.filter(isGroupOperationallyEnabled),
   });
 
+  const { periodsByGroupId } = useGroupStayPeriods(groups);
+
   const { data: profiles = [] } = useQuery({
     queryKey: ["operationalProfiles"],
     queryFn: () => base44.entities.OperationalGroupProfile.list("-accepted_at", 300),
@@ -186,11 +190,8 @@ export default function Dashboard() {
   // Active groups (lodging + day-use) on this date
   const activeGroups = useMemo(() => groups.filter(g => {
     if (EXCLUDED.has(g.status)) return false;
-    if (g.group_type === "DAY_USE") return g.arrival_date === selectedDate;
-    const dep = g.departure_date && g.departure_date.trim() !== "" ? g.departure_date : null;
-    if (!dep) return g.arrival_date === selectedDate;
-    return g.arrival_date <= selectedDate && dep > selectedDate;
-  }), [groups, selectedDate]);
+    return isGroupOnDashboardDate(g, selectedDate, periodsByGroupId[g.id] || []);
+  }), [groups, selectedDate, periodsByGroupId]);
 
   // Day-use groups only
   const dayUseGroups = useMemo(() =>

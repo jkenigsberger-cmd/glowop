@@ -12,11 +12,11 @@ import { cn } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
 import { getMonthDatesSunday, getWeekDatesSunday, HEB_DAYS_SUN } from "@/lib/calendarWeek";
 import { isGroupOperationallyEnabled } from "@/lib/groupOperationalIsolation";
+import { classifyGroupsForDate } from "@/lib/groupDateReaders";
+import useGroupStayPeriods from "@/hooks/useGroupStayPeriods";
 
 const fmt = (d) => moment(d).format("YYYY-MM-DD");
 const isSameDay = (a, b) => fmt(a) === fmt(b);
-const EXCLUDED = new Set(["CANCELLED", "ARCHIVED"]);
-
 const GROUP_TYPE_HEB = { LODGING: "לינה", DAY_USE: "פעילות יום" };
 const STATUS_HEB = { DRAFT: "טיוטה", PENDING_APPROVAL: "בהמתנה", CONFIRMED: "מאושר", COMPLETED: "הסתיים" };
 
@@ -29,27 +29,15 @@ function useGroups() {
 }
 
 /** For a given date string, classify each group */
-function classifyGroups(groups, dateStr) {
-  const arrivals = [], departures = [], staying = [];
-  groups.forEach((g) => {
-    if (EXCLUDED.has(g.status)) return;
-    if (!g.arrival_date) return;
-    const arr = g.arrival_date;
-    const dep = g.departure_date || arr;
-    if (arr === dateStr) arrivals.push(g);
-    else if (dep === dateStr) departures.push(g);
-    else if (arr < dateStr && dep > dateStr) staying.push(g);
-  });
-  return { arrivals, departures, staying };
-}
+const classifyGroups = classifyGroupsForDate;
 
 // ── Day Detail Modal ──────────────────────────────────────────────────────────
 
-function DayModal({ dateStr, groups, onClose }) {
+function DayModal({ dateStr, groups, periodsByGroupId, onClose }) {
   const navigate = useNavigate();
   const { arrivals, departures, staying } = useMemo(
-    () => classifyGroups(groups, dateStr),
-    [groups, dateStr]
+    () => classifyGroups(groups, dateStr, periodsByGroupId),
+    [groups, dateStr, periodsByGroupId]
   );
   const dayLabel = moment(dateStr).format("dddd, D בMMMM YYYY");
 
@@ -101,13 +89,13 @@ function DayModal({ dateStr, groups, onClose }) {
 
 // ── Month Grid Cell ────────────────────────────────────────────────────────────
 
-function CIODayCell({ date, groups, isCurrentMonth, onClick }) {
+function CIODayCell({ date, groups, periodsByGroupId, isCurrentMonth, onClick }) {
   const navigate = useNavigate();
   const dateStr = fmt(date);
   const isToday = isSameDay(date, moment());
   const { arrivals, departures, staying } = useMemo(
-    () => classifyGroups(groups, dateStr),
-    [groups, dateStr]
+    () => classifyGroups(groups, dateStr, periodsByGroupId),
+    [groups, dateStr, periodsByGroupId]
   );
 
   const chips = [
@@ -159,6 +147,7 @@ export default function CheckInOutCalendar() {
   const [pivot, setPivot] = useState(moment());
   const [modalDate, setModalDate] = useState(null);
   const { data: groups = [] } = useGroups();
+  const { periodsByGroupId } = useGroupStayPeriods(groups);
 
   const dates = useMemo(() => getMonthDatesSunday(pivot), [pivot]);
   const currentMonth = pivot.month();
@@ -201,6 +190,7 @@ export default function CheckInOutCalendar() {
                 key={date.toISOString()}
                 date={date}
                 groups={groups}
+                periodsByGroupId={periodsByGroupId}
                 isCurrentMonth={date.month() === currentMonth}
                 onClick={setModalDate}
               />
@@ -210,7 +200,7 @@ export default function CheckInOutCalendar() {
       </div>
 
       {modalDate && (
-        <DayModal dateStr={modalDate} groups={groups} onClose={() => setModalDate(null)} />
+        <DayModal dateStr={modalDate} groups={groups} periodsByGroupId={periodsByGroupId} onClose={() => setModalDate(null)} />
       )}
     </div>
   );

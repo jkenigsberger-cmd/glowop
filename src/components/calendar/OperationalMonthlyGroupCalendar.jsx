@@ -13,6 +13,8 @@ import "moment/locale/he";
 import { ChevronLeft, ChevronRight, ArrowDownToLine, ArrowUpFromLine, Moon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { isGroupOperationallyEnabled } from "@/lib/groupOperationalIsolation";
+import { isGroupOnOperationalCalendarDate } from "@/lib/groupDateReaders";
+import useGroupStayPeriods from "@/hooks/useGroupStayPeriods";
 
 moment.locale("he");
 
@@ -32,17 +34,11 @@ function buildCalendarGrid(pivot) {
 }
 
 // Groups relevant to a given date: staying / arriving / departing
-function groupsForDate(groups, dateStr) {
+function groupsForDate(groups, dateStr, periodsByGroupId) {
   return groups.filter(g => {
     if (!isGroupOperationallyEnabled(g)) return false;
-    const arr = g.arrival_date;
-    const dep = g.departure_date;
-    if (!arr) return false;
     if (g.status === "CANCELLED") return false;
-    if (arr === dateStr) return true;
-    if (dep === dateStr) return true;
-    if (!dep) return false;
-    return arr <= dateStr && dep > dateStr;
+    return isGroupOnOperationalCalendarDate(g, dateStr, periodsByGroupId[g.id] || []);
   });
 }
 
@@ -68,9 +64,9 @@ function getEventStyle(isArr, isDep) {
   };
 }
 
-function DayCell({ dateStr, inMonth, groups, onGroupClick, getGroupLabel }) {
+function DayCell({ dateStr, inMonth, groups, periodsByGroupId, onGroupClick, getGroupLabel }) {
   const isToday = dateStr === TODAY;
-  const dayGroups = groupsForDate(groups, dateStr);
+  const dayGroups = groupsForDate(groups, dateStr, periodsByGroupId);
   const MAX_VISIBLE = 3;
   const overflow = dayGroups.length - MAX_VISIBLE;
 
@@ -135,6 +131,7 @@ export default function OperationalMonthlyGroupCalendar({
   onGroupClick,
   getGroupLabel,
 }) {
+  const { periodsByGroupId } = useGroupStayPeriods(groups);
   const pivot  = selectedMonth || moment();
   const grid   = buildCalendarGrid(pivot);
   const pivotMonth = pivot.format("YYYY-MM");
@@ -185,6 +182,7 @@ export default function OperationalMonthlyGroupCalendar({
               dateStr={dateStr}
               inMonth={dateStr.slice(0, 7) === pivotMonth}
               groups={groups}
+              periodsByGroupId={periodsByGroupId}
               onGroupClick={onGroupClick}
               getGroupLabel={getGroupLabel}
             />
