@@ -13,7 +13,7 @@ import "moment/locale/he";
 import { ChevronLeft, ChevronRight, ArrowDownToLine, ArrowUpFromLine, Moon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { isGroupOperationallyEnabled } from "@/lib/groupOperationalIsolation";
-import { isGroupOnOperationalCalendarDate } from "@/lib/groupDateReaders";
+import { isGroupArrivalOnDate, isGroupDepartureOnDate, isGroupOnOperationalCalendarDate } from "@/lib/groupDateReaders";
 import useGroupStayPeriods from "@/hooks/useGroupStayPeriods";
 
 moment.locale("he");
@@ -85,8 +85,9 @@ function DayCell({ dateStr, inMonth, groups, periodsByGroupId, onGroupClick, get
       {/* Group chips — icon-first, minimal text */}
       <div className="space-y-0.5">
         {dayGroups.slice(0, MAX_VISIBLE).map(g => {
-          const isArr = g.arrival_date === dateStr;
-          const isDep = g.departure_date === dateStr;
+          const periods = periodsByGroupId[g.id] || [];
+          const isArr = isGroupArrivalOnDate(g, dateStr, periods);
+          const isDep = isGroupDepartureOnDate(g, dateStr, periods);
           const style = getEventStyle(isArr, isDep);
           const Icon = style.icon;
           // Custom label/color override from parent

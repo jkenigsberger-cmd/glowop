@@ -1,17 +1,42 @@
-import { isDateInsideStayPeriods } from "@/lib/groupStayPeriods";
+import { isArrivalDate, isDepartureDate, occupiesSleepingNight } from "@/lib/groupStayPeriods";
 
 const EXCLUDED = new Set(["CANCELLED", "ARCHIVED"]);
 
-export function isGroupOnDashboardDate(group, date, periods = []) {
-  if (group.stay_mode === "MULTI_PERIOD") return isDateInsideStayPeriods(date, periods);
+export function isGroupOperationallyPresent(group, date, periods = []) {
+  if (group.stay_mode === "MULTI_PERIOD") return occupiesSleepingNight(date, periods);
   if (group.group_type === "DAY_USE") return group.arrival_date === date;
   const departure = group.departure_date?.trim() || null;
   if (!departure) return group.arrival_date === date;
   return group.arrival_date <= date && departure > date;
 }
 
+export const isGroupOnDashboardDate = isGroupOperationallyPresent;
+
+export function isGroupArrivalOnDate(group, date, periods = []) {
+  return group.stay_mode === "MULTI_PERIOD"
+    ? isArrivalDate(date, periods)
+    : group.arrival_date === date;
+}
+
+export function isGroupDepartureOnDate(group, date, periods = []) {
+  return group.stay_mode === "MULTI_PERIOD"
+    ? isDepartureDate(date, periods)
+    : group.departure_date === date;
+}
+
+export function isGroupSleepingNightOnDate(group, date, periods = []) {
+  if (group.group_type !== "LODGING") return false;
+  if (group.stay_mode === "MULTI_PERIOD") return occupiesSleepingNight(date, periods);
+  const departure = group.departure_date?.trim() || null;
+  return !!departure && group.arrival_date <= date && departure > date;
+}
+
 export function isGroupOnOperationalCalendarDate(group, date, periods = []) {
-  if (group.stay_mode === "MULTI_PERIOD") return isDateInsideStayPeriods(date, periods);
+  if (group.stay_mode === "MULTI_PERIOD") {
+    return isGroupArrivalOnDate(group, date, periods)
+      || isGroupDepartureOnDate(group, date, periods)
+      || isGroupSleepingNightOnDate(group, date, periods);
+  }
   if (!group.arrival_date) return false;
   if (group.arrival_date === date || group.departure_date === date) return true;
   if (!group.departure_date) return false;
@@ -24,11 +49,11 @@ export function classifyGroupsForDate(groups, date, periodsByGroupId = {}) {
     if (EXCLUDED.has(group.status)) return;
     if (group.stay_mode === "MULTI_PERIOD") {
       const periods = periodsByGroupId[group.id] || [];
-      const arrives = periods.some(period => period.start_date === date);
-      const departs = periods.some(period => period.end_date === date);
+      const arrives = isGroupArrivalOnDate(group, date, periods);
+      const departs = isGroupDepartureOnDate(group, date, periods);
       if (arrives) arrivals.push(group);
       if (departs) departures.push(group);
-      if (!arrives && !departs && isDateInsideStayPeriods(date, periods)) staying.push(group);
+      if (!arrives && !departs && isGroupSleepingNightOnDate(group, date, periods)) staying.push(group);
       return;
     }
     if (!group.arrival_date) return;

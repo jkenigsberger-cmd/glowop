@@ -2,6 +2,8 @@ import { useMemo } from "react";
 import { BedDouble, MapPin } from "lucide-react";
 import OccupancyTent from "./OccupancyTent";
 import { isGroupOperationallyEnabled } from "@/lib/groupOperationalIsolation";
+import { occupiesSleepingNight } from "@/lib/groupStayPeriods";
+import useGroupStayPeriods from "@/hooks/useGroupStayPeriods";
 
 /**
  * Group color palette — deterministic assignment based on group_id hash.
@@ -301,17 +303,20 @@ export default function OccupancyMap({
   allocations = [],
   groups = [],
 }) {
-  const groupById = useMemo(() => Object.fromEntries(groups.filter(isGroupOperationallyEnabled).map(g => [g.id, g])), [groups]);
+  const operationalGroups = useMemo(() => groups.filter(isGroupOperationallyEnabled), [groups]);
+  const groupById = useMemo(() => Object.fromEntries(operationalGroups.map(g => [g.id, g])), [operationalGroups]);
+  const { periodsByGroupId } = useGroupStayPeriods(operationalGroups);
 
-  // Filter allocations: CONFIRMED + date range covers selectedDate
+  // Filter allocations: preserve allocation envelope, then hide MULTI_PERIOD gap nights.
   const dateAllocs = useMemo(() =>
-    allocations.filter(a =>
-      groupById[a.group_id] &&
-      a.status === "CONFIRMED" &&
-      a.arrival_date <= selectedDate &&
-      a.departure_date > selectedDate
-    ),
-    [allocations, selectedDate, groupById]
+    allocations.filter(a => {
+      const group = groupById[a.group_id];
+      if (!group || a.status !== "CONFIRMED") return false;
+      if (!(a.arrival_date <= selectedDate && a.departure_date > selectedDate)) return false;
+      return group.stay_mode !== "MULTI_PERIOD"
+        || occupiesSleepingNight(selectedDate, periodsByGroupId[group.id] || []);
+    }),
+    [allocations, selectedDate, groupById, periodsByGroupId]
   );
 
   // Build tent → allocation lookup

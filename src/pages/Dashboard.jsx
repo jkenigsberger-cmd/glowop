@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { FileText, ChevronRight, ChevronLeft, BedDouble, Sun, Users, LogIn, LogOut, UtensilsCrossed, CalendarDays, AlertTriangle, Coffee } from "lucide-react";
 import { useRoleContext } from "@/lib/RoleContext";
 import { isGroupOperationallyEnabled } from "@/lib/groupOperationalIsolation";
-import { isGroupOnDashboardDate } from "@/lib/groupDateReaders";
+import { isGroupArrivalOnDate, isGroupDepartureOnDate, isGroupOnDashboardDate, isGroupSleepingNightOnDate } from "@/lib/groupDateReaders";
 import useGroupStayPeriods from "@/hooks/useGroupStayPeriods";
 
 const toDateStr = (date) => format(date, "yyyy-MM-dd");
@@ -206,22 +206,20 @@ export default function Dashboard() {
   );
 
   const arrivingToday = useMemo(() =>
-    groups.filter(g => !EXCLUDED.has(g.status) && g.arrival_date === selectedDate),
-    [groups, selectedDate]
+    groups.filter(g => !EXCLUDED.has(g.status) && isGroupArrivalOnDate(g, selectedDate, periodsByGroupId[g.id] || [])),
+    [groups, selectedDate, periodsByGroupId]
   );
 
-  // Lodging groups that sleep tonight (not day-use, not departing today)
+  // Lodging groups that sleep tonight (not day-use, departure-exclusive)
   const sleepingTonight = useMemo(() => groups.filter(g => {
     if (EXCLUDED.has(g.status)) return false;
-    if (g.group_type !== "LODGING") return false;
-    const dep = g.departure_date && g.departure_date.trim() !== "" ? g.departure_date : null;
-    return dep && g.arrival_date <= selectedDate && dep > selectedDate;
-  }), [groups, selectedDate]);
+    return isGroupSleepingNightOnDate(g, selectedDate, periodsByGroupId[g.id] || []);
+  }), [groups, selectedDate, periodsByGroupId]);
 
   // ★ Only LODGING groups can check-out. Day-use groups are NOT departures.
   const departingToday = useMemo(() =>
-    groups.filter(g => !EXCLUDED.has(g.status) && g.group_type === "LODGING" && g.departure_date === selectedDate),
-    [groups, selectedDate]
+    groups.filter(g => !EXCLUDED.has(g.status) && g.group_type === "LODGING" && isGroupDepartureOnDate(g, selectedDate, periodsByGroupId[g.id] || [])),
+    [groups, selectedDate, periodsByGroupId]
   );
 
   const mealsForDate = useMemo(() =>
