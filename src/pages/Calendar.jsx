@@ -10,6 +10,8 @@ import { isGroupOperationallyEnabled } from "@/lib/groupOperationalIsolation";
 import CheckInOutCalendar from "../components/calendar/CheckInOutCalendar.jsx";
 import OperationalDaySummary from "../components/calendar/OperationalDaySummary.jsx";
 import { getWeekDatesSunday, getMonthDatesSunday, HEB_DAYS_SUN } from "@/lib/calendarWeek";
+import { classifyGroupsForDate } from "@/lib/groupDateReaders";
+import useGroupStayPeriods from "@/hooks/useGroupStayPeriods";
 
 moment.locale("he");
 
@@ -25,13 +27,12 @@ const MEAL_ORDER = { BREAKFAST: 0, LUNCH: 1, DINNER: 2, COFFEE_CORNER: 3, OTHER:
 
 const isDayUse = (g) => g.group_type === "DAY_USE";
 
-function getDaySummary(dateStr, groups, meals, activities) {
+function getDaySummary(dateStr, groups, meals, activities, periodsByGroupId = {}) {
   const operationalGroupIds = new Set(groups.map((group) => group.id));
   const activeGroups = groups.filter((g) => !EXCLUDED_STATUSES.has(g.status) && g.arrival_date && g.departure_date);
-  // Lodging check-ins/outs/staying
-  const checkins = activeGroups.filter((g) => !isDayUse(g) && fmtDay(g.arrival_date) === dateStr);
-  const checkouts = activeGroups.filter((g) => !isDayUse(g) && fmtDay(g.departure_date) === dateStr);
-  const staying = activeGroups.filter((g) => !isDayUse(g) && fmtDay(g.arrival_date) < dateStr && fmtDay(g.departure_date) > dateStr);
+  // Lodging check-ins/outs/staying — period-aware for MULTI_PERIOD groups
+  const lodgingGroups = activeGroups.filter((g) => !isDayUse(g));
+  const { arrivals: checkins, departures: checkouts, staying } = classifyGroupsForDate(lodgingGroups, dateStr, periodsByGroupId);
   // Day-use groups active today
   const dayUseGroups = activeGroups.filter((g) => isDayUse(g) && fmtDay(g.arrival_date) === dateStr);
   const onSite = [...checkins, ...staying];
@@ -53,10 +54,10 @@ function getDaySummary(dateStr, groups, meals, activities) {
 
 // ─── Compact Month Day Cell ───────────────────────────────────────────────────
 
-function MonthDayCell({ date, groups, meals, activities, onClick, isCurrentMonth }) {
+function MonthDayCell({ date, groups, meals, activities, periodsByGroupId, onClick, isCurrentMonth }) {
   const dateStr = fmt(date);
   const isToday = dateStr === todayStr;
-  const { checkins, checkouts, dayUseGroups, onSite, totalPax, mealsByType, dayActivities } = getDaySummary(dateStr, groups, meals, activities);
+  const { checkins, checkouts, dayUseGroups, onSite, totalPax, mealsByType, dayActivities } = getDaySummary(dateStr, groups, meals, activities, periodsByGroupId);
   const allOnDay = [...onSite, ...dayUseGroups];
 
   const hasContent = allOnDay.length > 0 || Object.keys(mealsByType).length > 0 || dayActivities.length > 0;
@@ -135,7 +136,7 @@ function MonthDayCell({ date, groups, meals, activities, onClick, isCurrentMonth
 
 }
 
-function MonthView({ dates, groups, meals, activities, pivot, onClick }) {
+function MonthView({ dates, groups, meals, activities, periodsByGroupId, pivot, onClick }) {
   const currentMonth = pivot.month();
   return (
     <div className="rounded-xl overflow-hidden border border-slate-200 shadow-sm">
@@ -155,6 +156,7 @@ function MonthView({ dates, groups, meals, activities, pivot, onClick }) {
           groups={groups}
           meals={meals}
           activities={activities}
+          periodsByGroupId={periodsByGroupId}
           onClick={onClick}
           isCurrentMonth={date.month() === currentMonth} />
 
@@ -167,10 +169,10 @@ function MonthView({ dates, groups, meals, activities, pivot, onClick }) {
 
 // ─── Compact Week Day Column ──────────────────────────────────────────────────
 
-function WeekDayColumn({ date, groups, meals, activities, onClick }) {
+function WeekDayColumn({ date, groups, meals, activities, periodsByGroupId, onClick }) {
   const dateStr = fmt(date);
   const isToday = dateStr === todayStr;
-  const { checkins, checkouts, staying, dayUseGroups, onSite, totalPax, mealsByType, dayActivities } = getDaySummary(dateStr, groups, meals, activities);
+  const { checkins, checkouts, staying, dayUseGroups, onSite, totalPax, mealsByType, dayActivities } = getDaySummary(dateStr, groups, meals, activities, periodsByGroupId);
   const allOnDay = [...onSite, ...dayUseGroups];
 
   const hasContent = allOnDay.length > 0 || Object.keys(mealsByType).length > 0 || dayActivities.length > 0;
@@ -263,7 +265,7 @@ function WeekDayColumn({ date, groups, meals, activities, onClick }) {
 
 }
 
-function WeekView({ dates, groups, meals, activities, onClick }) {
+function WeekView({ dates, groups, meals, activities, periodsByGroupId, onClick }) {
   return (
     <div className="rounded-xl border border-slate-200 overflow-hidden shadow-sm">
       <div className="grid grid-cols-7">
@@ -274,6 +276,7 @@ function WeekView({ dates, groups, meals, activities, onClick }) {
           groups={groups}
           meals={meals}
           activities={activities}
+          periodsByGroupId={periodsByGroupId}
           onClick={onClick} />
 
         )}
@@ -284,11 +287,11 @@ function WeekView({ dates, groups, meals, activities, onClick }) {
 
 // ─── Mobile Agenda View ───────────────────────────────────────────────────────
 
-function AgendaView({ pivot, groups, meals, activities, onDayClick, onPrev, onNext, onToday }) {
+function AgendaView({ pivot, groups, meals, activities, periodsByGroupId, onDayClick, onPrev, onNext, onToday }) {
   const dateStr = fmt(pivot);
   const isToday = dateStr === todayStr;
   const dayLabel = pivot.format("dddd, D בMMMM YYYY");
-  const { checkins, checkouts, staying, dayUseGroups, onSite, totalPax, mealsByType, dayActivities } = getDaySummary(dateStr, groups, meals, activities);
+  const { checkins, checkouts, staying, dayUseGroups, onSite, totalPax, mealsByType, dayActivities } = getDaySummary(dateStr, groups, meals, activities, periodsByGroupId);
   const allOnDay = [...onSite, ...dayUseGroups];
 
   return (
@@ -421,6 +424,7 @@ export default function Calendar() {
     queryFn: () => base44.entities.CoffeeCornerRequest.filter({ status: "ACTIVE" })
   });
 
+  const { periodsByGroupId } = useGroupStayPeriods(groups);
   const operationalGroupIds = useMemo(() => new Set(groups.map(g => g.id)), [groups]);
   const operationalMeals = useMemo(() => meals.filter(m => operationalGroupIds.has(m.group_id)), [meals, operationalGroupIds]);
   const standaloneAssignmentsByReservation = useMemo(() => {
@@ -473,6 +477,7 @@ export default function Calendar() {
           groups={groups}
           meals={operationalMeals}
           activities={operationalScheduleItems}
+          periodsByGroupId={periodsByGroupId}
           onDayClick={handleDayClick}
           onPrev={() => goAgendaDay(-1)}
           onNext={() => goAgendaDay(1)}
@@ -527,9 +532,9 @@ export default function Calendar() {
             <Legend />
 
             {view === "week" ?
-          <WeekView dates={dates} groups={groups} meals={operationalMeals} activities={operationalScheduleItems} onClick={handleDayClick} /> :
+          <WeekView dates={dates} groups={groups} meals={operationalMeals} activities={operationalScheduleItems} periodsByGroupId={periodsByGroupId} onClick={handleDayClick} /> :
 
-          <MonthView dates={dates} groups={groups} meals={operationalMeals} activities={operationalScheduleItems} pivot={pivot} onClick={handleDayClick} />
+          <MonthView dates={dates} groups={groups} meals={operationalMeals} activities={operationalScheduleItems} periodsByGroupId={periodsByGroupId} pivot={pivot} onClick={handleDayClick} />
           }
           </>
         }

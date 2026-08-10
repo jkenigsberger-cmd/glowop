@@ -26,6 +26,7 @@ import OperationalProfileAction from "@/components/groups/OperationalProfileActi
 import OperationalActivationAction from "@/components/groups/OperationalActivationAction";
 import MultiPeriodActivationAction from "@/components/groups/MultiPeriodActivationAction";
 import QuoteSyncButton from "@/components/quotes/QuoteSyncButton";
+import MechinaMovementSummary from "@/components/groups/MechinaMovementSummary";
 import { updateQuotePreparationCache, invalidateQuotePreparationCache } from "@/lib/quotePreparationCache";
 
 export default function GroupDetail() {
@@ -235,6 +236,9 @@ export default function GroupDetail() {
         <RoleGate permission="EDIT_GROUP">
           <MealDateRangeWarning group={group} />
         </RoleGate>
+
+        {/* Mechina movement summary — MULTI_PERIOD groups only */}
+        {group.stay_mode === "MULTI_PERIOD" && <MechinaMovementSummary groupId={id} />}
 
         {/* Summary Bar */}
         <div className="grid grid-cols-3 gap-3">

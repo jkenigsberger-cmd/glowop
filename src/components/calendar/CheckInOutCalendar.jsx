@@ -56,6 +56,7 @@ function DayModal({ dateStr, groups, periodsByGroupId, onClose }) {
             <div className="flex gap-2 text-[11px] text-slate-500 flex-wrap">
               {g.total_pax && <span>👥 {g.total_pax}</span>}
               {g.group_type && <span>{GROUP_TYPE_HEB[g.group_type] || g.group_type}</span>}
+              {g.stay_mode === "MULTI_PERIOD" && <span className="bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded font-medium">מכינה</span>}
               {g.status && <span className="text-slate-400">{STATUS_HEB[g.status] || g.status}</span>}
               {title === "נכנסים" && g.arrival_time && (
                 <span className="text-emerald-600 font-medium">🕐 שעת הגעה: {g.arrival_time}</span>
@@ -127,10 +128,10 @@ function CIODayCell({ date, groups, periodsByGroupId, isCurrentMonth, onClick })
             key={g.id + label}
             type="button"
             onClick={(e) => { e.stopPropagation(); navigate(`/groups/${g.id}`); }}
-            className={cn("w-full text-right text-[10px] leading-tight rounded px-1 py-0.5 truncate font-medium hover:opacity-80", cls)}
+            className={cn("w-full text-right text-[10px] leading-tight rounded px-1 py-0.5 truncate font-medium hover:opacity-80", cls, g.stay_mode === "MULTI_PERIOD" && "ring-1 ring-indigo-400 ring-offset-0")}
             title={`${label}: ${g.group_name}`}
           >
-            {label}: {g.group_name}
+            {label}: {g.group_name}{g.stay_mode === "MULTI_PERIOD" && <span className="mr-0.5 text-[8px] text-indigo-600">Ⓜ</span>}
           </button>
         ))}
         {overflow > 0 && (
