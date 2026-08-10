@@ -13,6 +13,7 @@ import { syncExistingOperationalPaxForGroup } from "@/lib/syncOperationalPax";
 import MealSyncAfterDateChangeModal from "@/components/groups/MealSyncAfterDateChangeModal";
 import GroupAvailabilityChecker from "@/components/groups/GroupAvailabilityChecker";
 import StayPeriodsEditor from "@/components/groups/StayPeriodsEditor";
+import StayPeriodsReadOnly from "@/components/groups/StayPeriodsReadOnly";
 import { loadMultiPeriodDraftPeriods, saveMultiPeriodDraft } from "@/lib/multiPeriodDraft";
 
 // Fields that trigger pax-related alerts when changed
@@ -33,6 +34,10 @@ const createInitialForm = group => ({
 
 export default function GroupFormModal({ group, onClose, onSaved, initialProfileDiets = null }) {
   const isEdit = !!group;
+  const activeMultiPeriodBasicEdit = isEdit &&
+    group.stay_mode === "MULTI_PERIOD" &&
+    group.status === "CONFIRMED" &&
+    group.operationally_active === true;
   const queryClient = useQueryClient();
   const [form, setForm] = useState(() => createInitialForm(group));
   // Dietary data — pre-loaded from profile.special_diets when editing
@@ -170,7 +175,7 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
     setAllocationBlockError(null);
     setGenderConsistencyError(null);
 
-    if (stayMode === "MULTI_PERIOD") {
+    if (stayMode === "MULTI_PERIOD" && !activeMultiPeriodBasicEdit) {
       if (periodsLoading) return;
       setSaving(true);
       try {
@@ -247,7 +252,7 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
     }
 
     // ── Date change → cascade re-planification with a preview/confirmation step ──
-    const groupDatesChanged = isEdit && (
+    const groupDatesChanged = isEdit && !activeMultiPeriodBasicEdit && (
       (form.arrival_date !== (group.arrival_date || "")) ||
       (form.departure_date !== (group.departure_date || ""))
     );
@@ -275,7 +280,19 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
 
     setSaving(true);
     let newGroupId = null;
-    const payload = {
+    const payload = activeMultiPeriodBasicEdit ? {
+      group_name: form.group_name,
+      group_type: group.group_type,
+      total_pax: form.total_pax,
+      staff_count: form.staff_count,
+      participant_count: participantCount,
+      boys_count: form.boys_count,
+      girls_count: form.girls_count,
+      contact_name: form.contact_name,
+      contact_phone: form.contact_phone,
+      contact_email: form.contact_email,
+      internal_notes: form.internal_notes,
+    } : {
       ...form,
       participant_count: participantCount,
     };
@@ -342,7 +359,19 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
         }
       }
 
-      await base44.entities.Group.update(group.id, payload);
+      const groupUpdatePayload = activeMultiPeriodBasicEdit ? {
+        group_name: payload.group_name,
+        total_pax: payload.total_pax,
+        staff_count: payload.staff_count,
+        participant_count: payload.participant_count,
+        boys_count: payload.boys_count,
+        girls_count: payload.girls_count,
+        contact_name: payload.contact_name,
+        contact_phone: payload.contact_phone,
+        contact_email: payload.contact_email,
+        internal_notes: payload.internal_notes,
+      } : payload;
+      await base44.entities.Group.update(group.id, groupUpdatePayload);
 
       // Sync existing operational pax if total_pax changed
       const oldTotalPax = Number(group.total_pax ?? 0);
@@ -418,7 +447,7 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
           }
 
           // B. Date changes
-          const datesChanged = DATE_FIELDS.some(f => (group[f] || "") !== (payload[f] || ""));
+          const datesChanged = !activeMultiPeriodBasicEdit && DATE_FIELDS.some(f => (group[f] || "") !== (payload[f] || ""));
           if (datesChanged) {
             const prev = { arrival_date: group.arrival_date, departure_date: group.departure_date };
             const next = { arrival_date: payload.arrival_date, departure_date: payload.departure_date };
@@ -588,7 +617,7 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label>סוג</Label>
-                <Select value={form.group_type} onValueChange={v => set("group_type", v)}>
+                <Select value={form.group_type} onValueChange={v => set("group_type", v)} disabled={activeMultiPeriodBasicEdit}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="LODGING">לינה</SelectItem>
@@ -599,7 +628,7 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
               {isEdit && (
                 <div className="space-y-1">
                   <Label>סטטוס</Label>
-                  <Select value={form.status} onValueChange={v => set("status", v)}>
+                  <Select value={form.status} onValueChange={v => set("status", v)} disabled={activeMultiPeriodBasicEdit}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="PENDING_APPROVAL">בהמתנה</SelectItem>
@@ -613,13 +642,17 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
               )}
             </div>
             <label className="flex items-center gap-2 cursor-pointer w-fit">
-              <input type="checkbox" checked={stayMode === "MULTI_PERIOD"} onChange={e => handleStayModeChange(e.target.checked)} className="h-4 w-4 accent-primary" />
+              <input type="checkbox" checked={stayMode === "MULTI_PERIOD"} onChange={e => handleStayModeChange(e.target.checked)} disabled={activeMultiPeriodBasicEdit} className="h-4 w-4 accent-primary disabled:cursor-not-allowed" />
               <span className="font-medium">קבוצת מכינה</span>
             </label>
           </div>
 
           {/* Dates */}
-          {stayMode === "CONTINUOUS" ? (
+          {activeMultiPeriodBasicEdit ? (
+            periodsLoading
+              ? <p className="text-sm text-muted-foreground">טוען תקופות שהייה...</p>
+              : <StayPeriodsReadOnly periods={stayPeriodsDraft} />
+          ) : stayMode === "CONTINUOUS" ? (
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1"><Label>תאריך הגעה *</Label><Input type="date" value={continuousDraft.arrival_date} onChange={e => setContinuousField("arrival_date", e.target.value)} required /></div>
               <div className="space-y-1"><Label>{isDayUse ? "תאריך האירוע" : "תאריך עזיבה"}</Label><Input type="date" value={continuousDraft.departure_date} onChange={e => setContinuousField("departure_date", e.target.value)} /></div>

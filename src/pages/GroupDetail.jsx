@@ -163,11 +163,11 @@ export default function GroupDetail() {
                   <Printer className="w-3.5 h-3.5" /> הפק סיכום קבוצה
                 </Button>
               </RoleGate>
-              {!isActivatedMultiPeriod && <RoleGate permission="EDIT_GROUP">
+              <RoleGate permission="EDIT_GROUP">
                 <Button variant="outline" size="sm" onClick={() => setEditGroup(true)} className="gap-1 flex-shrink-0">
                   <Pencil className="w-3.5 h-3.5" /> עריכה
                 </Button>
-              </RoleGate>}
+              </RoleGate>
             </div>
           </div>
         </div>
