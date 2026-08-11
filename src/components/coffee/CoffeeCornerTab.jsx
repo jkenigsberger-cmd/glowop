@@ -144,16 +144,17 @@ export default function CoffeeCornerTab({ groupId, profile, group }) {
       source: "manual",
       status: "ACTIVE",
     };
-    if (editingId) {
-      await base44.entities.CoffeeCornerRequest.update(editingId, payload);
-      toast.success("פינת קפה עודכנה");
-    } else {
-      await base44.entities.CoffeeCornerRequest.create(payload);
-      toast.success("פינת קפה נוספה");
+    try {
+      const { data } = await base44.functions.invoke("saveCoffeeCornerRequest", { ...payload, id: editingId || undefined });
+      if (!data?.success) { setFormError(data?.error || "שמירת פינת הקפה נכשלה"); return; }
+      toast.success(editingId ? "פינת קפה עודכנה" : "פינת קפה נוספה");
+      closeForm();
+      invalidate();
+    } catch (error) {
+      setFormError(error?.response?.data?.error || error?.message || "שמירת פינת הקפה נכשלה");
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
-    closeForm();
-    invalidate();
   };
 
   const handleCancel = async (req) => {

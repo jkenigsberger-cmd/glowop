@@ -117,18 +117,18 @@ export default function PrisaTab({ groupId, profile, group }) {
       source: "MANUAL",
       status: "ACTIVE",
     };
-    let createdRequest = null;
-    if (editingId) {
-      await base44.entities.PrisaRequest.update(editingId, payload);
-      toast.success("פריסה עודכנה");
-    } else {
-      createdRequest = await base44.entities.PrisaRequest.create(payload);
-      toast.success("פריסה נוספה");
+    try {
+      const { data } = await base44.functions.invoke("savePrisaRequest", { ...payload, id: editingId || undefined });
+      if (!data?.success) { setFormError(data?.error || "שמירת הפריסה נכשלה"); return; }
+      toast.success(editingId ? "פריסה עודכנה" : "פריסה נוספה");
+      closeForm();
+      await invalidate();
+      if (!editingId) setCopySource(data.item);
+    } catch (error) {
+      setFormError(error?.response?.data?.error || error?.message || "שמירת הפריסה נכשלה");
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
-    closeForm();
-    await invalidate();
-    if (createdRequest) setCopySource(createdRequest);
   };
 
   const handleCancel = async (req) => {

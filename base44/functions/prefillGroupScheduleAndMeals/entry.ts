@@ -6,6 +6,7 @@
  */
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 import { assertOperationalGroup } from '../../shared/quotePreparationConfig.js';
+import { validateDatedOperationalDate } from '../../shared/datedOperationalPeriodValidation.js';
 
 const MEAL_DEFAULTS = {
   BREAKFAST: { start_time: '08:00', end_time: '10:00' },
@@ -185,6 +186,13 @@ Deno.serve(async (req) => {
 
     // SAFETY: talk suggestions are intake-only — never create GroupScheduleItem from them
     const normalScheduleRows = scheduleRows.filter(r => !r.is_talk_suggestion);
+    for (const row of normalScheduleRows) {
+      if (!row.date) continue;
+      const dateValidation = await validateDatedOperationalDate(base44, group, row.date);
+      if (!dateValidation.valid) {
+        return Response.json({ success: false, error: dateValidation.message, error_code: dateValidation.code }, { status: 400 });
+      }
+    }
 
     for (const row of normalScheduleRows) {
       if (!row.date || !row.start_time || !row.activity) continue;

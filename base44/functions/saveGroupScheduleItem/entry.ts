@@ -2,6 +2,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 import { assertOperationalGroup, isPreparationGroupOperational } from '../../shared/quotePreparationConfig.js';
 import { checkActivitySpaceConflict } from '../../shared/activitySpaceAvailability.js';
 import { ACTIVITY_CALENDAR_ID, calendarDateTime } from '../../shared/activityCalendar.js';
+import { validateDatedOperationalDate } from '../../shared/datedOperationalPeriodValidation.js';
 
 const VALID_SPACE_CODES = new Set([
   'bunker_1', 'bunker_2', 'bunker_4', 'bunker_5',
@@ -314,6 +315,10 @@ export default async function(req) {
       return Response.json({ success: false, error: 'הקבוצה לא נמצאה' }, { status: 404 });
     }
     try { assertOperationalGroup(primaryGroup); } catch (error) { return Response.json({ success: false, error: error.code }, { status: 409 }); }
+    const primaryDateValidation = await validateDatedOperationalDate(base44, primaryGroup, date);
+    if (!primaryDateValidation.valid) {
+      return Response.json({ success: false, error: primaryDateValidation.message, error_code: primaryDateValidation.code }, { status: 400 });
+    }
     if (primaryGroup.arrival_date && primaryGroup.departure_date) {
       if (date < primaryGroup.arrival_date || date > primaryGroup.departure_date) {
         return Response.json({ success: false, error: 'לא ניתן לקבוע פעילות מחוץ לתאריכי הקבוצה' }, { status: 400 });
@@ -404,6 +409,8 @@ export default async function(req) {
       for (const gid of allGroupIds) {
         const g = groupMap[gid];
         if (!g) return Response.json({ success: false, error: `הקבוצה לא נמצאה: ${gid}` }, { status: 404 });
+        const groupDateValidation = await validateDatedOperationalDate(base44, g, date);
+        if (!groupDateValidation.valid) return Response.json({ success: false, error: groupDateValidation.message, error_code: groupDateValidation.code, group_id: gid }, { status: 400 });
         if (!isPreparationGroupOperational(g)) return Response.json({ success: false, error: 'PREPARATION_GROUP_NOT_OPERATIONAL', group_id: gid }, { status: 409 });
         if (g.arrival_date && g.departure_date) {
           const stayStart = g.arrival_date < g.departure_date ? g.arrival_date : g.departure_date;
@@ -554,6 +561,11 @@ export default async function(req) {
           shared_activity_id: currentSharedId,
           status: 'ACTIVE',
         });
+        const linkedGroups = await fetchGroupsByIds(base44, [...new Set(allLinked.map(item => item.group_id))]);
+        for (const linkedGroup of linkedGroups) {
+          const linkedDateValidation = await validateDatedOperationalDate(base44, linkedGroup, date);
+          if (!linkedDateValidation.valid) return Response.json({ success: false, error: linkedDateValidation.message, error_code: linkedDateValidation.code, group_id: linkedGroup.id }, { status: 400 });
+        }
 
         // Update all — preserve each item's group_id and operational_group_profile_id.
         // Keep the freshly-updated objects so calendar sync uses the NEW values directly
@@ -649,6 +661,8 @@ export default async function(req) {
       if (!g) {
         return Response.json({ success: false, error: `הקבוצה לא נמצאה: ${gid}` }, { status: 404 });
       }
+      const groupDateValidation = await validateDatedOperationalDate(base44, g, date);
+      if (!groupDateValidation.valid) return Response.json({ success: false, error: groupDateValidation.message, error_code: groupDateValidation.code, group_id: gid }, { status: 400 });
       if (g.arrival_date && g.departure_date) {
         // Defensive: handle inverted dates by using min/max
         const stayStart = g.arrival_date < g.departure_date ? g.arrival_date : g.departure_date;

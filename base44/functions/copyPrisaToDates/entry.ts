@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
+import { validateDatedOperationalDate } from '../../shared/datedOperationalPeriodValidation.js';
 
 const normalize = (value) => String(value || '').trim().toLowerCase();
 const allowedRoles = new Set(['SUPER_ADMIN', 'ADMIN']);
@@ -28,7 +29,12 @@ export default async function(req) {
     const profile = profiles.find((item) => item.id === source.operational_group_profile_id) || profiles[0] || null;
     const start = group.arrival_date || '';
     const end = group.departure_date || '';
-    const invalidDates = targetDates.filter((date) => !/^\d{4}-\d{2}-\d{2}$/.test(date) || !start || !end || date < start || date > end);
+    const invalidDates = [];
+    for (const date of targetDates) {
+      const validEnvelopeDate = /^\d{4}-\d{2}-\d{2}$/.test(date) && start && end && date >= start && date <= end;
+      const periodValidation = validEnvelopeDate ? await validateDatedOperationalDate(base44, group, date) : { valid: false };
+      if (!validEnvelopeDate || !periodValidation.valid) invalidDates.push(date);
+    }
     const validDates = targetDates.filter((date) => !invalidDates.includes(date));
 
     const participants = group.participant_count ?? profile?.participant_count;
