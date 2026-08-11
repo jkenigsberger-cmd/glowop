@@ -15,16 +15,17 @@ export default async function(req) {
     if (!group) return Response.json({ success: false, error: 'GROUP_NOT_FOUND' }, { status: 404 });
     if (group.stay_mode !== 'MULTI_PERIOD') return Response.json({ success: false, error: 'GROUP_NOT_MULTI_PERIOD' }, { status: 409 });
 
-    const [profiles, periods, tents, existingAllocations, neighborhoodReservations] = await Promise.all([
+    const [profiles, periods, tents, inventoryNeighborhoods, existingAllocations, neighborhoodReservations] = await Promise.all([
       base44.asServiceRole.entities.OperationalGroupProfile.filter({ group_id: groupId }),
       base44.asServiceRole.entities.GroupStayPeriod.filter({ group_id: groupId, status: 'ACTIVE' }, 'start_date', 100),
       base44.asServiceRole.entities.Tent.list(),
+      base44.asServiceRole.entities.Neighborhood.list(),
       base44.asServiceRole.entities.SleepingAllocation.filter({ status: { $in: ['DRAFT', 'CONFIRMED'] } }),
       base44.asServiceRole.entities.NeighborhoodReservation.filter({ status: 'ACTIVE' }),
     ]);
     if (profiles.length !== 1) return Response.json({ success: false, error: 'EXACTLY_ONE_OGP_REQUIRED', profile_count: profiles.length }, { status: 409 });
 
-    const assignmentErrors = validateSleepingAssignments(assignments, tents);
+    const assignmentErrors = validateSleepingAssignments(assignments, tents, inventoryNeighborhoods);
     if (assignmentErrors.length > 0) return Response.json({ success: false, error: 'INVALID_ASSIGNMENTS', errors: assignmentErrors }, { status: 400 });
 
     const plan = buildMultiPeriodSleepingPlan({ groupId, profileId: profiles[0].id, periods, assignments });

@@ -22,8 +22,9 @@ export function findLegacyEnvelopeAllocations(groupId, periods, allocations = []
   );
 }
 
-export function validateSleepingAssignments(assignments, tents = []) {
+export function validateSleepingAssignments(assignments, tents = [], neighborhoods = []) {
   const tentById = Object.fromEntries(tents.map(tent => [tent.id, tent]));
+  const neighborhoodById = Object.fromEntries(neighborhoods.map(neighborhood => [neighborhood.id, neighborhood]));
   const errors = [];
   if (!Array.isArray(assignments) || assignments.length === 0) return [{ code: 'ASSIGNMENTS_REQUIRED' }];
   const seenTentIds = new Set();
@@ -32,9 +33,13 @@ export function validateSleepingAssignments(assignments, tents = []) {
     if (!assignment?.tent_id || !assignment?.neighborhood_id) errors.push({ code: 'ASSIGNMENT_LOCATION_REQUIRED', index });
     if (!tent) errors.push({ code: 'TENT_NOT_FOUND', index, tent_id: assignment?.tent_id });
     else {
+      const isVipRequirement = assignment?.allocation_type === 'STAFF' && /__vip_req_\d+__/.test(assignment?.notes || '');
+      const maxPax = isVipRequirement ? 4 : Number(tent.capacity || 0);
       if (tent.working_status !== 'WORKING') errors.push({ code: 'TENT_NOT_WORKING', index, tent_id: tent.id });
       if (tent.neighborhood_id !== assignment.neighborhood_id) errors.push({ code: 'TENT_NEIGHBORHOOD_MISMATCH', index, tent_id: tent.id });
-      if (Number(assignment.allocated_pax) > Number(tent.capacity || 0)) errors.push({ code: 'PAX_EXCEEDS_TENT_CAPACITY', index, tent_id: tent.id });
+      if (isVipRequirement && tent.tent_type !== 'VIP') errors.push({ code: 'TENT_NOT_VIP', index, tent_id: tent.id });
+      if (isVipRequirement && neighborhoodById[assignment.neighborhood_id]?.is_vip !== true) errors.push({ code: 'NOT_VIP_NEIGHBORHOOD', index, tent_id: tent.id });
+      if (Number(assignment.allocated_pax) > maxPax) errors.push({ code: 'PAX_EXCEEDS_TENT_CAPACITY', index, tent_id: tent.id });
     }
     if (!Number.isFinite(Number(assignment?.allocated_pax)) || Number(assignment.allocated_pax) <= 0) errors.push({ code: 'INVALID_ALLOCATED_PAX', index });
     if (!ALLOCATION_TYPES.has(assignment?.allocation_type)) errors.push({ code: 'INVALID_ALLOCATION_TYPE', index });

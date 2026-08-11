@@ -6,9 +6,11 @@ function datesOverlap(a1, a2, b1, b2) {
   return a1 < b2 && b1 < a2;
 }
 
-// Capacity is always the physical tent capacity — allocation_type never overrides it.
+// Preserve the established VIP operational override; standard tents use physical capacity.
 function getOperationalMaxPax(tent) {
-  return tent.capacity || 8;
+  return tent.tent_type === 'VIP' || tent.is_accessible === true || /^8\d/.test(String(tent.code || ''))
+    ? 4
+    : (tent.capacity || 8);
 }
 
 Deno.serve(async (req) => {

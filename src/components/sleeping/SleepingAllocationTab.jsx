@@ -183,16 +183,19 @@ export default function SleepingAllocationTab({ groupId }) {
   // VIP tent conflict map: tentId → { gender_group, group_id } for OTHER groups
   const vipTentConflictMap = useMemo(() => {
     const map = {};
-    if (!arrivalDate || !departureDate) return map;
+    if ((!arrivalDate || !departureDate) && !isMultiPeriod) return map;
     const today = todayLocal();
     allConfirmedAllocations.forEach(oa => {
       if (oa.group_id === groupId) return;
       if (oa.departure_date <= today) return; // stay already ended
-      if (!datesOverlap(arrivalDate, departureDate, oa.arrival_date, oa.departure_date)) return;
+      const overlapsGroup = isMultiPeriod
+        ? activeStayPeriods.some(period => datesOverlap(period.start_date, period.end_date, oa.arrival_date, oa.departure_date))
+        : datesOverlap(arrivalDate, departureDate, oa.arrival_date, oa.departure_date);
+      if (!overlapsGroup) return;
       map[oa.tent_id] = { gender_group: oa.gender_group, group_id: oa.group_id };
     });
     return map;
-  }, [allConfirmedAllocations, groupId, arrivalDate, departureDate]);
+  }, [allConfirmedAllocations, groupId, arrivalDate, departureDate, isMultiPeriod, activeStayPeriods]);
 
   // Tent-level occupancy by OTHER groups, grouped by neighborhood — makes hidden
   // conflicts (e.g. alt-tent allocations without a neighborhood reservation) visible
@@ -571,19 +574,20 @@ export default function SleepingAllocationTab({ groupId }) {
       </section>
 
       {/* ── VIP ALLOCATION ── */}
-      {isMultiPeriod && vipRows.length > 0 && (
-        <div className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
-          שיבוץ VIP למכינה רב־תקופתית אינו זמין עדיין. התמיכה התקופתית תתווסף בשלב הבא.
-        </div>
-      )}
-      {!isMultiPeriod && vipRows.length > 0 && (
+      {vipRows.length > 0 && (
         <section className="space-y-3">
           <h3 className="text-sm font-semibold text-slate-700">שיבוץ VIP</h3>
           <p className="text-[11px] text-slate-500">
             שייך כל דרישת VIP לאוהל ספציפי (80–89). לחץ על דרישה ← לאחר מכן על אוהל.
+            {isMultiPeriod && " אותו אוהל נשמר בכל תקופות השהייה הפעילות."}
           </p>
 
-          {!arrivalDate && (
+          {isMultiPeriod && !canUseMultiPeriod && (
+            <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              שיבוץ VIP רב־תקופתי זמין לאחר אישור המכינה והפעלתה התפעולית.
+            </p>
+          )}
+          {!isMultiPeriod && !arrivalDate && (
             <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
               ⚠️ תאריכי לינה לא הוגדרו — לא ניתן לבדוק זמינות.
             </p>
@@ -598,6 +602,9 @@ export default function SleepingAllocationTab({ groupId }) {
             profile={{ ...profile, arrival_date: arrivalDate, departure_date: departureDate }}
             groupId={groupId}
             onInvalidate={invalidate}
+            isMultiPeriod={isMultiPeriod}
+            canUseMultiPeriod={canUseMultiPeriod && seriesValidation.valid}
+            logicalAssignments={logicalSeriesData.logical_assignments}
           />
         </section>
       )}

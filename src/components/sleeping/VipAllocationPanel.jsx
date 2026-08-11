@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { ShieldCheck, AlertTriangle, X, Shield, Car, User, Star, BookOpen, BedDouble, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import VipPaxEditDialog from "./VipPaxEditDialog";
+import { getLogicalVipAllocations, toSleepingAssignmentPrototype } from "@/lib/vipLogicalAllocations";
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -41,7 +42,7 @@ function getOperationalMaxPax(tent) {
 // ── Assignment Dialog ─────────────────────────────────────────────────────────
 // Opens after user selects req → tent. Lets them confirm/adjust/release.
 
-function AssignmentDialog({ req, reqIndex, tent, existingAlloc, profile, groupId, neighborhoodId, onSaved, onReleased, onClose }) {
+function AssignmentDialog({ req, reqIndex, tent, existingAlloc, profile, groupId, neighborhoodId, onSaved, onReleased, onClose, isMultiPeriod, canUseMultiPeriod, periodizedAssignments }) {
   const gc = getGenderCfg(req.gender_group);
   const pc = getPurposeCfg(req.purpose);
   const { Icon } = pc;
@@ -90,6 +91,47 @@ function AssignmentDialog({ req, reqIndex, tent, existingAlloc, profile, groupId
     console.log("[VIP Alloc] payload →", invokePayload);
 
     try {
+      if (isMultiPeriod) {
+        if (!canUseMultiPeriod) {
+          setErrors(["שיבוץ VIP רב־תקופתי זמין רק למכינה מאושרת ופעילה תפעולית."]);
+          return;
+        }
+        if (existingAlloc) {
+          setErrors(["החלפת שיבוץ VIP רב־תקופתי אינה נתמכת בבטחה בשלב זה. יש להשתמש בשחרור כל השיבוץ בלבד."]);
+          return;
+        }
+        const marker = `__vip_req_${reqIndex}__`;
+        const cleanNotes = notes.replace(/__vip_req_\d+__\s*/g, "").trim();
+        const assignment = {
+          tent_id: tent.id,
+          neighborhood_id: neighborhoodId,
+          allocated_pax: Number(pax),
+          allocation_type: "STAFF",
+          gender_group: gender,
+          notes: `${marker}${cleanNotes ? " " + cleanNotes : ""}`.trim(),
+        };
+        const assignments = [...periodizedAssignments, assignment];
+        const previewRes = await base44.functions.invoke("previewMultiPeriodSleepingPlan", { group_id: groupId, assignments });
+        const preview = previewRes.data;
+        if (!preview?.success || preview.legacy_envelope_requires_conversion || !preview.allowed) {
+          const conflict = preview?.exact_tent_conflicts?.[0];
+          setErrors([conflict
+            ? `אוהל ${tent.code} אינו פנוי בכל תקופות השהייה (${conflict.planned_period.arrival_date}–${conflict.planned_period.departure_date}).`
+            : "לא ניתן לשמור את שיבוץ ה-VIP הרב־תקופתי במצב הנוכחי."]);
+          return;
+        }
+        const commitRes = await base44.functions.invoke("commitMultiPeriodSleepingPlan", { group_id: groupId, assignments });
+        if (!commitRes.data?.success) {
+          setErrors([commitRes.data?.error === "INCONSISTENT_PERIODIZED_SLEEPING_STATE"
+            ? "מצב השיבוץ הרב־תקופתי אינו מאפשר הוספת VIP בטוחה."
+            : (commitRes.data?.error || "שגיאה בשמירת שיבוץ VIP רב־תקופתי")]);
+          return;
+        }
+        toast.success(`אוהל ${tent.code} שויך לדרישה #${reqIndex + 1} בכל תקופות השהייה ✓`);
+        onSaved();
+        return;
+      }
+
       const res = await base44.functions.invoke("saveVipSleepingAllocation", invokePayload);
       console.log("[VIP Alloc] response →", res?.data);
 
@@ -114,6 +156,10 @@ function AssignmentDialog({ req, reqIndex, tent, existingAlloc, profile, groupId
 
   const handleRelease = async () => {
     if (!existingAlloc) { onReleased(); return; }
+    if (isMultiPeriod) {
+      setErrors(["שחרור דרישת VIP בודדת אינו נתמך עדיין למכינה רב־תקופתית. ניתן לשחרר רק את כל שיבוץ הלינה."]);
+      return;
+    }
     if (!window.confirm(`לשחרר את אוהל ${tent.code}?`)) return;
     setReleasing(true);
     setErrors([]);
@@ -236,6 +282,12 @@ function AssignmentDialog({ req, reqIndex, tent, existingAlloc, profile, groupId
             </div>
           </div>
 
+          {isMultiPeriod && existingAlloc && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-700">
+              עריכה, החלפה או שחרור של דרישת VIP יחידה חסומים כדי לא להשאיר שורות תקופתיות חלקיות.
+            </div>
+          )}
+
           {/* Validation errors */}
           {errors.length > 0 && (
             <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 space-y-0.5">
@@ -256,7 +308,7 @@ function AssignmentDialog({ req, reqIndex, tent, existingAlloc, profile, groupId
                 size="sm"
                 variant="outline"
                 onClick={handleRelease}
-                disabled={releasing || saving}
+                disabled={releasing || saving || isMultiPeriod}
                 className="text-red-500 border-red-200 hover:bg-red-50 gap-1"
               >
                 <X className="w-3.5 h-3.5" />
@@ -271,7 +323,7 @@ function AssignmentDialog({ req, reqIndex, tent, existingAlloc, profile, groupId
               type="button"
               size="sm"
               onClick={handleSave}
-              disabled={saving || releasing}
+              disabled={saving || releasing || (isMultiPeriod && !!existingAlloc)}
               className="bg-primary hover:bg-primary/90 gap-1"
             >
               <ShieldCheck className="w-3.5 h-3.5" />
@@ -286,7 +338,7 @@ function AssignmentDialog({ req, reqIndex, tent, existingAlloc, profile, groupId
 
 // ── VIP Requirement Card (compact square) ─────────────────────────────────────
 
-function VipReqCard({ req, index, assignedTentCode, assignedStatus, assignedActualPax, isSelected, onClick }) {
+function VipReqCard({ req, index, assignedTentCode, assignedStatus, assignedActualPax, isSelected, onClick, editLocked = false }) {
   const gc = getGenderCfg(req.gender_group);
   const pc = getPurposeCfg(req.purpose);
   const { Icon } = pc;
@@ -361,7 +413,7 @@ function VipReqCard({ req, index, assignedTentCode, assignedStatus, assignedActu
       )}
       {isConfirmed && (
         <span className="text-[9px] text-emerald-600 flex items-center gap-0.5 opacity-80">
-          <Pencil className="w-2 h-2" /> ערוך כמות
+          <Pencil className="w-2 h-2" /> {editLocked ? "לצפייה בלבד" : "ערוך כמות"}
         </span>
       )}
     </button>
@@ -440,6 +492,9 @@ export default function VipAllocationPanel({
   profile,
   groupId,
   onInvalidate,
+  isMultiPeriod = false,
+  canUseMultiPeriod = false,
+  logicalAssignments = [],
 }) {
   const [selectedReqIndex, setSelectedReqIndex] = useState(null);
   // dialogTarget: { reqIndex, tent } — open the assignment dialog
@@ -451,16 +506,28 @@ export default function VipAllocationPanel({
 
   // ── Persisted allocation maps ──────────────────────────────────────────────
   const myActiveVipAllocs = useMemo(
-    () => myAllocations.filter(a => a.status !== "CANCELLED" && vipTents.some(t => t.id === a.tent_id)),
-    [myAllocations, vipTents]
+    () => isMultiPeriod
+      ? getLogicalVipAllocations(myAllocations).filter(a => vipTents.some(t => t.id === a.tent_id))
+      : myAllocations.filter(a => a.status !== "CANCELLED" && vipTents.some(t => t.id === a.tent_id)),
+    [myAllocations, vipTents, isMultiPeriod]
+  );
+  const periodizedAssignments = useMemo(
+    () => logicalAssignments.filter(item => !item.inconsistent).map(toSleepingAssignmentPrototype),
+    [logicalAssignments]
   );
 
   // reqIndex → persisted alloc (via __vip_req_N__ in notes)
+  const vipMarkerCollisions = useMemo(() => {
+    const counts = {};
+    myActiveVipAllocs.forEach(a => { counts[a.requirement_index] = (counts[a.requirement_index] || 0) + 1; });
+    return Object.entries(counts).filter(([, count]) => count > 1).map(([index]) => Number(index));
+  }, [myActiveVipAllocs]);
+
   const persistedReqToAlloc = useMemo(() => {
     const map = {};
     myActiveVipAllocs.forEach(a => {
       const m = (a.notes || "").match(/__vip_req_(\d+)__/);
-      if (m) map[Number(m[1])] = a;
+      if (m && map[Number(m[1])] == null) map[Number(m[1])] = a;
     });
     return map;
   }, [myActiveVipAllocs]);
@@ -498,12 +565,20 @@ export default function VipAllocationPanel({
   // ── Handlers ──────────────────────────────────────────────────────────────
 
   const handleReqClick = (index) => {
+    if (vipMarkerCollisions.includes(index)) {
+      setServerErrors([`דרישת VIP #${index + 1} מקושרת ליותר משיבוץ לוגי אחד. יש לשחרר את כל השיבוץ וליצור תכנית חדשה.`]);
+      return;
+    }
     const alloc = persistedReqToAlloc[index];
 
-    // Confirmed — open pax-edit dialog
+    // Confirmed MULTI_PERIOD series cannot be edited row-by-row.
     if (alloc?.status === "CONFIRMED") {
       const tent = vipTents.find(t => t.id === alloc.tent_id);
-      if (tent) setPaxEditTarget({ allocation: alloc, tent });
+      if (isMultiPeriod && tent) {
+        setDialogTarget({ reqIndex: index, tent });
+      } else if (tent) {
+        setPaxEditTarget({ allocation: alloc, tent });
+      }
       return;
     }
 
@@ -533,8 +608,8 @@ export default function VipAllocationPanel({
       )?.[0];
       if (assignedReqIndex !== undefined) {
         const alloc = persistedReqToAlloc[Number(assignedReqIndex)];
-        if (alloc?.status === "CONFIRMED") {
-          // Confirmed tent clicked → open pax-edit dialog
+        if (alloc?.status === "CONFIRMED" && !isMultiPeriod) {
+          // Confirmed CONTINUOUS tent clicked → open pax-edit dialog
           setPaxEditTarget({ allocation: alloc, tent });
         } else {
           setDialogTarget({ reqIndex: Number(assignedReqIndex), tent });
@@ -559,7 +634,9 @@ export default function VipAllocationPanel({
   };
 
   const handleConfirmAll = async () => {
-    const draftIds = myActiveVipAllocs.filter(a => a.status === "DRAFT").map(a => a.id);
+    const draftIds = myActiveVipAllocs.filter(a => a.status === "DRAFT").flatMap(a =>
+      isMultiPeriod ? a.period_rows.map(row => row.id) : [a.id]
+    );
     if (!draftIds.length) { toast.error("אין טיוטות לאישור"); return; }
     setConfirming(true);
     setServerErrors([]);
@@ -569,7 +646,9 @@ export default function VipAllocationPanel({
         draft_allocation_ids: draftIds,
       });
       if (res.data?.success) {
-        toast.success(`${res.data.confirmed_count} הקצאות VIP אושרו ✓`);
+        toast.success(isMultiPeriod
+          ? `${myActiveVipAllocs.filter(a => a.status === "DRAFT").length} שיבוצי VIP לוגיים אושרו ✓`
+          : `${res.data.confirmed_count} הקצאות VIP אושרו ✓`);
         onInvalidate();
       } else {
         setServerErrors(res.data?.errors || ["שגיאה לא ידועה"]);
@@ -649,6 +728,7 @@ export default function VipAllocationPanel({
                   assignedActualPax={alloc?.allocated_pax ?? null}
                   isSelected={selectedReqIndex === i}
                   onClick={() => handleReqClick(i)}
+                  editLocked={isMultiPeriod}
                 />
               );
             })}
@@ -689,6 +769,12 @@ export default function VipAllocationPanel({
           {vipTents.length === 0 && <p className="text-xs text-slate-400">לא נמצאו אוהלי VIP במלאי.</p>}
         </div>
       </div>
+
+      {vipMarkerCollisions.length > 0 && (
+        <div className="bg-red-50 border border-red-300 rounded-xl px-4 py-3 text-xs text-red-700">
+          נמצאה זהות דרישת VIP כפולה בשיבוצים לוגיים שונים. פעולות שינוי חסומות.
+        </div>
+      )}
 
       {/* Error display */}
       {serverErrors.length > 0 && (
@@ -740,6 +826,9 @@ export default function VipAllocationPanel({
           onSaved={handleDialogSaved}
           onReleased={handleDialogReleased}
           onClose={() => setDialogTarget(null)}
+          isMultiPeriod={isMultiPeriod}
+          canUseMultiPeriod={canUseMultiPeriod}
+          periodizedAssignments={periodizedAssignments}
         />
       )}
 

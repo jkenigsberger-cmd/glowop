@@ -20,14 +20,17 @@ function inspectExistingState({ allocations, reservations, assignments, periods,
   const bySeries = {};
   linkedAllocations.forEach(row => { (bySeries[row.allocation_series_id] ||= []).push(row); });
   const seriesGroups = Object.entries(bySeries);
-  if (seriesGroups.length !== assignments.length) return { state: 'INCONSISTENT', reason: 'SERIES_COUNT_MISMATCH' };
+  if (seriesGroups.length > assignments.length) return { state: 'INCONSISTENT', reason: 'SERIES_COUNT_MISMATCH' };
 
   const matchedTentIds = new Set();
+  const matchedAssignmentIndexes = new Set();
   for (const [seriesId, rows] of seriesGroups) {
     if (rows.length !== periods.length) return { state: 'INCONSISTENT', reason: 'PARTIAL_SERIES', allocation_series_id: seriesId };
-    const assignment = assignments.find(item => item.tent_id === rows[0].tent_id);
+    const assignmentIndex = assignments.findIndex(item => item.tent_id === rows[0].tent_id);
+    const assignment = assignments[assignmentIndex];
     if (!assignment || matchedTentIds.has(assignment.tent_id)) return { state: 'INCONSISTENT', reason: 'SERIES_ASSIGNMENT_MISMATCH', allocation_series_id: seriesId };
     matchedTentIds.add(assignment.tent_id);
+    matchedAssignmentIndexes.add(assignmentIndex);
     const periodIds = new Set();
     for (const row of rows) {
       const period = periodById[row.stay_period_id];
@@ -52,7 +55,16 @@ function inspectExistingState({ allocations, reservations, assignments, periods,
     );
     if (!found) return { state: 'INCONSISTENT', reason: 'NEIGHBORHOOD_PERIOD_MISMATCH', stay_period_id: expected.source_stay_period_id, neighborhood_id: wanted.neighborhood_id };
   }
-  return { state: 'COMPLETE', allocation_series_ids: Object.keys(bySeries), allocation_ids: linkedAllocations.map(row => row.id), neighborhood_reservation_ids: linkedReservations.map(row => row.id) };
+  if (seriesGroups.length === assignments.length) {
+    return { state: 'COMPLETE', allocation_series_ids: Object.keys(bySeries), allocation_ids: linkedAllocations.map(row => row.id), neighborhood_reservation_ids: linkedReservations.map(row => row.id) };
+  }
+  const missingAssignmentIndexes = assignments.map((_, index) => index).filter(index => !matchedAssignmentIndexes.has(index));
+  const appendIsVipOnly = missingAssignmentIndexes.every(index =>
+    assignments[index].allocation_type === 'STAFF' && /__vip_req_\d+__/.test(assignments[index].notes || '')
+  );
+  return appendIsVipOnly
+    ? { state: 'APPEND_VIP', missing_assignment_indexes: missingAssignmentIndexes }
+    : { state: 'INCONSISTENT', reason: 'SERIES_COUNT_MISMATCH' };
 }
 
 async function rollbackCreated(base44, allocationIds, reservationIds) {
@@ -84,15 +96,16 @@ export default async function(req) {
     if (group.operationally_active !== true) return Response.json({ success: false, error: 'GROUP_NOT_OPERATIONALLY_ACTIVE' }, { status: 409 });
     if (group.status !== 'CONFIRMED') return Response.json({ success: false, error: 'GROUP_NOT_CONFIRMED' }, { status: 409 });
 
-    const [profiles, periods, tents, activeAllocations, activeReservations] = await Promise.all([
+    const [profiles, periods, tents, inventoryNeighborhoods, activeAllocations, activeReservations] = await Promise.all([
       base44.asServiceRole.entities.OperationalGroupProfile.filter({ group_id: groupId }),
       base44.asServiceRole.entities.GroupStayPeriod.filter({ group_id: groupId, status: 'ACTIVE' }, 'start_date', 100),
       base44.asServiceRole.entities.Tent.list(),
+      base44.asServiceRole.entities.Neighborhood.list(),
       base44.asServiceRole.entities.SleepingAllocation.filter({ status: { $in: ['DRAFT', 'CONFIRMED'] } }),
       base44.asServiceRole.entities.NeighborhoodReservation.filter({ status: 'ACTIVE' }),
     ]);
     if (profiles.length !== 1) return Response.json({ success: false, error: 'EXACTLY_ONE_OGP_REQUIRED', profile_count: profiles.length }, { status: 409 });
-    const assignmentErrors = validateSleepingAssignments(assignments, tents);
+    const assignmentErrors = validateSleepingAssignments(assignments, tents, inventoryNeighborhoods);
     if (assignmentErrors.length > 0) return Response.json({ success: false, error: 'INVALID_ASSIGNMENTS', errors: assignmentErrors }, { status: 400 });
 
     const profile = profiles[0];
@@ -116,8 +129,13 @@ export default async function(req) {
     const preview = addSleepingPlanConflicts({ plan, existingAllocations: activeAllocations, existingNeighborhoodReservations: activeReservations, sharedNeighborhoodIds });
     if (!preview.allowed) return Response.json({ success: false, error: 'SLEEPING_PLAN_CONFLICT', exact_tent_conflicts: preview.exact_tent_conflicts, neighborhood_conflicts: preview.neighborhood_conflicts }, { status: 409 });
 
-    const seriesByAssignmentIndex = assignments.map((assignment, index) => ({ logical_assignment_index: index, tent_id: assignment.tent_id, allocation_series_id: crypto.randomUUID() }));
-    for (const planned of plan.planned_rows) {
+    const indexesToCreate = existingState.state === 'APPEND_VIP'
+      ? new Set(existingState.missing_assignment_indexes)
+      : new Set(assignments.map((_, index) => index));
+    const seriesByAssignmentIndex = assignments.map((assignment, index) => indexesToCreate.has(index)
+      ? { logical_assignment_index: index, tent_id: assignment.tent_id, allocation_series_id: crypto.randomUUID() }
+      : null);
+    for (const planned of plan.planned_rows.filter(row => indexesToCreate.has(row.logical_assignment_index))) {
       const series = seriesByAssignmentIndex[planned.logical_assignment_index];
       const created = await base44.asServiceRole.entities.SleepingAllocation.create({
         ...planned.sleeping_allocation,
@@ -126,7 +144,7 @@ export default async function(req) {
       });
       createdAllocationIds.push(created.id);
     }
-    for (const planned of plan.planned_neighborhood_intervals) {
+    for (const planned of (existingState.state === 'APPEND_VIP' ? [] : plan.planned_neighborhood_intervals)) {
       const created = await base44.asServiceRole.entities.NeighborhoodReservation.create({
         ...planned.neighborhood_reservation,
         stay_period_id: planned.source_stay_period_id,
@@ -140,7 +158,8 @@ export default async function(req) {
       already_committed: false,
       group_id: groupId,
       operational_group_profile_id: profile.id,
-      allocation_series: seriesByAssignmentIndex,
+      allocation_series: seriesByAssignmentIndex.filter(Boolean),
+      appended_vip_only: existingState.state === 'APPEND_VIP',
       sleeping_allocation_ids: createdAllocationIds,
       neighborhood_reservation_ids: createdReservationIds,
       sleeping_rows_created: createdAllocationIds.length,
