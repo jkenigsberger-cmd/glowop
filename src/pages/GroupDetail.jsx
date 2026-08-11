@@ -27,6 +27,7 @@ import OperationalActivationAction from "@/components/groups/OperationalActivati
 import MultiPeriodActivationAction from "@/components/groups/MultiPeriodActivationAction";
 import QuoteSyncButton from "@/components/quotes/QuoteSyncButton";
 import MechinaMovementSummary from "@/components/groups/MechinaMovementSummary";
+import ActiveStayPeriodsDialog from "@/components/groups/ActiveStayPeriodsDialog";
 import { updateQuotePreparationCache, invalidateQuotePreparationCache } from "@/lib/quotePreparationCache";
 
 export default function GroupDetail() {
@@ -39,6 +40,7 @@ export default function GroupDetail() {
   const [editSubmission, setEditSubmission] = useState(null);
   const [reviewSubmission, setReviewSubmission] = useState(null);
   const [activeTab, setActiveTab] = useState("overview");
+  const [editActivePeriods, setEditActivePeriods] = useState(false);
 
   const { data: group } = useQuery({
     queryKey: ["group", id],
@@ -230,7 +232,7 @@ export default function GroupDetail() {
 
         {isPreparation && <div className="bg-violet-50 border border-violet-200 rounded-xl px-4 py-3 flex items-center justify-between gap-3"><div><p className="font-semibold text-violet-800">קבוצה בהכנה</p><p className="text-xs text-violet-600 mt-1">הקבוצה עדיין אינה פעילה במודולים התפעוליים.</p></div>{canActivateOperationally && <RoleGate roles={["SUPER_ADMIN", "ADMIN"]}><OperationalActivationAction groupId={id} onActivated={handleOperationalActivation} /></RoleGate>}</div>}
         {canActivateMultiPeriod && <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 flex items-center justify-between gap-3"><div><p className="font-semibold text-blue-800">טיוטת מכינה רב־תקופתית</p><p className="text-xs text-blue-700 mt-1">המכינה אינה פעילה עדיין במודולים התפעוליים.</p></div><RoleGate roles={["SUPER_ADMIN", "ADMIN"]}><MultiPeriodActivationAction groupId={id} onActivated={refetch} /></RoleGate></div>}
-        {isActivatedMultiPeriod && <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3"><p className="font-semibold text-amber-800">המכינה פעילה</p><p className="text-xs text-amber-700 mt-1">תקופות השהייה נעולות לעריכה בשלב זה. שינוי תקופות פעילות יטופל בשלב מבוקר נפרד.</p></div>}
+        {isActivatedMultiPeriod && <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-center justify-between gap-3"><div><p className="font-semibold text-amber-800">המכינה פעילה</p><p className="text-xs text-amber-700 mt-1">שינוי תקופות מתבצע במסלול מבוקר עם בדיקת השפעות ואישור מפורש.</p></div><RoleGate roles={["SUPER_ADMIN", "ADMIN"]}><Button variant="outline" size="sm" onClick={() => setEditActivePeriods(true)} className="flex-shrink-0">עריכת תקופות שהייה</Button></RoleGate></div>}
 
         {/* Meal date range warning — shown when active meals exist outside current stay */}
         <RoleGate permission="EDIT_GROUP">
@@ -349,6 +351,7 @@ export default function GroupDetail() {
       </div>
 
       {/* Non-commercial modals */}
+      <ActiveStayPeriodsDialog open={editActivePeriods} groupId={id} onClose={() => setEditActivePeriods(false)} onApplied={() => { refetch(); queryClient.invalidateQueries({ queryKey: ["groupStayPeriods", id] }); queryClient.invalidateQueries({ queryKey: ["sleepingAllocations"] }); queryClient.invalidateQueries({ queryKey: ["mealReservations"] }); }} />
       {editGroup && <GroupFormModal group={group} initialProfileDiets={operationalProfile?.special_diets || null} onClose={() => setEditGroup(false)} onSaved={() => { refetch(); setEditGroup(false); }} />}
       {reviewSubmission && !showSubmissionForm && (
         <SubmissionReviewModal
