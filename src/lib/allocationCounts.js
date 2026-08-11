@@ -8,6 +8,8 @@
  * tent capacity, distribution JSON plans, or UI card display.
  */
 
+import { groupLogicalSleepingAssignments } from "../../base44/shared/logicalSleepingSeries.js";
+
 const ALT_TENT_MARKER = "__alt_tent__";
 const VIP_REQ_MARKER  = /__vip_req_\d+__/;
 
@@ -17,34 +19,39 @@ const VIP_REQ_MARKER  = /__vip_req_\d+__/;
  * @returns {Object}
  */
 export function computeAllocationCounts(allocations = [], profile = null) {
-  // ── Active allocations (not CANCELLED) ────────────────────────────────
   const active = allocations.filter(a => a.status !== "CANCELLED");
+  const seriesData = groupLogicalSleepingAssignments(active);
+  const logical = seriesData.logical_assignments;
+  const validLogical = logical.filter(a => !a.inconsistent);
 
-  // ── Allocated pax by sub-category ─────────────────────────────────────
-  const studentAllocs = active.filter(a => a.allocation_type === "STUDENT");
-  const staffAllocs   = active.filter(a => a.allocation_type === "STAFF");
-
-  // VIP allocations = STAFF allocations with __vip_req_N__ marker
+  const studentAllocs = validLogical.filter(a => a.allocation_type === "STUDENT");
+  const staffAllocs   = validLogical.filter(a => a.allocation_type === "STAFF");
   const vipAllocs = staffAllocs.filter(a => VIP_REQ_MARKER.test(a.notes || ""));
-  // Alt tent allocations = STAFF allocations with __alt_tent__ marker
   const altTentAllocs = staffAllocs.filter(a => (a.notes || "").includes(ALT_TENT_MARKER));
-  // Other staff (neither VIP nor alt tent)
   const otherStaffAllocs = staffAllocs.filter(
     a => !VIP_REQ_MARKER.test(a.notes || "") && !(a.notes || "").includes(ALT_TENT_MARKER)
   );
 
-  // ── Pax sums ──────────────────────────────────────────────────────────
-  const studentAllocated   = studentAllocs.reduce((s, a) => s + (a.allocated_pax || 0), 0);
-  const vipAllocated       = vipAllocs.reduce((s, a) => s + (a.allocated_pax || 0), 0);
-  const altTentAllocated   = altTentAllocs.reduce((s, a) => s + (a.allocated_pax || 0), 0);
-  const otherStaffAllocated = otherStaffAllocs.reduce((s, a) => s + (a.allocated_pax || 0), 0);
+  const studentAllocated   = studentAllocs.reduce((s, a) => s + a.logical_allocated_pax, 0);
+  const vipAllocated       = vipAllocs.reduce((s, a) => s + a.logical_allocated_pax, 0);
+  const altTentAllocated   = altTentAllocs.reduce((s, a) => s + a.logical_allocated_pax, 0);
+  const otherStaffAllocated = otherStaffAllocs.reduce((s, a) => s + a.logical_allocated_pax, 0);
   const staffAllocated     = vipAllocated + altTentAllocated + otherStaffAllocated;
   const totalAllocated     = studentAllocated + staffAllocated;
 
-  // Tent counts
   const studentTentCount   = new Set(studentAllocs.map(a => a.tent_id)).size;
   const vipTentCount       = new Set(vipAllocs.map(a => a.tent_id)).size;
   const altTentCount       = new Set(altTentAllocs.map(a => a.tent_id)).size;
+  const hasInvalidSeries = seriesData.inconsistent_series.length > 0;
+  const countMetadata = {
+    activeCount: logical.length,
+    physicalActiveCount: active.length,
+    logicalAssignmentCount: logical.length,
+    confirmedCount: logical.filter(a => a.all_confirmed).length,
+    draftCount: logical.filter(a => a.has_draft).length,
+    hasInvalidSeries,
+    invalidSeries: seriesData.inconsistent_series.map(a => ({ allocation_series_id: a.allocation_series_id, errors: a.consistency_errors })),
+  };
 
   // ── Required counts (from profile) ────────────────────────────────────
   if (!profile) {
@@ -54,10 +61,8 @@ export function computeAllocationCounts(allocations = [], profile = null) {
       studentTentCount, vipTentCount, altTentCount,
       studentRequired: 0, staffRequired: 0, totalRequired: 0,
       studentRemaining: 0, staffRemaining: 0, totalRemaining: 0,
-      isComplete: true,
-      activeCount: active.length,
-      confirmedCount: active.filter(a => a.status === "CONFIRMED").length,
-      draftCount: active.filter(a => a.status === "DRAFT").length,
+      isComplete: !hasInvalidSeries,
+      ...countMetadata,
     };
   }
 
@@ -82,7 +87,7 @@ export function computeAllocationCounts(allocations = [], profile = null) {
   const staffRemaining   = Math.max(0, staffRequired - staffAllocated);
   const totalRemaining   = Math.max(0, totalRequired - totalAllocated);
 
-  const isComplete = totalRequired > 0 && totalRemaining === 0;
+  const isComplete = !hasInvalidSeries && totalRequired > 0 && totalRemaining === 0;
 
   return {
     studentAllocated, vipAllocated, altTentAllocated, otherStaffAllocated,
@@ -91,8 +96,6 @@ export function computeAllocationCounts(allocations = [], profile = null) {
     studentRequired, staffRequired, totalRequired,
     studentRemaining, staffRemaining, totalRemaining,
     isComplete,
-    activeCount: active.length,
-    confirmedCount: active.filter(a => a.status === "CONFIRMED").length,
-    draftCount: active.filter(a => a.status === "DRAFT").length,
+    ...countMetadata,
   };
 }

@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 import { assertOperationalGroup } from '../../shared/quotePreparationConfig.js';
+import { groupLogicalSleepingAssignments, validateLinkedSeriesCompleteness } from '../../shared/logicalSleepingSeries.js';
 
 function datesOverlap(a1, a2, b1, b2) {
   return a1 < b2 && b1 < a2;
@@ -59,21 +60,37 @@ Deno.serve(async (req) => {
     // We do NOT rely solely on frontend-supplied IDs — the frontend cache may be
     // stale and miss VIP / alt-tent rows saved in the same session.
     const allGroupAllocations = await base44.asServiceRole.entities.SleepingAllocation.filter({ group_id });
-    const allGroupDrafts = allGroupAllocations.filter(a => a.status === 'DRAFT');
+    const activePeriods = group?.stay_mode === 'MULTI_PERIOD'
+      ? await base44.asServiceRole.entities.GroupStayPeriod.filter({ group_id, status: 'ACTIVE' }, 'start_date', 100)
+      : [];
+    const seriesValidation = group?.stay_mode === 'MULTI_PERIOD'
+      ? validateLinkedSeriesCompleteness(allGroupAllocations, activePeriods, group_id)
+      : { linked: false, valid: true, errors: [], ...groupLogicalSleepingAssignments(allGroupAllocations) };
 
-    // If frontend supplied IDs, use them as a hint; otherwise fall back to ALL group drafts.
-    // Either way, the final set is every DRAFT row that belongs to this group.
-    const requestedIds = Array.isArray(draft_allocation_ids) && draft_allocation_ids.length > 0
-      ? new Set(draft_allocation_ids)
-      : null;
+    if (!seriesValidation.valid) {
+      return Response.json({
+        success: false,
+        error: 'שיבוץ רב-תקופתי אינו שלם או אינו עקבי',
+        debug: { reasonCode: 'INVALID_MULTI_PERIOD_SERIES', series_errors: seriesValidation.errors },
+      }, { status: 200 });
+    }
 
-    // Always confirm ALL active DRAFT rows for this group (source of truth is DB, not frontend cache)
-    const finalDraftsToConfirm = allGroupDrafts;
-
+    const finalDraftsToConfirm = allGroupAllocations.filter(a => a.status === 'DRAFT');
     console.log(`[confirmSleepingAllocations] total group drafts found in DB: ${finalDraftsToConfirm.length}`);
     console.log(`[confirmSleepingAllocations] frontend requested IDs: ${draft_allocation_ids?.length ?? 0}`);
 
     if (finalDraftsToConfirm.length === 0) {
+      const alreadyConfirmed = seriesValidation.linked && seriesValidation.logical_assignments.length > 0 && seriesValidation.logical_assignments.every(item => item.all_confirmed);
+      if (alreadyConfirmed) {
+        return Response.json({
+          success: true,
+          already_confirmed: true,
+          confirmed_count: 0,
+          logical_assignment_count: seriesValidation.logical_assignment_count,
+          physical_row_count: seriesValidation.physical_row_count,
+          message: 'שיבוץ הלינה כבר אושר',
+        });
+      }
       return Response.json({
         success: false,
         error: 'לא נמצאו שיבוצי טיוטה לאישור — ייתכן שכבר אושרו או בוטלו',
@@ -138,6 +155,23 @@ Deno.serve(async (req) => {
         errors.push(`לא ניתן לשבץ את אותו אוהל לשתי קבוצות באותם תאריכים. (אוהל ${tent.code})`);
       }
 
+      // Linked rows in the same series are intentional across non-overlapping periods.
+      // A different linked series in this group may not overlap on the same exact tent.
+      const sameGroupTentConflicts = allGroupAllocations.filter(other =>
+        other.status !== 'CANCELLED' &&
+        other.id !== draft.id &&
+        other.tent_id === draft.tent_id &&
+        datesOverlap(draft.arrival_date, draft.departure_date, other.arrival_date, other.departure_date) &&
+        draft.allocation_series_id &&
+        other.allocation_series_id
+      );
+      if (sameGroupTentConflicts.some(other => other.allocation_series_id !== draft.allocation_series_id)) {
+        errors.push(`אוהל ${tent.code}: שתי סדרות שיבוץ של אותה קבוצה חופפות באותם תאריכים.`);
+      }
+      if (sameGroupTentConflicts.some(other => other.allocation_series_id === draft.allocation_series_id)) {
+        errors.push(`אוהל ${tent.code}: תקופות באותה סדרת שיבוץ חופפות זו לזו.`);
+      }
+
       // Rule 3: student neighborhood exclusivity (non-VIP only)
       // Bypassed if: shared_neighborhood_allowed is true (passed in request) OR already stored on reservation
       if (draft.allocation_type === 'STUDENT' && !isVip) {
@@ -156,11 +190,13 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Rule 4: no mixed-gender within same tent in same batch
-      const genderConflict = finalDraftsToConfirm.some(other =>
+      // Rule 4: no mixed-gender occupancy in the same tent during overlapping dates
+      const genderConflict = allGroupAllocations.some(other =>
+        other.status !== 'CANCELLED' &&
         other.id !== draft.id &&
         other.tent_id === draft.tent_id &&
-        other.gender_group !== draft.gender_group
+        other.gender_group !== draft.gender_group &&
+        datesOverlap(draft.arrival_date, draft.departure_date, other.arrival_date, other.departure_date)
       );
       if (genderConflict) {
         errors.push(`אוהל ${tent.code}: לא ניתן לשבץ שני מגדרים שונים לאותו אוהל.`);
@@ -187,15 +223,15 @@ Deno.serve(async (req) => {
       // Update all matching active NhoodReservations for this group that are in a shared context
       const nhoodIdsInBatch = new Set(finalDraftsToConfirm.map(d => d.neighborhood_id));
       for (const nhoodId of nhoodIdsInBatch) {
-        const res = myNhoodReservations.find(r => r.neighborhood_id === nhoodId);
-        if (res) {
-          await base44.asServiceRole.entities.NeighborhoodReservation.update(res.id, {
+        const matchingReservations = myNhoodReservations.filter(r => r.neighborhood_id === nhoodId);
+        await Promise.all(matchingReservations.map(res =>
+          base44.asServiceRole.entities.NeighborhoodReservation.update(res.id, {
             shared_neighborhood_allowed: true,
             shared_neighborhood_reason: shared_neighborhood_reason.trim(),
             shared_neighborhood_approved_by: approvedBy,
             shared_neighborhood_approved_at: now,
-          });
-        }
+          })
+        ));
       }
       console.log(`[confirmSleepingAllocations] shared override recorded by ${approvedBy} for neighborhoods: ${[...nhoodIdsInBatch].join(', ')}`);
     }
@@ -210,6 +246,9 @@ Deno.serve(async (req) => {
     const confirmedIds = finalDraftsToConfirm.map(d => d.id);
     console.log('[confirmSleepingAllocations] confirmed IDs:', confirmedIds);
 
+    const confirmedLogical = groupLogicalSleepingAssignments(allGroupAllocations.map(row =>
+      finalDraftIds.has(row.id) ? { ...row, status: 'CONFIRMED' } : row
+    ));
     const typeBreakdown = {
       student: finalDraftsToConfirm.filter(d => d.allocation_type === 'STUDENT').length,
       staff:   finalDraftsToConfirm.filter(d => d.allocation_type === 'STAFF').length,
@@ -220,6 +259,9 @@ Deno.serve(async (req) => {
       success: true,
       confirmed_count: finalDraftsToConfirm.length,
       confirmed_ids: confirmedIds,
+      logical_assignment_count: confirmedLogical.logical_assignment_count,
+      physical_row_count: confirmedLogical.physical_row_count,
+      logical_allocated_pax: confirmedLogical.logical_assignments.reduce((sum, item) => sum + (item.logical_allocated_pax || 0), 0),
       type_breakdown: typeBreakdown,
       message: 'שיבוץ הלינה אושר',
       shared_override_used: !!(shared_neighborhood_allowed && shared_neighborhood_reason),
