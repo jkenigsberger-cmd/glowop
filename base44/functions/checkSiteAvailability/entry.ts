@@ -1,5 +1,6 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { isGroupOperationallyEnabled } from '../../shared/groupOperationalIsolation.js';
+import { occupiesSleepingNight } from '../../shared/groupStayPeriods.js';
 
 /**
  * Enhanced availability check:
@@ -22,9 +23,11 @@ import { isGroupOperationallyEnabled } from '../../shared/groupOperationalIsolat
  *   exclude_group_id    string (optional)
  *   adult_lodging_lines string JSON (optional – to count required VIP tents from quote)
  */
-Deno.serve(async (req) => {
+export default async function(req) {
   try {
     const base44 = createClientFromRequest(req);
+    const user = await base44.auth.me();
+    if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
     const body = await req.json();
     const {
       arrival_date, departure_date, total_pax, group_type,
@@ -68,11 +71,12 @@ Deno.serve(async (req) => {
     }
 
     // ── Load all data in parallel ──────────────────────────────────────────────
-    const [allGroups, allProfiles, allHolds, allAllocations] = await Promise.all([
+    const [allGroups, allProfiles, allHolds, allAllocations, allStayPeriods] = await Promise.all([
       base44.asServiceRole.entities.Group.list("-arrival_date", 1000),
       base44.asServiceRole.entities.OperationalGroupProfile.list(),
       base44.asServiceRole.entities.OperationalHold.filter({ status: "ACTIVE" }),
       base44.asServiceRole.entities.SleepingAllocation.filter({ status: { $in: ["DRAFT", "CONFIRMED"] } }),
+      base44.asServiceRole.entities.GroupStayPeriod.filter({ status: "ACTIVE" }),
     ]);
 
     // Index profiles by group_id for fast lookup
@@ -80,11 +84,16 @@ Deno.serve(async (req) => {
     const profileByGroupId = {};
     for (const p of allProfiles) profileByGroupId[p.group_id] = p;
 
-    // Index allocations by group_id
+    // Index allocations and active stay periods by group_id
     const allocationsByGroupId = {};
     for (const a of allAllocations) {
       if (!allocationsByGroupId[a.group_id]) allocationsByGroupId[a.group_id] = [];
       allocationsByGroupId[a.group_id].push(a);
+    }
+    const stayPeriodsByGroupId = {};
+    for (const period of allStayPeriods) {
+      if (!stayPeriodsByGroupId[period.group_id]) stayPeriodsByGroupId[period.group_id] = [];
+      stayPeriodsByGroupId[period.group_id].push(period);
     }
 
     // Set of group_ids already represented by a counted Group (to avoid Hold double-count)
@@ -116,8 +125,13 @@ Deno.serve(async (req) => {
       if (g.id === exclude_group_id) continue;
       if (!g.arrival_date) continue;
 
+      countedGroupIds.add(g.id);
+      const groupStayPeriods = stayPeriodsByGroupId[g.id] || [];
       for (const night of lodgingNights) {
-        if (!nightOverlaps(g.arrival_date, g.departure_date, night)) continue;
+        const isPresent = g.stay_mode === "MULTI_PERIOD"
+          ? occupiesSleepingNight(night, groupStayPeriods)
+          : nightOverlaps(g.arrival_date, g.departure_date, night);
+        if (!isPresent) continue;
 
         const profile = profileByGroupId[g.id];
         const pax = Number(g.total_pax)
@@ -127,10 +141,11 @@ Deno.serve(async (req) => {
 
         lodgingPerNight[night].pax += pax;
         lodgingPerNight[night].sources.push(g.group_name || g.id);
-        countedGroupIds.add(g.id);
 
-        // VIP tents from allocations or profile
-        const groupAllocs = allocationsByGroupId[g.id] || [];
+        // Count only physical allocation rows that overlap this sleeping night.
+        const groupAllocs = (allocationsByGroupId[g.id] || []).filter(a =>
+          nightOverlaps(a.arrival_date, a.departure_date, night)
+        );
         const hasVipAllocs = groupAllocs.some(a => a.allocation_type === "STAFF");
         if (hasVipAllocs) {
           // Count distinct tents used as VIP (STAFF allocation_type maps to VIP tents)
@@ -361,4 +376,4 @@ Deno.serve(async (req) => {
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
   }
-});
+}
