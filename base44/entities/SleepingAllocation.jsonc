@@ -18,6 +18,14 @@
       "type": "string",
       "description": "FK to Neighborhood (denormalized for fast neighborhood-level checks)"
     },
+    "stay_period_id": {
+      "type": "string",
+      "description": "Optional FK to GroupStayPeriod for one MULTI_PERIOD occupancy interval"
+    },
+    "allocation_series_id": {
+      "type": "string",
+      "description": "Optional stable identifier linking one logical tent assignment across MULTI_PERIOD returns"
+    },
     "arrival_date": {
       "type": "string",
       "format": "date",

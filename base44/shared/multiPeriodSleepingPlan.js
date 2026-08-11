@@ -7,6 +7,21 @@ export function sleepingIntervalsOverlap(aArrival, aDeparture, bArrival, bDepart
   return aArrival < bDeparture && bArrival < aDeparture;
 }
 
+export function findLegacyEnvelopeAllocations(groupId, periods, allocations = []) {
+  const active = normalizeStayPeriods(periods).filter(period => period.status !== 'CANCELLED');
+  if (active.length === 0) return [];
+  const envelopeArrival = active[0].start_date;
+  const envelopeDeparture = active[active.length - 1].end_date;
+  return allocations.filter(allocation =>
+    allocation.group_id === groupId &&
+    allocation.status !== 'CANCELLED' &&
+    !allocation.stay_period_id &&
+    !allocation.allocation_series_id &&
+    allocation.arrival_date === envelopeArrival &&
+    allocation.departure_date === envelopeDeparture
+  );
+}
+
 export function validateSleepingAssignments(assignments, tents = []) {
   const tentById = Object.fromEntries(tents.map(tent => [tent.id, tent]));
   const errors = [];

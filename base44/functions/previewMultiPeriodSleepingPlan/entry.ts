@@ -1,5 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
-import { addSleepingPlanConflicts, buildMultiPeriodSleepingPlan, validateSleepingAssignments } from '../../shared/multiPeriodSleepingPlan.js';
+import { addSleepingPlanConflicts, buildMultiPeriodSleepingPlan, findLegacyEnvelopeAllocations, validateSleepingAssignments } from '../../shared/multiPeriodSleepingPlan.js';
 
 export default async function(req) {
   try {
@@ -34,7 +34,16 @@ export default async function(req) {
       .filter(reservation => reservation.group_id === groupId && reservation.shared_neighborhood_allowed === true)
       .map(reservation => reservation.neighborhood_id);
     const preview = addSleepingPlanConflicts({ plan, existingAllocations, existingNeighborhoodReservations: neighborhoodReservations, sharedNeighborhoodIds });
-    return Response.json({ success: true, read_only: true, group_id: groupId, operational_group_profile_id: profiles[0].id, ...preview });
+    const legacyEnvelopeAllocations = findLegacyEnvelopeAllocations(groupId, periods, existingAllocations);
+    return Response.json({
+      success: true,
+      read_only: true,
+      group_id: groupId,
+      operational_group_profile_id: profiles[0].id,
+      legacy_envelope_allocations: legacyEnvelopeAllocations.map(row => ({ id: row.id, tent_id: row.tent_id, arrival_date: row.arrival_date, departure_date: row.departure_date, status: row.status })),
+      legacy_envelope_requires_conversion: legacyEnvelopeAllocations.length > 0,
+      ...preview,
+    });
   } catch (error) {
     return Response.json({ success: false, error: error?.message || 'PREVIEW_FAILED' }, { status: 500 });
   }

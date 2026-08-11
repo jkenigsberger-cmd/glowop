@@ -14,6 +14,10 @@
       "type": "string",
       "description": "FK to Neighborhood"
     },
+    "stay_period_id": {
+      "type": "string",
+      "description": "Optional FK to GroupStayPeriod for one MULTI_PERIOD neighborhood interval"
+    },
     "arrival_date": {
       "type": "string",
       "format": "date",
