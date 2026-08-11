@@ -14,6 +14,11 @@ import SearchBar from "@/components/search/SearchBar";
 import OperationalMonthlyGroupCalendar from "@/components/calendar/OperationalMonthlyGroupCalendar";
 import moment from "moment";
 import { isGroupOperationallyEnabled } from "@/lib/groupOperationalIsolation";
+import {
+  classifyHousekeepingAllocationsForDate,
+  filterRowsForHousekeepingEvent,
+  isAllocationRelevantOnHousekeepingDate,
+} from "@/lib/housekeepingDateSemantics";
 
 const TODAY = new Date().toISOString().slice(0, 10);
 const DAYS_AHEAD = 7;
@@ -185,29 +190,15 @@ export default function Housekeeping() {
     ]);
 
     return dateRange.map(date => {
-      const checkInAllocsByGroup  = {};
-      const checkOutAllocsByGroup = {};
-      const occupiedAllocsByGroup = {};
-
-      confirmedAllocations.forEach(a => {
-        if (!lodgingGroupIds.has(a.group_id)) return;
-        if (a.arrival_date === date) {
-          if (!checkInAllocsByGroup[a.group_id]) checkInAllocsByGroup[a.group_id] = [];
-          checkInAllocsByGroup[a.group_id].push(a);
-        }
-        if (a.departure_date === date) {
-          if (!checkOutAllocsByGroup[a.group_id]) checkOutAllocsByGroup[a.group_id] = [];
-          checkOutAllocsByGroup[a.group_id].push(a);
-        }
-        if (a.arrival_date < date && a.departure_date > date) {
-          if (!occupiedAllocsByGroup[a.group_id]) occupiedAllocsByGroup[a.group_id] = [];
-          occupiedAllocsByGroup[a.group_id].push(a);
-        }
-      });
+      const {
+        checkInAllocsByGroup,
+        checkOutAllocsByGroup,
+        occupiedAllocsByGroup,
+      } = classifyHousekeepingAllocationsForDate(confirmedAllocations, date, lodgingGroupIds);
 
       const lodgingGroups = groups.filter(g => lodgingGroupIds.has(g.id) && g.status !== "CANCELLED");
-      const arrivingGroups  = lodgingGroups.filter(g => g.arrival_date === date);
-      const departingGroups = lodgingGroups.filter(g => g.departure_date === date);
+      const arrivingGroups = lodgingGroups.filter(g => g.stay_mode !== "MULTI_PERIOD" && g.arrival_date === date);
+      const departingGroups = lodgingGroups.filter(g => g.stay_mode !== "MULTI_PERIOD" && g.departure_date === date);
 
       const draftCheckIn  = arrivingGroups.filter(g => !checkInAllocsByGroup[g.id]  && draftOnlyGroupIds.has(g.id));
       const nhoodCheckIn  = arrivingGroups.filter(g => !checkInAllocsByGroup[g.id]  && !draftOnlyGroupIds.has(g.id) && nhoodOnlyGroupIds.has(g.id));
@@ -296,11 +287,18 @@ export default function Housekeeping() {
       if (![g.group_name, g.contact_name].some(f => f && f.toLowerCase().includes(q))) return false;
     }
     if (dateFilter) {
-      const arr = g.arrival_date;
-      const dep = g.departure_date;
-      if (!arr) return false;
-      if (arr > dateFilter) return false;
-      if (dep && dep < dateFilter) return false;
+      if (g.stay_mode === "MULTI_PERIOD") {
+        const hasRelevantStay = operationalAllocations.some(a =>
+          a.group_id === g.id && a.status !== "CANCELLED" && isAllocationRelevantOnHousekeepingDate(a, dateFilter)
+        );
+        if (!hasRelevantStay) return false;
+      } else {
+        const arr = g.arrival_date;
+        const dep = g.departure_date;
+        if (!arr) return false;
+        if (arr > dateFilter) return false;
+        if (dep && dep < dateFilter) return false;
+      }
     }
     return true;
   };
@@ -312,24 +310,30 @@ export default function Housekeeping() {
   };
 
   // ── Card prop builders (unchanged) ────────────────────────────────────────────
-  const cardProps = (groupId, allocs, type) => ({
-    group:             groupsMap[groupId],
-    allocations:       allocs,
-    draftAllocations:  draftAllocsByGroup[groupId] || [],
-    nhoodReservations: nhoodResByGroup[groupId]    || [],
-    profiles:          profilesByGroup[groupId]    || [],
-    tentsMap,
-    neighborhoodsMap,
-    type,
-    onRefresh: refetchAllocations,
-  });
+  const dateRelevantRows = (group, rows, date, type) =>
+    group?.stay_mode === "MULTI_PERIOD" ? filterRowsForHousekeepingEvent(rows, date, type) : rows;
 
-  const warnCardProps = (group, type) => ({
+  const cardProps = (groupId, allocs, type, date) => {
+    const group = groupsMap[groupId];
+    return {
+      group,
+      allocations: allocs,
+      draftAllocations: dateRelevantRows(group, draftAllocsByGroup[groupId] || [], date, type),
+      nhoodReservations: dateRelevantRows(group, nhoodResByGroup[groupId] || [], date, type),
+      profiles: profilesByGroup[groupId] || [],
+      tentsMap,
+      neighborhoodsMap,
+      type,
+      onRefresh: refetchAllocations,
+    };
+  };
+
+  const warnCardProps = (group, type, date) => ({
     group,
-    allocations:       [],
-    draftAllocations:  draftAllocsByGroup[group.id] || [],
-    nhoodReservations: nhoodResByGroup[group.id]    || [],
-    profiles:          profilesByGroup[group.id]    || [],
+    allocations: [],
+    draftAllocations: dateRelevantRows(group, draftAllocsByGroup[group.id] || [], date, type),
+    nhoodReservations: dateRelevantRows(group, nhoodResByGroup[group.id] || [], date, type),
+    profiles: profilesByGroup[group.id] || [],
     tentsMap,
     neighborhoodsMap,
     type,
@@ -360,16 +364,16 @@ export default function Housekeeping() {
             </h3>
             <div className="space-y-2">
               {checkInGroupIds.filter(matchGroupId).map(gid => (
-                <GroupAllocationCard key={gid} {...cardProps(gid, checkInAllocsByGroup[gid] || [], "checkin")} />
+                <GroupAllocationCard key={gid} {...cardProps(gid, checkInAllocsByGroup[gid] || [], "checkin", date)} />
               ))}
               {draftCheckIn.filter(matchGroup).map(g => (
-                <GroupAllocationCard key={g.id} {...warnCardProps(g, "checkin")} />
+                <GroupAllocationCard key={g.id} {...warnCardProps(g, "checkin", date)} />
               ))}
               {nhoodCheckIn.filter(matchGroup).map(g => (
-                <GroupAllocationCard key={g.id} {...warnCardProps(g, "checkin")} />
+                <GroupAllocationCard key={g.id} {...warnCardProps(g, "checkin", date)} />
               ))}
               {noneCheckIn.filter(matchGroup).map(g => (
-                <GroupAllocationCard key={g.id} {...warnCardProps(g, "checkin")} />
+                <GroupAllocationCard key={g.id} {...warnCardProps(g, "checkin", date)} />
               ))}
             </div>
           </div>
@@ -381,16 +385,16 @@ export default function Housekeeping() {
             </h3>
             <div className="space-y-2">
               {checkOutGroupIds.filter(matchGroupId).map(gid => (
-                <GroupAllocationCard key={gid} {...cardProps(gid, checkOutAllocsByGroup[gid] || [], "checkout")} />
+                <GroupAllocationCard key={gid} {...cardProps(gid, checkOutAllocsByGroup[gid] || [], "checkout", date)} />
               ))}
               {draftCheckOut.filter(matchGroup).map(g => (
-                <GroupAllocationCard key={g.id} {...warnCardProps(g, "checkout")} />
+                <GroupAllocationCard key={g.id} {...warnCardProps(g, "checkout", date)} />
               ))}
               {nhoodCheckOut.filter(matchGroup).map(g => (
-                <GroupAllocationCard key={g.id} {...warnCardProps(g, "checkout")} />
+                <GroupAllocationCard key={g.id} {...warnCardProps(g, "checkout", date)} />
               ))}
               {noneCheckOut.filter(matchGroup).map(g => (
-                <GroupAllocationCard key={g.id} {...warnCardProps(g, "checkout")} />
+                <GroupAllocationCard key={g.id} {...warnCardProps(g, "checkout", date)} />
               ))}
             </div>
           </div>
@@ -402,7 +406,7 @@ export default function Housekeeping() {
             </h3>
             <div className="space-y-2">
               {occupiedGroupIds.filter(matchGroupId).map(gid => (
-                <GroupAllocationCard key={gid} {...cardProps(gid, occupiedAllocsByGroup[gid] || [], "occupied")} />
+                <GroupAllocationCard key={gid} {...cardProps(gid, occupiedAllocsByGroup[gid] || [], "occupied", date)} />
               ))}
             </div>
           </div>
