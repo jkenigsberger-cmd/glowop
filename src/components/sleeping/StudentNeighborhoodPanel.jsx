@@ -50,6 +50,7 @@ export default function StudentNeighborhoodPanel({
   canUseMultiPeriod = false,
   logicalAssignments = [],
   seriesValidation = null,
+  activeStayPeriods = [],
 }) {
   const [open, setOpen] = useState(false);
   const [showDistribution, setShowDistribution] = useState(false);
@@ -175,20 +176,23 @@ export default function StudentNeighborhoodPanel({
           <div className="flex items-center gap-1.5 shrink-0">
             {isLockedByMe ? (
               <>
-                {!isMultiPeriod && (
-                  <AutoAllocationButton
-                    neighborhood={neighborhood}
-                    tents={tents}
-                    profile={profile}
-                    groupId={groupId}
-                    profileId={profileId}
-                    arrivalDate={arrivalDate}
-                    departureDate={departureDate}
-                    allConfirmedAllocs={allConfirmedAllocs}
-                    existingGroupAllocs={existingGroupAllocs}
-                    onSaved={onSaved}
-                  />
-                )}
+                <AutoAllocationButton
+                  neighborhood={neighborhood}
+                  tents={tents}
+                  profile={profile}
+                  groupId={groupId}
+                  profileId={profileId}
+                  arrivalDate={arrivalDate}
+                  departureDate={departureDate}
+                  allConfirmedAllocs={allConfirmedAllocs}
+                  existingGroupAllocs={existingGroupAllocs}
+                  onSaved={onSaved}
+                  isMultiPeriod={isMultiPeriod}
+                  canUseMultiPeriod={canUseMultiPeriod}
+                  activeStayPeriods={activeStayPeriods}
+                  logicalAssignments={logicalAssignments}
+                  seriesValidation={seriesValidation}
+                />
                 <Button
                   size="sm"
                   variant="outline"
@@ -221,14 +225,33 @@ export default function StudentNeighborhoodPanel({
                 )}
               </>
             ) : isMultiPeriod ? (
-              <Button
-                size="sm"
-                className="h-7 text-xs gap-1"
-                onClick={() => setOpen(o => !o)}
-                disabled={!canUseMultiPeriod || seriesValidation?.valid === false}
-              >
-                <LayoutGrid className="w-3 h-3" /> בחר שכונה ואוהלים
-              </Button>
+              <>
+                <AutoAllocationButton
+                  neighborhood={neighborhood}
+                  tents={tents}
+                  profile={profile}
+                  groupId={groupId}
+                  profileId={profileId}
+                  arrivalDate={arrivalDate}
+                  departureDate={departureDate}
+                  allConfirmedAllocs={allConfirmedAllocs}
+                  existingGroupAllocs={existingGroupAllocs}
+                  onSaved={onSaved}
+                  isMultiPeriod
+                  canUseMultiPeriod={canUseMultiPeriod}
+                  activeStayPeriods={activeStayPeriods}
+                  logicalAssignments={logicalAssignments}
+                  seriesValidation={seriesValidation}
+                />
+                <Button
+                  size="sm"
+                  className="h-7 text-xs gap-1"
+                  onClick={() => setOpen(o => !o)}
+                  disabled={!canUseMultiPeriod || seriesValidation?.valid === false}
+                >
+                  <LayoutGrid className="w-3 h-3" /> בחר שכונה ואוהלים
+                </Button>
+              </>
             ) : (
               <Button
                 size="sm"

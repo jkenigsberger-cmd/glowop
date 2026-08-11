@@ -530,8 +530,8 @@ export default function SleepingAllocationTab({ groupId }) {
         )}
         {isMultiPeriod && (
           <div className="text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
-            בחירת אוהל נשמרת כשיבוץ לוגי אחד ומוחלת אוטומטית על כל תקופות השהייה הפעילות. שיבוץ אוטומטי אינו זמין בשלב זה.
-          </div>
+            בחירת אוהל נשמרת כשיבוץ לוגי אחד ומוחלת אוטומטית על כל תקופות השהייה הפעילות.
+            </div>
         )}
 
         {studentNeighborhoods.length === 0 && (
@@ -564,6 +564,7 @@ export default function SleepingAllocationTab({ groupId }) {
             canUseMultiPeriod={canUseMultiPeriod}
             logicalAssignments={logicalStudentAssignments}
             seriesValidation={seriesValidation}
+            activeStayPeriods={activeStayPeriods}
             />
           );
         })}

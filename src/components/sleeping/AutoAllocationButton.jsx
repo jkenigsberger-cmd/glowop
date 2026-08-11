@@ -47,6 +47,11 @@ export default function AutoAllocationButton({
   allConfirmedAllocs = [],
   existingGroupAllocs = [],
   onSaved,
+  isMultiPeriod = false,
+  canUseMultiPeriod = false,
+  activeStayPeriods = [],
+  logicalAssignments = [],
+  seriesValidation = null,
 }) {
   const [preview, setPreview] = useState(null); // null | { segments: [{gender, rows}], error }
   const [saving, setSaving]   = useState(false);
@@ -61,15 +66,15 @@ export default function AutoAllocationButton({
   // Tents blocked by OTHER groups (overbooking check)
   const blockedTentIds = useMemo(() => {
     const set = new Set();
-    if (!arrivalDate || !departureDate) return set;
     allConfirmedAllocs.forEach(a => {
-      if (a.group_id === groupId) return;
-      if (a.status === "CANCELLED") return;
-      if (!datesOverlap(arrivalDate, departureDate, a.arrival_date, a.departure_date)) return;
-      set.add(a.tent_id);
+      if (a.group_id === groupId || a.status === "CANCELLED") return;
+      const overlapsRequiredStay = isMultiPeriod
+        ? activeStayPeriods.some(period => datesOverlap(period.start_date, period.end_date, a.arrival_date, a.departure_date))
+        : datesOverlap(arrivalDate, departureDate, a.arrival_date, a.departure_date);
+      if (overlapsRequiredStay) set.add(a.tent_id);
     });
     return set;
-  }, [allConfirmedAllocs, groupId, arrivalDate, departureDate]);
+  }, [allConfirmedAllocs, groupId, arrivalDate, departureDate, isMultiPeriod, activeStayPeriods]);
 
   // Tents already allocated by THIS group in this neighborhood (any status except cancelled)
   const usedByMeTentIds = useMemo(() => new Set(
@@ -130,6 +135,19 @@ export default function AutoAllocationButton({
   const runAutoAllocation = () => {
     setDone(false);
 
+    if (isMultiPeriod && !canUseMultiPeriod) {
+      setPreview({ error: "שיבוץ אוטומטי רב־תקופתי זמין רק למכינה מאושרת ופעילה תפעולית." });
+      return;
+    }
+    if (isMultiPeriod && seriesValidation?.valid === false) {
+      setPreview({ error: "השיבוץ הרב־תקופתי הקיים חלקי או לא עקבי. יש לשחרר את כולו לפני שיבוץ אוטומטי." });
+      return;
+    }
+    if (isMultiPeriod && logicalAssignments.length > 0) {
+      setPreview({ error: "כבר קיים שיבוץ לוגי למכינה. כדי למנוע כפילות, יש לשחרר את כל השיבוץ לפני הפעלה מחדש." });
+      return;
+    }
+
     if (!profile) {
       setPreview({ error: "אין פרופיל תפעולי — נא להשלים את פרטי הקבוצה." });
       return;
@@ -188,7 +206,30 @@ export default function AutoAllocationButton({
       return;
     }
 
+    if (isMultiPeriod && isPartial) {
+      setPreview({ error: "אין בשכונה מספיק קיבולת תואמת שנשמרת בכל תקופות השהייה של המכינה. לא נוצר שיבוץ חלקי." });
+      return;
+    }
+
     setPreview({ segments: result, error: null, isPartial });
+  };
+
+  const buildLogicalAssignments = () => preview.segments.flatMap(seg =>
+    seg.rows.map(({ tent, pax }) => ({
+      tent_id: tent.id,
+      neighborhood_id: neighborhood.id,
+      allocated_pax: pax,
+      allocation_type: "STUDENT",
+      gender_group: seg.gender,
+      notes: "שיבוץ אוטומטי",
+    }))
+  );
+
+  const multiPeriodConflictMessage = (result) => {
+    const conflict = result?.exact_tent_conflicts?.[0];
+    if (!conflict) return "אחד או יותר מהאוהלים שנבחרו אינם זמינים בכל תקופות השהייה של המכינה.";
+    const tentCode = tents.find(tent => tent.id === conflict.tent_id)?.code || conflict.tent_id;
+    return `אוהל ${tentCode} אינו זמין בכל התקופות: התנגשות בתאריכים ${conflict.planned_period.arrival_date}–${conflict.planned_period.departure_date} עם קבוצה ${conflict.conflicting_group_id}.`;
   };
 
   // ── Save all segments as DRAFT rows ────────────────────────────────────────
@@ -196,6 +237,32 @@ export default function AutoAllocationButton({
     if (!preview?.segments?.length) return;
     setSaving(true);
     try {
+      if (isMultiPeriod) {
+        const assignments = buildLogicalAssignments();
+        const previewRes = await base44.functions.invoke("previewMultiPeriodSleepingPlan", { group_id: groupId, assignments });
+        const previewResult = previewRes.data;
+        if (!previewResult?.success || previewResult.legacy_envelope_requires_conversion || !previewResult.allowed) {
+          const message = previewResult?.legacy_envelope_requires_conversion
+            ? "קיים שיבוץ מעטפת ישן הדורש המרה לפני שיבוץ אוטומטי."
+            : multiPeriodConflictMessage(previewResult);
+          setPreview({ error: message });
+          return;
+        }
+        const commitRes = await base44.functions.invoke("commitMultiPeriodSleepingPlan", { group_id: groupId, assignments });
+        if (!commitRes.data?.success) {
+          setPreview({ error: commitRes.data?.error === "INCONSISTENT_PERIODIZED_SLEEPING_STATE"
+            ? "כבר קיים שיבוץ רב־תקופתי שאינו ניתן להחלפה אוטומטית. יש לשחרר את כולו תחילה."
+            : (commitRes.data?.error || "שמירת השיבוץ הרב־תקופתי נכשלה.") });
+          return;
+        }
+        const totalPax = assignments.reduce((sum, assignment) => sum + assignment.allocated_pax, 0);
+        toast.success(`שיבוץ אוטומטי רב־תקופתי נוצר — ${assignments.length} אוהלים · ${totalPax} אנשים ✓`);
+        setDone(true);
+        setPreview(null);
+        onSaved?.();
+        return;
+      }
+
       const ops = [];
       for (const seg of preview.segments) {
         for (const { tent, pax } of seg.rows) {
@@ -286,7 +353,7 @@ export default function AutoAllocationButton({
             <div className="p-3 space-y-3">
               <p className="text-xs font-semibold text-violet-800 flex items-center gap-1.5">
                 <Wand2 className="w-3.5 h-3.5" />
-                תצוגה מקדימה — שיבוץ אוטומטי
+                תצוגה מקדימה — שיבוץ אוטומטי{isMultiPeriod ? " רב־תקופתי" : ""}
                 {preview.isPartial && (
                   <span className="text-amber-600 font-normal normal-case">· שיבוץ חלקי — לא כל השכונה מספיקה</span>
                 )}
@@ -338,14 +405,16 @@ export default function AutoAllocationButton({
                   >
                     {saving
                       ? <><Loader2 className="w-3 h-3 animate-spin" /> שומר...</>
-                      : <><CheckCircle2 className="w-3 h-3" /> צור שיבוץ טיוטה</>
-                    }
-                  </Button>
+                      : <><CheckCircle2 className="w-3 h-3" /> {isMultiPeriod ? "צור שיבוץ רב־תקופתי" : "צור שיבוץ טיוטה"}</>
+                      }
+                      </Button>
                 </RoleGate>
               </div>
               <p className="text-[10px] text-slate-400 text-center">
-                השיבוץ יישמר כטיוטה — לאחר מכן לחץ "אשר שיבוץ לינה" לאישור סופי
-              </p>
+                {isMultiPeriod
+                  ? "אותם אוהלים יישמרו כטיוטה בכל תקופות השהייה — לאחר מכן לחץ ״אשר שיבוץ לינה״"
+                  : "השיבוץ יישמר כטיוטה — לאחר מכן לחץ ״אשר שיבוץ לינה״ לאישור סופי"}
+                </p>
             </div>
           )}
         </div>
