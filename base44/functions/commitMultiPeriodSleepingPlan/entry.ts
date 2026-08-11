@@ -62,9 +62,12 @@ function inspectExistingState({ allocations, reservations, assignments, periods,
   const appendIsVipOnly = missingAssignmentIndexes.every(index =>
     assignments[index].allocation_type === 'STAFF' && /__vip_req_\d+__/.test(assignments[index].notes || '')
   );
-  return appendIsVipOnly
-    ? { state: 'APPEND_VIP', missing_assignment_indexes: missingAssignmentIndexes }
-    : { state: 'INCONSISTENT', reason: 'SERIES_COUNT_MISMATCH' };
+  const appendIsAltOnly = missingAssignmentIndexes.every(index =>
+    assignments[index].allocation_type === 'STAFF' && (assignments[index].notes || '').includes('__alt_tent__')
+  );
+  if (appendIsVipOnly) return { state: 'APPEND_VIP', missing_assignment_indexes: missingAssignmentIndexes };
+  if (appendIsAltOnly) return { state: 'APPEND_ALT', missing_assignment_indexes: missingAssignmentIndexes };
+  return { state: 'INCONSISTENT', reason: 'SERIES_COUNT_MISMATCH' };
 }
 
 async function rollbackCreated(base44, allocationIds, reservationIds) {
@@ -129,7 +132,8 @@ export default async function(req) {
     const preview = addSleepingPlanConflicts({ plan, existingAllocations: activeAllocations, existingNeighborhoodReservations: activeReservations, sharedNeighborhoodIds });
     if (!preview.allowed) return Response.json({ success: false, error: 'SLEEPING_PLAN_CONFLICT', exact_tent_conflicts: preview.exact_tent_conflicts, neighborhood_conflicts: preview.neighborhood_conflicts }, { status: 409 });
 
-    const indexesToCreate = existingState.state === 'APPEND_VIP'
+    const isAppend = existingState.state === 'APPEND_VIP' || existingState.state === 'APPEND_ALT';
+    const indexesToCreate = isAppend
       ? new Set(existingState.missing_assignment_indexes)
       : new Set(assignments.map((_, index) => index));
     const seriesByAssignmentIndex = assignments.map((assignment, index) => indexesToCreate.has(index)
@@ -144,7 +148,7 @@ export default async function(req) {
       });
       createdAllocationIds.push(created.id);
     }
-    for (const planned of (existingState.state === 'APPEND_VIP' ? [] : plan.planned_neighborhood_intervals)) {
+    for (const planned of (isAppend ? [] : plan.planned_neighborhood_intervals)) {
       const created = await base44.asServiceRole.entities.NeighborhoodReservation.create({
         ...planned.neighborhood_reservation,
         stay_period_id: planned.source_stay_period_id,
@@ -160,6 +164,7 @@ export default async function(req) {
       operational_group_profile_id: profile.id,
       allocation_series: seriesByAssignmentIndex.filter(Boolean),
       appended_vip_only: existingState.state === 'APPEND_VIP',
+      appended_alt_only: existingState.state === 'APPEND_ALT',
       sleeping_allocation_ids: createdAllocationIds,
       neighborhood_reservation_ids: createdReservationIds,
       sleeping_rows_created: createdAllocationIds.length,

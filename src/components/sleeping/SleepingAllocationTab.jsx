@@ -617,23 +617,21 @@ export default function SleepingAllocationTab({ groupId }) {
       )}
 
       {/* ── ALT TENT ALLOCATION ── */}
-      {isMultiPeriod ? (
-        <div className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
-          שיבוץ אוהל חילופי למכינה רב־תקופתית אינו זמין עדיין. התמיכה התקופתית תתווסף בשלב הבא.
-        </div>
-      ) : (
-        <AltTentAllocationPanel
-          profile={{ ...profile, arrival_date: arrivalDate, departure_date: departureDate }}
-          groupId={groupId}
-          allTents={allTents}
-          neighborhoods={neighborhoods}
-          myAllocations={myAllocations}
-          allActiveAllocations={allActiveAllocations}
-          arrivalDate={arrivalDate}
-          departureDate={departureDate}
-          onInvalidate={invalidate}
-        />
-      )}
+      <AltTentAllocationPanel
+        profile={{ ...profile, arrival_date: arrivalDate, departure_date: departureDate }}
+        groupId={groupId}
+        allTents={allTents}
+        neighborhoods={neighborhoods}
+        myAllocations={myAllocations}
+        allActiveAllocations={allActiveAllocations}
+        arrivalDate={arrivalDate}
+        departureDate={departureDate}
+        onInvalidate={invalidate}
+        isMultiPeriod={isMultiPeriod}
+        canUseMultiPeriod={canUseMultiPeriod && seriesValidation.valid}
+        logicalAssignments={logicalSeriesData.logical_assignments}
+        activeStayPeriods={activeStayPeriods}
+      />
 
       {/* ── CONFIRMATION PANEL ── */}
       {(() => {

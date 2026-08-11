@@ -7,8 +7,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import RoleGate from "@/components/RoleGate";
-
-const ALT_TENT_MARKER = "__alt_tent__";
+import { getLogicalAltTentAllocations, ALT_TENT_MARKER } from "@/lib/altTentLogicalAllocations";
+import { toSleepingAssignmentPrototype } from "@/lib/vipLogicalAllocations";
 
 const GENDER_OPTIONS = [
   { value: "MEN",   label: "גברים" },
@@ -181,6 +181,9 @@ function AltTentAllocationModal({
   availableTents,      // tents not occupied by other groups (DRAFT + CONFIRMED from others)
   arrivalDate, departureDate,
   onSaved, onClose,
+  isMultiPeriod = false,
+  canUseMultiPeriod = false,
+  periodizedAssignments = [],
 }) {
   const required      = profile.staff_alt_tent_pax ?? 0;
   const altTentNotes  = profile.staff_alt_tent_notes || "";
@@ -290,9 +293,55 @@ function AltTentAllocationModal({
     if (required > 0 && allocatedPax > required) errs.push(`שובצו יותר אנשים מהנדרש (${allocatedPax} > ${required})`);
     if (errs.length) { setErrors(errs); return; }
 
+    if (isMultiPeriod && !canUseMultiPeriod) {
+      setErrors(["שיבוץ אוהל חילופי רב־תקופתי זמין רק למכינה מאושרת ופעילה תפעולית"]);
+      return;
+    }
+    if (isMultiPeriod && existingAltAllocs.length > 0) {
+      setErrors(["לא ניתן להחליף שיבוץ אוהל חילופי רב־תקופתי קיים. יש לשחרר את כל תכנית הלינה וליצור תכנית חדשה."]);
+      return;
+    }
+
     setSaving(true);
     const failed = [];
 
+    if (isMultiPeriod) {
+      const altAssignments = entries.map(([tentId, sel]) => {
+        const tent = allTents.find(item => item.id === tentId);
+        const cleanNotes = (sel.notes || "").replace(/__alt_tent__\s*/g, "").trim();
+        return {
+          tent_id: tentId,
+          neighborhood_id: tent.neighborhood_id,
+          allocated_pax: Number(sel.pax),
+          allocation_type: "STAFF",
+          gender_group: sel.gender || "MIXED",
+          notes: `${ALT_TENT_MARKER}${cleanNotes ? ` ${cleanNotes}` : ""}`,
+        };
+      });
+      const assignments = [...periodizedAssignments, ...altAssignments];
+      try {
+        const preview = await base44.functions.invoke("previewMultiPeriodSleepingPlan", { group_id: groupId, assignments });
+        if (!preview.data?.success || !preview.data?.allowed) {
+          const conflicts = preview.data?.exact_tent_conflicts || [];
+          const details = conflicts.map(item => `אוהל תפוס בתקופה ${item.planned_period?.arrival_date}–${item.planned_period?.departure_date}`);
+          failed.push(...(details.length ? details : [preview.data?.error || "האוהל אינו פנוי בכל תקופות השהייה הפעילות"]));
+        } else {
+          const commit = await base44.functions.invoke("commitMultiPeriodSleepingPlan", { group_id: groupId, assignments });
+          if (!commit.data?.success) failed.push(commit.data?.error || "שמירת השיבוץ הרב־תקופתי נכשלה");
+        }
+      } catch (err) {
+        failed.push(err?.response?.data?.error || err?.message || "שמירת השיבוץ הרב־תקופתי נכשלה");
+      }
+      setSaving(false);
+      if (failed.length) setErrors(failed);
+      else {
+        toast.success(`שיבוץ אוהלים חילופיים נשמר לכל תקופות השהייה — ${entries.length} אוהלים ✓`);
+        onSaved();
+      }
+      return;
+    }
+
+    // CONTINUOUS: keep the existing save function and row behavior unchanged.
     // Save each selection sequentially
     for (const [tentId, sel] of entries) {
       try {
@@ -543,6 +592,10 @@ export default function AltTentAllocationPanel({
   arrivalDate,
   departureDate,
   onInvalidate,
+  isMultiPeriod = false,
+  canUseMultiPeriod = false,
+  logicalAssignments = [],
+  activeStayPeriods = [],
 }) {
   const [modalOpen, setModalOpen] = useState(false);
   const [releasingId, setReleasingId] = useState(null);
@@ -552,8 +605,14 @@ export default function AltTentAllocationPanel({
 
   // All active alt tent allocations for this group
   const altAllocs = useMemo(
-    () => myAllocations.filter(a => a.status !== "CANCELLED" && (a.notes || "").includes(ALT_TENT_MARKER)),
-    [myAllocations]
+    () => isMultiPeriod
+      ? getLogicalAltTentAllocations(myAllocations)
+      : myAllocations.filter(a => a.status !== "CANCELLED" && (a.notes || "").includes(ALT_TENT_MARKER)),
+    [myAllocations, isMultiPeriod]
+  );
+  const periodizedAssignments = useMemo(
+    () => logicalAssignments.filter(item => !item.inconsistent).map(toSleepingAssignmentPrototype),
+    [logicalAssignments]
   );
 
   const allocatedPax  = altAllocs.reduce((s, a) => s + (a.allocated_pax || 0), 0);
@@ -563,11 +622,13 @@ export default function AltTentAllocationPanel({
   // Tents occupied on overlapping dates — ALL groups including same group.
   // Exception: existing alt-tent allocs for THIS group are shown in the panel with שחרר button,
   // so exclude them from the blocked set (they are already excluded from availableTents via myAltTentIds).
-  const myAltAllocIds = useMemo(() => new Set(altAllocs.map(a => a.id)), [altAllocs]);
+  const myAltAllocIds = useMemo(() => new Set(altAllocs.flatMap(a =>
+    isMultiPeriod ? (a.period_rows || []).map(row => row.id) : [a.id]
+  )), [altAllocs, isMultiPeriod]);
 
   const occupiedTentIds = useMemo(() => {
     const ids = new Set();
-    if (!arrivalDate || !departureDate) return ids;
+    if (isMultiPeriod ? activeStayPeriods.length === 0 : (!arrivalDate || !departureDate)) return ids;
     // Allocations that already ended (departure <= today) don't block — guests already left
     const todayIL = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem" }).format(new Date());
     (allActiveAllocations || []).forEach(a => {
@@ -575,19 +636,20 @@ export default function AltTentAllocationPanel({
       // Skip this group's own existing alt-tent rows (handled separately in panel)
       if (myAltAllocIds.has(a.id)) return;
       if (a.departure_date && a.departure_date <= todayIL) return;
-      if (a.arrival_date && a.departure_date && a.arrival_date < departureDate && a.departure_date > arrivalDate) {
-        ids.add(a.tent_id);
-      }
+      const overlaps = isMultiPeriod
+        ? activeStayPeriods.some(period => a.arrival_date < period.end_date && a.departure_date > period.start_date)
+        : a.arrival_date && a.departure_date && a.arrival_date < departureDate && a.departure_date > arrivalDate;
+      if (overlaps) ids.add(a.tent_id);
     });
     return ids;
-  }, [allActiveAllocations, groupId, arrivalDate, departureDate, myAltAllocIds]);
+  }, [allActiveAllocations, arrivalDate, departureDate, myAltAllocIds, isMultiPeriod, activeStayPeriods]);
 
   // Tent IDs already used by this group's alt allocs (excluded from picker — managed inside modal)
   const myAltTentIds = useMemo(() => new Set(altAllocs.map(a => a.tent_id)), [altAllocs]);
 
   // Available regular tents: not VIP, working, not occupied by others, not already mine
   const availableTents = useMemo(() => {
-    if (!arrivalDate || !departureDate) return [];
+    if (isMultiPeriod ? activeStayPeriods.length === 0 : (!arrivalDate || !departureDate)) return [];
     return allTents.filter(t => {
       if (t.tent_type === "VIP") return false;
       if (t.working_status !== "WORKING") return false;
@@ -595,9 +657,13 @@ export default function AltTentAllocationPanel({
       if (occupiedTentIds.has(t.id)) return false;
       return true;
     });
-  }, [allTents, occupiedTentIds, myAltTentIds, arrivalDate, departureDate]);
+  }, [allTents, occupiedTentIds, myAltTentIds, arrivalDate, departureDate, isMultiPeriod, activeStayPeriods]);
 
   const handleRelease = async (alloc) => {
+    if (isMultiPeriod) {
+      toast.error("לא ניתן לשחרר תקופה בודדת משיבוץ אוהל חילופי רב־תקופתי. יש לשחרר את כל תכנית הלינה.");
+      return;
+    }
     setReleasingId(alloc.id);
     try {
       if (alloc.status === "DRAFT") {
@@ -644,7 +710,13 @@ export default function AltTentAllocationPanel({
           <Button
             size="sm"
             variant="outline"
-            onClick={() => setModalOpen(true)}
+            onClick={() => {
+              if (isMultiPeriod && altAllocs.length > 0) {
+                toast.error("לא ניתן להחליף שיבוץ אוהל חילופי רב־תקופתי קיים. יש לשחרר את כל תכנית הלינה וליצור תכנית חדשה.");
+                return;
+              }
+              setModalOpen(true);
+            }}
             className={`gap-1 shrink-0 ${
               allDone
                 ? "border-emerald-300 text-emerald-700 hover:bg-emerald-50"
@@ -714,6 +786,9 @@ export default function AltTentAllocationPanel({
           departureDate={departureDate}
           onSaved={() => { setModalOpen(false); onInvalidate(); }}
           onClose={() => setModalOpen(false)}
+          isMultiPeriod={isMultiPeriod}
+          canUseMultiPeriod={canUseMultiPeriod}
+          periodizedAssignments={periodizedAssignments}
         />
       )}
     </section>

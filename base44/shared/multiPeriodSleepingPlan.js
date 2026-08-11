@@ -34,11 +34,13 @@ export function validateSleepingAssignments(assignments, tents = [], neighborhoo
     if (!tent) errors.push({ code: 'TENT_NOT_FOUND', index, tent_id: assignment?.tent_id });
     else {
       const isVipRequirement = assignment?.allocation_type === 'STAFF' && /__vip_req_\d+__/.test(assignment?.notes || '');
+      const isAltTentRequirement = assignment?.allocation_type === 'STAFF' && (assignment?.notes || '').includes('__alt_tent__');
       const maxPax = isVipRequirement ? 4 : Number(tent.capacity || 0);
       if (tent.working_status !== 'WORKING') errors.push({ code: 'TENT_NOT_WORKING', index, tent_id: tent.id });
       if (tent.neighborhood_id !== assignment.neighborhood_id) errors.push({ code: 'TENT_NEIGHBORHOOD_MISMATCH', index, tent_id: tent.id });
       if (isVipRequirement && tent.tent_type !== 'VIP') errors.push({ code: 'TENT_NOT_VIP', index, tent_id: tent.id });
       if (isVipRequirement && neighborhoodById[assignment.neighborhood_id]?.is_vip !== true) errors.push({ code: 'NOT_VIP_NEIGHBORHOOD', index, tent_id: tent.id });
+      if (isAltTentRequirement && tent.tent_type === 'VIP') errors.push({ code: 'ALT_TENT_MUST_BE_STANDARD', index, tent_id: tent.id });
       if (Number(assignment.allocated_pax) > maxPax) errors.push({ code: 'PAX_EXCEEDS_TENT_CAPACITY', index, tent_id: tent.id });
     }
     if (!Number.isFinite(Number(assignment?.allocated_pax)) || Number(assignment.allocated_pax) <= 0) errors.push({ code: 'INVALID_ALLOCATED_PAX', index });
