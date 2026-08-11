@@ -13,6 +13,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertTriangle, CheckCircle2, Save, Unlock } from "lucide-react";
 import { toast } from "sonner";
+import { groupLogicalSleepingAssignments } from "../../../base44/shared/logicalSleepingSeries.js";
 
 const GENDER_LABEL = { BOYS: "בנים 👦", GIRLS: "בנות 👧", MEN: "גברים 👨", WOMEN: "נשים 👩" };
 
@@ -48,6 +49,9 @@ export default function TentDistributionEditor({
   departureDate,
   allConfirmedAllocs = [],
   onSaved,
+  isMultiPeriod = false,
+  canUseMultiPeriod = false,
+  seriesValidation = null,
 }) {
   const queryClient = useQueryClient();
 
@@ -67,6 +71,7 @@ export default function TentDistributionEditor({
   const [saving, setSaving] = useState(false);
   const [releasingTentId, setReleasingTentId] = useState(null);
   const [overrideMismatch, setOverrideMismatch] = useState(false);
+  const [periodErrors, setPeriodErrors] = useState([]);
 
   // Active student allocs for this group in this neighborhood
   const myNeighborhoodAllocs = useMemo(
@@ -77,6 +82,18 @@ export default function TentDistributionEditor({
     ),
     [existingAllocs, neighborhood]
   );
+  const logicalStudentAssignments = useMemo(
+    () => groupLogicalSleepingAssignments(
+      existingAllocs.filter(a => a.status !== "CANCELLED" && a.allocation_type === "STUDENT")
+    ).logical_assignments,
+    [existingAllocs]
+  );
+  const displayedNeighborhoodAllocs = useMemo(
+    () => isMultiPeriod
+      ? logicalStudentAssignments.filter(a => a.neighborhood_id === neighborhood?.id)
+      : myNeighborhoodAllocs,
+    [isMultiPeriod, logicalStudentAssignments, myNeighborhoodAllocs, neighborhood]
+  );
 
   const isMixedReservation = reservation?.gender_group === "MIXED";
 
@@ -86,8 +103,9 @@ export default function TentDistributionEditor({
     const pm = {};
     const nm = {};
     const gm = {};
-    myNeighborhoodAllocs.forEach(a => {
-      pm[a.tent_id] = String(a.allocated_pax ?? 0);
+    displayedNeighborhoodAllocs.forEach(a => {
+      const pax = isMultiPeriod ? a.logical_allocated_pax : a.allocated_pax;
+      pm[a.tent_id] = String(pax ?? 0);
       nm[a.tent_id] = a.notes || "";
       // Preserve existing gender; default to BOYS for new entries in mixed
       gm[a.tent_id] = (a.gender_group === "BOYS" || a.gender_group === "GIRLS") ? a.gender_group : "BOYS";
@@ -96,12 +114,12 @@ export default function TentDistributionEditor({
     setNotesMap(nm);
     setGenderMap(gm);
     setOverrideMismatch(false);
-  }, [open, myNeighborhoodAllocs.length]);
+  }, [open, displayedNeighborhoodAllocs, isMultiPeriod]);
 
   // Overbooking: tentId → true if another group has a CONFIRMED alloc overlapping dates
   const overbookedTentIds = useMemo(() => {
     const set = new Set();
-    if (!arrivalDate || !departureDate) return set;
+    if (isMultiPeriod || !arrivalDate || !departureDate) return set;
     allConfirmedAllocs.forEach(a => {
       if (a.group_id === groupId) return;
       if (a.status === "CANCELLED") return;
@@ -109,7 +127,7 @@ export default function TentDistributionEditor({
       set.add(a.tent_id);
     });
     return set;
-  }, [allConfirmedAllocs, groupId, arrivalDate, departureDate]);
+  }, [allConfirmedAllocs, groupId, arrivalDate, departureDate, isMultiPeriod]);
 
   const totalAssigned = useMemo(
     () => tents.reduce((s, t) => s + (Number(paxMap[t.id]) || 0), 0),
@@ -144,7 +162,20 @@ export default function TentDistributionEditor({
     return errors;
   }, [tents, paxMap, overbookedTentIds]);
 
-  const hasBlockingErrors = capacityErrors.length > 0 || overbookingErrors.length > 0;
+  const hasBlockingErrors = capacityErrors.length > 0 || overbookingErrors.length > 0 ||
+    (isMultiPeriod && (!canUseMultiPeriod || seriesValidation?.valid === false));
+
+  const formatPreviewConflict = (preview) => {
+    const tentById = Object.fromEntries(tents.map(t => [t.id, t]));
+    const exact = preview?.exact_tent_conflicts?.[0];
+    if (exact) {
+      const code = tentById[exact.tent_id]?.code || exact.tent_id;
+      return `אוהל ${code} תפוס בתאריכים ${exact.planned_period.arrival_date}–${exact.planned_period.departure_date} על ידי קבוצה ${exact.conflicting_group_id}`;
+    }
+    const hood = preview?.neighborhood_conflicts?.find(c => c.blocked);
+    if (hood) return `השכונה תפוסה בתאריכים ${hood.planned_period.arrival_date}–${hood.planned_period.departure_date} על ידי קבוצה ${hood.conflicting_group_id}`;
+    return "לא ניתן לשמור את תכנית הלינה בגלל התנגשות.";
+  };
 
   const handleSave = async () => {
     if (hasBlockingErrors) return;
@@ -153,7 +184,61 @@ export default function TentDistributionEditor({
     // (we don't enforce exact match, just warn)
 
     setSaving(true);
+    setPeriodErrors([]);
     try {
+      if (isMultiPeriod) {
+        if (!canUseMultiPeriod) throw new Error("שיבוץ רב־תקופתי זמין רק למכינה מאושרת ופעילה תפעולית.");
+        if (seriesValidation?.valid === false) throw new Error("קיים שיבוץ רב־תקופתי חלקי או לא עקבי. יש לשחרר את כל השיבוץ וליצור אותו מחדש.");
+
+        const currentNeighborhoodAssignments = tents.flatMap(tent => {
+          const pax = Number(paxMap[tent.id]) || 0;
+          if (pax <= 0) return [];
+          return [{
+            tent_id: tent.id,
+            neighborhood_id: neighborhood.id,
+            allocated_pax: pax,
+            allocation_type: "STUDENT",
+            gender_group: isMixedReservation ? (genderMap[tent.id] || "BOYS") : (reservation?.gender_group || "MIXED"),
+            notes: notesMap[tent.id] || "",
+          }];
+        });
+        const otherNeighborhoodAssignments = logicalStudentAssignments
+          .filter(a => a.neighborhood_id !== neighborhood.id && !a.inconsistent)
+          .map(a => ({
+            tent_id: a.tent_id,
+            neighborhood_id: a.neighborhood_id,
+            allocated_pax: a.logical_allocated_pax,
+            allocation_type: "STUDENT",
+            gender_group: a.gender_group,
+            notes: a.notes || "",
+          }));
+        const assignments = [...otherNeighborhoodAssignments, ...currentNeighborhoodAssignments];
+        const previewRes = await base44.functions.invoke("previewMultiPeriodSleepingPlan", { group_id: groupId, assignments });
+        const preview = previewRes.data;
+        if (!preview?.success || preview.legacy_envelope_requires_conversion || !preview.allowed) {
+          const message = preview?.legacy_envelope_requires_conversion
+            ? "קיים שיבוץ מעטפת ישן הדורש המרה לפני שמירה."
+            : formatPreviewConflict(preview);
+          setPeriodErrors([message]);
+          return;
+        }
+        const commitRes = await base44.functions.invoke("commitMultiPeriodSleepingPlan", { group_id: groupId, assignments });
+        if (!commitRes.data?.success) {
+          const message = commitRes.data?.error === "INCONSISTENT_PERIODIZED_SLEEPING_STATE"
+            ? "השיבוץ הקיים אינו תואם לתכנית. יש לשחרר את כל השיבוץ לפני שינוי אוהלים."
+            : (commitRes.data?.error || "שמירת התכנית הרב־תקופתית נכשלה");
+          setPeriodErrors([message]);
+          return;
+        }
+        toast.success(commitRes.data.already_committed
+          ? "השיבוץ הרב־תקופתי כבר שמור ✓"
+          : `נוצרו ${commitRes.data.sleeping_rows_created} שורות תקופתיות כשיבוץ לוגי אחד לכל אוהל ✓`);
+        queryClient.invalidateQueries({ queryKey: ["sleepingAllocations", groupId] });
+        onSaved?.();
+        onClose();
+        return;
+      }
+
       // Build existing alloc map by tentId
       const existingByTent = {};
       myNeighborhoodAllocs.forEach(a => { existingByTent[a.tent_id] = a; });
@@ -209,13 +294,18 @@ export default function TentDistributionEditor({
       onClose();
     } catch (err) {
       console.error("[TentDistributionEditor] save error:", err);
-      toast.error(err?.message || "שגיאה בשמירה — נסה שוב");
+      if (isMultiPeriod) setPeriodErrors([err?.message || "שגיאה בשמירה — נסה שוב"]);
+      else toast.error(err?.message || "שגיאה בשמירה — נסה שוב");
     } finally {
       setSaving(false);
     }
   };
 
   const handleReleaseTent = async (tent) => {
+    if (isMultiPeriod) {
+      setPeriodErrors(["שחרור אוהל יחיד אינו זמין בשיבוץ רב־תקופתי. יש להשתמש ב׳שחרר את כל השיבוץ׳."]);
+      return;
+    }
     const existing = myNeighborhoodAllocs.find(a => a.tent_id === tent.id);
     if (!existing) return;
     if (!window.confirm(`לשחרר את אוהל ${tent.code}?`)) return;
@@ -262,7 +352,7 @@ export default function TentDistributionEditor({
             <p className="text-xs text-slate-500 mt-0.5">
               {GENDER_LABEL[reservation.gender_group] ?? reservation.gender_group}
               {" · "}
-              {arrivalDate} → {departureDate}
+              {isMultiPeriod ? "כל תקופות השהייה הפעילות" : `${arrivalDate} → ${departureDate}`}
             </p>
           )}
         </DialogHeader>
@@ -287,7 +377,7 @@ export default function TentDistributionEditor({
             const pax = Number(paxMap[tent.id]) || 0;
             const isOverBooked = overbookedTentIds.has(tent.id);
             const isOverCap = pax > (tent.capacity || 0);
-            const hasExistingAlloc = !!myNeighborhoodAllocs.find(a => a.tent_id === tent.id);
+            const hasExistingAlloc = !!displayedNeighborhoodAllocs.find(a => a.tent_id === tent.id);
             const isReleasingThis = releasingTentId === tent.id;
             const rowBg = isOverBooked
               ? "bg-red-50 border-red-200"
@@ -373,9 +463,9 @@ export default function TentDistributionEditor({
         </div>
 
         {/* Validation errors */}
-        {(capacityErrors.length > 0 || overbookingErrors.length > 0) && (
+        {(capacityErrors.length > 0 || overbookingErrors.length > 0 || periodErrors.length > 0 || (isMultiPeriod && seriesValidation?.valid === false)) && (
           <div className="space-y-1">
-            {[...capacityErrors, ...overbookingErrors].map((e, i) => (
+            {[...capacityErrors, ...overbookingErrors, ...periodErrors, ...(isMultiPeriod && seriesValidation?.valid === false ? ["השיבוץ הרב־תקופתי הקיים חלקי או לא עקבי — השמירה חסומה."] : [])].map((e, i) => (
               <div key={i} className="flex items-start gap-1.5 text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
                 <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                 {e}

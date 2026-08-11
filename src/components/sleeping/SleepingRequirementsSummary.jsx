@@ -7,6 +7,7 @@
  *   2. Staff / VIP / adults (one bucket — VIP + alt tent are WHERE they sleep, not extra people)
  */
 import { computeAllocationCounts } from "@/lib/allocationCounts";
+import { groupLogicalSleepingAssignments } from "../../../base44/shared/logicalSleepingSeries.js";
 
 const Counter = ({ label, required, allocated, sub = false }) => {
   const remaining = required - allocated;
@@ -58,18 +59,20 @@ export default function SleepingRequirementsSummary({ profile, allocations, nhoo
   const hasAny      = counts.totalRequired > 0;
 
   // Per-gender breakdown for student display
-  const activeStudentAllocs = (allocations || []).filter(
-    a => a.status !== "CANCELLED" && a.allocation_type === "STUDENT"
-  );
-  const allocatedBoys  = activeStudentAllocs.filter(a => a.gender_group === "BOYS").reduce((s, a) => s + (a.allocated_pax || 0), 0);
-  const allocatedGirls = activeStudentAllocs.filter(a => a.gender_group === "GIRLS").reduce((s, a) => s + (a.allocated_pax || 0), 0);
-  const allocatedMixed = activeStudentAllocs.filter(a => a.gender_group === "MIXED").reduce((s, a) => s + (a.allocated_pax || 0), 0);
+  const activeStudentAllocs = groupLogicalSleepingAssignments(
+    (allocations || []).filter(a => a.status !== "CANCELLED" && a.allocation_type === "STUDENT")
+  ).logical_assignments.filter(a => !a.inconsistent);
+  const allocatedBoys  = activeStudentAllocs.filter(a => a.gender_group === "BOYS").reduce((s, a) => s + (a.logical_allocated_pax || 0), 0);
+  const allocatedGirls = activeStudentAllocs.filter(a => a.gender_group === "GIRLS").reduce((s, a) => s + (a.logical_allocated_pax || 0), 0);
+  const allocatedMixed = activeStudentAllocs.filter(a => a.gender_group === "MIXED").reduce((s, a) => s + (a.logical_allocated_pax || 0), 0);
 
   const boysRequired  = Number(profile.boys_beds_needed  ?? profile.boys_count  ?? 0) || 0;
   const girlsRequired = Number(profile.girls_beds_needed ?? profile.girls_count ?? 0) || 0;
   const hasBothGenders = boysRequired > 0 && girlsRequired > 0;
 
-  const activeNhoods = (nhoodReservations || []).filter(r => r.status === "ACTIVE");
+  const activeNhoods = Object.values(Object.fromEntries(
+    (nhoodReservations || []).filter(r => r.status === "ACTIVE").map(r => [r.neighborhood_id, r])
+  ));
 
   // Over-allocation warning
   const overAllocated = counts.totalAllocated > counts.totalRequired && counts.totalRequired > 0;

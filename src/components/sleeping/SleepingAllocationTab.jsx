@@ -10,6 +10,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { computeAllocationCounts } from "@/lib/allocationCounts";
+import { groupLogicalSleepingAssignments, validateLinkedSeriesCompleteness } from "../../../base44/shared/logicalSleepingSeries.js";
 
 import SleepingRequirementsSummary from "./SleepingRequirementsSummary";
 import StudentNeighborhoodPanel from "./StudentNeighborhoodPanel";
@@ -76,6 +77,12 @@ export default function SleepingAllocationTab({ groupId }) {
     enabled: !!groupId,
   });
 
+  const { data: activeStayPeriods = [] } = useQuery({
+    queryKey: ["groupStayPeriods", groupId, "active"],
+    queryFn: () => base44.entities.GroupStayPeriod.filter({ group_id: groupId, status: "ACTIVE" }, "start_date", 100),
+    enabled: !!groupId,
+  });
+
   const { data: neighborhoods = [] } = useQuery({
     queryKey: ["neighborhoods"],
     queryFn: () => base44.entities.Neighborhood.list("sort_order"),
@@ -129,6 +136,22 @@ export default function SleepingAllocationTab({ groupId }) {
   // ── Derived ────────────────────────────────────────────────────────────────
   const arrivalDate   = profile?.arrival_date   || group?.arrival_date   || "";
   const departureDate = profile?.departure_date || group?.departure_date || "";
+  const isMultiPeriod = group?.stay_mode === "MULTI_PERIOD";
+  const canUseMultiPeriod = isMultiPeriod && group?.operationally_active === true && group?.status === "CONFIRMED";
+  const logicalSeriesData = useMemo(
+    () => groupLogicalSleepingAssignments(myAllocations.filter(a => a.status !== "CANCELLED")),
+    [myAllocations]
+  );
+  const logicalStudentAssignments = useMemo(
+    () => logicalSeriesData.logical_assignments.filter(a => a.allocation_type === "STUDENT"),
+    [logicalSeriesData]
+  );
+  const seriesValidation = useMemo(
+    () => isMultiPeriod
+      ? validateLinkedSeriesCompleteness(myAllocations, activeStayPeriods, groupId)
+      : { valid: true, errors: [] },
+    [isMultiPeriod, myAllocations, activeStayPeriods, groupId]
+  );
 
   const groupById = useMemo(() => Object.fromEntries(allGroups.map(g => [g.id, g])), [allGroups]);
 
@@ -143,16 +166,19 @@ export default function SleepingAllocationTab({ groupId }) {
 
   const otherNhoodResByNeighborhood = useMemo(() => {
     const map = {};
-    if (!arrivalDate || !departureDate) return map;
+    if ((!arrivalDate || !departureDate) && !isMultiPeriod) return map;
     const today = todayLocal();
     allNhoodReservations.forEach(r => {
       if (r.group_id === groupId) return;
       if (r.departure_date <= today) return; // stay already ended
-      if (!datesOverlap(arrivalDate, departureDate, r.arrival_date, r.departure_date)) return;
+      const overlapsGroup = isMultiPeriod
+        ? activeStayPeriods.some(period => datesOverlap(period.start_date, period.end_date, r.arrival_date, r.departure_date))
+        : datesOverlap(arrivalDate, departureDate, r.arrival_date, r.departure_date);
+      if (!overlapsGroup) return;
       map[r.neighborhood_id] = { group_name: groupById[r.group_id]?.group_name || r.group_id, gender_group: r.gender_group };
     });
     return map;
-  }, [allNhoodReservations, groupId, arrivalDate, departureDate, groupById]);
+  }, [allNhoodReservations, groupId, arrivalDate, departureDate, groupById, isMultiPeriod, activeStayPeriods]);
 
   // VIP tent conflict map: tentId → { gender_group, group_id } for OTHER groups
   const vipTentConflictMap = useMemo(() => {
@@ -172,13 +198,16 @@ export default function SleepingAllocationTab({ groupId }) {
   // conflicts (e.g. alt-tent allocations without a neighborhood reservation) visible
   const tentConflictsByNeighborhood = useMemo(() => {
     const map = {};
-    if (!arrivalDate || !departureDate) return map;
+    if ((!arrivalDate || !departureDate) && !isMultiPeriod) return map;
     const tentById = Object.fromEntries(allTents.map(t => [t.id, t]));
     const today = todayLocal();
     allConfirmedAllocations.forEach(oa => {
       if (oa.group_id === groupId) return;
       if (oa.departure_date <= today) return; // stay already ended
-      if (!datesOverlap(arrivalDate, departureDate, oa.arrival_date, oa.departure_date)) return;
+      const overlapsGroup = isMultiPeriod
+        ? activeStayPeriods.some(period => datesOverlap(period.start_date, period.end_date, oa.arrival_date, oa.departure_date))
+        : datesOverlap(arrivalDate, departureDate, oa.arrival_date, oa.departure_date);
+      if (!overlapsGroup) return;
       if (!oa.neighborhood_id) return;
       if (!map[oa.neighborhood_id]) map[oa.neighborhood_id] = [];
       map[oa.neighborhood_id].push({
@@ -190,7 +219,7 @@ export default function SleepingAllocationTab({ groupId }) {
       });
     });
     return map;
-  }, [allConfirmedAllocations, groupId, arrivalDate, departureDate, allTents, groupById]);
+  }, [allConfirmedAllocations, groupId, arrivalDate, departureDate, allTents, groupById, isMultiPeriod, activeStayPeriods]);
 
   // Gender split availability
   const hasGenderSplit = (Number(profile?.boys_count) + Number(profile?.girls_count)) > 0;
@@ -321,7 +350,9 @@ export default function SleepingAllocationTab({ groupId }) {
       const res = await base44.functions.invoke("confirmSleepingAllocations", payload);
 
       if (res.data?.success) {
-        toast.success(`שיבוץ הלינה אושר — ${res.data.confirmed_count} שורות ✓`);
+        toast.success(isMultiPeriod
+          ? `שיבוץ הלינה אושר — ${res.data.logical_assignment_count ?? logicalSeriesData.logical_assignment_count} שיבוצים לוגיים (${res.data.confirmed_count} שורות תקופתיות) ✓`
+          : `שיבוץ הלינה אושר — ${res.data.confirmed_count} שורות ✓`);
         if (res.data.shared_override_used) toast.success("אישור שכונה משותפת נרשם ✓");
         queryClient.invalidateQueries({ queryKey: ["sleepingAllocations", groupId] });
         queryClient.invalidateQueries({ queryKey: ["allConfirmedAllocations"] });
@@ -439,7 +470,12 @@ export default function SleepingAllocationTab({ groupId }) {
       />
 
       {/* Date range */}
-      {arrivalDate && (
+      {isMultiPeriod ? (
+        <div className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+          📅 תקופות לינה פעילות: {activeStayPeriods.map(period => `${period.start_date}–${period.end_date}`).join(" · ")}
+          <span className="text-slate-400 mr-2">(תאריך יציאה בלעדי)</span>
+        </div>
+      ) : arrivalDate && (
         <div className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
           📅 תאריכי לינה: <strong>{arrivalDate}</strong> — <strong>{departureDate}</strong>
           <span className="text-slate-400 mr-2">(departure_date בלעדי)</span>
@@ -450,7 +486,7 @@ export default function SleepingAllocationTab({ groupId }) {
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold text-slate-700">שיבוץ לפי שכונות — חניכים</h3>
-          {totalTentsNeeded > 0 && suggestion.length > 0 && (
+          {!isMultiPeriod && totalTentsNeeded > 0 && suggestion.length > 0 && (
             <Button
               size="sm" variant="outline"
               className="h-7 text-xs gap-1 border-amber-200 text-amber-700 hover:bg-amber-50"
@@ -465,7 +501,7 @@ export default function SleepingAllocationTab({ groupId }) {
           שכונה שנבחרת נחסמת כולה לקבוצה — קבוצת חניכים אחרת לא תוכל להשתמש בה בתאריכים החופפים.
         </p>
 
-        {showSuggestion && suggestion.length > 0 && (
+        {!isMultiPeriod && showSuggestion && suggestion.length > 0 && (
           <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 space-y-1.5">
             <p className="text-xs font-semibold text-amber-800 flex items-center gap-1.5">
               <Lightbulb className="w-3.5 h-3.5" />
@@ -479,6 +515,22 @@ export default function SleepingAllocationTab({ groupId }) {
               </div>
             ))}
             <p className="text-[10px] text-amber-500">הצעה בלבד — ניתן לבחור שכונות אחרות</p>
+          </div>
+        )}
+
+        {isMultiPeriod && !canUseMultiPeriod && (
+          <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+            שיבוץ אוהלים רב־תקופתי זמין לאחר אישור המכינה והפעלתה התפעולית.
+          </div>
+        )}
+        {isMultiPeriod && seriesValidation.valid === false && (
+          <div className="text-xs text-red-700 bg-red-50 border border-red-300 rounded-lg px-3 py-2">
+            השיבוץ הרב־תקופתי הקיים חלקי או לא עקבי. לא ניתן לערוך או לאשר אותו; יש לשחרר את כל השיבוץ וליצור תכנית חדשה.
+          </div>
+        )}
+        {isMultiPeriod && (
+          <div className="text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
+            בחירת אוהל נשמרת כשיבוץ לוגי אחד ומוחלת אוטומטית על כל תקופות השהייה הפעילות. שיבוץ אוטומטי אינו זמין בשלב זה.
           </div>
         )}
 
@@ -508,13 +560,22 @@ export default function SleepingAllocationTab({ groupId }) {
             profile={profile}
             existingGroupAllocs={myAllocations}
             occupiedTents={tentConflictsByNeighborhood[hood.id] || []}
+            isMultiPeriod={isMultiPeriod}
+            canUseMultiPeriod={canUseMultiPeriod}
+            logicalAssignments={logicalStudentAssignments}
+            seriesValidation={seriesValidation}
             />
           );
         })}
       </section>
 
       {/* ── VIP ALLOCATION ── */}
-      {vipRows.length > 0 && (
+      {isMultiPeriod && vipRows.length > 0 && (
+        <div className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+          שיבוץ VIP למכינה רב־תקופתית אינו זמין עדיין. התמיכה התקופתית תתווסף בשלב הבא.
+        </div>
+      )}
+      {!isMultiPeriod && vipRows.length > 0 && (
         <section className="space-y-3">
           <h3 className="text-sm font-semibold text-slate-700">שיבוץ VIP</h3>
           <p className="text-[11px] text-slate-500">
@@ -540,7 +601,7 @@ export default function SleepingAllocationTab({ groupId }) {
         </section>
       )}
 
-      {vipRows.length === 0 && vipTents.length > 0 && (
+      {!isMultiPeriod && vipRows.length === 0 && vipTents.length > 0 && (
         <section>
           <h3 className="text-sm font-semibold text-slate-700 mb-1">שיבוץ VIP</h3>
           <p className="text-xs text-slate-400 italic">לא הוגדרו דרישות VIP לקבוצה זו.</p>
@@ -548,29 +609,40 @@ export default function SleepingAllocationTab({ groupId }) {
       )}
 
       {/* ── ALT TENT ALLOCATION ── */}
-      <AltTentAllocationPanel
-        profile={{ ...profile, arrival_date: arrivalDate, departure_date: departureDate }}
-        groupId={groupId}
-        allTents={allTents}
-        neighborhoods={neighborhoods}
-        myAllocations={myAllocations}
-        allActiveAllocations={allActiveAllocations}
-        arrivalDate={arrivalDate}
-        departureDate={departureDate}
-        onInvalidate={invalidate}
-      />
+      {isMultiPeriod ? (
+        <div className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+          שיבוץ אוהל חילופי למכינה רב־תקופתית אינו זמין עדיין. התמיכה התקופתית תתווסף בשלב הבא.
+        </div>
+      ) : (
+        <AltTentAllocationPanel
+          profile={{ ...profile, arrival_date: arrivalDate, departure_date: departureDate }}
+          groupId={groupId}
+          allTents={allTents}
+          neighborhoods={neighborhoods}
+          myAllocations={myAllocations}
+          allActiveAllocations={allActiveAllocations}
+          arrivalDate={arrivalDate}
+          departureDate={departureDate}
+          onInvalidate={invalidate}
+        />
+      )}
 
       {/* ── CONFIRMATION PANEL ── */}
       {(() => {
-        const draftAllocs     = myAllocations.filter(a => a.status === "DRAFT");
-        const confirmedAllocs = myAllocations.filter(a => a.status === "CONFIRMED");
-        const activeAllocs    = myAllocations.filter(a => a.status !== "CANCELLED");
-        const totalAssigned   = activeAllocs.reduce((s, a) => s + (a.allocated_pax || 0), 0);
-        const tentCount       = new Set(activeAllocs.map(a => a.tent_id)).size;
-        const hasNhoodOnly    = myActiveNhoodRes.length > 0 && activeAllocs.length === 0;
+        const physicalDraftAllocs = myAllocations.filter(a => a.status === "DRAFT");
+        const physicalConfirmedAllocs = myAllocations.filter(a => a.status === "CONFIRMED");
+        const activeAllocs = myAllocations.filter(a => a.status !== "CANCELLED");
+        const logicalAllocs = logicalSeriesData.logical_assignments.filter(a => !a.inconsistent);
+        const draftAllocs = isMultiPeriod ? logicalAllocs.filter(a => a.has_draft) : physicalDraftAllocs;
+        const confirmedAllocs = isMultiPeriod ? logicalAllocs.filter(a => a.all_confirmed) : physicalConfirmedAllocs;
+        const totalAssigned = isMultiPeriod
+          ? logicalAllocs.reduce((s, a) => s + (a.logical_allocated_pax || 0), 0)
+          : activeAllocs.reduce((s, a) => s + (a.allocated_pax || 0), 0);
+        const tentCount = isMultiPeriod ? logicalAllocs.length : new Set(activeAllocs.map(a => a.tent_id)).size;
+        const hasNhoodOnly = myActiveNhoodRes.length > 0 && activeAllocs.length === 0;
 
         // Unified counts for partial allocation warning
-        const unifiedCounts  = computeAllocationCounts(myAllocations, profile);
+        const unifiedCounts = computeAllocationCounts(myAllocations, profile);
         const isPartialAlloc = unifiedCounts.totalRequired > 0 && unifiedCounts.totalRemaining > 0;
 
         // A: All specific tents confirmed
@@ -591,7 +663,7 @@ export default function SleepingAllocationTab({ groupId }) {
                   {isPartialAlloc ? "שיבוץ חלקי — מאושר" : "שיבוץ לפי אוהלים — מאושר"}
                 </p>
                 <p className={`text-xs ${isPartialAlloc ? "text-amber-700" : "text-emerald-600"}`}>
-                  {totalAssigned} משתתפים · {tentCount} אוהלים · {confirmedAllocs.length} שורות מאושרות
+                  {totalAssigned} משתתפים · {tentCount} אוהלים{isMultiPeriod ? ` · ${physicalConfirmedAllocs.length} שורות תקופתיות מאושרות` : ` · ${confirmedAllocs.length} שורות מאושרות`}
                 </p>
                 {isPartialAlloc && (
                   <p className="text-xs text-amber-700 font-medium mt-0.5">
@@ -615,11 +687,11 @@ export default function SleepingAllocationTab({ groupId }) {
                 <div>
                   <p className="text-sm font-semibold text-amber-800">שיבוץ לפי אוהלים — טיוטה</p>
                   <p className="text-xs text-amber-700 mt-0.5">
-                    {draftAllocs.length} שורות טיוטה · {totalAssigned} משתתפים · {tentCount} אוהלים
+                    {isMultiPeriod ? `${draftAllocs.length} שיבוצים לוגיים (${physicalDraftAllocs.length} שורות תקופתיות)` : `${draftAllocs.length} שורות טיוטה`} · {totalAssigned} משתתפים · {tentCount} אוהלים
                     {nhoodNames && <span> · שכונות: {nhoodNames}</span>}
                   </p>
                   {confirmedAllocs.length > 0 && (
-                    <p className="text-xs text-emerald-700 mt-0.5">{confirmedAllocs.length} שורות כבר מאושרות</p>
+                    <p className="text-xs text-emerald-700 mt-0.5">{confirmedAllocs.length} {isMultiPeriod ? "שיבוצים לוגיים כבר מאושרים" : "שורות כבר מאושרות"}</p>
                   )}
                 </div>
               </div>
@@ -696,7 +768,7 @@ export default function SleepingAllocationTab({ groupId }) {
                         : "bg-emerald-700 hover:bg-emerald-800"
                     }`}
                     onClick={() => handleConfirmAllocations()}
-                    disabled={saving}
+                    disabled={saving || (isMultiPeriod && seriesValidation.valid === false)}
                   >
                     <CheckCircle2 className="w-4 h-4" />
                     {saving ? "מאשר..." : isPartialAlloc ? "אשר שיבוץ חלקי" : "אשר שיבוץ לינה"}

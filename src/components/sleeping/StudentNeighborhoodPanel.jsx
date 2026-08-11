@@ -46,6 +46,10 @@ export default function StudentNeighborhoodPanel({
   profile = null,
   existingGroupAllocs = [],
   occupiedTents = [],
+  isMultiPeriod = false,
+  canUseMultiPeriod = false,
+  logicalAssignments = [],
+  seriesValidation = null,
 }) {
   const [open, setOpen] = useState(false);
   const [showDistribution, setShowDistribution] = useState(false);
@@ -59,8 +63,13 @@ export default function StudentNeighborhoodPanel({
   const [sharedReason, setSharedReason] = useState("");
 
   const totalBeds = tents.reduce((s, t) => s + (t.capacity || 0), 0);
-  const isLockedByMe = !!lockByThisGroup;
+  const logicalNeighborhoodAssignments = logicalAssignments.filter(a => a.neighborhood_id === neighborhood.id);
+  const isLockedByMe = isMultiPeriod ? logicalNeighborhoodAssignments.length > 0 : !!lockByThisGroup;
   const isLockedByOther = !!lockByOtherGroup && !isLockedByMe;
+  const effectiveReservation = lockByThisGroup || (isMultiPeriod ? {
+    gender_group: logicalNeighborhoodAssignments[0]?.gender_group || form.gender_group,
+    planned_tents: logicalNeighborhoodAssignments.length || Number(form.planned_tents) || tents.length,
+  } : null);
   // Is this neighborhood already shared (approved on existing reservation)?
   const isAlreadyShared = !!(lockByThisGroup?.shared_neighborhood_allowed);
 
@@ -115,8 +124,8 @@ export default function StudentNeighborhoodPanel({
             {isLockedByMe && (
               <span className="inline-flex items-center gap-1 text-[10px] font-medium bg-emerald-100 text-emerald-700 border border-emerald-300 rounded-full px-2 py-0.5">
                 <CheckCircle2 className="w-3 h-3" />
-                שמורה לקבוצה ({GENDER_OPTIONS.find(g => g.value === lockByThisGroup.gender_group)?.label ?? lockByThisGroup.gender_group})
-                · {lockByThisGroup.planned_tents} אוהלים מתוכננים
+                שמורה לקבוצה ({GENDER_OPTIONS.find(g => g.value === effectiveReservation.gender_group)?.label ?? effectiveReservation.gender_group})
+                · {effectiveReservation.planned_tents} אוהלים מתוכננים
               </span>
             )}
 
@@ -134,7 +143,7 @@ export default function StudentNeighborhoodPanel({
 
           {/* Spare tent note when reserved by me */}
           {isLockedByMe && (() => {
-            const spare = tents.length - (lockByThisGroup.planned_tents || tents.length);
+            const spare = tents.length - (effectiveReservation.planned_tents || tents.length);
             if (spare <= 0) return null;
             return (
               <p className="text-[10px] text-amber-700 mt-0.5">
@@ -166,18 +175,20 @@ export default function StudentNeighborhoodPanel({
           <div className="flex items-center gap-1.5 shrink-0">
             {isLockedByMe ? (
               <>
-                <AutoAllocationButton
-                  neighborhood={neighborhood}
-                  tents={tents}
-                  profile={profile}
-                  groupId={groupId}
-                  profileId={profileId}
-                  arrivalDate={arrivalDate}
-                  departureDate={departureDate}
-                  allConfirmedAllocs={allConfirmedAllocs}
-                  existingGroupAllocs={existingGroupAllocs}
-                  onSaved={onSaved}
-                />
+                {!isMultiPeriod && (
+                  <AutoAllocationButton
+                    neighborhood={neighborhood}
+                    tents={tents}
+                    profile={profile}
+                    groupId={groupId}
+                    profileId={profileId}
+                    arrivalDate={arrivalDate}
+                    departureDate={departureDate}
+                    allConfirmedAllocs={allConfirmedAllocs}
+                    existingGroupAllocs={existingGroupAllocs}
+                    onSaved={onSaved}
+                  />
+                )}
                 <Button
                   size="sm"
                   variant="outline"
@@ -186,25 +197,38 @@ export default function StudentNeighborhoodPanel({
                 >
                   <LayoutGrid className="w-3 h-3" /> פירוט לפי אוהלים
                 </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-7 text-xs gap-1 border-emerald-300 text-emerald-700 hover:bg-emerald-100"
-                  onClick={() => setOpen(o => !o)}
-                >
-                  {open ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                  ערוך
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-7 text-xs gap-1 border-red-200 text-red-600 hover:bg-red-50"
-                  onClick={handleRelease}
-                  disabled={saving}
-                >
-                  <X className="w-3 h-3" /> שחרר
-                </Button>
+                {!isMultiPeriod && (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs gap-1 border-emerald-300 text-emerald-700 hover:bg-emerald-100"
+                      onClick={() => setOpen(o => !o)}
+                    >
+                      {open ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                      ערוך
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs gap-1 border-red-200 text-red-600 hover:bg-red-50"
+                      onClick={handleRelease}
+                      disabled={saving}
+                    >
+                      <X className="w-3 h-3" /> שחרר
+                    </Button>
+                  </>
+                )}
               </>
+            ) : isMultiPeriod ? (
+              <Button
+                size="sm"
+                className="h-7 text-xs gap-1"
+                onClick={() => setOpen(o => !o)}
+                disabled={!canUseMultiPeriod || seriesValidation?.valid === false}
+              >
+                <LayoutGrid className="w-3 h-3" /> בחר שכונה ואוהלים
+              </Button>
             ) : (
               <Button
                 size="sm"
@@ -226,13 +250,16 @@ export default function StudentNeighborhoodPanel({
         onClose={() => setShowDistribution(false)}
         neighborhood={neighborhood}
         tents={tents}
-        reservation={lockByThisGroup}
+        reservation={effectiveReservation}
         groupId={groupId}
         profileId={profileId}
         arrivalDate={arrivalDate}
         departureDate={departureDate}
         allConfirmedAllocs={allConfirmedAllocs}
         onSaved={onSaved}
+        isMultiPeriod={isMultiPeriod}
+        canUseMultiPeriod={canUseMultiPeriod}
+        seriesValidation={seriesValidation}
       />
 
       {/* Expand form */}
@@ -242,7 +269,7 @@ export default function StudentNeighborhoodPanel({
             <div className="space-y-1">
               <label className="text-[11px] font-medium text-slate-600">מגדר</label>
               <Select
-                value={isLockedByMe ? lockByThisGroup.gender_group : form.gender_group}
+                value={isLockedByMe ? effectiveReservation.gender_group : form.gender_group}
                 onValueChange={v => setForm(f => ({ ...f, gender_group: v }))}
               >
                 <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
@@ -259,7 +286,7 @@ export default function StudentNeighborhoodPanel({
                 type="number"
                 min="1"
                 max={tents.length}
-                value={isLockedByMe ? (lockByThisGroup.planned_tents ?? tents.length) : form.planned_tents}
+                value={isLockedByMe ? (effectiveReservation.planned_tents ?? tents.length) : form.planned_tents}
                 onChange={e => setForm(f => ({ ...f, planned_tents: e.target.value }))}
                 className="h-7 text-xs"
               />
@@ -315,10 +342,10 @@ export default function StudentNeighborhoodPanel({
             <Button
               size="sm"
               className="h-7 text-xs"
-              onClick={handleReserve}
+              onClick={isMultiPeriod ? () => { setOpen(false); setShowDistribution(true); } : handleReserve}
               disabled={saving || (isLockedByOther && (!sharedAllowed || !sharedReason.trim()))}
             >
-              {isLockedByMe ? "עדכן" : "שמור שכונה"}
+              {isMultiPeriod ? "המשך לבחירת אוהלים" : isLockedByMe ? "עדכן" : "שמור שכונה"}
             </Button>
           </div>
           <p className="text-[10px] text-slate-400 text-center">
