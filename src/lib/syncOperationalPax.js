@@ -26,9 +26,9 @@ export async function syncExistingOperationalPaxForGroup(groupId, newTotalPax) {
 
   const ops = [];
 
-  // Meals — update pax only
+  // Meals — update pax only; undefined/false lock remains backward-compatible and unlocked
   meals.forEach(m => {
-    if (m.pax !== pax) {
+    if (m.pax_sync_locked !== true && m.pax !== pax) {
       ops.push(base44.entities.MealReservation.update(m.id, { pax }));
     }
   });

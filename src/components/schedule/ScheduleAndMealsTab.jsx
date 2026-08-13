@@ -39,7 +39,7 @@ const EMPTY_MEAL = (type = "BREAKFAST") => ({
   meal_type: type,
   start_time: MEAL_DEFAULTS[type].start_time,
   end_time:   MEAL_DEFAULTS[type].end_time,
-  pax: "", sandwich_option: false, notes: ""
+  pax: "", pax_sync_locked: false, sandwich_option: false, notes: ""
 });
 
 export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = [], guestFormSubmission = null }) {
@@ -177,9 +177,16 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
     return () => { cancelled = true; };
   }, [scheduleItems, groupId]);
 
+  const invalidateMealCaches = () => {
+    queryClient.invalidateQueries({ queryKey: ["mealReservations", groupId] });
+    queryClient.invalidateQueries({ queryKey: ["mealReservations_kitchen"] });
+    queryClient.invalidateQueries({ queryKey: ["mealReservations_kitchenReport"] });
+    queryClient.invalidateQueries({ queryKey: ["kc-meals"] });
+  };
+
   const invalidate = (extraGroupIds = []) => {
     queryClient.invalidateQueries({ queryKey: ["groupScheduleItems", groupId] });
-    queryClient.invalidateQueries({ queryKey: ["mealReservations", groupId] });
+    invalidateMealCaches();
     // Invalidate only the specific extra groups that received clones, not all schedule queries
     for (const gid of extraGroupIds) {
       queryClient.invalidateQueries({ queryKey: ["groupScheduleItems", gid] });
@@ -523,14 +530,37 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
   // ── Meal handlers ──────────────────────────────────────────────────────────
   const handleSaveMealItem = async (form) => {
     setSaving(true);
-    if (form.id) {
-      await base44.entities.MealReservation.update(form.id, form);
-    } else {
-      await base44.entities.MealReservation.create(form);
+    try {
+      if (form.id) {
+        await base44.entities.MealReservation.update(form.id, form);
+      } else {
+        await base44.entities.MealReservation.create(form);
+      }
+      invalidateMealCaches();
+      toast.success("ארוחה נשמרה");
+    } catch (err) {
+      toast.error(err?.message || "שמירת הארוחה נכשלה");
+      throw err;
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
-    invalidate();
-    toast.success("ארוחה נשמרה");
+  };
+
+  const handleToggleMealPaxLock = async (item, locked) => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      const update = locked
+        ? { pax_sync_locked: true }
+        : { pax_sync_locked: false, pax: Number(group.total_pax) };
+      await base44.entities.MealReservation.update(item.id, update);
+      invalidateMealCaches();
+      toast.success(locked ? "מספר הסועדים ננעל" : "הנעילה בוטלה ומספר הסועדים עודכן לפי הקבוצה");
+    } catch (err) {
+      toast.error(err?.message || "עדכון נעילת מספר הסועדים נכשל");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleCancelMealItem = async (id) => {
@@ -1241,6 +1271,7 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
                 item={item}
                 onSave={handleSaveMealItem}
                 onCancel={handleCancelMealItem}
+                onToggleLock={handleToggleMealPaxLock}
                 saving={saving}
                 profileDiets={profile?.special_diets || null}
               />
@@ -1260,6 +1291,7 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
                   item={item}
                   onSave={handleSaveMealItem}
                   onCancel={() => {}}
+                  onToggleLock={handleToggleMealPaxLock}
                   saving={saving}
                   profileDiets={profile?.special_diets || null}
                 />

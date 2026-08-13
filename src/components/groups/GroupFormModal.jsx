@@ -379,6 +379,10 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
       if (newTotalPax > 0 && newTotalPax !== oldTotalPax) {
         try {
           await syncExistingOperationalPaxForGroup(group.id, newTotalPax);
+          queryClient.invalidateQueries({ queryKey: ["mealReservations", group.id] });
+          queryClient.invalidateQueries({ queryKey: ["mealReservations_kitchen"] });
+          queryClient.invalidateQueries({ queryKey: ["mealReservations_kitchenReport"] });
+          queryClient.invalidateQueries({ queryKey: ["kc-meals"] });
         } catch (syncErr) {
           console.warn("[GroupFormModal] pax sync failed (non-blocking):", syncErr?.message);
         }

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Pencil, Trash2, Check, X, ChevronDown, ChevronUp } from "lucide-react";
+import { Pencil, Trash2, Check, X, ChevronDown, ChevronUp, Lock, LockOpen } from "lucide-react";
 import RoleGate from "@/components/RoleGate";
 
 const MEAL_LABELS = { BREAKFAST: "ארוחת בוקר", LUNCH: "ארוחת צהריים", DINNER: "ארוחת ערב", OTHER: "אחר" };
@@ -59,7 +59,7 @@ function DietBadges({ raw }) {
   );
 }
 
-export default function MealReservationRow({ item, onSave, onCancel, saving, profileDiets = null }) {
+export default function MealReservationRow({ item, onSave, onCancel, onToggleLock, saving, profileDiets = null }) {
   const [editing, setEditing] = useState(false);
   const [expanded, setExpanded] = useState(false);
 
@@ -214,9 +214,23 @@ export default function MealReservationRow({ item, onSave, onCancel, saving, pro
               <span className="text-xs bg-red-50 text-red-600 border border-red-200 rounded px-1.5">בוטל</span>
             )}
           </div>
-          <p className="text-xs text-muted-foreground">
-            {item.date} · {item.start_time}–{item.end_time} · {item.pax} אנשים
-          </p>
+          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            <span>{item.date} · {item.start_time}–{item.end_time} · {item.pax} אנשים</span>
+            {item.status !== "CANCELLED" && (
+              <RoleGate permission="MANAGE_MEALS">
+                <button
+                  type="button"
+                  onClick={() => onToggleLock(item, item.pax_sync_locked !== true)}
+                  disabled={saving}
+                  title={item.pax_sync_locked === true ? "נעול — מספר הסועדים לא יתעדכן אוטומטית לפי הקבוצה" : "מתעדכן אוטומטית לפי מספר המשתתפים בקבוצה"}
+                  aria-label={item.pax_sync_locked === true ? "בטל נעילת מספר סועדים" : "נעל מספר סועדים"}
+                  className="inline-flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+                >
+                  {item.pax_sync_locked === true ? <Lock className="h-3.5 w-3.5" /> : <LockOpen className="h-3.5 w-3.5" />}
+                </button>
+              </RoleGate>
+            )}
+          </div>
           {item.notes && (
             <p className="text-xs text-slate-600 whitespace-pre-line">{item.notes}</p>
           )}

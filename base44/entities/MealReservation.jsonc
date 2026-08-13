@@ -35,6 +35,11 @@
     "pax": {
       "type": "number"
     },
+    "pax_sync_locked": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, automatic Group pax synchronization must not change this meal's pax"
+    },
     "special_diets_summary": {
       "type": "string",
       "description": "JSON summary of diet counts for this meal"
