@@ -100,12 +100,15 @@ export default function SleepingAllocationTab({ groupId }) {
   });
 
   // All CONFIRMED allocations from OTHER groups (for VIP conflict check)
+  // staleTime: 0 — conflict data must always refetch on mount, never serve stale cache
   const { data: allConfirmedAllocations = [] } = useQuery({
     queryKey: ["allConfirmedAllocations"],
     queryFn: () => base44.entities.SleepingAllocation.filter({ status: "CONFIRMED" }),
+    staleTime: 0,
   });
 
   // All ACTIVE (DRAFT + CONFIRMED) allocations — used for alt tent tent-level conflict detection
+  // staleTime: 0 — conflict data must always refetch on mount, never serve stale cache
   const { data: allActiveAllocations = [] } = useQuery({
     queryKey: ["allActiveAllocations"],
     queryFn: async () => {
@@ -115,6 +118,7 @@ export default function SleepingAllocationTab({ groupId }) {
       ]);
       return [...draft, ...confirmed];
     },
+    staleTime: 0,
   });
 
   const { data: myNhoodReservations = [] } = useQuery({
@@ -359,6 +363,7 @@ export default function SleepingAllocationTab({ groupId }) {
         if (res.data.shared_override_used) toast.success("אישור שכונה משותפת נרשם ✓");
         queryClient.invalidateQueries({ queryKey: ["sleepingAllocations", groupId] });
         queryClient.invalidateQueries({ queryKey: ["allConfirmedAllocations"] });
+        queryClient.invalidateQueries({ queryKey: ["allActiveAllocations"] });
         queryClient.invalidateQueries({ queryKey: ["allAllocations"] });
         queryClient.invalidateQueries({ queryKey: ["sleepingAllocations"] });
         queryClient.invalidateQueries({ queryKey: ["nhoodReservations", groupId] });

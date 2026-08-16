@@ -56,10 +56,12 @@ export default function TentDistributionEditor({
   const queryClient = useQueryClient();
 
   // Fetch existing allocations for this group in this neighborhood
+  // staleTime: 0 — always refetch when the dialog opens so pax/conflict state is current
   const { data: existingAllocs = [] } = useQuery({
     queryKey: ["sleepingAllocations", groupId],
     queryFn: () => base44.entities.SleepingAllocation.filter({ group_id: groupId }),
     enabled: !!groupId && open,
+    staleTime: 0,
   });
 
   // paxMap: tentId → pax string
