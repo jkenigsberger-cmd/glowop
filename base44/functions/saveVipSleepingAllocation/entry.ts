@@ -234,11 +234,14 @@ Deno.serve(async (req) => {
       console.error('[saveVipSleepingAllocation] SleepingAllocation.filter (tent) error:', e?.message);
     }
 
-    // Only block on OTHER groups — same-group rows are handled by stale-row logic below.
+    // Only block on OTHER groups — normalize SDK/request IDs at the comparison boundary
+    // so this group's physical rows (including one MULTI_PERIOD series) can never self-conflict.
+    const currentGroupId = String(group_id);
+    const currentAllocationId = allocation_id == null ? null : String(allocation_id);
     const activeForOtherGroups = existingForTent.filter(a =>
       a.status !== 'CANCELLED' &&
-      a.id !== allocation_id &&
-      a.group_id !== group_id
+      (currentAllocationId == null || String(a.id) !== currentAllocationId) &&
+      String(a.group_id) !== currentGroupId
     );
     dbg.existingActiveAllocationsCount = activeForOtherGroups.length;
 
