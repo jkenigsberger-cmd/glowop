@@ -215,12 +215,8 @@ Deno.serve(async (req) => {
     } catch (e) {
       console.error('[saveVipSleepingAllocation] SleepingAllocation.filter (group) error:', e?.message);
     }
-    const currentConfirmedVip = groupAllocs.find(a =>
-      a.status === 'CONFIRMED' && a.allocation_type === 'STAFF' &&
-      (a.notes || '').includes(noteMarker) && a.arrival_date <= todayIL && todayIL < a.departure_date
-    );
-    const isActiveFirstAssignment = group?.stay_mode === 'CONTINUOUS' && group.arrival_date <= todayIL && todayIL < group.departure_date && !allocation_id && !currentConfirmedVip;
-    if (isActiveFirstAssignment) {
+    const isActiveContinuousCreate = group?.stay_mode === 'CONTINUOUS' && group.arrival_date <= todayIL && todayIL < group.departure_date && !allocation_id;
+    if (isActiveContinuousCreate) {
       const requestedEffectiveDate = String(effective_date || '').slice(0, 10);
       if (!isValidDate(requestedEffectiveDate) || requestedEffectiveDate < todayIL || requestedEffectiveDate >= departure_date) {
         return fail('INVALID_EFFECTIVE_DATE', 'תאריך תחילת השיבוץ חייב להיות מהיום ולפני עזיבת הקבוצה', dbg);
