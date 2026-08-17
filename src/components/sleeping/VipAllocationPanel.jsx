@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -6,6 +6,8 @@ import { ShieldCheck, AlertTriangle, X, Shield, Car, User, Star, BookOpen, BedDo
 import { toast } from "sonner";
 import VipPaxEditDialog from "./VipPaxEditDialog";
 import { getLogicalVipAllocations, toSleepingAssignmentPrototype } from "@/lib/vipLogicalAllocations";
+import { getExactVipSourceCandidates } from "@/lib/vipEffectiveReassignment";
+import VipSourceSelector from "./VipSourceSelector";
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -42,7 +44,7 @@ function getOperationalMaxPax(tent) {
 // ── Assignment Dialog ─────────────────────────────────────────────────────────
 // Opens after user selects req → tent. Lets them confirm/adjust/release.
 
-function AssignmentDialog({ req, reqIndex, tent, existingAlloc, profile, groupId, neighborhoodId, onSaved, onReleased, onClose, isMultiPeriod, canUseMultiPeriod, periodizedAssignments }) {
+function AssignmentDialog({ req, reqIndex, tent, existingAlloc, profile, group, groupId, neighborhoodId, allAllocations, allTents, neighborhoods, onSaved, onReleased, onClose, isMultiPeriod, canUseMultiPeriod, periodizedAssignments }) {
   const gc = getGenderCfg(req.gender_group);
   const pc = getPurposeCfg(req.purpose);
   const { Icon } = pc;
@@ -60,6 +62,18 @@ function AssignmentDialog({ req, reqIndex, tent, existingAlloc, profile, groupId
   const [saving,  setSaving]  = useState(false);
   const [releasing, setReleasing] = useState(false);
   const [errors,  setErrors]  = useState([]);
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem" }).format(new Date());
+  const isActiveContinuous = !isMultiPeriod && group?.stay_mode === "CONTINUOUS" && group.arrival_date <= today && today < group.departure_date;
+  const isActiveLocationChange = isActiveContinuous && (!existingAlloc || existingAlloc.tent_id !== tent.id);
+  const [effectiveDate, setEffectiveDate] = useState(today);
+  const candidates = useMemo(() => isActiveLocationChange ? getExactVipSourceCandidates({
+    allocations: allAllocations, requirement: req, effectiveDate, existingAllocation: existingAlloc,
+  }) : [], [isActiveLocationChange, allAllocations, req, effectiveDate, existingAlloc]);
+  const [sourceId, setSourceId] = useState("");
+  useEffect(() => setSourceId(candidates.length === 1 ? candidates[0].id : ""), [candidates]);
+  const sourceAllocation = candidates.find(row => row.id === sourceId) || null;
+  const effectiveEnd = sourceAllocation?.departure_date || group?.departure_date || profile?.departure_date;
+  const maxEffectiveDate = effectiveEnd ? new Date(new Date(`${effectiveEnd}T12:00:00Z`).getTime() - 86400000).toISOString().slice(0, 10) : "";
 
   const isReassign = !!existingAlloc;
 
@@ -69,6 +83,8 @@ function AssignmentDialog({ req, reqIndex, tent, existingAlloc, profile, groupId
     if (!gender) errs.push("יש לבחור מגדר");
     if (pax < 1) errs.push("מספר האנשים חייב להיות לפחות 1");
     if (pax > maxPax) errs.push(`מקסימום ${maxPax} אנשים לאוהל זה`);
+    if (isActiveLocationChange && !(today <= effectiveDate && effectiveDate < effectiveEnd)) errs.push("תאריך תחילת השינוי חייב להיות מהיום ולפני סיום השיבוץ");
+    if (isActiveLocationChange && !sourceAllocation) errs.push(candidates.length ? "יש לבחור שיבוץ מקור" : "לא נמצא שיבוץ מקור תואם ללא פיצול כמות");
     return errs;
   };
 
@@ -91,6 +107,26 @@ function AssignmentDialog({ req, reqIndex, tent, existingAlloc, profile, groupId
     console.log("[VIP Alloc] payload →", invokePayload);
 
     try {
+      if (isActiveLocationChange) {
+        const res = await base44.functions.invoke("reassignSleepingAllocation", {
+          allocation_id: sourceAllocation.id,
+          group_id: groupId,
+          destination_tent_id: tent.id,
+          effective_date: effectiveDate,
+        });
+        if (!res.data?.success) {
+          setErrors([res.data?.error || "שגיאה בשינוי מקום הלינה"]);
+          return;
+        }
+        const marker = `__vip_req_${reqIndex}__`;
+        if (!(sourceAllocation.notes || "").includes(marker)) {
+          const cleanNotes = (sourceAllocation.notes || "").replace(/__vip_req_\d+__\s*/g, "").trim();
+          await base44.entities.SleepingAllocation.update(res.data.new_allocation_id, { notes: `${marker}${cleanNotes ? " " + cleanNotes : ""}` });
+        }
+        toast.success(`אוהל ${tent.code} שויך החל מ-${effectiveDate} ✓`);
+        onSaved();
+        return;
+      }
       if (isMultiPeriod) {
         if (!canUseMultiPeriod) {
           setErrors(["שיבוץ VIP רב־תקופתי זמין רק למכינה מאושרת ופעילה תפעולית."]);
@@ -216,6 +252,13 @@ function AssignmentDialog({ req, reqIndex, tent, existingAlloc, profile, groupId
 
           {/* Editable fields */}
           <div className="space-y-3">
+            {isActiveLocationChange && <>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-600">החל מתאריך</label>
+                <input type="date" min={today} max={maxEffectiveDate} value={effectiveDate} onChange={e => setEffectiveDate(e.target.value)} className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm" />
+              </div>
+              <VipSourceSelector candidates={candidates} value={sourceId} onChange={setSourceId} tents={allTents} neighborhoods={neighborhoods} />
+            </>}
             {/* Gender toggle */}
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-600">מגדר</label>
@@ -323,7 +366,7 @@ function AssignmentDialog({ req, reqIndex, tent, existingAlloc, profile, groupId
               type="button"
               size="sm"
               onClick={handleSave}
-              disabled={saving || releasing || (isMultiPeriod && !!existingAlloc)}
+              disabled={saving || releasing || (isMultiPeriod && !!existingAlloc) || (isActiveLocationChange && !sourceAllocation)}
               className="bg-primary hover:bg-primary/90 gap-1"
             >
               <ShieldCheck className="w-3.5 h-3.5" />
@@ -495,6 +538,9 @@ export default function VipAllocationPanel({
   isMultiPeriod = false,
   canUseMultiPeriod = false,
   logicalAssignments = [],
+  group,
+  allTents = [],
+  neighborhoods = [],
 }) {
   const [selectedReqIndex, setSelectedReqIndex] = useState(null);
   // dialogTarget: { reqIndex, tent } — open the assignment dialog
@@ -503,13 +549,15 @@ export default function VipAllocationPanel({
   const [paxEditTarget, setPaxEditTarget] = useState(null);
   const [confirming, setConfirming]     = useState(false);
   const [serverErrors, setServerErrors] = useState([]);
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem" }).format(new Date());
+  const isActiveContinuous = !isMultiPeriod && group?.stay_mode === "CONTINUOUS" && group.arrival_date <= today && today < group.departure_date;
 
   // ── Persisted allocation maps ──────────────────────────────────────────────
   const myActiveVipAllocs = useMemo(
     () => isMultiPeriod
       ? getLogicalVipAllocations(myAllocations).filter(a => vipTents.some(t => t.id === a.tent_id))
-      : myAllocations.filter(a => a.status !== "CANCELLED" && vipTents.some(t => t.id === a.tent_id)),
-    [myAllocations, vipTents, isMultiPeriod]
+      : myAllocations.filter(a => a.status !== "CANCELLED" && vipTents.some(t => t.id === a.tent_id) && (!isActiveContinuous || a.departure_date > today)),
+    [myAllocations, vipTents, isMultiPeriod, isActiveContinuous, today]
   );
   const periodizedAssignments = useMemo(
     () => logicalAssignments.filter(item => !item.inconsistent).map(toSleepingAssignmentPrototype),
@@ -597,6 +645,14 @@ export default function VipAllocationPanel({
       }
     }
 
+    setSelectedReqIndex(index);
+  };
+
+  const handleActiveLocationChange = (index) => {
+    if (vipMarkerCollisions.includes(index)) {
+      setServerErrors([`דרישת VIP #${index + 1} מקושרת ליותר משיבוץ לוגי אחד. לא ניתן לשנות מקום.`]);
+      return;
+    }
     setSelectedReqIndex(index);
   };
 
@@ -719,17 +775,23 @@ export default function VipAllocationPanel({
               const alloc = persistedReqToAlloc[i];
               const tentCode = alloc ? tentCodeById[alloc.tent_id] || "?" : null;
               return (
-                <VipReqCard
-                  key={i}
-                  req={req}
-                  index={i}
-                  assignedTentCode={tentCode}
-                  assignedStatus={alloc?.status || null}
-                  assignedActualPax={alloc?.allocated_pax ?? null}
-                  isSelected={selectedReqIndex === i}
-                  onClick={() => handleReqClick(i)}
-                  editLocked={isMultiPeriod}
-                />
+                <div key={i} className="flex flex-col items-center gap-1">
+                  <VipReqCard
+                    req={req}
+                    index={i}
+                    assignedTentCode={tentCode}
+                    assignedStatus={alloc?.status || null}
+                    assignedActualPax={alloc?.allocated_pax ?? null}
+                    isSelected={selectedReqIndex === i}
+                    onClick={() => handleReqClick(i)}
+                    editLocked={isMultiPeriod}
+                  />
+                  {isActiveContinuous && alloc?.status === "CONFIRMED" && (
+                    <button type="button" onClick={() => handleActiveLocationChange(i)} className="text-[10px] font-semibold text-primary hover:underline">
+                      שנה אוהל החל מתאריך
+                    </button>
+                  )}
+                </div>
               );
             })}
           </div>
@@ -821,8 +883,12 @@ export default function VipAllocationPanel({
           tent={dialogTarget.tent}
           existingAlloc={persistedReqToAlloc[dialogTarget.reqIndex] || null}
           profile={profile}
+          group={group}
           groupId={groupId}
           neighborhoodId={vipNeighborhoodId}
+          allAllocations={myAllocations}
+          allTents={allTents}
+          neighborhoods={neighborhoods}
           onSaved={handleDialogSaved}
           onReleased={handleDialogReleased}
           onClose={() => setDialogTarget(null)}
