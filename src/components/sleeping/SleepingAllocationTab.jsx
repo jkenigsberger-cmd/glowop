@@ -626,8 +626,6 @@ export default function SleepingAllocationTab({ groupId }) {
             canUseMultiPeriod={canUseMultiPeriod && seriesValidation.valid}
             logicalAssignments={logicalSeriesData.logical_assignments}
             group={group}
-            allTents={allTents}
-            neighborhoods={neighborhoods}
           />
         </section>
       )}

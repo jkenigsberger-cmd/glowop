@@ -66,6 +66,7 @@ Deno.serve(async (req) => {
       gender_group,
       allocated_pax,
       notes,
+      effective_date,
     } = body;
 
     console.log('[saveVipSleepingAllocation] received payload:', JSON.stringify({
@@ -206,6 +207,28 @@ Deno.serve(async (req) => {
     const finalDepartureBeforeNormalize = departure_date;
     arrival_date   = String(arrival_date).slice(0, 10);
     departure_date = String(departure_date).slice(0, 10);
+    const todayIL = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem' }).format(new Date());
+    const noteMarker = `__vip_req_${requirement_index}__`;
+    let groupAllocs = [];
+    try {
+      groupAllocs = await base44.asServiceRole.entities.SleepingAllocation.filter({ group_id });
+    } catch (e) {
+      console.error('[saveVipSleepingAllocation] SleepingAllocation.filter (group) error:', e?.message);
+    }
+    const currentConfirmedVip = groupAllocs.find(a =>
+      a.status === 'CONFIRMED' && a.allocation_type === 'STAFF' &&
+      (a.notes || '').includes(noteMarker) && a.arrival_date <= todayIL && todayIL < a.departure_date
+    );
+    const isActiveFirstAssignment = group?.stay_mode === 'CONTINUOUS' && group.arrival_date <= todayIL && todayIL < group.departure_date && !allocation_id && !currentConfirmedVip;
+    if (isActiveFirstAssignment) {
+      const requestedEffectiveDate = String(effective_date || '').slice(0, 10);
+      if (!isValidDate(requestedEffectiveDate) || requestedEffectiveDate < todayIL || requestedEffectiveDate >= departure_date) {
+        return fail('INVALID_EFFECTIVE_DATE', 'תאריך תחילת השיבוץ חייב להיות מהיום ולפני עזיבת הקבוצה', dbg);
+      }
+      arrival_date = requestedEffectiveDate;
+    }
+    dbg.arrival_date = arrival_date;
+    dbg.departure_date = departure_date;
     if (!isValidDate(arrival_date) || !isValidDate(departure_date)) {
       return fail('DATES_INVALID', 'תאריכי השיבוץ אינם תקינים', dbg);
     }
@@ -275,14 +298,6 @@ Deno.serve(async (req) => {
 
     // ── 6. Check for stale row: same req already on a different tent ─────────
 
-    const noteMarker = `__vip_req_${requirement_index}__`;
-    let groupAllocs = [];
-    try {
-      groupAllocs = await base44.asServiceRole.entities.SleepingAllocation.filter({ group_id });
-    } catch (e) {
-      console.error('[saveVipSleepingAllocation] SleepingAllocation.filter (group) error:', e?.message);
-    }
-
     // Only consider STAFF/VIP allocations for stale-row matching — never touch student rows.
     const staleRow = groupAllocs.find(a =>
       a.status !== 'CANCELLED' &&
@@ -292,7 +307,6 @@ Deno.serve(async (req) => {
     );
     console.log('[saveVipSleepingAllocation] staleRow:', staleRow ? `id=${staleRow.id} tent=${staleRow.tent_id}` : 'none');
     const rowBeingChanged = allocation_id ? groupAllocs.find(a => String(a.id) === String(allocation_id)) : staleRow;
-    const todayIL = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem' }).format(new Date());
     if (rowBeingChanged?.status === 'CONFIRMED' && rowBeingChanged.arrival_date <= todayIL && rowBeingChanged.departure_date > todayIL && String(rowBeingChanged.tent_id) !== String(tent_id)) {
       return fail('EFFECTIVE_DATE_REQUIRED', 'שינוי מקום של שיבוץ מאושר פעיל מחייב תאריך תחילה', dbg);
     }
