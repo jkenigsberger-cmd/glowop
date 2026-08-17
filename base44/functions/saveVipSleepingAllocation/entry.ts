@@ -291,6 +291,11 @@ Deno.serve(async (req) => {
       (a.notes || '').includes(noteMarker)
     );
     console.log('[saveVipSleepingAllocation] staleRow:', staleRow ? `id=${staleRow.id} tent=${staleRow.tent_id}` : 'none');
+    const rowBeingChanged = allocation_id ? groupAllocs.find(a => String(a.id) === String(allocation_id)) : staleRow;
+    const todayIL = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem' }).format(new Date());
+    if (rowBeingChanged?.status === 'CONFIRMED' && rowBeingChanged.arrival_date <= todayIL && rowBeingChanged.departure_date > todayIL && String(rowBeingChanged.tent_id) !== String(tent_id)) {
+      return fail('EFFECTIVE_DATE_REQUIRED', 'שינוי מקום של שיבוץ מאושר פעיל מחייב תאריך תחילה', dbg);
+    }
 
     // ── 7. Build & persist ───────────────────────────────────────────────────
 

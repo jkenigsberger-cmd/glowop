@@ -181,6 +181,12 @@ export default function TentDistributionEditor({
 
   const handleSave = async () => {
     if (hasBlockingErrors) return;
+    const todayIL = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem" }).format(new Date());
+    const removesActiveConfirmed = myNeighborhoodAllocs.some(a => a.status === "CONFIRMED" && a.arrival_date <= todayIL && a.departure_date > todayIL && !(Number(paxMap[a.tent_id]) > 0));
+    if (!isMultiPeriod && removesActiveConfirmed) {
+      toast.error("שינוי מקום של שיבוץ מאושר פעיל מחייב בחירה ב׳שנה החל מתאריך׳.");
+      return;
+    }
 
     // Check mismatch — warn but allow override
     // (we don't enforce exact match, just warn)
@@ -310,6 +316,11 @@ export default function TentDistributionEditor({
     }
     const existing = myNeighborhoodAllocs.find(a => a.tent_id === tent.id);
     if (!existing) return;
+    const todayIL = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem" }).format(new Date());
+    if (existing.status === "CONFIRMED" && existing.arrival_date <= todayIL && existing.departure_date > todayIL) {
+      toast.error("שינוי מקום של שיבוץ מאושר פעיל מחייב בחירה ב׳שנה החל מתאריך׳.");
+      return;
+    }
     if (!window.confirm(`לשחרר את אוהל ${tent.code}?`)) return;
     setReleasingTentId(tent.id);
     try {

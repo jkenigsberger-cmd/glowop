@@ -301,6 +301,14 @@ function AltTentAllocationModal({
       setErrors(["לא ניתן להחליף שיבוץ אוהל חילופי רב־תקופתי קיים. יש לשחרר את כל תכנית הלינה וליצור תכנית חדשה."]);
       return;
     }
+    const todayIL = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem" }).format(new Date());
+    const existingTentIds = new Set(existingAltAllocs.map(a => a.tent_id));
+    const changesActiveLocation = existingAltAllocs.some(a => a.status === "CONFIRMED" && a.arrival_date <= todayIL && a.departure_date > todayIL) &&
+      (entries.some(([tentId]) => !existingTentIds.has(tentId)) || existingAltAllocs.some(a => !selections[a.tent_id]));
+    if (!isMultiPeriod && changesActiveLocation) {
+      setErrors(["שינוי מקום של שיבוץ מאושר פעיל מחייב בחירה ב׳שנה החל מתאריך׳."]);
+      return;
+    }
 
     setSaving(true);
     const failed = [];

@@ -16,6 +16,7 @@ import SleepingRequirementsSummary from "./SleepingRequirementsSummary";
 import StudentNeighborhoodPanel from "./StudentNeighborhoodPanel";
 import VipAllocationPanel from "./VipAllocationPanel";
 import AltTentAllocationPanel from "./AltTentAllocationPanel";
+import EffectiveReassignmentPanel from "./EffectiveReassignmentPanel";
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -315,6 +316,12 @@ export default function SleepingAllocationTab({ groupId }) {
     try {
       // 1. Cancel the neighborhood reservation itself
       const reservation = myActiveNhoodRes.find(r => r.id === reservationId);
+      const today = todayLocal();
+      const hasActiveConfirmed = reservation && myAllocations.some(a => a.status === "CONFIRMED" && a.neighborhood_id === reservation.neighborhood_id && a.arrival_date <= today && a.departure_date > today);
+      if (hasActiveConfirmed) {
+        toast.error("שינוי מקום של שיבוץ מאושר פעיל מחייב בחירה ב׳שנה החל מתאריך׳.");
+        return;
+      }
       await base44.entities.NeighborhoodReservation.update(reservationId, { status: "CANCELLED" });
 
       // 2. Also cancel all active SleepingAllocation rows for this group in this neighborhood
@@ -467,6 +474,14 @@ export default function SleepingAllocationTab({ groupId }) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <EffectiveReassignmentPanel
+        group={group}
+        allocations={myAllocations}
+        tents={allTents}
+        neighborhoods={neighborhoods}
+        onSaved={invalidate}
+      />
 
       {/* Requirements summary */}
       <SleepingRequirementsSummary
