@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
+import { getOperationalStayDates, normalizeStayPeriods } from '../../shared/groupStayPeriods.js';
 
 Deno.serve(async (req) => {
   try {
@@ -57,6 +58,14 @@ Deno.serve(async (req) => {
       ? arrival_date
       : (quote.departure_date || snapshot?.endDate || '');
 
+    const activeStayPeriods = group?.stay_mode === 'MULTI_PERIOD'
+      ? normalizeStayPeriods(await base44.asServiceRole.entities.GroupStayPeriod.filter({ group_id: group.id, status: 'ACTIVE' }))
+      : [];
+    const publicStayPeriods = activeStayPeriods.map(({ start_date, end_date }) => ({ start_date, end_date }));
+    const operationalDates = group?.stay_mode === 'MULTI_PERIOD'
+      ? getOperationalStayDates(activeStayPeriods)
+      : [];
+
     // Build safe talks array for GuestForm (name + type + stable id only — NO pricing)
     const parseSafe = (field) => { try { return JSON.parse(field || '[]') || []; } catch { return []; } };
     const talks = [];
@@ -74,8 +83,11 @@ Deno.serve(async (req) => {
       snapshot,
       group_name,
       group_type,
+      stay_mode:         group?.stay_mode || 'CONTINUOUS',
       arrival_date,
       departure_date,
+      stay_periods:      publicStayPeriods,
+      operational_dates: operationalDates,
       total_pax:         ogp?.total_pax         ?? snapshot?.totalPax         ?? quote.estimated_pax    ?? null,
       staff_count:       ogp?.staff_count       ?? snapshot?.staffTotal        ?? quote.staff_count      ?? null,
       participant_count: ogp?.participant_count ?? snapshot?.studentsTotal     ?? quote.participant_count ?? null,

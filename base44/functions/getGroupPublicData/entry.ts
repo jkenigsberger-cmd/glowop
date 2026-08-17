@@ -6,6 +6,7 @@
  * Does NOT expose internal_notes or admin data.
  */
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
+import { getOperationalStayDates, normalizeStayPeriods } from '../../shared/groupStayPeriods.js';
 
 Deno.serve(async (req) => {
   try {
@@ -68,6 +69,14 @@ Deno.serve(async (req) => {
     const arrival_date = group.arrival_date || '';
     const departure_date = group_type === 'DAY_USE' ? arrival_date : (group.departure_date || '');
 
+    const activeStayPeriods = group.stay_mode === 'MULTI_PERIOD'
+      ? normalizeStayPeriods(await base44.asServiceRole.entities.GroupStayPeriod.filter({ group_id, status: 'ACTIVE' }))
+      : [];
+    const publicStayPeriods = activeStayPeriods.map(({ start_date, end_date }) => ({ start_date, end_date }));
+    const operationalDates = group.stay_mode === 'MULTI_PERIOD'
+      ? getOperationalStayDates(activeStayPeriods)
+      : [];
+
     // OperationalGroupProfile is the operational source of truth for participant counts.
     // Expose its pax so the guest form can prefill an editable value (DAY_USE especially).
     let ogp = null;
@@ -84,8 +93,11 @@ Deno.serve(async (req) => {
       snapshot:          null,
       group_name:        group.group_name || '',
       group_type,
+      stay_mode:         group.stay_mode || 'CONTINUOUS',
       arrival_date,
       departure_date,
+      stay_periods:      publicStayPeriods,
+      operational_dates: operationalDates,
       total_pax:         ogp?.total_pax         ?? group.total_pax         ?? null,
       staff_count:       ogp?.staff_count       ?? group.staff_count        ?? null,
       participant_count: ogp?.participant_count ?? group.participant_count   ?? null,

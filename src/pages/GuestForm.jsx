@@ -11,7 +11,10 @@ import { Button } from "@/components/ui/button";
 import { differenceInCalendarDays, addDays, format, parseISO } from "date-fns";
 import { base44 } from "@/api/base44Client";
 
-function buildInitialMeals(arrival, departure, isDayUse = false) {
+function buildInitialMeals(arrival, departure, isDayUse = false, stayPeriods = []) {
+  if (stayPeriods.length > 0) {
+    return stayPeriods.flatMap(period => buildInitialMeals(period.start_date, period.end_date, false));
+  }
   if (!arrival) return [];
   try {
     // DAY_USE (single-day): generate LUNCH + DINNER for arrival date only
@@ -161,7 +164,7 @@ export default function GuestForm() {
         const dep = d.departure_date || '';
         const isDayUse = d.group_type === 'DAY_USE';
         const nights = arr && dep ? differenceInCalendarDays(parseISO(dep), parseISO(arr)) : 0;
-        if (isDayUse || nights > 0) setMeals(buildInitialMeals(arr, dep, isDayUse));
+        if (isDayUse || nights > 0) setMeals(buildInitialMeals(arr, dep, isDayUse, d.stay_periods || []));
 
         // DAY_USE: prefill editable participant count from operational profile (total_pax)
         if (isDayUse) {

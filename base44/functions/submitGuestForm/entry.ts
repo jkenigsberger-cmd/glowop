@@ -8,6 +8,7 @@
  * kitchen MealReservation records (meals + coffee corner).
  */
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
+import { validateDatedOperationalDate } from '../../shared/datedOperationalPeriodValidation.js';
 
 // ── Kitchen sync helpers ─────────────────────────────────────────────────────
 
@@ -259,6 +260,24 @@ Deno.serve(async (req) => {
     try { groupForOgp = await base44.asServiceRole.entities.Group.get(group_id); } catch { /* handled */ }
     if (!groupForOgp) {
       return Response.json({ error: 'GROUP_NOT_FOUND', message: 'הקבוצה לא נמצאה' }, { status: 404 });
+    }
+
+    // Validate every dated request before creating or updating any submission data.
+    // CONTINUOUS groups pass through unchanged; MULTI_PERIOD groups use ACTIVE periods.
+    const datedRows = [];
+    try {
+      const mealRows = JSON.parse(fields.meal_plan || '[]');
+      if (Array.isArray(mealRows)) datedRows.push(...mealRows.map(row => ({ type: 'MEAL', date: row?.date })).filter(row => row.date));
+    } catch { /* malformed JSON is handled by existing submission behavior */ }
+    try {
+      const scheduleRows = JSON.parse(fields.schedule_notes || '[]');
+      if (Array.isArray(scheduleRows)) datedRows.push(...scheduleRows.map(row => ({ type: 'ACTIVITY', date: row?.date })).filter(row => row.date));
+    } catch { /* malformed JSON is handled by existing submission behavior */ }
+    for (const row of datedRows) {
+      const dateValidation = await validateDatedOperationalDate(base44, groupForOgp, row.date);
+      if (!dateValidation.valid) {
+        return Response.json({ error: dateValidation.message, error_code: dateValidation.code, request_type: row.type, date: row.date }, { status: 400 });
+      }
     }
 
     let operational_group_profile_id = '';

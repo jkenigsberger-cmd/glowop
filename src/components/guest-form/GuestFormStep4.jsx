@@ -53,7 +53,7 @@ function NeedsSection({ needs = {}, onNeedsChange }) {
   );
 }
 
-function ActivityRow({ row, index, onChange, onRemove, minDate, maxDate }) {
+function ActivityRow({ row, index, onChange, onRemove, minDate, maxDate, availableDates = [] }) {
   const set = (k, v) => onChange(index, { ...row, [k]: v });
 
   const timeError = row.start_time && row.end_time && row.start_time >= row.end_time
@@ -85,13 +85,24 @@ function ActivityRow({ row, index, onChange, onRemove, minDate, maxDate }) {
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1">
           <Label className="text-sm text-slate-600">תאריך</Label>
-          <Input
-            type="date"
-            value={row.date}
-            min={minDate || undefined}
-            max={maxDate || undefined}
-            onChange={e => set("date", e.target.value)}
-          />
+          {availableDates.length > 0 ? (
+            <select
+              value={row.date}
+              onChange={e => set("date", e.target.value)}
+              className="flex h-9 w-full rounded-md border border-input bg-white px-3 py-1 text-sm"
+            >
+              <option value="">בחרו תאריך</option>
+              {availableDates.map(date => <option key={date} value={date}>{date}</option>)}
+            </select>
+          ) : (
+            <Input
+              type="date"
+              value={row.date}
+              min={minDate || undefined}
+              max={maxDate || undefined}
+              onChange={e => set("date", e.target.value)}
+            />
+          )}
         </div>
         <div className="space-y-1">
           <Label className="text-sm text-slate-600">איפה?</Label>
@@ -183,6 +194,7 @@ export default function GuestFormStep4({ rows, setRows, quoteData }) {
           onRemove={handleRemove}
           minDate={quoteData?.arrival_date || undefined}
           maxDate={quoteData?.departure_date || undefined}
+          availableDates={quoteData?.operational_dates || []}
         />
       ))}
 

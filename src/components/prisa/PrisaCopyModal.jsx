@@ -8,12 +8,18 @@ import PrisaCopyChoose from "@/components/prisa/PrisaCopyChoose";
 import PrisaDateSelector from "@/components/prisa/PrisaDateSelector";
 import PrisaCopyConfirm from "@/components/prisa/PrisaCopyConfirm";
 
-export default function PrisaCopyModal({ sourcePrisa, arrivalDate, departureDate, existingRequests, onClose, onDone }) {
+export default function PrisaCopyModal({ sourcePrisa, arrivalDate, departureDate, stayDates, existingRequests, onClose, onDone }) {
   const [step, setStep] = useState("choose");
   const [selected, setSelected] = useState([]);
   const [creating, setCreating] = useState(false);
-  const hasStayDates = !!arrivalDate && !!departureDate && departureDate >= arrivalDate;
-  const dates = useMemo(() => hasStayDates ? buildStayDates(arrivalDate, departureDate).filter((date) => date !== sourcePrisa.date) : [], [arrivalDate, departureDate, hasStayDates, sourcePrisa.date]);
+  const isPeriodAware = Array.isArray(stayDates);
+  const hasStayDates = isPeriodAware
+    ? stayDates.length > 0
+    : !!arrivalDate && !!departureDate && departureDate >= arrivalDate;
+  const dates = useMemo(() => {
+    const candidates = isPeriodAware ? stayDates : (hasStayDates ? buildStayDates(arrivalDate, departureDate) : []);
+    return candidates.filter((date) => date !== sourcePrisa.date);
+  }, [arrivalDate, departureDate, hasStayDates, isPeriodAware, sourcePrisa.date, stayDates]);
   const taken = useMemo(() => new Set(existingRequests.filter((item) => item.status !== "CANCELLED" && item.type === sourcePrisa.type && item.pickup_slot === sourcePrisa.pickup_slot).map((item) => item.date)), [existingRequests, sourcePrisa]);
   const available = dates.filter((date) => !taken.has(date));
   const createCopies = async (targetDates) => {

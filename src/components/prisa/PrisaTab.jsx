@@ -11,6 +11,8 @@ import { PRISA_TYPE_LABELS, PRISA_SLOT_LABELS, computeEffectiveQuantity } from "
 import { resolveMealPax } from "@/lib/mealPax";
 import { invalidatePrisaQueries } from "@/lib/prisaQueries";
 import PrisaCopyModal from "@/components/prisa/PrisaCopyModal";
+import useGroupStayPeriods from "@/hooks/useGroupStayPeriods";
+import { getOperationalStayDates } from "@/lib/groupStayPeriods";
 
 const EMPTY_FORM = () => ({
   date: "",
@@ -33,6 +35,11 @@ export default function PrisaTab({ groupId, profile, group }) {
   const arrivalDate = group?.arrival_date || "";
   const departureDate = group?.departure_date || "";
   const groupType = group?.group_type || "LODGING";
+  const isMultiPeriod = group?.stay_mode === "MULTI_PERIOD";
+  const { periodsByGroupId } = useGroupStayPeriods(isMultiPeriod && group ? [group] : []);
+  const operationalStayDates = isMultiPeriod
+    ? getOperationalStayDates(periodsByGroupId[groupId] || [])
+    : undefined;
 
   const minDate = arrivalDate;
   const maxDate = groupType === "DAY_USE" ? arrivalDate : (departureDate || arrivalDate);
@@ -255,7 +262,7 @@ export default function PrisaTab({ groupId, profile, group }) {
         </div>
       )}
 
-      {copySource && <PrisaCopyModal sourcePrisa={copySource} arrivalDate={arrivalDate} departureDate={departureDate} existingRequests={requests} onClose={() => setCopySource(null)} onDone={handleCopyDone} />}
+      {copySource && <PrisaCopyModal sourcePrisa={copySource} arrivalDate={arrivalDate} departureDate={departureDate} stayDates={operationalStayDates} existingRequests={requests} onClose={() => setCopySource(null)} onDone={handleCopyDone} />}
 
       {/* List */}
       {activeRequests.length === 0 && !formOpen ? (

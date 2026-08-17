@@ -3,7 +3,15 @@ import { differenceInCalendarDays, addDays, format, parseISO } from "date-fns";
 
 const MEAL_TYPES = { BREAKFAST: "ארוחת בוקר", LUNCH: "ארוחת צהריים", DINNER: "ארוחת ערב" };
 
-function generateMeals(arrivalDate, departureDate, arrivalLunch, departureLunch) {
+function generateMeals(arrivalDate, departureDate, arrivalLunch, departureLunch, stayPeriods = []) {
+  if (stayPeriods.length > 0) {
+    return stayPeriods.flatMap((period, index) => generateMeals(
+      period.start_date,
+      period.end_date,
+      index === 0 && arrivalLunch,
+      index === stayPeriods.length - 1 && departureLunch
+    ));
+  }
   const start = parseISO(arrivalDate);
   const end = parseISO(departureDate);
   const nights = differenceInCalendarDays(end, start);
@@ -37,6 +45,8 @@ function hebrewDate(dateStr) {
 
 export default function GuestFormStep2({ quoteData, mealOptions, setMealOptions, meals, setMeals }) {
   const { arrival_date, departure_date } = quoteData || {};
+  const stayPeriods = quoteData?.stay_periods || [];
+  const stayPeriodsKey = JSON.stringify(stayPeriods);
   const nights = arrival_date && departure_date
     ? differenceInCalendarDays(parseISO(departure_date), parseISO(arrival_date))
     : 0;
@@ -45,10 +55,10 @@ export default function GuestFormStep2({ quoteData, mealOptions, setMealOptions,
   useEffect(() => {
     if (!arrival_date || !departure_date) return;
     const prevMap = new Map(meals.map(m => [`${m.date}_${m.meal_type}`, m.sandwich_instead]));
-    const fresh = generateMeals(arrival_date, departure_date, mealOptions.arrival_lunch, mealOptions.departure_lunch);
+    const fresh = generateMeals(arrival_date, departure_date, mealOptions.arrival_lunch, mealOptions.departure_lunch, stayPeriods);
     setMeals(fresh.map(m => ({ ...m, sandwich_instead: prevMap.get(`${m.date}_${m.meal_type}`) || false })));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mealOptions.arrival_lunch, mealOptions.departure_lunch, arrival_date, departure_date]);
+  }, [mealOptions.arrival_lunch, mealOptions.departure_lunch, arrival_date, departure_date, stayPeriodsKey]);
 
   const toggleSandwich = (date, meal_type) => {
     setMeals(prev => prev.map(m =>
@@ -74,9 +84,18 @@ export default function GuestFormStep2({ quoteData, mealOptions, setMealOptions,
     <div className="space-y-5">
       {/* Stay banner */}
       <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-sm text-blue-800 flex flex-wrap gap-4">
-        <div><span className="text-blue-500 text-xs">צ׳ק-אין</span><br /><strong>{arrival_date}</strong></div>
-        <div><span className="text-blue-500 text-xs">צ׳ק-אאוט</span><br /><strong>{departure_date}</strong></div>
-        <div><span className="text-blue-500 text-xs">לילות</span><br /><strong>{nights}</strong></div>
+        {stayPeriods.length > 0 ? stayPeriods.map((period, index) => (
+          <div key={`${period.start_date}-${period.end_date}`}>
+            <span className="text-blue-500 text-xs">תקופה {index + 1}</span><br />
+            <strong>{period.start_date}–{period.end_date}</strong>
+          </div>
+        )) : (
+          <>
+            <div><span className="text-blue-500 text-xs">צ׳ק-אין</span><br /><strong>{arrival_date}</strong></div>
+            <div><span className="text-blue-500 text-xs">צ׳ק-אאוט</span><br /><strong>{departure_date}</strong></div>
+            <div><span className="text-blue-500 text-xs">לילות</span><br /><strong>{nights}</strong></div>
+          </>
+        )}
       </div>
 
       {/* Lunch toggle */}
