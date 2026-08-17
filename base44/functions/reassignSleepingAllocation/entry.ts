@@ -26,6 +26,7 @@ export default async function(req) {
     if (!group || !allocation || allocation.group_id !== group_id) return fail('ALLOCATION_NOT_FOUND', 'שיבוץ הלינה לא נמצא');
     if (group.stay_mode === 'MULTI_PERIOD') return fail('MULTI_PERIOD_REASSIGNMENT_BLOCKED', 'שינוי חלקי של שיבוץ רב־תקופתי חסום כדי לא לפגוע בקישורי התקופות והסדרה');
     if (group.stay_mode !== 'CONTINUOUS') return fail('UNSUPPORTED_STAY_MODE', 'סוג השהייה אינו נתמך לשינוי מתוארך');
+    if (effective_date < todayIL()) return fail('HISTORICAL_CORRECTION_REQUIRED', 'לא ניתן לשנות היסטוריית לינה מתאריך עבר בתהליך הרגיל. נדרש תהליך תיקון היסטורי');
     if (allocation.status !== 'CONFIRMED') return fail('CONFIRMED_ALLOCATION_REQUIRED', 'ניתן לפצל רק שיבוץ מאושר');
     if (!destinationTent || destinationTent.working_status !== 'WORKING') return fail('DESTINATION_UNAVAILABLE', 'אוהל היעד אינו זמין');
     if (destinationTent.id === allocation.tent_id) return fail('DESTINATION_UNCHANGED', 'יש לבחור מקום לינה חדש');
