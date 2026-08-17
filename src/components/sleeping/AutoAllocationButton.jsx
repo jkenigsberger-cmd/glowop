@@ -56,6 +56,10 @@ export default function AutoAllocationButton({
   const [preview, setPreview] = useState(null); // null | { segments: [{gender, rows}], error }
   const [saving, setSaving]   = useState(false);
   const [done, setDone]       = useState(false);
+  const todayIL = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem" }).format(new Date());
+  const allocationStartDate = !isMultiPeriod && arrivalDate <= todayIL && todayIL < departureDate
+    ? todayIL
+    : arrivalDate;
 
   // Does the group have a gender split?
   const hasGenderSplit = useMemo(() =>
@@ -70,11 +74,11 @@ export default function AutoAllocationButton({
       if (a.group_id === groupId || a.status === "CANCELLED") return;
       const overlapsRequiredStay = isMultiPeriod
         ? activeStayPeriods.some(period => datesOverlap(period.start_date, period.end_date, a.arrival_date, a.departure_date))
-        : datesOverlap(arrivalDate, departureDate, a.arrival_date, a.departure_date);
+        : datesOverlap(allocationStartDate, departureDate, a.arrival_date, a.departure_date);
       if (overlapsRequiredStay) set.add(a.tent_id);
     });
     return set;
-  }, [allConfirmedAllocs, groupId, arrivalDate, departureDate, isMultiPeriod, activeStayPeriods]);
+  }, [allConfirmedAllocs, groupId, allocationStartDate, departureDate, isMultiPeriod, activeStayPeriods]);
 
   // Tents already allocated by THIS group in this neighborhood (any status except cancelled)
   const usedByMeTentIds = useMemo(() => new Set(
@@ -271,7 +275,7 @@ export default function AutoAllocationButton({
             operational_group_profile_id: profileId,
             tent_id:                      tent.id,
             neighborhood_id:              neighborhood.id,
-            arrival_date:                 arrivalDate,
+            arrival_date:                 allocationStartDate,
             departure_date:               departureDate,
             allocated_pax:                pax,
             allocation_type:              "STUDENT",
