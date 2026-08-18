@@ -1,8 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
-// Admin notification recipients — reused from sendFormNotification
-const ADMIN_EMAILS = ["hospitality@glow-glamping.com", "shelly.fleischman@gmail.com", "vered@keren-hador.com"];
-
 const ADMIN_ROLES = ["SUPER_ADMIN", "ADMIN", "OPERATIONS"];
 
 function timeToMinutes(t) {
@@ -22,7 +19,7 @@ function reservationOverlapsBlock(block, date, startTime, endTime) {
   return reservationStart < `${block.end_date}T${block.end_time}` && blockStart < reservationEnd;
 }
 
-Deno.serve(async (req) => {
+export default async function(req) {
   try {
     const base44 = createClientFromRequest(req);
 
@@ -95,6 +92,9 @@ Deno.serve(async (req) => {
       return Response.json({ success: false, error: "הקבוצה הזו לא זמינה לבקשות מכינה" }, { status: 200 });
     }
 
+    const profiles = await base44.asServiceRole.entities.OperationalGroupProfile.filter({ group_id: mechina_group_id });
+    const profile = profiles[0] || null;
+
     // ── Physical space blocks are the source of truth for temporary closures ──
     const activeBlocks = await base44.asServiceRole.entities.ActivitySpaceBlock.filter({
       activity_space_id: space_id,
@@ -134,79 +134,96 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ── Save request ─────────────────────────────────────────────────────────
-    const newRequest = await base44.asServiceRole.entities.CommonSpaceBookingRequest.create({
-      mechina_group_id,
-      requested_by_user_id: user.id,
-      requested_by_name: internalUser?.name || user.full_name || "",
-      requested_by_email: user.email,
-      space_id,
-      space_name: space.name || "",
-      date,
-      start_time,
-      end_time,
-      activity_title,
-      participants_count: participants_count || null,
-      needs_projector: !!needs_projector,
-      needs_screen: !!needs_screen,
-      needs_microphone: !!needs_microphone,
-      needs_sound: !!needs_sound,
-      needs_whiteboard: !!needs_whiteboard,
-      needs_chair_circle: !!needs_chair_circle,
-      chairs_count: chairs_count || null,
-      logistics_other: logistics_other || "",
-      notes: notes || "",
-      status: "PENDING",
-    });
+    // ── Save and auto-approve atomically from the user's perspective ──────────
+    let newRequest = null;
+    let scheduleItem = null;
+    try {
+      newRequest = await base44.asServiceRole.entities.CommonSpaceBookingRequest.create({
+        mechina_group_id,
+        requested_by_user_id: user.id,
+        requested_by_name: internalUser?.name || user.full_name || "",
+        requested_by_email: user.email,
+        space_id,
+        space_name: space.name || "",
+        date,
+        start_time,
+        end_time,
+        activity_title,
+        participants_count: participants_count || null,
+        needs_projector: !!needs_projector,
+        needs_screen: !!needs_screen,
+        needs_microphone: !!needs_microphone,
+        needs_sound: !!needs_sound,
+        needs_whiteboard: !!needs_whiteboard,
+        needs_chair_circle: !!needs_chair_circle,
+        chairs_count: chairs_count || null,
+        logistics_other: logistics_other || "",
+        notes: notes || "",
+        status: "PENDING",
+      });
 
-    // ── Email notification ───────────────────────────────────────────────────
-    const equipmentLines = [
-      needs_projector    ? "מקרן" : null,
-      needs_screen       ? "מסך" : null,
-      needs_microphone   ? "מיקרופון" : null,
-      needs_sound        ? "מערכת סאונד" : null,
-      needs_whiteboard   ? "לוח לבן" : null,
-      needs_chair_circle ? "עיגול כיסאות" : null,
-      chairs_count       ? `כיסאות: ${chairs_count}` : null,
-      logistics_other    ? `אחר: ${logistics_other}` : null,
-    ].filter(Boolean).join(", ") || "—";
+      scheduleItem = await base44.asServiceRole.entities.GroupScheduleItem.create({
+        group_id: mechina_group_id,
+        operational_group_profile_id: profile?.id || "",
+        date,
+        start_time,
+        end_time,
+        activity_name: activity_title,
+        activity_space_id: space_id,
+        activity_space_code: space.code || "",
+        pax: participants_count || null,
+        needs_projector: !!needs_projector,
+        needs_screen: !!needs_screen,
+        needs_microphone: !!needs_microphone,
+        needs_sound: !!needs_sound,
+        needs_whiteboard: !!needs_whiteboard,
+        needs_chair_circle: !!needs_chair_circle,
+        chairs_count: chairs_count || null,
+        logistics_other: logistics_other || "",
+        notes: [notes || "", "נוצר ואושר אוטומטית מבקשת מרחב של מכינה"].filter(Boolean).join(" | "),
+        source: "manual",
+        status: "ACTIVE",
+      });
+
+      await base44.asServiceRole.entities.CommonSpaceBookingRequest.update(newRequest.id, {
+        status: "APPROVED",
+        admin_decision_by_name: "אישור אוטומטי",
+        admin_decision_at: new Date().toISOString(),
+        approved_schedule_item_id: scheduleItem.id,
+      });
+    } catch (persistError) {
+      if (scheduleItem?.id) await base44.asServiceRole.entities.GroupScheduleItem.delete(scheduleItem.id).catch(() => null);
+      if (newRequest?.id) await base44.asServiceRole.entities.CommonSpaceBookingRequest.delete(newRequest.id).catch(() => null);
+      throw persistError;
+    }
 
     const emailBody = `
 <div dir="rtl" style="font-family: Arial, sans-serif; font-size: 15px; color: #222; line-height: 1.7;">
   <p>שלום רב,</p>
-  <p>התקבלה בקשה חדשה להזמנת מרחב מכינה:</p>
+  <p>הבקשה להזמנת מרחב <strong>אושרה אוטומטית</strong>.</p>
   <hr style="border: none; border-top: 1px solid #eee; margin: 12px 0;" />
-  <p>🏕️ <strong>מכינה:</strong> ${group.group_name}</p>
-  <p>👤 <strong>שם הפונה:</strong> ${internalUser?.name || user.full_name || "—"}</p>
-  <p>📧 <strong>אימייל:</strong> ${user.email}</p>
   <p>📍 <strong>מרחב:</strong> ${space.name}</p>
   <p>📅 <strong>תאריך:</strong> ${date}</p>
   <p>⏰ <strong>שעות:</strong> ${start_time} – ${end_time}</p>
   <p>🎯 <strong>שם הפעילות:</strong> ${activity_title}</p>
-  <p>👥 <strong>מספר משתתפים:</strong> ${participants_count || "—"}</p>
-  <p>🔧 <strong>ציוד נדרש:</strong> ${equipmentLines}</p>
-  ${notes ? `<p>📝 <strong>הערות:</strong> ${notes}</p>` : ""}
   <hr style="border: none; border-top: 1px solid #eee; margin: 12px 0;" />
-  <p>יש לאשר את הבקשה במערכת.</p>
   <p>בברכה,<br/>מערכת הדור הבא</p>
 </div>`.trim();
 
     try {
-      for (const email of ADMIN_EMAILS) {
-        await base44.asServiceRole.integrations.Core.SendEmail({
-          to: email,
-          subject: `בקשה חדשה להזמנת מרחב — מכינה`,
-          body: emailBody,
-        });
-      }
+      await base44.asServiceRole.integrations.Core.SendEmail({
+        to: user.email,
+        subject: "הבקשה להזמנת מרחב אושרה",
+        body: emailBody,
+      });
     } catch (emailErr) {
       console.warn("Email send failed (non-fatal):", emailErr?.message);
     }
 
-    return Response.json({ success: true, request_id: newRequest.id });
+    return Response.json({ success: true, request_id: newRequest.id, schedule_item_id: scheduleItem.id, status: "APPROVED" });
 
   } catch (err) {
     console.error("[submitMechinaBookingRequest]", err?.message, err?.stack);
     return Response.json({ success: false, error: "שגיאה פנימית — נסה שוב" }, { status: 500 });
   }
-});
+}

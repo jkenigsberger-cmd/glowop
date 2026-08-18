@@ -479,10 +479,6 @@ export default function MechinaSpaces() {
                 </div>
                 <div className="flex items-center gap-2 flex-wrap justify-end">
                   <StatusBadge status={req.status} />
-                  <Button size="sm" variant="outline" className="border-emerald-300 text-emerald-700 hover:bg-emerald-50 gap-1"
-                    onClick={() => setDecisionModal({ mode: "approve", request: req })}>
-                    <CheckCircle className="w-3.5 h-3.5" /> אשר
-                  </Button>
                   <Button size="sm" variant="outline" className="border-red-300 text-red-600 hover:bg-red-50 gap-1"
                     onClick={() => setDecisionModal({ mode: "reject", request: req })}>
                     <XCircle className="w-3.5 h-3.5" /> דחה
@@ -553,6 +549,10 @@ export default function MechinaSpaces() {
                 </div>
                 <div className="flex items-center gap-2">
                   <StatusBadge status={req.status} />
+                  <Button size="sm" variant="outline" className="border-red-300 text-red-600 hover:bg-red-50 gap-1"
+                    onClick={() => setDecisionModal({ mode: "reject", request: req })}>
+                    <XCircle className="w-3.5 h-3.5" /> דחה
+                  </Button>
                   <Button size="sm" variant="outline" className="border-slate-300 text-slate-600 hover:bg-slate-50 gap-1"
                     onClick={() => setActionModal({ type: "cancel", request: req })}>
                     <Ban className="w-3.5 h-3.5" /> בטל הזמנה

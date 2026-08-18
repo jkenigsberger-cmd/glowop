@@ -2,7 +2,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 const ADMIN_ROLES = ["SUPER_ADMIN", "ADMIN", "OPERATIONS"];
 
-Deno.serve(async (req) => {
+export default async function(req) {
   try {
     const base44 = createClientFromRequest(req);
 
@@ -26,10 +26,7 @@ Deno.serve(async (req) => {
     try { request = await base44.asServiceRole.entities.CommonSpaceBookingRequest.get(request_id); } catch {}
     if (!request) return Response.json({ success: false, error: "בקשה לא נמצאה" }, { status: 200 });
 
-    if (request.status === "APPROVED") {
-      return Response.json({ success: false, error: "לא ניתן לדחות בקשה שכבר אושרה" }, { status: 200 });
-    }
-    if (request.status !== "PENDING" && request.status !== "CHANGE_REQUESTED") {
+    if (!['PENDING', 'CHANGE_REQUESTED', 'APPROVED'].includes(request.status)) {
       return Response.json({ success: false, error: "הבקשה אינה במצב הניתן לדחייה" }, { status: 200 });
     }
 
@@ -37,7 +34,19 @@ Deno.serve(async (req) => {
     let space = null;
     try { space = await base44.asServiceRole.entities.ActivitySpace.get(request.space_id); } catch {}
 
-    // C. Update request — no GroupScheduleItem created
+    // C. Approved requests already own a real booking — cancel it before rejecting.
+    let cancelledScheduleItemId = null;
+    if (request.status === "APPROVED" && request.approved_schedule_item_id) {
+      const scheduleItem = await base44.asServiceRole.entities.GroupScheduleItem.get(request.approved_schedule_item_id).catch(() => null);
+      if (scheduleItem) {
+        await base44.asServiceRole.entities.GroupScheduleItem.update(scheduleItem.id, {
+          status: "CANCELLED",
+          notes: [scheduleItem.notes || "", "נדחה על ידי מנהל דרך בקשת מרחב מכינה"].filter(Boolean).join("\n"),
+        });
+        cancelledScheduleItemId = scheduleItem.id;
+      }
+    }
+
     await base44.asServiceRole.entities.CommonSpaceBookingRequest.update(request_id, {
       status: "REJECTED",
       admin_decision_by_user_id: user.id,
@@ -46,9 +55,7 @@ Deno.serve(async (req) => {
       admin_notes: admin_notes || "",
     });
 
-    // D+E. Do not touch GroupScheduleItem at all.
-
-    // F. Email requester
+    // D. Email requester
     const emailBody = `
 <div dir="rtl" style="font-family: Arial, sans-serif; font-size: 15px; color: #222; line-height: 1.7;">
   <p>שלום רב,</p>
@@ -74,10 +81,10 @@ Deno.serve(async (req) => {
       console.warn("Email send failed (non-fatal):", emailErr?.message);
     }
 
-    return Response.json({ success: true, request_id });
+    return Response.json({ success: true, request_id, cancelled_schedule_item_id: cancelledScheduleItemId });
 
   } catch (err) {
     console.error("[rejectMechinaBookingRequest]", err?.message, err?.stack);
     return Response.json({ success: false, error: "שגיאה פנימית — נסה שוב" }, { status: 500 });
   }
-});
+}

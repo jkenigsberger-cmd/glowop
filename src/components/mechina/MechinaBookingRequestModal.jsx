@@ -64,7 +64,7 @@ export default function MechinaBookingRequestModal({ open, onClose, onSubmitted,
         notes: form.notes,
       });
       if (res.data?.success) {
-        toast.success("הבקשה נשלחה לאישור");
+        toast.success("הבקשה אושרה והמרחב נשמר");
         onSubmitted();
         onClose();
       } else {
