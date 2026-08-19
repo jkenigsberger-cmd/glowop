@@ -302,10 +302,12 @@ export default function OccupancyMap({
   tents = [],
   allocations = [],
   groups = [],
+  periodsByGroupIdOverride = null,
 }) {
   const operationalGroups = useMemo(() => groups.filter(isGroupOperationallyEnabled), [groups]);
   const groupById = useMemo(() => Object.fromEntries(operationalGroups.map(g => [g.id, g])), [operationalGroups]);
-  const { periodsByGroupId } = useGroupStayPeriods(operationalGroups);
+  const { periodsByGroupId: livePeriodsByGroupId } = useGroupStayPeriods(operationalGroups);
+  const periodsByGroupId = periodsByGroupIdOverride || livePeriodsByGroupId;
 
   // Filter allocations: preserve allocation envelope, then hide MULTI_PERIOD gap nights.
   const dateAllocs = useMemo(() =>

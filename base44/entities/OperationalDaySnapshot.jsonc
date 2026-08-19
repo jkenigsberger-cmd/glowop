@@ -1,0 +1,28 @@
+{
+  "name": "OperationalDaySnapshot",
+  "type": "object",
+  "properties": {
+    "date": {
+      "type": "string",
+      "format": "date",
+      "description": "Asia/Jerusalem operational date; logical unique key"
+    },
+    "snapshot_json": {
+      "type": "string",
+      "description": "Immutable versioned Dashboard snapshot"
+    },
+    "finalized_at": {
+      "type": "string",
+      "description": "ISO datetime when the day was finalized"
+    },
+    "snapshot_version": {
+      "type": "integer",
+      "default": 1
+    }
+  },
+  "required": [
+    "date",
+    "snapshot_json",
+    "snapshot_version"
+  ]
+}

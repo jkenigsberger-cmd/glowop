@@ -97,6 +97,21 @@ export default function Dashboard() {
   const { role } = useRoleContext();
   const canViewSpaceBlocks = ["SUPER_ADMIN", "ADMIN", "OPERATIONS", "MAINTENANCE"].includes(role);
   const isToday = selectedDate === TODAY;
+  const isPast = selectedDate < TODAY;
+
+  const { data: snapshotRecords = [], isLoading: isSnapshotLoading } = useQuery({
+    queryKey: ["operationalDaySnapshot", selectedDate],
+    queryFn: () => base44.entities.OperationalDaySnapshot.filter({ date: selectedDate }),
+    enabled: isPast,
+  });
+  const historicalSnapshot = isPast ? snapshotRecords[0] || null : null;
+  const snapshotPayload = useMemo(() => {
+    if (!historicalSnapshot?.snapshot_json) return null;
+    try { return JSON.parse(historicalSnapshot.snapshot_json); } catch { return null; }
+  }, [historicalSnapshot]);
+  const snapshotData = snapshotPayload?.snapshot_version === 1 ? snapshotPayload.data : null;
+  const hasHistoricalSnapshot = isPast && !!snapshotData;
+  const historicalUnavailable = isPast && !isSnapshotLoading && !hasHistoricalSnapshot;
 
   useEffect(() => {
     const timer = window.setInterval(() => setAlertNow(new Date()), 60000);
@@ -109,71 +124,94 @@ export default function Dashboard() {
   };
 
   // ── Data fetching ──────────────────────────────────────────────────────
-  const { data: groups = [] } = useQuery({
+  const { data: liveGroups = [] } = useQuery({
     queryKey: ["groups"],
     queryFn: () => base44.entities.Group.list("-arrival_date", 300),
     select: items => items.filter(isGroupOperationallyEnabled),
   });
+  const groups = snapshotData?.groups ?? liveGroups;
 
-  const { periodsByGroupId } = useGroupStayPeriods(groups);
+  const { periodsByGroupId: livePeriodsByGroupId } = useGroupStayPeriods(groups);
+  const periodsByGroupId = useMemo(() => {
+    if (!snapshotData) return livePeriodsByGroupId;
+    const index = {};
+    (snapshotData.group_stay_periods || []).forEach(period => { (index[period.group_id] ||= []).push(period); });
+    return index;
+  }, [snapshotData, livePeriodsByGroupId]);
 
-  const { data: profiles = [] } = useQuery({
+  const { data: liveProfiles = [] } = useQuery({
     queryKey: ["operationalProfiles"],
     queryFn: () => base44.entities.OperationalGroupProfile.list("-accepted_at", 300),
   });
+  const profiles = snapshotData?.profiles ?? liveProfiles;
 
-  const { data: meals = [] } = useQuery({
+  const { data: liveMeals = [] } = useQuery({
     queryKey: ["allMeals"],
     queryFn: () => base44.entities.MealReservation.filter({ status: "ACTIVE" }),
   });
-  const { data: coffeeRequests = [] } = useQuery({
+  const meals = snapshotData?.meals ?? liveMeals;
+  const { data: liveCoffeeRequests = [] } = useQuery({
     queryKey: ["coffeeCornerRequests_dashboard"],
     queryFn: () => base44.entities.CoffeeCornerRequest.filter({ status: "ACTIVE" }),
   });
+  const coffeeRequests = snapshotData?.coffee_requests ?? liveCoffeeRequests;
 
-  const { data: activities = [] } = useQuery({
+  const { data: liveActivities = [] } = useQuery({
     queryKey: ["allActivities"],
     queryFn: () => base44.entities.GroupScheduleItem.filter({ status: "ACTIVE" }),
   });
-  const { data: standaloneActivities = [] } = useQuery({
+  const activities = useMemo(() => {
+    if (!snapshotData) return liveActivities;
+    const combined = [...(snapshotData.activities || []), ...(snapshotData.alert_activities || [])];
+    return [...new Map(combined.map(item => [item.id, item])).values()];
+  }, [snapshotData, liveActivities]);
+  const { data: liveStandaloneActivities = [] } = useQuery({
     queryKey: ["standaloneActivities"],
     queryFn: () => base44.entities.StandaloneActivityReservation.filter({ status: "ACTIVE" }),
   });
-  const { data: standaloneAssignments = [] } = useQuery({
+  const standaloneActivities = snapshotData?.standalone_activities ?? liveStandaloneActivities;
+  const { data: liveStandaloneAssignments = [] } = useQuery({
     queryKey: ["standaloneActivityAssignments"],
     queryFn: () => base44.entities.StandaloneActivitySpaceAssignment.list("-created_date", 500),
   });
+  const standaloneAssignments = snapshotData?.standalone_assignments ?? liveStandaloneAssignments;
 
-  const { data: allocations = [] } = useQuery({
+  const { data: liveAllocations = [] } = useQuery({
     queryKey: ["allAllocations"],
     queryFn: () => base44.entities.SleepingAllocation.filter({ status: "CONFIRMED" }),
   });
+  const allocations = snapshotData?.allocations ?? liveAllocations;
 
-  const { data: facilities = [] } = useQuery({
+  const { data: liveFacilities = [] } = useQuery({
     queryKey: ["facilities"],
     queryFn: () => base44.entities.Facility.list(),
   });
+  const facilities = snapshotData?.facilities ?? liveFacilities;
 
-  const { data: tents = [] } = useQuery({
+  const { data: liveTents = [] } = useQuery({
     queryKey: ["tents"],
     queryFn: () => base44.entities.Tent.list(),
   });
+  const tents = snapshotData?.tents ?? liveTents;
 
-  const { data: activitySpaces = [] } = useQuery({
+  const { data: liveActivitySpaces = [] } = useQuery({
     queryKey: ["activitySpaces"],
     queryFn: () => base44.entities.ActivitySpace.list(),
   });
+  const activitySpaces = snapshotData?.activity_spaces ?? liveActivitySpaces;
 
-  const { data: activitySpaceBlocks = [] } = useQuery({
+  const { data: liveActivitySpaceBlocks = [] } = useQuery({
     queryKey: ["activity-space-blocks-active"],
     queryFn: () => base44.entities.ActivitySpaceBlock.filter({ status: "ACTIVE" }),
     enabled: canViewSpaceBlocks,
   });
+  const activitySpaceBlocks = snapshotData?.activity_space_blocks ?? liveActivitySpaceBlocks;
 
-  const { data: neighborhoods = [] } = useQuery({
+  const { data: liveNeighborhoods = [] } = useQuery({
     queryKey: ["neighborhoods"],
     queryFn: () => base44.entities.Neighborhood.list("sort_order", 50),
   });
+  const neighborhoods = snapshotData?.neighborhoods ?? liveNeighborhoods;
 
   // ── Lookup maps ────────────────────────────────────────────────────────
   const groupById = useMemo(() => Object.fromEntries(groups.map(g => [g.id, g])), [groups]);
@@ -408,12 +446,23 @@ export default function Dashboard() {
           />
         </div>
 
+        {isSnapshotLoading && isPast && (
+          <div className="rounded-lg border border-border bg-card px-4 py-3 text-sm text-muted-foreground">טוען צילום מצב היסטורי…</div>
+        )}
+        {hasHistoricalSnapshot && (
+          <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">נתונים היסטוריים · נשמרו בסוף היום</div>
+        )}
+        {historicalUnavailable && (
+          <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">לא קיים צילום מצב היסטורי מלא לתאריך זה</div>
+        )}
+
+        {!isSnapshotLoading && !historicalUnavailable && <>
         {canViewSpaceBlocks && upcomingSpaceBlocks.length > 0 && (
           <DashboardSpaceBlocksAlert blocks={upcomingSpaceBlocks} activities={activitiesForSpaceBlockAlert} />
         )}
 
         {/* ── Daily staff brief (generate-and-copy) ────────────────────── */}
-        <DailyStaffBrief selectedDate={selectedDate} />
+        {!isPast && <DailyStaffBrief selectedDate={selectedDate} />}
 
         {/* ── Summary cards (clickable) ────────────────────────────────── */}
         <DashboardSummaryCards
@@ -434,6 +483,7 @@ export default function Dashboard() {
             tents={tents}
             allocations={operationalAllocations}
             groups={groups}
+            periodsByGroupIdOverride={snapshotData ? periodsByGroupId : null}
           />
         </Section>
 
@@ -530,6 +580,7 @@ export default function Dashboard() {
         <Section title="קישורים מהירים">
           <DashboardQuickLinks />
         </Section>
+        </>}
 
       </div>
     </div>
