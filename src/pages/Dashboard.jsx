@@ -319,7 +319,7 @@ export default function Dashboard() {
     [profiles, allocatedGroupIds, groupById]
   );
 
-  const stats = {
+  const liveStats = {
     activeGroups:        lodgingGroups.length,
     arrivingToday:       arrivingToday.filter(g => g.group_type === "LODGING").length,
     sleepingTonight:     sleepingTonight.length,
@@ -331,6 +331,7 @@ export default function Dashboard() {
     pendingHousekeeping: pendingHousekeepingProfiles.length,
     maintenanceIssues,
   };
+  const stats = snapshotPayload?.derived?.summary_cards ?? liveStats;
 
   // ── Operational warnings (LODGING ONLY for sleeping alerts) ────────────
 
@@ -378,7 +379,8 @@ export default function Dashboard() {
     ...brokenTents.map(t => ({ id: t.id, label: `אוהל: ${t.code} (${t.working_status})` })),
   ], [brokenFacilities, brokenTents]);
 
-  const warnings = { arrivingNoSleeping, arrivingNextNoSleeping, arrivingSoonPendingAllocation, brokenItems: brokenItemsList };
+  const liveWarnings = { arrivingNoSleeping, arrivingNextNoSleeping, arrivingSoonPendingAllocation, brokenItems: brokenItemsList };
+  const warnings = snapshotPayload?.derived?.warnings ?? liveWarnings;
 
   // ── Per-group counts ───────────────────────────────────────────────────
   const mealsByGroup = useMemo(() => {

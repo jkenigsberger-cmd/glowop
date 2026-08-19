@@ -8,6 +8,7 @@ const addDays = (value, days) => {
   return date.toISOString().slice(0, 10);
 };
 const sortRecords = (items) => [...items].sort((a, b) => String(a.id || '').localeCompare(String(b.id || '')));
+const compact = (items, fields) => sortRecords(items).map((item) => Object.fromEntries(fields.filter((field) => item[field] !== undefined).map((field) => [field, item[field]])));
 
 function periodsIndex(periods) {
   const index = {};
@@ -104,26 +105,36 @@ export async function buildOperationalDaySnapshot(base44, date) {
   const upcomingBlocks = activitySpaceBlocks.filter((block) => blockVisible(block, date, alertEnd));
   const alertActivities = activities.filter((activity) => groupById[activity.group_id] && activity.date >= date && activity.date <= alertEnd && activity.activity_space_id);
   const totalPaxOnSite = activeGroups.reduce((sum, group) => sum + (profileByGroupId[group.id]?.total_pax ?? group.total_pax ?? 0), 0);
+  const snapshotGroupIds = new Set([
+    ...activeGroups, ...arrivingToday, ...sleepingTonight, ...departingToday, ...arrivingNextLodging,
+    ...mealsForDate.map((item) => groupById[item.group_id]).filter(Boolean),
+    ...coffeeForDate.map((item) => groupById[item.group_id]).filter(Boolean),
+    ...groupActivitiesForDate.map((item) => groupById[item.group_id]).filter(Boolean),
+    ...alertActivities.map((item) => groupById[item.group_id]).filter(Boolean),
+    ...dateAllocations.map((item) => groupById[item.group_id]).filter(Boolean),
+  ].map((group) => group.id));
+  const snapshotGroups = groups.filter((group) => snapshotGroupIds.has(group.id));
+  const standaloneIds = new Set(standaloneForDate.map((item) => item.id));
 
   return {
     snapshot_version: 1,
     date,
     data: {
-      groups: sortRecords(groups),
-      group_stay_periods: sortRecords(periods.filter((period) => groupById[period.group_id])),
-      profiles: sortRecords(profiles.filter((profile) => groupById[profile.group_id])),
-      meals: sortRecords(mealsForDate),
-      coffee_requests: sortRecords(coffeeForDate),
-      activities: sortRecords(groupActivitiesForDate),
-      standalone_activities: sortRecords(standaloneForDate),
-      standalone_assignments: sortRecords(standaloneAssignments.filter((assignment) => standaloneForDate.some((activity) => activity.id === assignment.reservation_id))),
-      allocations: sortRecords(operationalAllocations),
-      facilities: sortRecords(facilities),
-      tents: sortRecords(tents),
-      activity_spaces: sortRecords(activitySpaces),
-      activity_space_blocks: sortRecords(upcomingBlocks),
-      alert_activities: sortRecords(alertActivities),
-      neighborhoods: [...neighborhoods].sort((a, b) => (a.sort_order ?? 999) - (b.sort_order ?? 999) || String(a.id).localeCompare(String(b.id))),
+      groups: compact(snapshotGroups, ['id','group_name','group_type','stay_mode','arrival_date','departure_date','arrival_time','departure_time','total_pax','status','internal_notes','operationally_active','quote_preparation_flow']),
+      group_stay_periods: compact(periods.filter((period) => snapshotGroupIds.has(period.group_id)), ['id','group_id','start_date','end_date','arrival_time','departure_time','status']),
+      profiles: compact(profiles.filter((profile) => snapshotGroupIds.has(profile.group_id)), ['id','group_id','total_pax','participant_count','staff_count','boys_count','girls_count','special_diets','meal_plan','general_notes','sleeping_requirements_completed']),
+      meals: compact(mealsForDate, ['id','group_id','operational_group_profile_id','date','meal_type','start_time','end_time','pax','special_diets_summary','sandwich_option','notes','status']),
+      coffee_requests: compact(coffeeForDate, ['id','group_id','operational_group_profile_id','date','start_time','end_time','pax','coffee_corner_type','location_id','location_name_snapshot','notes','status']),
+      activities: compact(groupActivitiesForDate, ['id','group_id','date','start_time','end_time','activity_name','requested_location','activity_space_id','activity_space_code','pax','notes','status']),
+      standalone_activities: compact(standaloneForDate, ['id','title','event_date','start_time','end_time','expected_pax','status']),
+      standalone_assignments: compact(standaloneAssignments.filter((assignment) => standaloneIds.has(assignment.reservation_id)), ['id','reservation_id','activity_space_id']),
+      allocations: compact(dateAllocations, ['id','group_id','tent_id','neighborhood_id','arrival_date','departure_date','allocated_pax','allocation_type','gender_group','status']),
+      facilities: [],
+      tents: compact(tents, ['id','neighborhood_id','code','tent_number','sub_label','tent_type','capacity','working_status']),
+      activity_spaces: compact(activitySpaces, ['id','code','name','space_type','capacity','working_status']),
+      activity_space_blocks: compact(upcomingBlocks, ['id','activity_space_id','activity_space_name','start_date','end_date','start_time','end_time','is_open_ended','reason_type','reason_notes','status']),
+      alert_activities: compact(alertActivities, ['id','group_id','date','start_time','end_time','activity_space_id','activity_name','status']),
+      neighborhoods: compact(neighborhoods, ['id','code','name','sort_order','is_vip']),
     },
     derived: {
       group_ids: {
