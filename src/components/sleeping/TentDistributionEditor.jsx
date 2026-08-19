@@ -77,17 +77,6 @@ export default function TentDistributionEditor({
   const [releasingTentId, setReleasingTentId] = useState(null);
   const [overrideMismatch, setOverrideMismatch] = useState(false);
   const [periodErrors, setPeriodErrors] = useState([]);
-  const currentSharedApproval = useMemo(() => sharedNeighborhoods.some(item =>
-    item?.neighborhood_id === neighborhood?.id &&
-    item?.shared_neighborhood_allowed === true &&
-    typeof item?.reason === "string" && item.reason.trim()
-  ), [sharedNeighborhoods, neighborhood]);
-
-  useEffect(() => {
-    if (currentSharedApproval) {
-      setPeriodErrors(errors => errors.filter(error => !error.startsWith("השכונה תפוסה בתאריכים")));
-    }
-  }, [currentSharedApproval]);
 
   // Active student allocs for this group in this neighborhood
   const myNeighborhoodAllocs = useMemo(
@@ -190,16 +179,14 @@ export default function TentDistributionEditor({
   const hasBlockingErrors = capacityErrors.length > 0 || overbookingErrors.length > 0 ||
     (isMultiPeriod && (!canUseMultiPeriod || seriesValidation?.valid === false));
 
-  const formatPreviewConflict = (preview, blockingNeighborhoodConflicts = null) => {
+  const formatPreviewConflict = (preview) => {
     const tentById = Object.fromEntries(tents.map(t => [t.id, t]));
     const exact = preview?.exact_tent_conflicts?.[0];
     if (exact) {
       const code = tentById[exact.tent_id]?.code || exact.tent_id;
       return `אוהל ${code} תפוס בתאריכים ${exact.planned_period.arrival_date}–${exact.planned_period.departure_date} על ידי קבוצה ${exact.conflicting_group_id}`;
     }
-    const hood = blockingNeighborhoodConflicts
-      ? blockingNeighborhoodConflicts[0]
-      : preview?.neighborhood_conflicts?.find(c => c.blocked);
+    const hood = preview?.neighborhood_conflicts?.find(c => c.blocked);
     if (hood) return `השכונה תפוסה בתאריכים ${hood.planned_period.arrival_date}–${hood.planned_period.departure_date} על ידי קבוצה ${hood.conflicting_group_id}`;
     return "לא ניתן לשמור את תכנית הלינה בגלל התנגשות.";
   };
@@ -252,14 +239,10 @@ export default function TentDistributionEditor({
           shared_neighborhoods: sharedNeighborhoods,
         });
         const preview = previewRes.data;
-        const blockingNeighborhoodConflicts = (preview?.neighborhood_conflicts || []).filter(conflict =>
-          conflict.blocked && !(currentSharedApproval && conflict.neighborhood_id === neighborhood.id)
-        );
-        const previewAllowed = (preview?.exact_tent_conflicts || []).length === 0 && blockingNeighborhoodConflicts.length === 0;
-        if (!preview?.success || preview.legacy_envelope_requires_conversion || !previewAllowed) {
+        if (!preview?.success || preview.legacy_envelope_requires_conversion || !preview.allowed) {
           const message = preview?.legacy_envelope_requires_conversion
             ? "קיים שיבוץ מעטפת ישן הדורש המרה לפני שמירה."
-            : formatPreviewConflict(preview, blockingNeighborhoodConflicts);
+            : formatPreviewConflict(preview);
           setPeriodErrors([message]);
           return;
         }
@@ -517,13 +500,6 @@ export default function TentDistributionEditor({
             {totalAssigned} אנשים
           </span>
         </div>
-
-        {isMultiPeriod && currentSharedApproval && (
-          <div className="flex items-start gap-1.5 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-            <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-            שכונה משותפת עם קבוצה נוספת — אוהלים תפוסים נשארים חסומים.
-          </div>
-        )}
 
         {/* Validation errors */}
         {(capacityErrors.length > 0 || overbookingErrors.length > 0 || periodErrors.length > 0 || (isMultiPeriod && seriesValidation?.valid === false)) && (
