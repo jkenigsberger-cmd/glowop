@@ -52,6 +52,7 @@ export default function AutoAllocationButton({
   activeStayPeriods = [],
   logicalAssignments = [],
   seriesValidation = null,
+  sharedNeighborhoods = [],
 }) {
   const [preview, setPreview] = useState(null); // null | { segments: [{gender, rows}], error }
   const [saving, setSaving]   = useState(false);
@@ -243,7 +244,8 @@ export default function AutoAllocationButton({
     try {
       if (isMultiPeriod) {
         const assignments = buildLogicalAssignments();
-        const previewRes = await base44.functions.invoke("previewMultiPeriodSleepingPlan", { group_id: groupId, assignments });
+        const payload = { group_id: groupId, assignments, shared_neighborhoods: sharedNeighborhoods };
+        const previewRes = await base44.functions.invoke("previewMultiPeriodSleepingPlan", payload);
         const previewResult = previewRes.data;
         if (!previewResult?.success || previewResult.legacy_envelope_requires_conversion || !previewResult.allowed) {
           const message = previewResult?.legacy_envelope_requires_conversion
@@ -252,7 +254,7 @@ export default function AutoAllocationButton({
           setPreview({ error: message });
           return;
         }
-        const commitRes = await base44.functions.invoke("commitMultiPeriodSleepingPlan", { group_id: groupId, assignments });
+        const commitRes = await base44.functions.invoke("commitMultiPeriodSleepingPlan", payload);
         if (!commitRes.data?.success) {
           setPreview({ error: commitRes.data?.error === "INCONSISTENT_PERIODIZED_SLEEPING_STATE"
             ? "כבר קיים שיבוץ רב־תקופתי שאינו ניתן להחלפה אוטומטית. יש לשחרר את כולו תחילה."

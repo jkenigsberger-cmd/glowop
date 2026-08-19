@@ -205,6 +205,7 @@ export default function StudentNeighborhoodPanel({
                   activeStayPeriods={activeStayPeriods}
                   logicalAssignments={logicalAssignments}
                   seriesValidation={seriesValidation}
+                  sharedNeighborhoods={sharedNeighborhoodIntent}
                 />
                 <Button
                   size="sm"
@@ -255,6 +256,7 @@ export default function StudentNeighborhoodPanel({
                   activeStayPeriods={activeStayPeriods}
                   logicalAssignments={logicalAssignments}
                   seriesValidation={seriesValidation}
+                  sharedNeighborhoods={sharedNeighborhoodIntent}
                 />
                 <Button
                   size="sm"
