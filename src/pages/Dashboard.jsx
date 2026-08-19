@@ -455,10 +455,10 @@ export default function Dashboard() {
           <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">נתונים היסטוריים · נשמרו בסוף היום</div>
         )}
         {historicalUnavailable && (
-          <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">לא קיים צילום מצב היסטורי מלא לתאריך זה</div>
+          <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900">נתונים משוחזרים · ייתכן ששינויים מאוחרים משפיעים על התצוגה</div>
         )}
 
-        {!isSnapshotLoading && !historicalUnavailable && <>
+        {!isSnapshotLoading && <>
         {canViewSpaceBlocks && upcomingSpaceBlocks.length > 0 && (
           <DashboardSpaceBlocksAlert blocks={upcomingSpaceBlocks} activities={activitiesForSpaceBlockAlert} />
         )}
