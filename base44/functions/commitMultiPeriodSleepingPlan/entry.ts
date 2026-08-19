@@ -1,5 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
-import { addSleepingPlanConflicts, buildMultiPeriodSleepingPlan, findLegacyEnvelopeAllocations, validateSleepingAssignments } from '../../shared/multiPeriodSleepingPlan.js';
+import { addSleepingPlanConflicts, buildMultiPeriodSleepingPlan, findLegacyEnvelopeAllocations, normalizeSharedNeighborhoodIntent, validateSleepingAssignments } from '../../shared/multiPeriodSleepingPlan.js';
 
 function equivalentAssignment(row, assignment) {
   return row.tent_id === assignment.tent_id &&
@@ -91,6 +91,7 @@ export default async function(req) {
     const body = await req.json();
     const groupId = body?.group_id;
     const assignments = body?.assignments;
+    const sharedNeighborhoods = body?.shared_neighborhoods;
     if (!groupId) return Response.json({ success: false, error: 'GROUP_ID_REQUIRED' }, { status: 400 });
 
     const group = await base44.asServiceRole.entities.Group.get(groupId).catch(() => null);
@@ -110,6 +111,8 @@ export default async function(req) {
     if (profiles.length !== 1) return Response.json({ success: false, error: 'EXACTLY_ONE_OGP_REQUIRED', profile_count: profiles.length }, { status: 409 });
     const assignmentErrors = validateSleepingAssignments(assignments, tents, inventoryNeighborhoods);
     if (assignmentErrors.length > 0) return Response.json({ success: false, error: 'INVALID_ASSIGNMENTS', errors: assignmentErrors }, { status: 400 });
+    const sharedIntent = normalizeSharedNeighborhoodIntent(sharedNeighborhoods, assignments);
+    if (sharedIntent.errors.length > 0) return Response.json({ success: false, error: 'INVALID_SHARED_NEIGHBORHOODS', errors: sharedIntent.errors }, { status: 400 });
 
     const profile = profiles[0];
     const plan = buildMultiPeriodSleepingPlan({ groupId, profileId: profile.id, periods, assignments });
@@ -128,7 +131,10 @@ export default async function(req) {
     if (existingState.state === 'COMPLETE') return Response.json({ success: true, already_committed: true, read_only_retry: true, ...existingState });
     if (existingState.state === 'INCONSISTENT') return Response.json({ success: false, error: 'INCONSISTENT_PERIODIZED_SLEEPING_STATE', details: existingState }, { status: 409 });
 
-    const sharedNeighborhoodIds = myReservations.filter(row => row.shared_neighborhood_allowed === true).map(row => row.neighborhood_id);
+    const sharedNeighborhoodIds = [...new Set([
+      ...myReservations.filter(row => row.shared_neighborhood_allowed === true).map(row => row.neighborhood_id),
+      ...sharedIntent.sharedNeighborhoodIds,
+    ])];
     const preview = addSleepingPlanConflicts({ plan, existingAllocations: activeAllocations, existingNeighborhoodReservations: activeReservations, sharedNeighborhoodIds });
     if (!preview.allowed) return Response.json({ success: false, error: 'SLEEPING_PLAN_CONFLICT', exact_tent_conflicts: preview.exact_tent_conflicts, neighborhood_conflicts: preview.neighborhood_conflicts }, { status: 409 });
 
@@ -149,10 +155,16 @@ export default async function(req) {
       createdAllocationIds.push(created.id);
     }
     for (const planned of (isAppend ? [] : plan.planned_neighborhood_intervals)) {
+      const shared = sharedIntent.byNeighborhoodId[planned.neighborhood_reservation.neighborhood_id] || null;
       const created = await base44.asServiceRole.entities.NeighborhoodReservation.create({
         ...planned.neighborhood_reservation,
         stay_period_id: planned.source_stay_period_id,
-        shared_neighborhood_allowed: false,
+        shared_neighborhood_allowed: !!shared,
+        ...(shared ? {
+          shared_neighborhood_reason: shared.reason,
+          shared_neighborhood_approved_by: user.email,
+          shared_neighborhood_approved_at: new Date().toISOString(),
+        } : {}),
       });
       createdReservationIds.push(created.id);
     }

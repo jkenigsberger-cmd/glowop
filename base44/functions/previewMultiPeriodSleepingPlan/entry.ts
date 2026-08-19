@@ -1,5 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
-import { addSleepingPlanConflicts, buildMultiPeriodSleepingPlan, findLegacyEnvelopeAllocations, validateSleepingAssignments } from '../../shared/multiPeriodSleepingPlan.js';
+import { addSleepingPlanConflicts, buildMultiPeriodSleepingPlan, findLegacyEnvelopeAllocations, normalizeSharedNeighborhoodIntent, validateSleepingAssignments } from '../../shared/multiPeriodSleepingPlan.js';
 
 export default async function(req) {
   try {
@@ -9,6 +9,7 @@ export default async function(req) {
     const body = await req.json();
     const groupId = body?.group_id;
     const assignments = body?.assignments;
+    const sharedNeighborhoods = body?.shared_neighborhoods;
     if (!groupId) return Response.json({ success: false, error: 'GROUP_ID_REQUIRED' }, { status: 400 });
 
     const group = await base44.asServiceRole.entities.Group.get(groupId).catch(() => null);
@@ -27,13 +28,18 @@ export default async function(req) {
 
     const assignmentErrors = validateSleepingAssignments(assignments, tents, inventoryNeighborhoods);
     if (assignmentErrors.length > 0) return Response.json({ success: false, error: 'INVALID_ASSIGNMENTS', errors: assignmentErrors }, { status: 400 });
+    const sharedIntent = normalizeSharedNeighborhoodIntent(sharedNeighborhoods, assignments);
+    if (sharedIntent.errors.length > 0) return Response.json({ success: false, error: 'INVALID_SHARED_NEIGHBORHOODS', errors: sharedIntent.errors }, { status: 400 });
 
     const plan = buildMultiPeriodSleepingPlan({ groupId, profileId: profiles[0].id, periods, assignments });
     if (!plan.valid) return Response.json({ success: false, error: 'INVALID_ACTIVE_PERIODS', errors: plan.errors }, { status: 409 });
 
-    const sharedNeighborhoodIds = neighborhoodReservations
-      .filter(reservation => reservation.group_id === groupId && reservation.shared_neighborhood_allowed === true)
-      .map(reservation => reservation.neighborhood_id);
+    const sharedNeighborhoodIds = [...new Set([
+      ...neighborhoodReservations
+        .filter(reservation => reservation.group_id === groupId && reservation.shared_neighborhood_allowed === true)
+        .map(reservation => reservation.neighborhood_id),
+      ...sharedIntent.sharedNeighborhoodIds,
+    ])];
     const preview = addSleepingPlanConflicts({ plan, existingAllocations, existingNeighborhoodReservations: neighborhoodReservations, sharedNeighborhoodIds });
     const legacyEnvelopeAllocations = findLegacyEnvelopeAllocations(groupId, periods, existingAllocations);
     return Response.json({

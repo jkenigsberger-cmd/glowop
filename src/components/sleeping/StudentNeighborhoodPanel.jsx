@@ -41,6 +41,7 @@ export default function StudentNeighborhoodPanel({
   onRelease,
   saving,
   allConfirmedAllocs = [],
+  allActiveAllocs = [],
   onSaved,
   defaultGenderGroup = "BOYS",
   profile = null,
@@ -73,6 +74,11 @@ export default function StudentNeighborhoodPanel({
   } : null);
   // Is this neighborhood already shared (approved on existing reservation)?
   const isAlreadyShared = !!(lockByThisGroup?.shared_neighborhood_allowed);
+  const sharedNeighborhoodIntent = sharedAllowed && sharedReason.trim() ? [{
+    neighborhood_id: neighborhood.id,
+    shared_neighborhood_allowed: true,
+    reason: sharedReason.trim(),
+  }] : [];
 
   const handleReserve = () => {
     // If neighborhood is used by another group, require conscious shared override
@@ -279,10 +285,13 @@ export default function StudentNeighborhoodPanel({
         arrivalDate={arrivalDate}
         departureDate={departureDate}
         allConfirmedAllocs={allConfirmedAllocs}
+        allActiveAllocs={allActiveAllocs}
         onSaved={onSaved}
         isMultiPeriod={isMultiPeriod}
         canUseMultiPeriod={canUseMultiPeriod}
         seriesValidation={seriesValidation}
+        activeStayPeriods={activeStayPeriods}
+        sharedNeighborhoods={sharedNeighborhoodIntent}
       />
 
       {/* Expand form */}
@@ -338,7 +347,10 @@ export default function StudentNeighborhoodPanel({
                 <input
                   type="checkbox"
                   checked={sharedAllowed}
-                  onChange={e => setSharedAllowed(e.target.checked)}
+                  onChange={e => {
+                    setSharedAllowed(e.target.checked);
+                    if (!e.target.checked) setSharedReason("");
+                  }}
                   className="w-4 h-4 accent-amber-600"
                 />
                 <span className="text-xs font-semibold text-amber-800">אפשר שימוש בשכונה משותפת</span>

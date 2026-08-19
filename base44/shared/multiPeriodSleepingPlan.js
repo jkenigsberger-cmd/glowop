@@ -7,6 +7,38 @@ export function sleepingIntervalsOverlap(aArrival, aDeparture, bArrival, bDepart
   return aArrival < bDeparture && bArrival < aDeparture;
 }
 
+export function normalizeSharedNeighborhoodIntent(sharedNeighborhoods, assignments = []) {
+  const studentNeighborhoodIds = new Set(
+    assignments.filter(item => item?.allocation_type === 'STUDENT').map(item => item.neighborhood_id)
+  );
+  const byNeighborhoodId = {};
+  const errors = [];
+  if (sharedNeighborhoods == null) return { byNeighborhoodId, sharedNeighborhoodIds: [], errors };
+  if (!Array.isArray(sharedNeighborhoods)) return { byNeighborhoodId, sharedNeighborhoodIds: [], errors: [{ code: 'SHARED_NEIGHBORHOODS_MUST_BE_ARRAY' }] };
+  sharedNeighborhoods.forEach((item, index) => {
+    const neighborhoodId = item?.neighborhood_id;
+    const reason = typeof item?.reason === 'string' ? item.reason.trim() : '';
+    if (item?.shared_neighborhood_allowed !== true) {
+      errors.push({ code: 'SHARED_NEIGHBORHOOD_NOT_APPROVED', index });
+      return;
+    }
+    if (!neighborhoodId || !studentNeighborhoodIds.has(neighborhoodId)) {
+      errors.push({ code: 'SHARED_NEIGHBORHOOD_NOT_IN_STUDENT_PLAN', index, neighborhood_id: neighborhoodId || null });
+      return;
+    }
+    if (!reason) {
+      errors.push({ code: 'SHARED_NEIGHBORHOOD_REASON_REQUIRED', index, neighborhood_id: neighborhoodId });
+      return;
+    }
+    if (byNeighborhoodId[neighborhoodId]) {
+      errors.push({ code: 'DUPLICATE_SHARED_NEIGHBORHOOD', index, neighborhood_id: neighborhoodId });
+      return;
+    }
+    byNeighborhoodId[neighborhoodId] = { neighborhood_id: neighborhoodId, shared_neighborhood_allowed: true, reason };
+  });
+  return { byNeighborhoodId, sharedNeighborhoodIds: Object.keys(byNeighborhoodId), errors };
+}
+
 export function findLegacyEnvelopeAllocations(groupId, periods, allocations = []) {
   const active = normalizeStayPeriods(periods).filter(period => period.status !== 'CANCELLED');
   if (active.length === 0) return [];

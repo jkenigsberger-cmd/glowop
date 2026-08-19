@@ -48,10 +48,13 @@ export default function TentDistributionEditor({
   arrivalDate,
   departureDate,
   allConfirmedAllocs = [],
+  allActiveAllocs = [],
   onSaved,
   isMultiPeriod = false,
   canUseMultiPeriod = false,
   seriesValidation = null,
+  activeStayPeriods = [],
+  sharedNeighborhoods = [],
 }) {
   const queryClient = useQueryClient();
 
@@ -118,18 +121,27 @@ export default function TentDistributionEditor({
     setOverrideMismatch(false);
   }, [open, displayedNeighborhoodAllocs, isMultiPeriod]);
 
-  // Overbooking: tentId → true if another group has a CONFIRMED alloc overlapping dates
-  const overbookedTentIds = useMemo(() => {
-    const set = new Set();
-    if (isMultiPeriod || !arrivalDate || !departureDate) return set;
-    allConfirmedAllocs.forEach(a => {
-      if (a.group_id === groupId) return;
-      if (a.status === "CANCELLED") return;
-      if (a.arrival_date >= departureDate || a.departure_date <= arrivalDate) return;
-      set.add(a.tent_id);
+  // Exact tent availability remains authoritative even when neighborhood sharing is approved.
+  const tentConflictMap = useMemo(() => {
+    const map = {};
+    const source = isMultiPeriod ? allActiveAllocs : allConfirmedAllocs;
+    source.forEach(allocation => {
+      if (allocation.group_id === groupId || allocation.status === "CANCELLED") return;
+      const conflictingPeriods = isMultiPeriod
+        ? activeStayPeriods.filter(period => period.start_date < allocation.departure_date && allocation.arrival_date < period.end_date)
+        : (arrivalDate && departureDate && arrivalDate < allocation.departure_date && allocation.arrival_date < departureDate
+          ? [{ start_date: arrivalDate, end_date: departureDate }]
+          : []);
+      if (conflictingPeriods.length === 0) return;
+      (map[allocation.tent_id] ||= []).push({
+        arrival_date: allocation.arrival_date,
+        departure_date: allocation.departure_date,
+        required_periods: conflictingPeriods.map(period => ({ start_date: period.start_date, end_date: period.end_date })),
+      });
     });
-    return set;
-  }, [allConfirmedAllocs, groupId, arrivalDate, departureDate, isMultiPeriod]);
+    return map;
+  }, [isMultiPeriod, allActiveAllocs, allConfirmedAllocs, groupId, activeStayPeriods, arrivalDate, departureDate]);
+  const overbookedTentIds = useMemo(() => new Set(Object.keys(tentConflictMap)), [tentConflictMap]);
 
   const totalAssigned = useMemo(
     () => tents.reduce((s, t) => s + (Number(paxMap[t.id]) || 0), 0),
@@ -221,7 +233,11 @@ export default function TentDistributionEditor({
             notes: a.notes || "",
           }));
         const assignments = [...otherNeighborhoodAssignments, ...currentNeighborhoodAssignments];
-        const previewRes = await base44.functions.invoke("previewMultiPeriodSleepingPlan", { group_id: groupId, assignments });
+        const previewRes = await base44.functions.invoke("previewMultiPeriodSleepingPlan", {
+          group_id: groupId,
+          assignments,
+          shared_neighborhoods: sharedNeighborhoods,
+        });
         const preview = previewRes.data;
         if (!preview?.success || preview.legacy_envelope_requires_conversion || !preview.allowed) {
           const message = preview?.legacy_envelope_requires_conversion
@@ -230,7 +246,11 @@ export default function TentDistributionEditor({
           setPeriodErrors([message]);
           return;
         }
-        const commitRes = await base44.functions.invoke("commitMultiPeriodSleepingPlan", { group_id: groupId, assignments });
+        const commitRes = await base44.functions.invoke("commitMultiPeriodSleepingPlan", {
+          group_id: groupId,
+          assignments,
+          shared_neighborhoods: sharedNeighborhoods,
+        });
         if (!commitRes.data?.success) {
           const message = commitRes.data?.error === "INCONSISTENT_PERIODIZED_SLEEPING_STATE"
             ? "השיבוץ הקיים אינו תואם לתכנית. יש לשחרר את כל השיבוץ לפני שינוי אוהלים."
@@ -389,6 +409,7 @@ export default function TentDistributionEditor({
           {sortedTents.map(tent => {
             const pax = Number(paxMap[tent.id]) || 0;
             const isOverBooked = overbookedTentIds.has(tent.id);
+            const exactConflicts = tentConflictMap[tent.id] || [];
             const isOverCap = pax > (tent.capacity || 0);
             const hasExistingAlloc = !!displayedNeighborhoodAllocs.find(a => a.tent_id === tent.id);
             const isReleasingThis = releasingTentId === tent.id;
@@ -404,9 +425,13 @@ export default function TentDistributionEditor({
               <div key={tent.id} className={`grid gap-2 items-center border rounded-lg px-3 py-2 ${isMixedReservation ? "grid-cols-[1fr_auto_auto_auto_auto_auto]" : "grid-cols-[1fr_auto_auto_auto_auto]"} ${rowBg}`}>
                 <div className="flex items-center gap-1.5 min-w-0">
                   <span className="font-semibold text-sm text-slate-800">{tent.code}</span>
-                  {isOverBooked && (
-                    <span className="text-[10px] text-red-600 font-medium">תפוס</span>
-                  )}
+                  {isOverBooked ? (
+                    <span className="text-[10px] text-red-600 font-medium">
+                      לא זמין · {exactConflicts[0].arrival_date}–{exactConflicts[0].departure_date}
+                    </span>
+                  ) : isMultiPeriod ? (
+                    <span className="text-[10px] text-emerald-600 font-medium">זמין בכל התקופות</span>
+                  ) : null}
                 </div>
                 <span className="w-14 text-center text-xs text-slate-500">{tent.capacity || "—"}</span>
                 {isMixedReservation && (
@@ -446,6 +471,7 @@ export default function TentDistributionEditor({
                   onChange={e => setNotesMap(n => ({ ...n, [tent.id]: e.target.value }))}
                   placeholder="הערות..."
                   className="w-28 h-7 text-xs"
+                  disabled={isOverBooked && !hasExistingAlloc}
                 />
                 <div className="w-16 flex justify-center">
                   {hasExistingAlloc && (

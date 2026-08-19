@@ -578,6 +578,7 @@ export default function SleepingAllocationTab({ groupId }) {
             onRelease={handleReleaseNeighborhood}
             saving={saving}
             allConfirmedAllocs={allConfirmedAllocations}
+            allActiveAllocs={allActiveAllocations}
             onSaved={invalidate}
             defaultGenderGroup={defaultGenderGroup}
             profile={profile}
