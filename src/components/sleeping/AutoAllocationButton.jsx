@@ -88,17 +88,19 @@ export default function AutoAllocationButton({
       .map(a => a.tent_id)
   ), [existingGroupAllocs, neighborhood]);
 
-  // Already-allocated pax per gender for this group across ALL neighborhoods
+  // Already-allocated pax per gender across ALL neighborhoods.
+  // MULTI_PERIOD counts one logical series once, never once per physical period row.
   const allocatedPaxByGender = useMemo(() => {
     const map = { BOYS: 0, GIRLS: 0, MIXED: 0 };
-    existingGroupAllocs
-      .filter(a => a.status !== "CANCELLED" && a.allocation_type === "STUDENT")
-      .forEach(a => {
-        const g = a.gender_group;
-        if (map[g] !== undefined) map[g] += (a.allocated_pax || 0);
-      });
+    const source = isMultiPeriod
+      ? logicalAssignments.filter(a => !a.inconsistent && a.allocation_type === "STUDENT")
+      : existingGroupAllocs.filter(a => a.status !== "CANCELLED" && a.allocation_type === "STUDENT");
+    source.forEach(a => {
+      const g = a.gender_group;
+      if (map[g] !== undefined) map[g] += Number(isMultiPeriod ? a.logical_allocated_pax : a.allocated_pax) || 0;
+    });
     return map;
-  }, [existingGroupAllocs]);
+  }, [isMultiPeriod, logicalAssignments, existingGroupAllocs]);
 
   // ── Core: compute what still needs to be allocated ──────────────────────────
   // Available tents sorted (needed for capacity-aware auto-expand)
@@ -148,11 +150,6 @@ export default function AutoAllocationButton({
       setPreview({ error: "השיבוץ הרב־תקופתי הקיים חלקי או לא עקבי. יש לשחרר את כולו לפני שיבוץ אוטומטי." });
       return;
     }
-    if (isMultiPeriod && logicalAssignments.length > 0) {
-      setPreview({ error: "כבר קיים שיבוץ לוגי למכינה. כדי למנוע כפילות, יש לשחרר את כל השיבוץ לפני הפעלה מחדש." });
-      return;
-    }
-
     if (!profile) {
       setPreview({ error: "אין פרופיל תפעולי — נא להשלים את פרטי הקבוצה." });
       return;
@@ -211,12 +208,14 @@ export default function AutoAllocationButton({
       return;
     }
 
-    if (isMultiPeriod && isPartial) {
-      setPreview({ error: "אין בשכונה מספיק קיבולת תואמת שנשמרת בכל תקופות השהייה של המכינה. לא נוצר שיבוץ חלקי." });
-      return;
-    }
-
-    setPreview({ segments: result, error: null, isPartial });
+    const allocatedPax = result.reduce((sum, segment) => sum + segment.allocatedPax, 0);
+    setPreview({
+      segments: result,
+      error: null,
+      isPartial,
+      allocatedPax,
+      remainingPax: Math.max(0, totalRemainingPax - allocatedPax),
+    });
   };
 
   const buildLogicalAssignments = () => preview.segments.flatMap(seg =>
@@ -243,7 +242,18 @@ export default function AutoAllocationButton({
     setSaving(true);
     try {
       if (isMultiPeriod) {
-        const assignments = buildLogicalAssignments();
+        const newAssignments = buildLogicalAssignments();
+        const existingAssignments = logicalAssignments
+          .filter(assignment => !assignment.inconsistent)
+          .map(assignment => ({
+            tent_id: assignment.tent_id,
+            neighborhood_id: assignment.neighborhood_id,
+            allocated_pax: assignment.logical_allocated_pax,
+            allocation_type: assignment.allocation_type,
+            gender_group: assignment.gender_group,
+            notes: assignment.notes || "",
+          }));
+        const assignments = [...existingAssignments, ...newAssignments];
         const payload = { group_id: groupId, assignments, shared_neighborhoods: sharedNeighborhoods };
         const previewRes = await base44.functions.invoke("previewMultiPeriodSleepingPlan", payload);
         const previewResult = previewRes.data;
@@ -261,8 +271,11 @@ export default function AutoAllocationButton({
             : (commitRes.data?.error || "שמירת השיבוץ הרב־תקופתי נכשלה.") });
           return;
         }
-        const totalPax = assignments.reduce((sum, assignment) => sum + assignment.allocated_pax, 0);
-        toast.success(`שיבוץ אוטומטי רב־תקופתי נוצר — ${assignments.length} אוהלים · ${totalPax} אנשים ✓`);
+        const totalPax = newAssignments.reduce((sum, assignment) => sum + assignment.allocated_pax, 0);
+        const remainingPax = preview.remainingPax || 0;
+        toast.success(remainingPax > 0
+          ? `שובצו ${totalPax} · נותרו ${remainingPax} לשיבוץ`
+          : `שיבוץ אוטומטי רב־תקופתי נוצר — ${newAssignments.length} אוהלים · ${totalPax} אנשים ✓`);
         setDone(true);
         setPreview(null);
         onSaved?.();
@@ -367,7 +380,7 @@ export default function AutoAllocationButton({
               {preview.isPartial && (
                 <div className="flex items-start gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
                   <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                  <span>השכונה אינה מספיקה לכל הדרישה. ניתן לאשר שיבוץ חלקי זה ולהמשיך לשכונה נוספת עבור הנותרים.</span>
+                  <span className="font-semibold">שובצו {preview.allocatedPax} · נותרו {preview.remainingPax} לשיבוץ</span>
                 </div>
               )}
 

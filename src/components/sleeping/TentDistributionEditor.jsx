@@ -87,11 +87,15 @@ export default function TentDistributionEditor({
     ),
     [existingAllocs, neighborhood]
   );
-  const logicalStudentAssignments = useMemo(
+  const logicalAssignments = useMemo(
     () => groupLogicalSleepingAssignments(
-      existingAllocs.filter(a => a.status !== "CANCELLED" && a.allocation_type === "STUDENT")
+      existingAllocs.filter(a => a.status !== "CANCELLED")
     ).logical_assignments,
     [existingAllocs]
+  );
+  const logicalStudentAssignments = useMemo(
+    () => logicalAssignments.filter(a => a.allocation_type === "STUDENT"),
+    [logicalAssignments]
   );
   const displayedNeighborhoodAllocs = useMemo(
     () => isMultiPeriod
@@ -222,8 +226,8 @@ export default function TentDistributionEditor({
             notes: notesMap[tent.id] || "",
           }];
         });
-        const otherNeighborhoodAssignments = logicalStudentAssignments
-          .filter(a => a.neighborhood_id !== neighborhood.id && !a.inconsistent)
+        const otherNeighborhoodAssignments = logicalAssignments
+          .filter(a => !a.inconsistent && (a.allocation_type !== "STUDENT" || a.neighborhood_id !== neighborhood.id))
           .map(a => ({
             tent_id: a.tent_id,
             neighborhood_id: a.neighborhood_id,

@@ -240,11 +240,11 @@ export default function SleepingAllocationTab({ groupId }) {
     boysDist.reduce((s, r) => s + (r.tent_count || 0), 0) +
     girlsDist.reduce((s, r) => s + (r.tent_count || 0), 0);
 
-  // For suggestion, only show truly exclusive (not occupied by others)
-  // The full list always shows all neighborhoods (including occupied ones) so admin can trigger shared override
+  // Neighborhood overlap is operational metadata, not physical unavailability.
+  // Exact tent/date checks remain authoritative when an allocation is created.
   const availableStudentNeighborhoods = useMemo(
-    () => neighborhoods.filter(n => !n.is_vip && !otherNhoodResByNeighborhood[n.id]),
-    [neighborhoods, otherNhoodResByNeighborhood]
+    () => neighborhoods.filter(n => !n.is_vip),
+    [neighborhoods]
   );
 
   const suggestion = useMemo(
@@ -521,7 +521,7 @@ export default function SleepingAllocationTab({ groupId }) {
         </div>
 
         <p className="text-[11px] text-slate-500">
-          שכונה שנבחרת נחסמת כולה לקבוצה — קבוצת חניכים אחרת לא תוכל להשתמש בה בתאריכים החופפים.
+          ניתן לפצל קבוצה בין שכונות ולשתף שכונה באישור; אוהל פיזי נשאר בלעדי בכל טווח תאריכים חופף.
         </p>
 
         {!isMultiPeriod && showSuggestion && suggestion.length > 0 && (
@@ -586,7 +586,7 @@ export default function SleepingAllocationTab({ groupId }) {
             occupiedTents={tentConflictsByNeighborhood[hood.id] || []}
             isMultiPeriod={isMultiPeriod}
             canUseMultiPeriod={canUseMultiPeriod}
-            logicalAssignments={logicalStudentAssignments}
+            logicalAssignments={logicalSeriesData.logical_assignments}
             seriesValidation={seriesValidation}
             activeStayPeriods={activeStayPeriods}
             />

@@ -65,7 +65,7 @@ export default function StudentNeighborhoodPanel({
   const [sharedReason, setSharedReason] = useState("");
 
   const totalBeds = tents.reduce((s, t) => s + (t.capacity || 0), 0);
-  const logicalNeighborhoodAssignments = logicalAssignments.filter(a => a.neighborhood_id === neighborhood.id);
+  const logicalNeighborhoodAssignments = logicalAssignments.filter(a => a.allocation_type === "STUDENT" && a.neighborhood_id === neighborhood.id);
   const isLockedByMe = isMultiPeriod ? logicalNeighborhoodAssignments.length > 0 : !!lockByThisGroup;
   const hasNeighborhoodConflict = !!lockByOtherGroup;
   const isLockedByOther = hasNeighborhoodConflict && !isLockedByMe;
@@ -124,7 +124,7 @@ export default function StudentNeighborhoodPanel({
   let bgClass = "bg-white";
   if (isLockedByMe && isAlreadyShared) { borderClass = "border-amber-300"; bgClass = "bg-amber-50"; }
   else if (isLockedByMe) { borderClass = "border-emerald-300"; bgClass = "bg-emerald-50"; }
-  else if (isLockedByOther) { borderClass = "border-red-200"; bgClass = "bg-red-50 opacity-75"; }
+  else if (isLockedByOther) { borderClass = "border-amber-300"; bgClass = "bg-amber-50"; }
 
   return (
     <div className={`border rounded-xl overflow-hidden ${borderClass} ${bgClass}`}>
@@ -144,8 +144,8 @@ export default function StudentNeighborhoodPanel({
             )}
 
             {isLockedByOther && (
-              <span className="inline-flex items-center gap-1 text-[10px] font-medium bg-red-100 text-red-700 border border-red-200 rounded-full px-2 py-0.5">
-                <Lock className="w-3 h-3" /> בשימוש — {lockByOtherGroup.group_name}
+              <span className="inline-flex items-center gap-1 text-[10px] font-medium bg-amber-100 text-amber-800 border border-amber-300 rounded-full px-2 py-0.5">
+                <Users className="w-3 h-3" /> שכונה משותפת עם קבוצה נוספת — {lockByOtherGroup.group_name}
               </span>
             )}
             {isAlreadyShared && (
@@ -160,8 +160,8 @@ export default function StudentNeighborhoodPanel({
             const spare = tents.length - (effectiveReservation.planned_tents || tents.length);
             if (spare <= 0) return null;
             return (
-              <p className="text-[10px] text-amber-700 mt-0.5">
-                נותרו {spare} אוהלים פנויים בתוך השכונה, אך הם חסומים לקבוצות אחרות בגלל בלעדיות שכונה
+              <p className="text-[10px] text-slate-500 mt-0.5">
+                נותרו {spare} אוהלים שאינם בשימוש של קבוצה זו
               </p>
             );
           })()}
@@ -425,7 +425,7 @@ export default function StudentNeighborhoodPanel({
             </Button>
           </div>
           <p className="text-[10px] text-slate-400 text-center">
-            שיבוץ לפי שכונות — שכונה שנבחרת נחסמת כולה לקבוצה
+            הבלעדיות הפיזית נשמרת ברמת אוהל ותאריכים; שכונות יכולות להיות משותפות באישור
           </p>
         </div>
       )}

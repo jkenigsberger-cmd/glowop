@@ -42,21 +42,27 @@ function inspectExistingState({ allocations, reservations, assignments, periods,
   }
 
   const expectedNeighborhoods = plan.planned_neighborhood_intervals;
-  if (linkedReservations.length !== expectedNeighborhoods.length) return { state: 'INCONSISTENT', reason: 'NEIGHBORHOOD_PERIOD_COUNT_MISMATCH' };
-  for (const expected of expectedNeighborhoods) {
-    const wanted = expected.neighborhood_reservation;
-    const found = linkedReservations.find(row =>
-      row.stay_period_id === expected.source_stay_period_id &&
-      row.neighborhood_id === wanted.neighborhood_id &&
-      row.arrival_date === wanted.arrival_date &&
-      row.departure_date === wanted.departure_date &&
-      row.gender_group === wanted.gender_group &&
-      Number(row.planned_tents) === Number(wanted.planned_tents)
-    );
-    if (!found) return { state: 'INCONSISTENT', reason: 'NEIGHBORHOOD_PERIOD_MISMATCH', stay_period_id: expected.source_stay_period_id, neighborhood_id: wanted.neighborhood_id };
+  const reservationKey = (stayPeriodId, neighborhoodId) => `${stayPeriodId || ''}:${neighborhoodId}`;
+  const expectedByKey = new Map(expectedNeighborhoods.map(expected => [
+    reservationKey(expected.source_stay_period_id, expected.neighborhood_reservation.neighborhood_id),
+    expected,
+  ]));
+  const seenReservationKeys = new Set();
+  for (const row of linkedReservations) {
+    const key = reservationKey(row.stay_period_id, row.neighborhood_id);
+    if (seenReservationKeys.has(key)) return { state: 'INCONSISTENT', reason: 'DUPLICATE_ACTIVE_NEIGHBORHOOD_PERIOD', stay_period_id: row.stay_period_id, neighborhood_id: row.neighborhood_id };
+    seenReservationKeys.add(key);
+    const expected = expectedByKey.get(key);
+    const wanted = expected?.neighborhood_reservation;
+    if (!wanted || row.arrival_date !== wanted.arrival_date || row.departure_date !== wanted.departure_date || row.gender_group !== wanted.gender_group || Number(row.planned_tents) !== Number(wanted.planned_tents)) {
+      return { state: 'INCONSISTENT', reason: 'NEIGHBORHOOD_PERIOD_MISMATCH', stay_period_id: row.stay_period_id, neighborhood_id: row.neighborhood_id };
+    }
   }
   if (seriesGroups.length === assignments.length) {
-    return { state: 'COMPLETE', allocation_series_ids: Object.keys(bySeries), allocation_ids: linkedAllocations.map(row => row.id), neighborhood_reservation_ids: linkedReservations.map(row => row.id) };
+    if (linkedReservations.length === expectedNeighborhoods.length) {
+      return { state: 'COMPLETE', allocation_series_ids: Object.keys(bySeries), allocation_ids: linkedAllocations.map(row => row.id), neighborhood_reservation_ids: linkedReservations.map(row => row.id) };
+    }
+    return { state: 'APPEND_RESERVATIONS', missing_assignment_indexes: [] };
   }
   const missingAssignmentIndexes = assignments.map((_, index) => index).filter(index => !matchedAssignmentIndexes.has(index));
   const appendIsVipOnly = missingAssignmentIndexes.every(index =>
@@ -65,8 +71,10 @@ function inspectExistingState({ allocations, reservations, assignments, periods,
   const appendIsAltOnly = missingAssignmentIndexes.every(index =>
     assignments[index].allocation_type === 'STAFF' && (assignments[index].notes || '').includes('__alt_tent__')
   );
+  const appendIsStudentOnly = missingAssignmentIndexes.every(index => assignments[index].allocation_type === 'STUDENT');
   if (appendIsVipOnly) return { state: 'APPEND_VIP', missing_assignment_indexes: missingAssignmentIndexes };
   if (appendIsAltOnly) return { state: 'APPEND_ALT', missing_assignment_indexes: missingAssignmentIndexes };
+  if (appendIsStudentOnly) return { state: 'APPEND_STUDENT', missing_assignment_indexes: missingAssignmentIndexes };
   return { state: 'INCONSISTENT', reason: 'SERIES_COUNT_MISMATCH' };
 }
 
@@ -138,9 +146,9 @@ export default async function(req) {
     const preview = addSleepingPlanConflicts({ plan, existingAllocations: activeAllocations, existingNeighborhoodReservations: activeReservations, sharedNeighborhoodIds });
     if (!preview.allowed) return Response.json({ success: false, error: 'SLEEPING_PLAN_CONFLICT', exact_tent_conflicts: preview.exact_tent_conflicts, neighborhood_conflicts: preview.neighborhood_conflicts }, { status: 409 });
 
-    const isAppend = existingState.state === 'APPEND_VIP' || existingState.state === 'APPEND_ALT';
-    const indexesToCreate = isAppend
-      ? new Set(existingState.missing_assignment_indexes)
+    const isAllocationAppend = ['APPEND_VIP', 'APPEND_ALT', 'APPEND_STUDENT', 'APPEND_RESERVATIONS'].includes(existingState.state);
+    const indexesToCreate = isAllocationAppend
+      ? new Set(existingState.missing_assignment_indexes || [])
       : new Set(assignments.map((_, index) => index));
     const seriesByAssignmentIndex = assignments.map((assignment, index) => indexesToCreate.has(index)
       ? { logical_assignment_index: index, tent_id: assignment.tent_id, allocation_series_id: crypto.randomUUID() }
@@ -154,7 +162,11 @@ export default async function(req) {
       });
       createdAllocationIds.push(created.id);
     }
-    for (const planned of (isAppend ? [] : plan.planned_neighborhood_intervals)) {
+    const existingReservationKeys = new Set(myReservations.map(row => `${row.stay_period_id || ''}:${row.neighborhood_id}`));
+    const neighborhoodPlansToCreate = plan.planned_neighborhood_intervals.filter(planned =>
+      !existingReservationKeys.has(`${planned.source_stay_period_id || ''}:${planned.neighborhood_reservation.neighborhood_id}`)
+    );
+    for (const planned of neighborhoodPlansToCreate) {
       const shared = sharedIntent.byNeighborhoodId[planned.neighborhood_reservation.neighborhood_id] || null;
       const created = await base44.asServiceRole.entities.NeighborhoodReservation.create({
         ...planned.neighborhood_reservation,
@@ -177,6 +189,7 @@ export default async function(req) {
       allocation_series: seriesByAssignmentIndex.filter(Boolean),
       appended_vip_only: existingState.state === 'APPEND_VIP',
       appended_alt_only: existingState.state === 'APPEND_ALT',
+      appended_student_only: existingState.state === 'APPEND_STUDENT',
       sleeping_allocation_ids: createdAllocationIds,
       neighborhood_reservation_ids: createdReservationIds,
       sleeping_rows_created: createdAllocationIds.length,
