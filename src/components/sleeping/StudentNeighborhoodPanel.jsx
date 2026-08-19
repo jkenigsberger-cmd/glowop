@@ -67,17 +67,24 @@ export default function StudentNeighborhoodPanel({
   const totalBeds = tents.reduce((s, t) => s + (t.capacity || 0), 0);
   const logicalNeighborhoodAssignments = logicalAssignments.filter(a => a.neighborhood_id === neighborhood.id);
   const isLockedByMe = isMultiPeriod ? logicalNeighborhoodAssignments.length > 0 : !!lockByThisGroup;
-  const isLockedByOther = !!lockByOtherGroup && !isLockedByMe;
+  const hasNeighborhoodConflict = !!lockByOtherGroup;
+  const isLockedByOther = hasNeighborhoodConflict && !isLockedByMe;
+  const blockedTentIds = new Set(allActiveAllocs
+    .filter(allocation => allocation.group_id !== groupId && allocation.status !== "CANCELLED" &&
+      activeStayPeriods.some(period => period.start_date < allocation.departure_date && allocation.arrival_date < period.end_date))
+    .map(allocation => allocation.tent_id));
+  const hasPhysicallyAvailableTent = tents.some(tent => !blockedTentIds.has(tent.id));
   const effectiveReservation = lockByThisGroup || (isMultiPeriod ? {
     gender_group: logicalNeighborhoodAssignments[0]?.gender_group || form.gender_group,
     planned_tents: logicalNeighborhoodAssignments.length || Number(form.planned_tents) || tents.length,
   } : null);
   // Is this neighborhood already shared (approved on existing reservation)?
   const isAlreadyShared = !!(lockByThisGroup?.shared_neighborhood_allowed);
-  const sharedNeighborhoodIntent = sharedAllowed && sharedReason.trim() ? [{
+  const effectiveSharedReason = sharedReason.trim() || lockByThisGroup?.shared_neighborhood_reason?.trim() || "";
+  const sharedNeighborhoodIntent = (sharedAllowed || isAlreadyShared) && effectiveSharedReason ? [{
     neighborhood_id: neighborhood.id,
     shared_neighborhood_allowed: true,
-    reason: sharedReason.trim(),
+    reason: effectiveSharedReason,
   }] : [];
 
   const handleReserve = () => {
@@ -273,6 +280,38 @@ export default function StudentNeighborhoodPanel({
         )}
       </div>
 
+      {isMultiPeriod && hasNeighborhoodConflict && hasPhysicallyAvailableTent && !isAlreadyShared && (
+        <div className="border-t border-amber-200 bg-amber-50 px-4 py-3 space-y-2">
+          <p className="text-xs text-amber-800">
+            השכונה משותפת עם {lockByOtherGroup.group_name}. אישור זה עוקף רק את התנגשות השכונה; אוהל תפוס נשאר חסום.
+          </p>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={sharedAllowed}
+              onChange={e => {
+                setSharedAllowed(e.target.checked);
+                if (!e.target.checked) setSharedReason("");
+              }}
+              className="w-4 h-4 accent-amber-600"
+            />
+            <span className="text-xs font-semibold text-amber-900">שימוש משותף בשכונה</span>
+          </label>
+          {sharedAllowed && (
+            <div className="space-y-1">
+              <label className="text-[11px] font-medium text-amber-900">סיבת שימוש משותף *</label>
+              <Textarea
+                value={sharedReason}
+                onChange={e => setSharedReason(e.target.value)}
+                placeholder="יש לפרט את סיבת האישור"
+                className="text-xs min-h-[56px] border-amber-300 focus:border-amber-500"
+              />
+              {!sharedReason.trim() && <p className="text-[10px] text-red-600">סיבה חובה</p>}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Tent distribution editor */}
       <TentDistributionEditor
         open={showDistribution}
@@ -333,8 +372,8 @@ export default function StudentNeighborhoodPanel({
               placeholder="הערות..."
             />
           </div>
-          {/* Shared neighborhood override section */}
-          {isLockedByOther && (
+          {/* CONTINUOUS shared neighborhood override section */}
+          {isLockedByOther && !isMultiPeriod && (
             <div className="border border-amber-300 rounded-lg bg-amber-50 px-3 py-3 space-y-2">
               <p className="text-xs font-semibold text-amber-800 flex items-center gap-1.5">
                 <AlertTriangle className="w-3.5 h-3.5" />
