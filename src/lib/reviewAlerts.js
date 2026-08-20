@@ -23,22 +23,27 @@ import { base44 } from "@/api/base44Client";
  * @param {string} message
  * @param {object|null} prevValues
  * @param {object|null} newValues
+ * @param {string|null} sourceRecordId - optional per-record identity for deduplication
  */
-export async function upsertReviewAlert(groupId, module, source, title, message, prevValues = null, newValues = null) {
+export async function upsertReviewAlert(groupId, module, source, title, message, prevValues = null, newValues = null, sourceRecordId = null) {
   try {
-    // Look for an existing OPEN alert with same group + module + source
-    const existing = await base44.entities.OperationalReviewAlert.filter({
+    // Existing callers keep group + module + source identity. Record-aware callers
+    // add source_record_id so separate source records never overwrite each other.
+    const alertIdentity = {
       group_id: groupId,
       module,
       source,
       status: "OPEN",
-    });
+      ...(sourceRecordId ? { source_record_id: sourceRecordId } : {}),
+    };
+    const existing = await base44.entities.OperationalReviewAlert.filter(alertIdentity);
 
     const payload = {
       title,
       message,
       previous_value_json: prevValues ? JSON.stringify(prevValues) : null,
       new_value_json:       newValues  ? JSON.stringify(newValues)  : null,
+      ...(sourceRecordId ? { source_record_id: sourceRecordId } : {}),
     };
 
     if (existing && existing.length > 0) {

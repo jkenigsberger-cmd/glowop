@@ -17,6 +17,7 @@ import QuoteTalksPanel, { extractQuoteTalks } from "./QuoteTalksPanel";
 import DietaryFields, { EMPTY_DIETS, parseDiets, mergeDiets } from "@/components/shared/DietaryFields";
 import RoleGate from "@/components/RoleGate";
 import SharedGroupSelector from "./SharedGroupSelector";
+import { upsertReviewAlert } from "@/lib/reviewAlerts";
 
 const MEAL_LABELS = { BREAKFAST: "ארוחת בוקר", LUNCH: "ארוחת צהריים", DINNER: "ארוחת ערב", OTHER: "אחר" };
 
@@ -528,11 +529,58 @@ export default function ScheduleAndMealsTab({ groupId, profile, group, quotes = 
   };
 
   // ── Meal handlers ──────────────────────────────────────────────────────────
-  const handleSaveMealItem = async (form) => {
+  const handleSaveMealItem = async (form, item) => {
     setSaving(true);
     try {
       if (form.id) {
+        const oldSandwich = !!item?.sandwich_option;
+        const newSandwich = !!form.sandwich_option;
         await base44.entities.MealReservation.update(form.id, form);
+
+        if (oldSandwich !== newSandwich) {
+          const direction = newSandwich
+            ? {
+                title: "🍽️ → 🥪 שינוי סוג ארוחה",
+                message: "מארוחה רגילה לסנדוויצ'ים",
+              }
+            : {
+                title: "🥪 → 🍽️ שינוי סוג ארוחה",
+                message: "מסנדוויצ'ים לארוחה רגילה",
+              };
+          const mealLabel = MEAL_LABELS[form.meal_type] || form.meal_type || "אחר";
+          const timeLabel = form.start_time
+            ? `${form.start_time}${form.end_time ? `–${form.end_time}` : ""}`
+            : "לא צוינה";
+          const details = `סוג ארוחה: ${mealLabel} · תאריך: ${form.date} · שעה: ${timeLabel} · מנות: ${form.pax}`;
+          const previousValues = {
+            sandwich_option: oldSandwich,
+            meal_type: item.meal_type,
+            date: item.date,
+            start_time: item.start_time,
+            end_time: item.end_time,
+            pax: item.pax,
+          };
+          const newValues = {
+            sandwich_option: newSandwich,
+            meal_type: form.meal_type,
+            date: form.date,
+            start_time: form.start_time,
+            end_time: form.end_time,
+            pax: form.pax,
+          };
+          await upsertReviewAlert(
+            groupId,
+            "KITCHEN",
+            "MEAL_CHANGED",
+            direction.title,
+            `${direction.message} · ${details}`,
+            previousValues,
+            newValues,
+            form.id
+          );
+          queryClient.invalidateQueries({ queryKey: ["reviewAlerts"] });
+          queryClient.invalidateQueries({ queryKey: ["openAlertCounts"] });
+        }
       } else {
         await base44.entities.MealReservation.create(form);
       }

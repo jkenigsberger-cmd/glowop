@@ -90,7 +90,7 @@ export default function MealReservationRow({ item, onSave, onCancel, onToggleLoc
       ...form,
       special_diets_summary: JSON.stringify(dietForm),
     };
-    await onSave(updatedForm);
+    await onSave(updatedForm, item);
     setEditing(false);
   };
 
