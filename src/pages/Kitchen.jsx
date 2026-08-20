@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import KitchenMealCard from "@/components/kitchen/KitchenMealCard";
 import KitchenCoffeeCard from "@/components/kitchen/KitchenCoffeeCard";
+import KitchenSandwichSection from "@/components/kitchen/KitchenSandwichSection";
 import ReviewAlertsBanner from "@/components/alerts/ReviewAlertsBanner";
 import KitchenCalendar from "@/components/calendar/KitchenCalendar";
 import { isGroupOperationallyEnabled } from "@/lib/groupOperationalIsolation";
@@ -113,10 +114,15 @@ export default function Kitchen() {
       .sort((a, b) => (PRISA_SLOT_ORDER[a.pickup_slot] ?? 99) - (PRISA_SLOT_ORDER[b.pickup_slot] ?? 99));
   }, [allPrisaRequests, groupMap, selectedDate]);
 
-  // Group meals by meal type
+  const sandwichMeals = useMemo(
+    () => dayMeals.filter(m => m.sandwich_option === true),
+    [dayMeals]
+  );
+
+  // Group only regular meals by meal type; sandwich meals render in their own section.
   const mealsByType = useMemo(() => {
     const grouped = {};
-    dayMeals.forEach(m => {
+    dayMeals.filter(m => m.sandwich_option !== true).forEach(m => {
       const t = m.meal_type || "OTHER";
       if (!grouped[t]) grouped[t] = [];
       grouped[t].push(m);
@@ -417,6 +423,12 @@ export default function Kitchen() {
                   </div>
                 </section>
               )}
+
+              <KitchenSandwichSection
+                meals={sandwichMeals}
+                groupMap={groupMap}
+                profileMap={profileMap}
+              />
 
               {/* Meals grouped by type */}
               {Object.entries(mealsByType).map(([mealType, mealsInGroup]) => {
