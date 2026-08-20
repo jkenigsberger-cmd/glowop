@@ -26,12 +26,13 @@ function validDate(value) {
 export default async function(req) {
   try {
     const base44 = createClientFromRequest(req);
-    const user = await base44.auth.me();
-    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
-    const internalUsers = await base44.asServiceRole.entities.InternalUser.list('-created_date', 500);
-    const caller = internalUsers.find((item) => normalize(item.email) === normalize(user.email) && item.active !== false);
-    if (user.role !== 'admin' && (!caller || !['SUPER_ADMIN', 'ADMIN'].includes(caller.role))) {
-      return Response.json({ error: 'Forbidden' }, { status: 403 });
+    const user = await base44.auth.me().catch(() => null);
+    if (user) {
+      const internalUsers = await base44.asServiceRole.entities.InternalUser.list('-created_date', 500);
+      const caller = internalUsers.find((item) => normalize(item.email) === normalize(user.email) && item.active !== false);
+      if (user.role !== 'admin' && (!caller || !['SUPER_ADMIN', 'ADMIN'].includes(caller.role))) {
+        return Response.json({ error: 'Forbidden' }, { status: 403 });
+      }
     }
 
     const body = await req.json().catch(() => ({}));
