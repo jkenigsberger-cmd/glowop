@@ -12,6 +12,7 @@
  */
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 import { getEffectiveQuoteGroupName } from '../../shared/quotePreparation.js';
+import { assertValidQuoteOperationalDates } from '../../shared/operationalDateValidation.js';
 
 Deno.serve(async (req) => {
   try {
@@ -39,6 +40,7 @@ Deno.serve(async (req) => {
 
     if (!quote) return Response.json({ error: 'הצעת מחיר לא נמצאה' }, { status: 404 });
     if (!group) return Response.json({ error: 'קבוצה לא נמצאה' }, { status: 404 });
+    assertValidQuoteOperationalDates(quote);
     if (quote.status !== 'APPROVED' && quote.status !== 'DRAFT') {
       return Response.json({ error: 'ניתן לסנכרן רק הצעה בטיוטה או מאושרת' }, { status: 400 });
     }
@@ -175,6 +177,6 @@ Deno.serve(async (req) => {
 
     return Response.json({ success: true });
   } catch (error) {
-    return Response.json({ error: error.message }, { status: 500 });
+    return Response.json({ error: error?.code || 'INTERNAL_ERROR', message: error.message }, { status: error?.code === 'INVALID_QUOTE_OPERATIONAL_DATE' ? 400 : 500 });
   }
 });

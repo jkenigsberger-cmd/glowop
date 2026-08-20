@@ -2,6 +2,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { getEffectiveQuoteGroupName } from '../../shared/quotePreparation.js';
 import { ensureExactlyOneOperationalProfile } from '../../shared/operationalProfile.js';
 import { assertQuoteMultiOptionEnabled, resolveSelectedQuoteOption, buildApprovedOptionSnapshot, markSelectedQuoteOption } from '../../shared/quoteOptions.js';
+import { assertValidQuoteOperationalDates } from '../../shared/operationalDateValidation.js';
 
 /**
  * approveQuoteAndInitializeGroup
@@ -108,6 +109,7 @@ Deno.serve(async (req) => {
         success: false, error: 'QUOTE_NOT_FOUND', message: 'הצעת המחיר לא נמצאה', quote_id,
       }, { status: 404 });
     }
+    assertValidQuoteOperationalDates(quote);
 
     if (quote.multi_option_enabled) assertQuoteMultiOptionEnabled(effectiveRole);
     const selection = await resolveSelectedQuoteOption(base44, quote, selected_option_key);
@@ -269,7 +271,7 @@ Deno.serve(async (req) => {
     console.error('[approveQuoteAndInitializeGroup] unexpected error:', error?.message, error?.stack);
     const code = error?.code || 'INTERNAL_ERROR';
     return Response.json({
-      success: false, error: code, message: code === 'QUOTE_ALREADY_APPROVED_WITH_DIFFERENT_OPTION' ? 'QUOTE_ALREADY_APPROVED_WITH_DIFFERENT_OPTION' : 'שגיאה פנימית בשרת — אנא נסה שוב',
-    }, { status: error?.code ? 409 : 500 });
+      success: false, error: code, message: code === 'INVALID_QUOTE_OPERATIONAL_DATE' ? error.message : code === 'QUOTE_ALREADY_APPROVED_WITH_DIFFERENT_OPTION' ? 'QUOTE_ALREADY_APPROVED_WITH_DIFFERENT_OPTION' : 'שגיאה פנימית בשרת — אנא נסה שוב',
+    }, { status: code === 'INVALID_QUOTE_OPERATIONAL_DATE' ? 400 : error?.code ? 409 : 500 });
   }
 });

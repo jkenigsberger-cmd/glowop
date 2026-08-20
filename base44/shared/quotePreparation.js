@@ -1,4 +1,5 @@
 import { assertQuotePreparationEnabled } from './quotePreparationConfig.js';
+import { assertValidQuoteOperationalDates } from './operationalDateValidation.js';
 
 export const OPEN_QUOTE_STATUSES = new Set(['DRAFT', 'SENT']);
 export const isQuoteOpen = (quote) => OPEN_QUOTE_STATUSES.has(String(quote?.status || '').toUpperCase());
@@ -42,6 +43,7 @@ export async function ensureQuotePreparation(base44, quoteId) {
   const quote = await base44.asServiceRole.entities.Quote.get(quoteId);
   if (!quote) throw Object.assign(new Error('QUOTE_NOT_FOUND'), { code: 'QUOTE_NOT_FOUND' });
   if (!quote.preparation_flow_enabled) throw Object.assign(new Error('NOT_PREPARATION_FLOW'), { code: 'NOT_PREPARATION_FLOW' });
+  assertValidQuoteOperationalDates(quote);
 
   const warnings = [];
   let group = null;

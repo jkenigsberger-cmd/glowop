@@ -2,6 +2,11 @@ import { Link } from "react-router-dom";
 import { format, parseISO } from "date-fns";
 import { Users, ChevronLeft } from "lucide-react";
 import GroupStatusBadge from "@/components/groups/GroupStatusBadge";
+import { isValidDateString } from "@/lib/groupStayPeriods";
+
+const formatGroupDate = (value) => isValidDateString(value)
+  ? format(parseISO(value), "dd/MM/yy")
+  : "תאריך לא תקין";
 
 /**
  * Compact group card for the Groups page.
@@ -28,8 +33,8 @@ export default function GroupCard({ group }) {
         {/* Line 2: dates, pax, contact */}
         <div className="flex items-center gap-3 text-xs text-slate-400 flex-wrap">
           <span>
-            {group.arrival_date ? format(parseISO(group.arrival_date), "dd/MM/yy") : "—"}
-            {!isDayUse && group.departure_date && `–${format(parseISO(group.departure_date), "dd/MM/yy")}`}
+            {group.arrival_date ? formatGroupDate(group.arrival_date) : "—"}
+            {!isDayUse && group.departure_date && `–${formatGroupDate(group.departure_date)}`}
           </span>
           {group.total_pax ? (
             <span className="flex items-center gap-0.5">

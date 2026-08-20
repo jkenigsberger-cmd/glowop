@@ -22,6 +22,7 @@ import QuoteAudienceSelector from "./QuoteAudienceSelector";
 import QuoteOptionTabs from "./QuoteOptionTabs";
 import QuoteOptionPreviewSelector from "./QuoteOptionPreviewSelector";
 import { toast } from "sonner";
+import { isValidDateString } from "@/lib/groupStayPeriods";
 
 // ── Catalog ───────────────────────────────────────────────────────────────────
 const STUDENT_LODGING_RATES = {
@@ -646,12 +647,12 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved, returnT
 
   // C. Auto-set expiration = arrival + 14 days when arrival changes
   useEffect(() => {
-    if (!form.arrival_date) return;
+    if (!form.arrival_date || !isValidDateString(form.arrival_date)) return;
     if (!expiryAutoGenRef.current) return; // user manually set it, don't override
-    const d = new Date(form.arrival_date);
-    d.setDate(d.getDate() + 14);
-    const autoExpiry = d.toISOString().slice(0, 10);
-    set("valid_until", autoExpiry);
+    const [year, month, day] = form.arrival_date.split("-").map(Number);
+    const d = new Date(Date.UTC(year, month - 1, day));
+    d.setUTCDate(d.getUTCDate() + 14);
+    set("valid_until", d.toISOString().slice(0, 10));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.arrival_date]);
 
@@ -793,6 +794,16 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved, returnT
       return;
     }
     setAudienceError(false);
+    const dateFields = [
+      ["arrival_date", "תאריך ההגעה אינו תקין"],
+      ["departure_date", "תאריך העזיבה אינו תקין"],
+      ["valid_until", "תוקף ההצעה אינו תקין"],
+    ];
+    const invalidDate = dateFields.find(([field]) => form[field] && !isValidDateString(form[field]));
+    if (invalidDate) {
+      toast.error(invalidDate[1]);
+      return;
+    }
     setSaving(true);
     try {
       const usePreparationFlow = preparationFlowEnabled && isNewGroupFlow;

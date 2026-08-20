@@ -118,6 +118,7 @@ export default function QuoteStatusActions({ quote, group, onUpdated }) {
         QUOTE_APPROVAL_UPDATE_FAILED: "הפרופיל התפעולי מוכן אך עדכון סטטוס ההצעה נכשל — נסה שוב",
         SELECTED_OPTION_REQUIRED: "יש לבחור אפשרות מאושרת",
         QUOTE_ALREADY_APPROVED_WITH_DIFFERENT_OPTION: "ההצעה כבר אושרה עם אפשרות אחרת",
+        INVALID_QUOTE_OPERATIONAL_DATE: "תאריכי הצעת המחיר אינם תקינים. יש לתקן את ההצעה לפני העברה לתפעול.",
       };
       toast.error(ERROR_MESSAGES[data.error] || "אישור הצעת המחיר נכשל");
       setLoading(false);

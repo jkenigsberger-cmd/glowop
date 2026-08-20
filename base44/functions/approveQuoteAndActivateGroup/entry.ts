@@ -1,6 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { ensureQuotePreparation, quoteGroupFields, auditLog, isQuoteApproved } from '../../shared/quotePreparation.js';
 import { assertQuoteMultiOptionEnabled, resolveSelectedQuoteOption, buildApprovedOptionSnapshot, markSelectedQuoteOption } from '../../shared/quoteOptions.js';
+import { assertValidQuoteOperationalDates } from '../../shared/operationalDateValidation.js';
 
 Deno.serve(async (req) => {
   try {
@@ -14,6 +15,7 @@ Deno.serve(async (req) => {
     if (!quote_id) return Response.json({ success: false, error: 'MISSING_QUOTE_ID' }, { status: 400 });
     const quote = await base44.asServiceRole.entities.Quote.get(quote_id);
     if (!quote) return Response.json({ success: false, error: 'QUOTE_NOT_FOUND' }, { status: 404 });
+    assertValidQuoteOperationalDates(quote);
     if (quote.multi_option_enabled) assertQuoteMultiOptionEnabled(role);
     const selection = await resolveSelectedQuoteOption(base44, quote, selected_option_key);
 
@@ -34,6 +36,6 @@ Deno.serve(async (req) => {
     return Response.json({ success: true, status: alreadyApproved ? 'already_approved_repaired' : 'approved', quote: finalQuote, group: finalGroup, profile: finalProfiles[0], quote_id, group_id: finalGroup.id, operational_group_profile_id: finalProfiles[0].id, warnings: result.warnings });
   } catch (error) {
     console.error('[approveQuoteAndActivateGroup]', error?.code || error?.message);
-    return Response.json({ success: false, error: error?.code || 'INTERNAL_ERROR', quote_id: error?.quote_id, group_id: error?.group_id, profile_ids: error?.profile_ids, recovery: error?.recovery, partial_state: error?.code === 'PROFILE_CREATE_FAILED_RETRYABLE' ? 'QUOTE_LINKED_GROUP_EXISTS_PROFILE_MISSING' : undefined }, { status: error?.code ? 409 : 500 });
+    return Response.json({ success: false, error: error?.code || 'INTERNAL_ERROR', message: error?.message, quote_id: error?.quote_id, group_id: error?.group_id, profile_ids: error?.profile_ids, recovery: error?.recovery, partial_state: error?.code === 'PROFILE_CREATE_FAILED_RETRYABLE' ? 'QUOTE_LINKED_GROUP_EXISTS_PROFILE_MISSING' : undefined }, { status: error?.code === 'INVALID_QUOTE_OPERATIONAL_DATE' ? 400 : error?.code ? 409 : 500 });
   }
 });
