@@ -12,8 +12,29 @@ import QuoteCenterCard from "@/components/quotes/QuoteCenterCard";
 import { FileText, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { updateQuotePreparationCache, invalidateQuotePreparationCache } from "@/lib/quotePreparationCache";
+import { isValidDateString } from "@/lib/groupStayPeriods";
 
 const tabForStatus = status => status === "APPROVED" ? "approved" : ["REJECTED", "EXPIRED"].includes(status) ? "history" : "open";
+
+const todayInJerusalem = () => {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Jerusalem",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+};
+
+const compareDepartureDesc = (a, b) => {
+  const aValid = isValidDateString(a.departure_date);
+  const bValid = isValidDateString(b.departure_date);
+  if (!aValid && !bValid) return 0;
+  if (!aValid) return 1;
+  if (!bValid) return -1;
+  return b.departure_date.localeCompare(a.departure_date);
+};
 
 export default function Quotes() {
   const { role } = useRoleContext();
@@ -49,9 +70,8 @@ export default function Quotes() {
   }, [quotes, quoteOptions, optionLoadFailed]);
 
   const sortedQuotes = useMemo(() => {
-    const isDate = v => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
     return [...quotes].sort((a, b) => {
-      const av = isDate(a.arrival_date), bv = isDate(b.arrival_date);
+      const av = isValidDateString(a.arrival_date), bv = isValidDateString(b.arrival_date);
       if (!av && !bv) return 0;
       if (!av) return 1;
       if (!bv) return -1;
@@ -61,6 +81,14 @@ export default function Quotes() {
       return 0;
     });
   }, [quotes]);
+  const today = todayInJerusalem();
+  const approvedQuotes = sortedQuotes.filter(isQuoteApproved);
+  const currentApprovedQuotes = approvedQuotes.filter(quote =>
+    !isValidDateString(quote.departure_date) || quote.departure_date >= today
+  );
+  const completedApprovedQuotes = approvedQuotes.filter(quote =>
+    isValidDateString(quote.departure_date) && quote.departure_date < today
+  );
   if (!enabled) return <div className="p-10 text-center text-muted-foreground" dir="rtl">מרכז הצעות המחיר עדיין אינו פעיל לתפקיד זה.</div>;
   const refresh = groupId => { invalidateQuotePreparationCache(qc, groupId); qc.invalidateQueries({ queryKey: ["quoteCenterOptions"] }); };
   const groupMap = Object.fromEntries(groups.map(group => [group.id, group]));
@@ -81,7 +109,7 @@ export default function Quotes() {
     updateQuotePreparationCache(qc, { quote: approvedQuote, group: confirmedGroup, profile: operationalProfile });
     refresh(confirmedGroup?.id); setActiveTab("approved"); toast.success("הצעת המחיר אושרה"); return true;
   };
-  const sections = [{ key: "open", label: "פתוחות / בתהליך", rows: sortedQuotes.filter(isQuoteOpen) }, { key: "approved", label: "מאושרות", rows: sortedQuotes.filter(isQuoteApproved) }, { key: "history", label: "נדחו / היסטוריה", rows: sortedQuotes.filter(isQuoteRejected) }];
+  const sections = [{ key: "open", label: "פתוחות / בתהליך", rows: sortedQuotes.filter(isQuoteOpen) }, { key: "approved", label: "מאושרות", rows: currentApprovedQuotes }, { key: "history", label: "נדחו / היסטוריה", rows: [...sortedQuotes.filter(isQuoteRejected), ...completedApprovedQuotes].sort(compareDepartureDesc) }];
   const handleSaved = (savedQuote, savedOptions = []) => {
     updateQuotePreparationCache(qc, { quote: savedQuote });
     if (savedOptions.length) qc.setQueryData(["quoteCenterOptions"], rows => [...(rows || []).filter(option => option.quote_id !== savedQuote.id), ...savedOptions]);
