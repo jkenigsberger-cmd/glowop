@@ -48,6 +48,19 @@ export default function Quotes() {
     }));
   }, [quotes, quoteOptions, optionLoadFailed]);
 
+  const sortedQuotes = useMemo(() => {
+    const isDate = v => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
+    return [...quotes].sort((a, b) => {
+      const av = isDate(a.arrival_date), bv = isDate(b.arrival_date);
+      if (!av && !bv) return 0;
+      if (!av) return 1;
+      if (!bv) return -1;
+      if (a.arrival_date !== b.arrival_date) return a.arrival_date < b.arrival_date ? -1 : 1;
+      const at = a.arrival_time || "", bt = b.arrival_time || "";
+      if (at !== bt) return at < bt ? -1 : 1;
+      return 0;
+    });
+  }, [quotes]);
   if (!enabled) return <div className="p-10 text-center text-muted-foreground" dir="rtl">מרכז הצעות המחיר עדיין אינו פעיל לתפקיד זה.</div>;
   const refresh = groupId => { invalidateQuotePreparationCache(qc, groupId); qc.invalidateQueries({ queryKey: ["quoteCenterOptions"] }); };
   const groupMap = Object.fromEntries(groups.map(group => [group.id, group]));
@@ -68,7 +81,7 @@ export default function Quotes() {
     updateQuotePreparationCache(qc, { quote: approvedQuote, group: confirmedGroup, profile: operationalProfile });
     refresh(confirmedGroup?.id); setActiveTab("approved"); toast.success("הצעת המחיר אושרה"); return true;
   };
-  const sections = [{ key: "open", label: "פתוחות / בתהליך", rows: quotes.filter(isQuoteOpen) }, { key: "approved", label: "מאושרות", rows: quotes.filter(isQuoteApproved) }, { key: "history", label: "נדחו / היסטוריה", rows: quotes.filter(isQuoteRejected) }];
+  const sections = [{ key: "open", label: "פתוחות / בתהליך", rows: sortedQuotes.filter(isQuoteOpen) }, { key: "approved", label: "מאושרות", rows: sortedQuotes.filter(isQuoteApproved) }, { key: "history", label: "נדחו / היסטוריה", rows: sortedQuotes.filter(isQuoteRejected) }];
   const handleSaved = (savedQuote, savedOptions = []) => {
     updateQuotePreparationCache(qc, { quote: savedQuote });
     if (savedOptions.length) qc.setQueryData(["quoteCenterOptions"], rows => [...(rows || []).filter(option => option.quote_id !== savedQuote.id), ...savedOptions]);
