@@ -1,9 +1,14 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
-import { ensureQuotePreparation, quoteGroupFields, auditLog, isQuoteApproved } from '../../shared/quotePreparation.js';
+import { ensureQuotePreparation, auditLog, isQuoteApproved } from '../../shared/quotePreparation.js';
 import { assertQuoteMultiOptionEnabled, resolveSelectedQuoteOption, buildApprovedOptionSnapshot, markSelectedQuoteOption } from '../../shared/quoteOptions.js';
 import { assertValidQuoteOperationalDates } from '../../shared/operationalDateValidation.js';
 
-Deno.serve(async (req) => {
+/**
+ * Commercial approval for preparation-flow quotes.
+ * The historical function name is retained for compatibility; operational activation
+ * belongs exclusively to activatePreparationGroupOperationally.
+ */
+export default async function(req) {
   try {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me();
@@ -26,16 +31,15 @@ Deno.serve(async (req) => {
 
     if (result.quote.multi_option_enabled) await markSelectedQuoteOption(base44, quote_id, selection.key);
     if (!alreadyApproved) await base44.asServiceRole.entities.Quote.update(quote_id, { status: 'APPROVED', approved_at: new Date().toISOString(), approved_by: user.email, snapshot, approved_option_key: selection.key, approved_option_total_price: Number(selection.effectiveQuote.total_price || 0), approved_option_snapshot: snapshot });
-    if (result.group.status !== 'CONFIRMED') await base44.asServiceRole.entities.Group.update(result.group.id, { ...quoteGroupFields(result.quote), status: 'CONFIRMED', quote_preparation_flow: true });
 
     const finalQuote = await base44.asServiceRole.entities.Quote.get(quote_id);
     const finalGroup = await base44.asServiceRole.entities.Group.get(result.group.id);
     const finalProfiles = await base44.asServiceRole.entities.OperationalGroupProfile.filter({ group_id: result.group.id });
     if (finalProfiles.length !== 1) throw Object.assign(new Error('DUPLICATE_OPERATIONAL_PROFILE'), { code: 'DUPLICATE_OPERATIONAL_PROFILE', profile_ids: finalProfiles.map(p => p.id) });
-    auditLog(alreadyApproved ? 'approve_repaired' : 'approve_activate', user, { ...result, quote: finalQuote, group: finalGroup }, beforeQuoteStatus, 'APPROVED');
-    return Response.json({ success: true, status: alreadyApproved ? 'already_approved_repaired' : 'approved', quote: finalQuote, group: finalGroup, profile: finalProfiles[0], quote_id, group_id: finalGroup.id, operational_group_profile_id: finalProfiles[0].id, warnings: result.warnings });
+    auditLog(alreadyApproved ? 'commercial_approval_repeated' : 'commercial_approval', user, { ...result, quote: finalQuote, group: finalGroup }, beforeQuoteStatus, 'APPROVED');
+    return Response.json({ success: true, status: alreadyApproved ? 'already_approved' : 'approved', quote: finalQuote, group: finalGroup, profile: finalProfiles[0], quote_id, group_id: finalGroup.id, operational_group_profile_id: finalProfiles[0].id, warnings: result.warnings });
   } catch (error) {
     console.error('[approveQuoteAndActivateGroup]', error?.code || error?.message);
     return Response.json({ success: false, error: error?.code || 'INTERNAL_ERROR', message: error?.message, quote_id: error?.quote_id, group_id: error?.group_id, profile_ids: error?.profile_ids, recovery: error?.recovery, partial_state: error?.code === 'PROFILE_CREATE_FAILED_RETRYABLE' ? 'QUOTE_LINKED_GROUP_EXISTS_PROFILE_MISSING' : undefined }, { status: error?.code === 'INVALID_QUOTE_OPERATIONAL_DATE' ? 400 : error?.code ? 409 : 500 });
   }
-});
+}

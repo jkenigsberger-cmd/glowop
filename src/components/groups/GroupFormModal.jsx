@@ -38,6 +38,8 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
     group.stay_mode === "MULTI_PERIOD" &&
     group.status === "CONFIRMED" &&
     group.operationally_active === true;
+  const isPreparationGroup = isEdit && group.quote_preparation_flow === true &&
+    ["DRAFT", "PENDING_APPROVAL"].includes(group.status);
   const queryClient = useQueryClient();
   const [form, setForm] = useState(() => createInitialForm(group));
   // Dietary data — pre-loaded from profile.special_diets when editing
@@ -631,17 +633,23 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
               </div>
               {isEdit && (
                 <div className="space-y-1">
-                  <Label>סטטוס</Label>
-                  <Select value={form.status} onValueChange={v => set("status", v)} disabled={activeMultiPeriodBasicEdit}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="PENDING_APPROVAL">בהמתנה</SelectItem>
-                      <SelectItem value="CONFIRMED">מאושר</SelectItem>
-                      <SelectItem value="COMPLETED">הסתיים</SelectItem>
-                      <SelectItem value="ARCHIVED">מוקפא</SelectItem>
-                      <SelectItem value="CANCELLED">מבוטל</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Label>סטטוס תפעולי</Label>
+                  {isPreparationGroup ? (
+                    <div className="flex h-9 items-center rounded-md border border-amber-200 bg-amber-50 px-3 text-sm font-medium text-amber-800">
+                      בהכנה
+                    </div>
+                  ) : (
+                    <Select value={form.status} onValueChange={v => set("status", v)} disabled={activeMultiPeriodBasicEdit}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="PENDING_APPROVAL">בהמתנה</SelectItem>
+                        <SelectItem value="CONFIRMED">מאושר</SelectItem>
+                        <SelectItem value="COMPLETED">הסתיים</SelectItem>
+                        <SelectItem value="ARCHIVED">מוקפא</SelectItem>
+                        <SelectItem value="CANCELLED">מבוטל</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
               )}
             </div>

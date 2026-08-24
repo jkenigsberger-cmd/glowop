@@ -66,8 +66,9 @@ export async function ensureQuotePreparation(base44, quoteId) {
     }
   }
 
-  const groupAlreadyOperational = group.status === 'CONFIRMED';
-  if (isQuoteOpen(quote) && !groupAlreadyOperational) {
+  const groupStillInPreparation = group.quote_preparation_flow === true &&
+    ['DRAFT', 'PENDING_APPROVAL'].includes(group.status);
+  if (groupStillInPreparation) {
     group = await base44.asServiceRole.entities.Group.update(group.id, {
       ...quoteGroupFields(quote), quote_preparation_flow: true,
     });
@@ -89,7 +90,7 @@ export async function ensureQuotePreparation(base44, quoteId) {
       throw Object.assign(new Error('PROFILE_CREATE_FAILED_RETRYABLE'), { code: 'PROFILE_CREATE_FAILED_RETRYABLE', quote_id: quote.id, group_id: group.id, recovery: 'RETRY_ENSURE' });
     }
   } else {
-    const update = isQuoteOpen(quote) && !groupAlreadyOperational ? quoteProfileFields(quote) : {};
+    const update = groupStillInPreparation ? quoteProfileFields(quote) : {};
     if (!profile.quote_id) update.quote_id = quote.id;
     else if (String(profile.quote_id) !== String(quote.id)) warnings.push('PROFILE_LINKED_TO_DIFFERENT_QUOTE');
     if (Object.keys(update).length) profile = await base44.asServiceRole.entities.OperationalGroupProfile.update(profile.id, update);

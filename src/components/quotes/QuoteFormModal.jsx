@@ -13,7 +13,7 @@ import PackageLinesSection from "./PackageLinesSection";
 import AdjustmentsSection, { calcAdjustmentLine, normalizeAdjustmentRow } from "./AdjustmentsSection";
 import { calcPackageLine, calcAddonLine } from "@/lib/quoteCatalog";
 import { useRoleContext } from "@/lib/RoleContext";
-import { isQuotePreparationEnabled, isQuoteOpen } from "@/lib/quotePreparationFlow";
+import { isQuotePreparationEnabled } from "@/lib/quotePreparationFlow";
 import { getEffectiveQuoteGroupName } from "@/lib/quoteAudience";
 import { isQuoteMultiOptionEnabled } from "@/lib/quoteMultiOption";
 import { extractQuoteOptionPayload, applyOptionPayloadToQuote, createEmptyQuoteOption } from "@/lib/quoteOptions";
@@ -860,7 +860,7 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved, returnT
         savedOptions = optionsRes.data.options || [];
         finalSavedQuote = { ...savedQuote, multi_option_enabled: true };
       }
-      if ((usePreparationFlow || quote?.preparation_flow_enabled) && isQuoteOpen(savedQuote)) {
+      if (usePreparationFlow || quote?.preparation_flow_enabled) {
         const ensured = await base44.functions.invoke("ensureQuotePreparationGroup", { quote_id: savedQuote.id });
         if (!ensured.data?.success) throw new Error(ensured.data?.error || "PREPARATION_INIT_FAILED");
         resolvedGroupId = ensured.data.group?.id;
