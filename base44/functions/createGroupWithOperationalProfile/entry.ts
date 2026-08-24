@@ -42,6 +42,7 @@ const GROUP_FIELDS = [
   'arrival_time', 'departure_time',
   'total_pax', 'staff_count', 'participant_count', 'boys_count', 'girls_count',
   'contact_name', 'contact_phone', 'contact_email', 'internal_notes', 'status',
+  'manual_creation_request_id',
 ];
 
 // Valid operational fields we accept into the OGP (mirrors OGP schema).
@@ -75,7 +76,56 @@ function pick(source, allowedKeys) {
   return out;
 }
 
-Deno.serve(async (req) => {
+const normalizedText = value => String(value || '').trim().toLowerCase()
+  .replace(/[\s,.;:|/\\_\-–—()\[\]{}]+/g, ' ').trim();
+const normalizedPhone = value => String(value || '').replace(/\D/g, '');
+const sameValue = (a, b, normalizer = normalizedText) => {
+  const left = normalizer(a);
+  const right = normalizer(b);
+  return Boolean(left && right && left === right);
+};
+const nameSimilarity = (a, b) => {
+  const left = new Set(normalizedText(a).split(' ').filter(Boolean));
+  const right = new Set(normalizedText(b).split(' ').filter(Boolean));
+  if (!left.size || !right.size) return 0;
+  const shared = [...left].filter(token => right.has(token)).length;
+  return shared / Math.max(left.size, right.size);
+};
+const effectiveDeparture = group => group.group_type === 'DAY_USE'
+  ? group.arrival_date
+  : (group.departure_date || group.arrival_date);
+
+async function findPotentialDuplicates(base44, proposed) {
+  const groups = await base44.asServiceRole.entities.Group.filter({ arrival_date: proposed.arrival_date });
+  const sameWindow = groups.filter(group => effectiveDeparture(group) === effectiveDeparture(proposed));
+  const enriched = await Promise.all(sameWindow.map(async group => {
+    const [profiles, quotes] = await Promise.all([
+      base44.asServiceRole.entities.OperationalGroupProfile.filter({ group_id: group.id }),
+      base44.asServiceRole.entities.Quote.filter({ group_id: group.id }),
+    ]);
+    const totalPax = group.total_pax ?? profiles[0]?.total_pax ?? null;
+    const samePax = proposed.total_pax != null && totalPax != null && Number(proposed.total_pax) === Number(totalPax);
+    const sameEmail = sameValue(proposed.contact_email, group.contact_email);
+    const samePhone = sameValue(proposed.contact_phone, group.contact_phone, normalizedPhone);
+    const sameContact = sameValue(proposed.contact_name, group.contact_name);
+    const strong = samePax || sameEmail || samePhone || sameContact;
+    if (!strong) return null;
+    const quote = quotes[0] || null;
+    const score = 4 + (samePax ? 3 : 0) + (sameEmail ? 3 : 0) + (samePhone ? 3 : 0) +
+      (sameContact ? 2 : 0) + (proposed.group_type === group.group_type ? 1 : 0) +
+      (nameSimilarity(proposed.group_name, group.group_name) >= 0.5 ? 1 : 0) + (quote ? 2 : 0);
+    return {
+      group_id: group.id, group_name: group.group_name, group_type: group.group_type,
+      arrival_date: group.arrival_date, departure_date: effectiveDeparture(group),
+      total_pax: totalPax, status: group.status, quote_linked: Boolean(quote),
+      quote_id: quote?.id || null, quote_status: quote?.status || null, score,
+    };
+  }));
+  const priority = { DRAFT: 0, PENDING_APPROVAL: 1, CONFIRMED: 2, ARCHIVED: 3, COMPLETED: 4, CANCELLED: 5 };
+  return enriched.filter(Boolean).sort((a, b) => (priority[a.status] ?? 6) - (priority[b.status] ?? 6) || b.score - a.score);
+}
+
+export default async function(req) {
   try {
     const base44 = createClientFromRequest(req);
 
@@ -100,6 +150,8 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const group_data = body?.group_data;
     const ogp_data = body?.ogp_data;
+    const duplicate_override = body?.duplicate_override === true;
+    const client_request_id = typeof body?.client_request_id === 'string' ? body.client_request_id.trim() : '';
 
     if (!group_data || typeof group_data !== 'object') {
       return Response.json({
@@ -134,6 +186,24 @@ Deno.serve(async (req) => {
         success: false, error: 'INVALID_GROUP_TYPE',
         message: 'group_type חייב להיות LODGING או DAY_USE',
       }, { status: 400 });
+    }
+
+    if (client_request_id) {
+      const priorGroups = await base44.asServiceRole.entities.Group.filter({ manual_creation_request_id: client_request_id });
+      if (priorGroups.length > 0) {
+        const priorProfiles = await base44.asServiceRole.entities.OperationalGroupProfile.filter({ group_id: priorGroups[0].id });
+        return Response.json({ success: true, status: 'already_created', group_id: priorGroups[0].id, operational_group_profile_id: priorProfiles[0]?.id || null });
+      }
+      groupPayload.manual_creation_request_id = client_request_id;
+    }
+
+    const candidates = await findPotentialDuplicates(base44, groupPayload);
+    const blockingCandidates = candidates.filter(candidate => candidate.status !== 'CANCELLED');
+    if (!duplicate_override && blockingCandidates.length > 0) {
+      return Response.json({
+        success: false, error: 'POTENTIAL_DUPLICATE_GROUP', requires_override: true,
+        message: 'ייתכן שהקבוצה כבר קיימת', candidates,
+      }, { status: 409 });
     }
 
     // ── Step 1: Create the Group ───────────────────────────────────────────
@@ -225,4 +295,4 @@ Deno.serve(async (req) => {
       success: false, error: 'INTERNAL_ERROR', message: 'שגיאה פנימית בשרת — אנא נסה שוב',
     }, { status: 500 });
   }
-});
+}

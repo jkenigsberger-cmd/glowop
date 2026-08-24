@@ -15,6 +15,7 @@ import GroupAvailabilityChecker from "@/components/groups/GroupAvailabilityCheck
 import StayPeriodsEditor from "@/components/groups/StayPeriodsEditor";
 import StayPeriodsReadOnly from "@/components/groups/StayPeriodsReadOnly";
 import { loadMultiPeriodDraftPeriods, saveMultiPeriodDraft } from "@/lib/multiPeriodDraft";
+import DuplicateGroupWarningDialog from "@/components/groups/DuplicateGroupWarningDialog";
 
 // Fields that trigger pax-related alerts when changed
 const PAX_FIELDS = ["total_pax", "participant_count", "staff_count", "boys_count", "girls_count"];
@@ -88,6 +89,9 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
   const [mealSyncData, setMealSyncData] = useState(null); // { outOfRangeMeals, newDeparture }
   const [replanifyPreview, setReplanifyPreview] = useState(null); // impact summary awaiting confirmation
   const [replanifyConfirmed, setReplanifyConfirmed] = useState(false);
+  const [duplicateWarning, setDuplicateWarning] = useState(null);
+  const [pendingManualCreate, setPendingManualCreate] = useState(null);
+  const manualRequestId = useRef(crypto.randomUUID());
 
   useEffect(() => {
     if (!isEdit || group?.stay_mode !== "MULTI_PERIOD" || !group?.id) return;
@@ -321,14 +325,13 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
     const dietPayload = hasAnyDiet ? { special_diets: JSON.stringify(diets) } : {};
 
     if (isEdit) {
-      // If status is changing to CANCELLED or ARCHIVED, delegate to lifecycle function
-      // so all operational resources are properly released — never update status directly.
+      // Lifecycle statuses must use the shared backend cleanup/release semantics.
       const statusChangingToLifecycle =
         payload.status !== group.status &&
-        (payload.status === "CANCELLED" || payload.status === "ARCHIVED");
+        ["CANCELLED", "ARCHIVED", "COMPLETED"].includes(payload.status);
 
       if (statusChangingToLifecycle) {
-        const action = payload.status === "CANCELLED" ? "cancel" : "freeze";
+        const action = payload.status === "CANCELLED" ? "cancel" : payload.status === "ARCHIVED" ? "freeze" : "complete";
         const res = await base44.functions.invoke("updateGroupLifecycle", {
           group_id: group.id,
           action,
@@ -531,12 +534,18 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
         ...dietPayload,
       };
 
-      const res = await base44.functions.invoke("createGroupWithOperationalProfile", { group_data, ogp_data });
+      const request = { group_data, ogp_data, client_request_id: manualRequestId.current };
+      const res = await base44.functions.invoke("createGroupWithOperationalProfile", request);
       const data = res.data || {};
       newGroupId = data.group_id || null;
       if (!data.success) {
         setSaving(false);
         const errCode = data.error;
+        if (errCode === "POTENTIAL_DUPLICATE_GROUP") {
+          setPendingManualCreate(request);
+          setDuplicateWarning(data.candidates || []);
+          return;
+        }
         if (errCode === "OGP_CREATE_FAILED_AFTER_GROUP") {
           console.error("[GroupFormModal] OGP failed after group create. group_id:", data.group_id);
           setAllocationBlockError("הקבוצה נוצרה אך יצירת הפרופיל התפעולי נכשלה. יש לפנות למנהל מערכת.");
@@ -590,7 +599,27 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
     onSaved();
   };
 
+  const handleDuplicateOverride = async () => {
+    if (!pendingManualCreate) return;
+    setSaving(true);
+    const res = await base44.functions.invoke("createGroupWithOperationalProfile", { ...pendingManualCreate, duplicate_override: true });
+    const data = res.data || {};
+    setSaving(false);
+    if (!data.success) {
+      setDuplicateWarning(null);
+      setAllocationBlockError("יצירת הקבוצה נכשלה. אנא נסה שוב.");
+      return;
+    }
+    queryClient.invalidateQueries({ queryKey: ["groups"] });
+    setDuplicateWarning(null);
+    onSaved(data.group_id);
+  };
+
   const isDayUse = form.group_type === "DAY_USE";
+
+  if (duplicateWarning) {
+    return <DuplicateGroupWarningDialog candidates={duplicateWarning} saving={saving} onOpen={id => onSaved(id)} onOverride={handleDuplicateOverride} onClose={() => setDuplicateWarning(null)} />;
+  }
 
   if (mealSyncData) {
     return (

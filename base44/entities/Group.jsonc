@@ -65,6 +65,10 @@
     "internal_notes": {
       "type": "string"
     },
+    "manual_creation_request_id": {
+      "type": "string",
+      "description": "Client request id used to make manual Group creation idempotent"
+    },
     "quote_preparation_flow": {
       "type": "boolean",
       "default": false,
