@@ -2,6 +2,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { ensureQuotePreparation, auditLog, isQuoteApproved } from '../../shared/quotePreparation.js';
 import { assertQuoteMultiOptionEnabled, resolveSelectedQuoteOption, buildApprovedOptionSnapshot, markSelectedQuoteOption } from '../../shared/quoteOptions.js';
 import { assertValidQuoteOperationalDates } from '../../shared/operationalDateValidation.js';
+import { sendGroupsAdminApprovalEmail } from '../../shared/groupsAdminNotification.js';
 
 /**
  * Commercial approval for preparation-flow quotes.
@@ -37,7 +38,17 @@ export default async function(req) {
     const finalProfiles = await base44.asServiceRole.entities.OperationalGroupProfile.filter({ group_id: result.group.id });
     if (finalProfiles.length !== 1) throw Object.assign(new Error('DUPLICATE_OPERATIONAL_PROFILE'), { code: 'DUPLICATE_OPERATIONAL_PROFILE', profile_ids: finalProfiles.map(p => p.id) });
     auditLog(alreadyApproved ? 'commercial_approval_repeated' : 'commercial_approval', user, { ...result, quote: finalQuote, group: finalGroup }, beforeQuoteStatus, 'APPROVED');
-    return Response.json({ success: true, status: alreadyApproved ? 'already_approved' : 'approved', quote: finalQuote, group: finalGroup, profile: finalProfiles[0], quote_id, group_id: finalGroup.id, operational_group_profile_id: finalProfiles[0].id, warnings: result.warnings });
+
+    // Groups-admin handoff email — ONLY on the real first approval (DRAFT/SENT → APPROVED).
+    // Email failure is advisory: approval stays successful, no rollback.
+    const warnings = [...(result.warnings || [])];
+    if (!alreadyApproved) {
+      const requestOrigin = req.headers.get('origin') || req.headers.get('x-forwarded-origin') || null;
+      const emailResult = await sendGroupsAdminApprovalEmail(base44, { group: finalGroup, quote: finalQuote, requestOrigin });
+      if (!emailResult.sent) warnings.push(emailResult.warning || 'GROUPS_ADMIN_EMAIL_FAILED');
+    }
+
+    return Response.json({ success: true, status: alreadyApproved ? 'already_approved' : 'approved', quote: finalQuote, group: finalGroup, profile: finalProfiles[0], quote_id, group_id: finalGroup.id, operational_group_profile_id: finalProfiles[0].id, warnings });
   } catch (error) {
     console.error('[approveQuoteAndActivateGroup]', error?.code || error?.message);
     return Response.json({ success: false, error: error?.code || 'INTERNAL_ERROR', message: error?.message, quote_id: error?.quote_id, group_id: error?.group_id, profile_ids: error?.profile_ids, recovery: error?.recovery, partial_state: error?.code === 'PROFILE_CREATE_FAILED_RETRYABLE' ? 'QUOTE_LINKED_GROUP_EXISTS_PROFILE_MISSING' : undefined }, { status: error?.code === 'INVALID_QUOTE_OPERATIONAL_DATE' ? 400 : error?.code ? 409 : 500 });
