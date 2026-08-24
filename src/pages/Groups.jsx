@@ -13,7 +13,7 @@ import GroupCard from "@/components/groups/GroupCard";
 import DayGroupHeader, { groupByDay } from "@/components/groups/DayGroupHeader";
 import PreparationGroupCard from "@/components/groups/PreparationGroupCard";
 import { useRoleContext } from "@/lib/RoleContext";
-import { isQuoteOpen, isQuotePreparationEnabled } from "@/lib/quotePreparationFlow";
+import { isQuoteOpen, isQuoteApproved, isQuotePreparationEnabled } from "@/lib/quotePreparationFlow";
 import { updateQuotePreparationCache, invalidateQuotePreparationCache } from "@/lib/quotePreparationCache";
 
 const TODAY = new Date().toISOString().slice(0, 10);
@@ -60,8 +60,8 @@ export default function Groups() {
     queryFn: () => base44.entities.OperationalGroupProfile.list("-updated_date", 500),
     enabled: preparationFlowEnabled,
   });
-  const openPreparationQuotes = preparationQuotes.filter(isQuoteOpen);
-  const preparationQuoteByGroup = Object.fromEntries(openPreparationQuotes.filter(q => q.group_id).map(q => [q.group_id, q]));
+  const visiblePreparationQuotes = preparationQuotes.filter(q => isQuoteOpen(q) || isQuoteApproved(q));
+  const preparationQuoteByGroup = Object.fromEntries(visiblePreparationQuotes.filter(q => q.group_id).map(q => [q.group_id, q]));
   const preparationGroupIds = new Set(preparationQuotes.filter(q => q.group_id).map(q => q.group_id));
   const preparationProfileByGroup = Object.fromEntries(preparationProfiles.map(p => [p.group_id, p]));
   const preparationGroups = groups.filter(g => preparationQuoteByGroup[g.id] && g.status !== "CONFIRMED" && g.status !== "ARCHIVED");
