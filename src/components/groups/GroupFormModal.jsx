@@ -535,8 +535,18 @@ export default function GroupFormModal({ group, onClose, onSaved, initialProfile
       };
 
       const request = { group_data, ogp_data, client_request_id: manualRequestId.current };
-      const res = await base44.functions.invoke("createGroupWithOperationalProfile", request);
-      const data = res.data || {};
+      let data;
+      try {
+        const res = await base44.functions.invoke("createGroupWithOperationalProfile", request);
+        data = res.data || {};
+      } catch (error) {
+        data = error?.response?.data || {};
+        if (data.error !== "POTENTIAL_DUPLICATE_GROUP") {
+          setSaving(false);
+          setAllocationBlockError("יצירת הקבוצה נכשלה. אנא נסה שוב.");
+          return;
+        }
+      }
       newGroupId = data.group_id || null;
       if (!data.success) {
         setSaving(false);
