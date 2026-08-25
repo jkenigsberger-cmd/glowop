@@ -8,33 +8,23 @@ const INACTIVE_MSG = "הקישור הזה כבר לא פעיל. אנא השתמ�
 
 export default function GuestFormAssistant({ formLinkToken }) {
   const [open, setOpen] = useState(false);
-  const [conversation, setConversation] = useState(null);
+  const [ready, setReady] = useState(false);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [initializing, setInitializing] = useState(false);
   const [sending, setSending] = useState(false);
-  const [blocked, setBlocked] = useState(null); // string = blocking message shown instead of chat
+  const [blocked, setBlocked] = useState(null);
   const bottomRef = useRef(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, open]);
 
-  // Live updates
-  useEffect(() => {
-    if (!conversation?.id) return;
-    const unsubscribe = base44.agents.subscribeToConversation(conversation.id, (data) => {
-      setMessages(data.messages || []);
-    });
-    return () => unsubscribe();
-  }, [conversation?.id]);
-
   const handleOpen = async () => {
     setOpen(true);
-    if (conversation || blocked || initializing) return;
+    if (ready || blocked || initializing) return;
     setInitializing(true);
     try {
-      // Validate token server-side BEFORE starting a conversation
       const res = await base44.functions.invoke("getGuestFormAssistantContext", {
         form_link_token: formLinkToken,
       });
@@ -42,13 +32,7 @@ export default function GuestFormAssistant({ formLinkToken }) {
         setBlocked(res?.data?.public_message || INACTIVE_MSG);
         return;
       }
-      const conv = await base44.agents.createConversation({
-        agent_name: "guest_form_assistant",
-        metadata: { name: "עזרה במילוי הטופס", form_link_token: formLinkToken },
-      });
-      setConversation(conv);
-      // Hidden bootstrap message so the agent has the token for its tool call
-      await base44.agents.addMessage(conv, { role: "user", content: `[FORM_TOKEN] ${formLinkToken}` });
+      setReady(true);
     } catch (_e) {
       setBlocked("העוזר אינו זמין כרגע. אפשר להמשיך למלא את הטופס כרגיל ולכתוב שאלות בשדה הערות.");
     } finally {
@@ -58,13 +42,23 @@ export default function GuestFormAssistant({ formLinkToken }) {
 
   const handleSend = async () => {
     const text = input.trim();
-    if (!text || !conversation || sending) return;
+    if (!text || !ready || sending) return;
     setInput("");
+    setMessages(current => [...current, { role: "user", content: text }]);
     setSending(true);
     try {
-      await base44.agents.addMessage(conversation, { role: "user", content: text });
+      const res = await base44.functions.invoke("askGuestFormAssistant", {
+        form_link_token: formLinkToken,
+        question: text,
+      });
+      if (!res?.data?.success) {
+        if (res?.data?.public_message) setBlocked(res.data.public_message);
+        else throw new Error("ASSISTANT_UNAVAILABLE");
+        return;
+      }
+      setMessages(current => [...current, { role: "assistant", content: res.data.answer }]);
     } catch (_e) {
-      setBlocked("העוזר אינו זמין כרגע. אפשר להמשיך למלא את הטופס כרגיל ולכתוב שאלות בשדה הערות.");
+      setMessages(current => [...current, { role: "assistant", content: "העוזר אינו זמין כרגע. אפשר להמשיך למלא את הטופס כרגיל ולכתוב שאלות בשדה הערות." }]);
     } finally {
       setSending(false);
     }
@@ -135,9 +129,9 @@ export default function GuestFormAssistant({ formLinkToken }) {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSend()}
-                disabled={initializing || !conversation}
+                disabled={initializing || !ready || sending}
               />
-              <Button size="icon" onClick={handleSend} disabled={!input.trim() || sending || !conversation}>
+              <Button size="icon" onClick={handleSend} disabled={!input.trim() || sending || !ready}>
                 {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
               </Button>
             </div>
