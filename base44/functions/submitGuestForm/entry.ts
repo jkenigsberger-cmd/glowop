@@ -9,6 +9,7 @@
  */
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 import { validateDatedOperationalDate } from '../../shared/datedOperationalPeriodValidation.js';
+import { loadGuestFormStayPeriods, updateGuestFormStayPeriodTimes } from '../../shared/guestFormStayPeriodTimes.js';
 
 // ── Kitchen sync helpers ─────────────────────────────────────────────────────
 
@@ -166,7 +167,7 @@ function buildOgpUpdateFromFields(fields, num) {
 
 // ── Main handler ─────────────────────────────────────────────────────────────
 
-Deno.serve(async (req) => {
+export default async function(req) {
   try {
     const base44 = createClientFromRequest(req);
 
@@ -195,6 +196,9 @@ Deno.serve(async (req) => {
 
       if (String(quote.status || '').toUpperCase() !== 'APPROVED') {
         return Response.json({ error: 'הצעת המחיר אינה מאושרת — הטופס זמין רק לאחר אישור הצעה' }, { status: 403 });
+      }
+      if (quote.group_id !== group_id) {
+        return Response.json({ error: 'הקישור אינו תואם לקבוצה.' }, { status: 403 });
       }
 
       // Prevent duplicate submissions (quote-based)
@@ -260,6 +264,19 @@ Deno.serve(async (req) => {
     try { groupForOgp = await base44.asServiceRole.entities.Group.get(group_id); } catch { /* handled */ }
     if (!groupForOgp) {
       return Response.json({ error: 'GROUP_NOT_FOUND', message: 'הקבוצה לא נמצאה' }, { status: 404 });
+    }
+
+    const requestedPeriodTimes = Array.isArray(fields.stay_period_times) ? fields.stay_period_times : [];
+    if (groupForOgp.stay_mode === 'MULTI_PERIOD') {
+      try {
+        const allowedPeriods = await loadGuestFormStayPeriods(base44, group_id, form_link_token);
+        const allowedIds = new Set(allowedPeriods.map(period => period.id));
+        if (requestedPeriodTimes.some(period => !period?.id || !allowedIds.has(period.id))) {
+          return Response.json({ error: 'FOREIGN_STAY_PERIOD' }, { status: 403 });
+        }
+      } catch {
+        return Response.json({ error: 'הקישור אינו בתוקף. נא לבקש קישור חדש.' }, { status: 403 });
+      }
     }
 
     // Validate every dated request before creating or updating any submission data.
@@ -390,6 +407,10 @@ Deno.serve(async (req) => {
     console.log('[submitGuestForm] creating submission...');
     const submission = await base44.asServiceRole.entities.GuestFormSubmission.create(submissionData);
 
+    if (groupForOgp.stay_mode === 'MULTI_PERIOD') {
+      await updateGuestFormStayPeriodTimes(base44, group_id, form_link_token, requestedPeriodTimes);
+    }
+
     // ── DAY_USE kitchen sync ─────────────────────────────────────────────────
     // Fetch group to check type and get activity date
     let groupForSync = null;
@@ -498,4 +519,4 @@ Deno.serve(async (req) => {
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
   }
-});
+}

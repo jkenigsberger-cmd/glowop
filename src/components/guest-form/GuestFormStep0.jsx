@@ -2,6 +2,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useState } from "react";
 import { format } from "date-fns";
+import MultiPeriodTimesFields from "@/components/guest-form/MultiPeriodTimesFields";
 
 function LockedField({ label, value }) {
   return (
@@ -23,7 +24,7 @@ function Field({ label, children }) {
   );
 }
 
-export default function GuestFormStep0({ form, setForm, quoteData }) {
+export default function GuestFormStep0({ form, setForm, quoteData, stayPeriods, setStayPeriods }) {
   const [showExtra, setShowExtra] = useState(true);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -81,22 +82,18 @@ export default function GuestFormStep0({ form, setForm, quoteData }) {
       </Field>
 
       {/* Estimated arrival/departure times */}
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="שעת הגעה משוערת">
-          <Input
-            type="time"
-            value={form.estimated_arrival_time || ""}
-            onChange={e => set("estimated_arrival_time", e.target.value)}
-          />
-        </Field>
-        <Field label="שעת עזיבה משוערת">
-          <Input
-            type="time"
-            value={form.estimated_departure_time || ""}
-            onChange={e => set("estimated_departure_time", e.target.value)}
-          />
-        </Field>
-      </div>
+      {quoteData?.stay_mode === "MULTI_PERIOD" ? (
+        <MultiPeriodTimesFields periods={stayPeriods} onChange={setStayPeriods} />
+      ) : (
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="שעת הגעה משוערת">
+            <Input type="time" value={form.estimated_arrival_time || ""} onChange={e => set("estimated_arrival_time", e.target.value)} />
+          </Field>
+          <Field label="שעת עזיבה משוערת">
+            <Input type="time" value={form.estimated_departure_time || ""} onChange={e => set("estimated_departure_time", e.target.value)} />
+          </Field>
+        </div>
+      )}
 
       {/* Collapsible extra */}
       <button

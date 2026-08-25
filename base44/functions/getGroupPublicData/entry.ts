@@ -7,8 +7,9 @@
  */
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 import { getOperationalStayDates, normalizeStayPeriods } from '../../shared/groupStayPeriods.js';
+import { loadGuestFormStayPeriods } from '../../shared/guestFormStayPeriodTimes.js';
 
-Deno.serve(async (req) => {
+export default async function(req) {
   try {
     const base44 = createClientFromRequest(req);
     const body = await req.json();
@@ -72,7 +73,14 @@ Deno.serve(async (req) => {
     const activeStayPeriods = group.stay_mode === 'MULTI_PERIOD'
       ? normalizeStayPeriods(await base44.asServiceRole.entities.GroupStayPeriod.filter({ group_id, status: 'ACTIVE' }))
       : [];
-    const publicStayPeriods = activeStayPeriods.map(({ start_date, end_date }) => ({ start_date, end_date }));
+    let publicStayPeriods = [];
+    if (group.stay_mode === 'MULTI_PERIOD') {
+      try {
+        publicStayPeriods = await loadGuestFormStayPeriods(base44, group_id, token);
+      } catch {
+        return Response.json({ error: 'הקישור אינו בתוקף. נא לבקש קישור חדש.' }, { status: 403 });
+      }
+    }
     const operationalDates = group.stay_mode === 'MULTI_PERIOD'
       ? getOperationalStayDates(activeStayPeriods)
       : [];
@@ -114,4 +122,4 @@ Deno.serve(async (req) => {
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
   }
-});
+}

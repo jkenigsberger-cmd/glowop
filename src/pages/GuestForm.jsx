@@ -120,6 +120,7 @@ export default function GuestForm() {
   });
   const [schedule, setSchedule] = useState([]);
   const [generalNotes, setGeneralNotes] = useState("");
+  const [stayPeriodTimes, setStayPeriodTimes] = useState([]);
   // DAY_USE specific meal state
   const [dayUseMeals, setDayUseMeals] = useState({ breakfast: null, lunch: null, dinner: null });
   const [dayUseCoffeeCorner, setDayUseCoffeeCorner] = useState(null);
@@ -137,7 +138,7 @@ export default function GuestForm() {
 
     const fetchData = directGroupId
       ? callFunction("getGroupPublicData", { group_id: directGroupId, token: formLinkToken })
-      : callFunction("getQuotePublicData", { quote_id: quoteId });
+      : callFunction("getQuotePublicData", { quote_id: quoteId, token: formLinkToken });
 
     fetchData
       .then(d => {
@@ -151,6 +152,7 @@ export default function GuestForm() {
         }
 
         setQuoteData(d);
+        setStayPeriodTimes(Array.isArray(d.stay_periods) ? d.stay_periods : []);
         setDetails({
           group_name:       getGroupName(d),
           group_type_label: "",
@@ -277,6 +279,7 @@ export default function GuestForm() {
         group_type_label: details.group_type_label,
         estimated_arrival_time:   details.estimated_arrival_time   || null,
         estimated_departure_time: details.estimated_departure_time || null,
+        stay_period_times: quoteData?.stay_mode === "MULTI_PERIOD" ? stayPeriodTimes : undefined,
         total_pax:       totalPax || null,
         participant_count: isDayUseGroup ? (dayUsePaxNum || null) : (participantCount || null),
         staff_count:     staffCount || null,
@@ -367,7 +370,7 @@ export default function GuestForm() {
           </div>
           <div className="p-5">
             {currentStepKey === "details" && (
-              <GuestFormStep0 form={details} setForm={setDetails} quoteData={resolvedQuoteData} />
+              <GuestFormStep0 form={details} setForm={setDetails} quoteData={resolvedQuoteData} stayPeriods={stayPeriodTimes} setStayPeriods={setStayPeriodTimes} />
             )}
             {currentStepKey === "diet" && (
               <GuestFormStep1 form={diet} setForm={setDiet} isDayUse={isDayUseGroup} />
