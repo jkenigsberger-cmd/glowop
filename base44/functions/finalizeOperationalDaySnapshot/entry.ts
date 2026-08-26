@@ -3,6 +3,27 @@ import { buildOperationalDaySnapshot } from '../../shared/operationalDaySnapshot
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const normalize = (value) => String(value || '').trim().toLowerCase();
+const MAX_CHUNK_BYTES = 12000;
+const MAX_CHUNKS = 16;
+
+function splitUtf8(value) {
+  const encoder = new TextEncoder();
+  const chunks = [];
+  let chunk = '';
+  let chunkBytes = 0;
+  for (const character of value) {
+    const characterBytes = encoder.encode(character).length;
+    if (chunk && chunkBytes + characterBytes > MAX_CHUNK_BYTES) {
+      chunks.push(chunk);
+      chunk = '';
+      chunkBytes = 0;
+    }
+    chunk += character;
+    chunkBytes += characterBytes;
+  }
+  if (chunk || chunks.length === 0) chunks.push(chunk);
+  return chunks;
+}
 
 function dateInJerusalem(reference = new Date()) {
   const parts = new Intl.DateTimeFormat('en-CA', {
@@ -53,14 +74,14 @@ export default async function(req) {
 
     const payload = await buildOperationalDaySnapshot(base44, date);
     const snapshotJson = JSON.stringify(payload);
-    const snapshotChunks = snapshotJson.match(/[\s\S]{1,20000}/g) || [''];
-    if (snapshotChunks.length > 4) throw new Error('Snapshot exceeds supported immutable storage size');
+    const snapshotChunks = splitUtf8(snapshotJson);
+    if (snapshotChunks.length > MAX_CHUNKS) {
+      throw new Error(`Snapshot requires ${snapshotChunks.length} chunks; maximum supported is ${MAX_CHUNKS}`);
+    }
+    const snapshotFields = Object.fromEntries(snapshotChunks.map((chunk, index) => [index === 0 ? 'snapshot_json' : `snapshot_json_part_${index + 1}`, chunk]));
     const created = await base44.asServiceRole.entities.OperationalDaySnapshot.create({
       date,
-      snapshot_json: snapshotChunks[0],
-      snapshot_json_part_2: snapshotChunks[1] || undefined,
-      snapshot_json_part_3: snapshotChunks[2] || undefined,
-      snapshot_json_part_4: snapshotChunks[3] || undefined,
+      ...snapshotFields,
       finalized_at: new Date().toISOString(),
       snapshot_version: 1,
     });

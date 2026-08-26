@@ -9,19 +9,67 @@
     },
     "snapshot_json": {
       "type": "string",
-      "description": "Immutable versioned Dashboard snapshot, first bounded chunk"
+      "description": "Immutable versioned Dashboard snapshot, chunk 1"
     },
     "snapshot_json_part_2": {
       "type": "string",
-      "description": "Optional second bounded chunk of the immutable snapshot"
+      "description": "Immutable snapshot chunk 2"
     },
     "snapshot_json_part_3": {
       "type": "string",
-      "description": "Optional third bounded chunk of the immutable snapshot"
+      "description": "Immutable snapshot chunk 3"
     },
     "snapshot_json_part_4": {
       "type": "string",
-      "description": "Optional fourth bounded chunk of the immutable snapshot"
+      "description": "Immutable snapshot chunk 4"
+    },
+    "snapshot_json_part_5": {
+      "type": "string",
+      "description": "Immutable snapshot chunk 5"
+    },
+    "snapshot_json_part_6": {
+      "type": "string",
+      "description": "Immutable snapshot chunk 6"
+    },
+    "snapshot_json_part_7": {
+      "type": "string",
+      "description": "Immutable snapshot chunk 7"
+    },
+    "snapshot_json_part_8": {
+      "type": "string",
+      "description": "Immutable snapshot chunk 8"
+    },
+    "snapshot_json_part_9": {
+      "type": "string",
+      "description": "Immutable snapshot chunk 9"
+    },
+    "snapshot_json_part_10": {
+      "type": "string",
+      "description": "Immutable snapshot chunk 10"
+    },
+    "snapshot_json_part_11": {
+      "type": "string",
+      "description": "Immutable snapshot chunk 11"
+    },
+    "snapshot_json_part_12": {
+      "type": "string",
+      "description": "Immutable snapshot chunk 12"
+    },
+    "snapshot_json_part_13": {
+      "type": "string",
+      "description": "Immutable snapshot chunk 13"
+    },
+    "snapshot_json_part_14": {
+      "type": "string",
+      "description": "Immutable snapshot chunk 14"
+    },
+    "snapshot_json_part_15": {
+      "type": "string",
+      "description": "Immutable snapshot chunk 15"
+    },
+    "snapshot_json_part_16": {
+      "type": "string",
+      "description": "Immutable snapshot chunk 16"
     },
     "finalized_at": {
       "type": "string",

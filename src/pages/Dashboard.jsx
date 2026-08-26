@@ -23,6 +23,12 @@ import YesterdaySnapshotWarning from "@/components/dashboard/YesterdaySnapshotWa
 
 const toDateStr = (date) => format(date, "yyyy-MM-dd");
 const TODAY = toDateStr(new Date());
+const SNAPSHOT_CHUNK_FIELDS = [
+  "snapshot_json", "snapshot_json_part_2", "snapshot_json_part_3", "snapshot_json_part_4",
+  "snapshot_json_part_5", "snapshot_json_part_6", "snapshot_json_part_7", "snapshot_json_part_8",
+  "snapshot_json_part_9", "snapshot_json_part_10", "snapshot_json_part_11", "snapshot_json_part_12",
+  "snapshot_json_part_13", "snapshot_json_part_14", "snapshot_json_part_15", "snapshot_json_part_16",
+];
 
 function Section({ title, children, id, icon: Icon }) {
   return (
@@ -108,7 +114,7 @@ export default function Dashboard() {
   const historicalSnapshot = isPast ? snapshotRecords[0] || null : null;
   const snapshotPayload = useMemo(() => {
     if (!historicalSnapshot?.snapshot_json) return null;
-    const snapshotJson = [historicalSnapshot.snapshot_json, historicalSnapshot.snapshot_json_part_2, historicalSnapshot.snapshot_json_part_3, historicalSnapshot.snapshot_json_part_4].filter(Boolean).join("");
+    const snapshotJson = SNAPSHOT_CHUNK_FIELDS.map((field) => historicalSnapshot[field]).filter(Boolean).join("");
     try { return JSON.parse(snapshotJson); } catch { return null; }
   }, [historicalSnapshot]);
   const snapshotData = snapshotPayload?.snapshot_version === 1 ? snapshotPayload.data : null;
