@@ -35,6 +35,7 @@ import WorkSchedule from "./pages/WorkSchedule.jsx";
 import MyShifts from "./pages/MyShifts.jsx";
 import AnalyticsDashboard from "./pages/AnalyticsDashboard.jsx";
 import Quotes from "./pages/Quotes.jsx";
+import AuthenticatedSnapshotFallback from "@/components/snapshots/AuthenticatedSnapshotFallback";
 
 // Landing page resolver — MAINTENANCE users go straight to the maintenance module,
 // everyone else sees the Dashboard.
@@ -59,6 +60,7 @@ const AuthenticatedApp = () => {
   // Render app — RouteGuard handles auth check + login screen + role check
   return (
     <RoleProvider>
+      <AuthenticatedSnapshotFallback />
       <AppNav />
       <Routes>
         <Route path="/" element={<RouteGuard><HomeLanding /></RouteGuard>} />

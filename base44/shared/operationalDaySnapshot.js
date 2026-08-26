@@ -9,6 +9,14 @@ const addDays = (value, days) => {
 };
 const sortRecords = (items) => [...items].sort((a, b) => String(a.id || '').localeCompare(String(b.id || '')));
 const compact = (items, fields) => sortRecords(items).map((item) => Object.fromEntries(fields.filter((field) => item[field] !== undefined).map((field) => [field, item[field]])));
+const dashboardMealPlan = (value) => {
+  try {
+    const hasDepartureLunch = JSON.parse(value || '[]').some((meal) => meal.meal_type === 'LUNCH' && meal.sandwich_instead === false);
+    return hasDepartureLunch ? '[{"meal_type":"LUNCH","sandwich_instead":false}]' : '[]';
+  } catch {
+    return '[]';
+  }
+};
 
 function periodsIndex(periods) {
   const index = {};
@@ -103,7 +111,8 @@ export async function buildOperationalDaySnapshot(base44, date) {
 
   const alertEnd = addDays(date, 14);
   const upcomingBlocks = activitySpaceBlocks.filter((block) => blockVisible(block, date, alertEnd));
-  const alertActivities = activities.filter((activity) => groupById[activity.group_id] && activity.date >= date && activity.date <= alertEnd && activity.activity_space_id);
+  const upcomingBlockedSpaceIds = new Set(upcomingBlocks.map((block) => block.activity_space_id));
+  const alertActivities = activities.filter((activity) => groupById[activity.group_id] && activity.date >= date && activity.date <= alertEnd && upcomingBlockedSpaceIds.has(activity.activity_space_id));
   const totalPaxOnSite = activeGroups.reduce((sum, group) => sum + (profileByGroupId[group.id]?.total_pax ?? group.total_pax ?? 0), 0);
   const snapshotGroupIds = new Set([
     ...activeGroups, ...arrivingToday, ...sleepingTonight, ...departingToday, ...arrivingNextLodging,
@@ -120,20 +129,20 @@ export async function buildOperationalDaySnapshot(base44, date) {
     snapshot_version: 1,
     date,
     data: {
-      groups: compact(snapshotGroups, ['id','group_name','group_type','stay_mode','arrival_date','departure_date','arrival_time','departure_time','total_pax','status','internal_notes','operationally_active','quote_preparation_flow']),
+      groups: compact(snapshotGroups, ['id','group_name','group_type','stay_mode','arrival_date','departure_date','total_pax','status','internal_notes','operationally_active','quote_preparation_flow']),
       group_stay_periods: compact(periods.filter((period) => snapshotGroupIds.has(period.group_id)), ['id','group_id','start_date','end_date','arrival_time','departure_time','status']),
-      profiles: compact(profiles.filter((profile) => snapshotGroupIds.has(profile.group_id)), ['id','group_id','total_pax','participant_count','staff_count','boys_count','girls_count','special_diets','meal_plan','general_notes','sleeping_requirements_completed']),
-      meals: compact(mealsForDate, ['id','group_id','operational_group_profile_id','date','meal_type','start_time','end_time','pax','special_diets_summary','sandwich_option','notes','status']),
-      coffee_requests: compact(coffeeForDate, ['id','group_id','operational_group_profile_id','date','start_time','end_time','pax','coffee_corner_type','location_id','location_name_snapshot','notes','status']),
+      profiles: compact(profiles.filter((profile) => snapshotGroupIds.has(profile.group_id)).map((profile) => ({ ...profile, meal_plan: dashboardMealPlan(profile.meal_plan) })), ['group_id','total_pax','meal_plan','general_notes','sleeping_requirements_completed']),
+      meals: compact(mealsForDate, ['id','group_id','date','meal_type','start_time','end_time','pax','special_diets_summary','sandwich_option','notes']),
+      coffee_requests: compact(coffeeForDate, ['id','group_id','date','start_time','end_time','pax','coffee_corner_type','location_name_snapshot','notes']),
       activities: compact(groupActivitiesForDate, ['id','group_id','date','start_time','end_time','activity_name','requested_location','activity_space_id','activity_space_code','pax','notes','status']),
       standalone_activities: compact(standaloneForDate, ['id','title','event_date','start_time','end_time','expected_pax','status']),
       standalone_assignments: compact(standaloneAssignments.filter((assignment) => standaloneIds.has(assignment.reservation_id)), ['id','reservation_id','activity_space_id']),
-      allocations: compact(dateAllocations, ['id','group_id','tent_id','neighborhood_id','arrival_date','departure_date','allocated_pax','allocation_type','gender_group','status']),
+      allocations: compact(dateAllocations, ['id','group_id','tent_id','arrival_date','departure_date','allocated_pax','status']),
       facilities: [],
-      tents: compact(tents, ['id','neighborhood_id','code','tent_number','sub_label','tent_type','capacity','working_status']),
-      activity_spaces: compact(activitySpaces, ['id','code','name','space_type','capacity','working_status']),
+      tents: compact(tents, ['id','neighborhood_id','code','tent_type','capacity']),
+      activity_spaces: compact(activitySpaces, ['id','name']),
       activity_space_blocks: compact(upcomingBlocks, ['id','activity_space_id','activity_space_name','start_date','end_date','start_time','end_time','is_open_ended','reason_type','reason_notes','status']),
-      alert_activities: compact(alertActivities, ['id','group_id','date','start_time','end_time','activity_space_id','activity_name','status']),
+      alert_activities: compact(alertActivities, ['date','start_time','end_time','activity_space_id']),
       neighborhoods: compact(neighborhoods, ['id','code','name','sort_order','is_vip']),
     },
     derived: {

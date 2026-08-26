@@ -9,7 +9,19 @@
     },
     "snapshot_json": {
       "type": "string",
-      "description": "Immutable versioned Dashboard snapshot"
+      "description": "Immutable versioned Dashboard snapshot, first bounded chunk"
+    },
+    "snapshot_json_part_2": {
+      "type": "string",
+      "description": "Optional second bounded chunk of the immutable snapshot"
+    },
+    "snapshot_json_part_3": {
+      "type": "string",
+      "description": "Optional third bounded chunk of the immutable snapshot"
+    },
+    "snapshot_json_part_4": {
+      "type": "string",
+      "description": "Optional fourth bounded chunk of the immutable snapshot"
     },
     "finalized_at": {
       "type": "string",

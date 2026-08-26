@@ -19,6 +19,7 @@ import { useRoleContext } from "@/lib/RoleContext";
 import { isGroupOperationallyEnabled } from "@/lib/groupOperationalIsolation";
 import { isGroupArrivalOnDate, isGroupDepartureOnDate, isGroupOnDashboardDate, isGroupSleepingNightOnDate } from "@/lib/groupDateReaders";
 import useGroupStayPeriods from "@/hooks/useGroupStayPeriods";
+import YesterdaySnapshotWarning from "@/components/dashboard/YesterdaySnapshotWarning";
 
 const toDateStr = (date) => format(date, "yyyy-MM-dd");
 const TODAY = toDateStr(new Date());
@@ -107,7 +108,8 @@ export default function Dashboard() {
   const historicalSnapshot = isPast ? snapshotRecords[0] || null : null;
   const snapshotPayload = useMemo(() => {
     if (!historicalSnapshot?.snapshot_json) return null;
-    try { return JSON.parse(historicalSnapshot.snapshot_json); } catch { return null; }
+    const snapshotJson = [historicalSnapshot.snapshot_json, historicalSnapshot.snapshot_json_part_2, historicalSnapshot.snapshot_json_part_3, historicalSnapshot.snapshot_json_part_4].filter(Boolean).join("");
+    try { return JSON.parse(snapshotJson); } catch { return null; }
   }, [historicalSnapshot]);
   const snapshotData = snapshotPayload?.snapshot_version === 1 ? snapshotPayload.data : null;
   const hasHistoricalSnapshot = isPast && !!snapshotData;
@@ -421,6 +423,8 @@ export default function Dashboard() {
             <FileText className="w-3.5 h-3.5" /> הפק סיכום יומי
           </Button>
         </div>
+
+        <YesterdaySnapshotWarning />
 
         {/* ── Date navigation ─────────────────────────────────────────── */}
         <div className="flex items-center gap-2 flex-wrap">
