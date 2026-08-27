@@ -1,5 +1,5 @@
 export const QUOTE_MULTI_OPTION_FLOW = true;
-export const QUOTE_MULTI_OPTION_ROLLOUT = "SUPER_ADMIN_ONLY";
+export const QUOTE_MULTI_OPTION_ROLLOUT = "ADMINS";
 
 export function isQuoteMultiOptionEnabled(role) {
   if (!QUOTE_MULTI_OPTION_FLOW) return false;
