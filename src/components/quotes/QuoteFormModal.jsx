@@ -16,8 +16,8 @@ import { useRoleContext } from "@/lib/RoleContext";
 import { isQuotePreparationEnabled } from "@/lib/quotePreparationFlow";
 import { getEffectiveQuoteGroupName } from "@/lib/quoteAudience";
 import { isQuoteMultiOptionEnabled } from "@/lib/quoteMultiOption";
-import { extractQuoteOptionPayload, applyOptionPayloadToQuote, createEmptyQuoteOption } from "@/lib/quoteOptions";
-import { normalizeCatalogLines, normalizeOptionPayload, syncAutoCatalogLines, syncOptionPayloadPax } from "@/lib/quoteQuantityMode";
+import { extractQuoteOptionPayload, applyOptionPayloadToQuote, createEmptyQuoteOption, isOptionDraftSemanticallyEqual } from "@/lib/quoteOptions";
+import { normalizeCatalogLines, normalizeOptionPayload, syncOptionPayloadPax } from "@/lib/quoteQuantityMode";
 import QuoteAudienceSelector from "./QuoteAudienceSelector";
 import QuoteOptionTabs from "./QuoteOptionTabs";
 import QuoteOptionPreviewSelector from "./QuoteOptionPreviewSelector";
@@ -534,6 +534,7 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved, returnT
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const [coffeeEnabled, setCoffeeEnabled] = useState(quote ? (quote.coffee_corner_pax > 0) : false);
+  const [coffeeCornerPax, setCoffeeCornerPax] = useState(Number(quote?.coffee_corner_pax || 0));
   const [prisaEnabled, setPrisaEnabled] = useState(quote ? (quote.includes_prisa === true) : false);
   const PRISA_RATE = 2.5;
 
@@ -587,7 +588,7 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved, returnT
   const [saving, setSaving] = useState(false);
   const [optionBusy, setOptionBusy] = useState(false);
   const optionCreateLockRef = useRef(false);
-  const [optionLoading, setOptionLoading] = useState(false);
+  const [optionLoading, setOptionLoading] = useState(() => Boolean(multiOptionFeatureEnabled && quote?.id && quote.multi_option_enabled));
   const [optionLoadError, setOptionLoadError] = useState("");
   const [optionNotes, setOptionNotes] = useState("");
   const [activeOptionKey, setActiveOptionKey] = useState("A");
@@ -597,8 +598,8 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved, returnT
   const optionDraftsRef = useRef({});
   const optionLoadedQuoteRef = useRef(null);
   const optionLoadRequestRef = useRef(0);
-  const latestOptionPayloadRef = useRef(null);
   const previousPaxRef = useRef(initEstPax);
+  const previousStaffRef = useRef(initStaff);
   const [audienceError, setAudienceError] = useState(false);
   const [availabilityResult, setAvailabilityResult] = useState(null);
   const [checkingAvailability, setCheckingAvailability] = useState(false);
@@ -656,18 +657,6 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved, returnT
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.arrival_date]);
 
-  useEffect(() => {
-    if (previousPaxRef.current === estimatedPax) return;
-    const previousPax = previousPaxRef.current;
-    previousPaxRef.current = estimatedPax;
-    setPackageLines(lines => syncAutoCatalogLines(lines, [], estimatedPax).packageLines);
-    setNewAddonLines(lines => syncAutoCatalogLines([], lines, estimatedPax).addonLines);
-    const syncedDrafts = Object.fromEntries(Object.entries(optionDraftsRef.current).map(([key, payload]) => [key, syncOptionPayloadPax(payload, estimatedPax, previousPax)]));
-    replaceOptionDrafts(syncedDrafts);
-  // Only estimated pax drives AUTO catalog quantities in both drafts.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [estimatedPax]);
-
   const suggestedRateType = suggestLodgingRateType(form.arrival_date, groupType);
   const coffeeTotal      = coffeeEnabled && staffCount > 0 ? staffCount * COFFEE_CORNER_RATE : 0;
 
@@ -692,40 +681,62 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved, returnT
     package_lines: JSON.stringify(packageLines), new_addon_lines: JSON.stringify(newAddonLines),
     student_lodging_lines: JSON.stringify(studentLodging), adult_lodging_lines: JSON.stringify(adultLodging),
     workshop_lines: JSON.stringify(workshops), lecture_lines: JSON.stringify(lectures),
-    coffee_corner_pax: coffeeEnabled ? staffCount : 0, includes_prisa: prisaEnabled,
+    coffee_corner_pax: coffeeEnabled ? coffeeCornerPax : 0, includes_prisa: prisaEnabled,
     addon_lines: JSON.stringify(addons), adjustment_lines: JSON.stringify(adjustments), surcharge_lines: JSON.stringify([]),
     discount_percent: Number(form.discount_percent || 0), subtotal, discount_amount: discountAmount,
     total_price, advance_payment: advance, balance_payment: balance,
     payment_terms: form.payment_terms, option_notes: optionNotes,
   });
 
-  latestOptionPayloadRef.current = captureCurrentOptionPayload();
-
   const replaceOptionDrafts = drafts => {
     optionDraftsRef.current = drafts;
     setOptionDrafts(drafts);
   };
 
-  const applyOptionDraft = (payload = {}) => {
-    const normalized = syncOptionPayloadPax(normalizeOptionPayload(payload, initEstPax), estimatedPax);
-    setPackageLines(parse(normalized.package_lines, [])); setNewAddonLines(parse(normalized.new_addon_lines, []));
-    setStudentLodging(parse(normalized.student_lodging_lines, [])); setAdultLodging(parse(normalized.adult_lodging_lines, []));
-    setWorkshops(parse(normalized.workshop_lines, [])); setLectures(parse(normalized.lecture_lines, []));
-    setAddons(parse(normalized.addon_lines, [])); setAdjustments(parse(normalized.adjustment_lines, []));
-    setCoffeeEnabled(Number(normalized.coffee_corner_pax || 0) > 0); setPrisaEnabled(normalized.includes_prisa === true);
-    set("discount_percent", normalized.discount_percent ?? 0); set("payment_terms", normalized.payment_terms || ""); setOptionNotes(normalized.option_notes || "");
+  const captureActiveOptionDraft = () => {
+    const captured = captureCurrentOptionPayload();
+    const stored = optionDraftsRef.current[activeOptionKey];
+    return stored && isOptionDraftSemanticallyEqual(captured, stored) ? stored : captured;
   };
+
+  const applyOptionDraft = (payload = {}) => {
+    setPackageLines(parse(payload.package_lines, [])); setNewAddonLines(parse(payload.new_addon_lines, []));
+    setStudentLodging(parse(payload.student_lodging_lines, [])); setAdultLodging(parse(payload.adult_lodging_lines, []));
+    setWorkshops(parse(payload.workshop_lines, [])); setLectures(parse(payload.lecture_lines, []));
+    setAddons(parse(payload.addon_lines, [])); setAdjustments(parse(payload.adjustment_lines, []));
+    setCoffeeEnabled(Number(payload.coffee_corner_pax || 0) > 0); setCoffeeCornerPax(Number(payload.coffee_corner_pax || 0));
+    setPrisaEnabled(payload.includes_prisa === true);
+    set("discount_percent", payload.discount_percent ?? 0); set("payment_terms", payload.payment_terms || ""); setOptionNotes(payload.option_notes || "");
+  };
+
+  useEffect(() => {
+    if (previousPaxRef.current === estimatedPax) return;
+    const previousPax = previousPaxRef.current;
+    previousPaxRef.current = estimatedPax;
+    const current = captureCurrentOptionPayload();
+    const prisaDelta = current.includes_prisa ? (estimatedPax - previousPax) * PRISA_RATE : 0;
+    const drafts = { ...optionDraftsRef.current, [activeOptionKey]: { ...current, subtotal: Number(current.subtotal || 0) - prisaDelta } };
+    const syncedDrafts = Object.fromEntries(Object.entries(drafts).map(([key, payload]) => [key, syncOptionPayloadPax(payload, estimatedPax, previousPax)]));
+    replaceOptionDrafts(syncedDrafts);
+    applyOptionDraft(syncedDrafts[activeOptionKey]);
+  // An explicit shared pax change synchronizes each draft once; tab navigation never does.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [estimatedPax]);
+
+  useEffect(() => {
+    if (previousStaffRef.current === staffCount) return;
+    previousStaffRef.current = staffCount;
+    if (coffeeEnabled) setCoffeeCornerPax(staffCount);
+  }, [staffCount, coffeeEnabled]);
 
   useEffect(() => {
     if (!multiOptionFeatureEnabled || !quote?.id || !quote.multi_option_enabled || optionLoadedQuoteRef.current === quote.id) return;
     const requestId = ++optionLoadRequestRef.current;
-    const initialFingerprint = JSON.stringify(latestOptionPayloadRef.current);
     setOptionLoading(true); setOptionLoadError("");
     base44.entities.QuoteOption.filter({ quote_id: quote.id }).then(rows => {
       if (requestId !== optionLoadRequestRef.current) return;
       const optionA = rows.filter(row => row.option_key === "A"); const optionB = rows.filter(row => row.option_key === "B");
       if (rows.length !== 2 || optionA.length !== 1 || optionB.length !== 1) throw new Error(optionA.length > 1 || optionB.length > 1 ? "DUPLICATE_QUOTE_OPTION" : "BOTH_OPTIONS_REQUIRED");
-      if (JSON.stringify(latestOptionPayloadRef.current) !== initialFingerprint) throw new Error("LOCAL_EDIT_DURING_OPTION_LOAD");
       const drafts = {
         A: normalizeOptionPayload(parseOptionPayload(optionA[0].option_payload), initEstPax),
         B: normalizeOptionPayload(parseOptionPayload(optionB[0].option_payload), initEstPax),
@@ -738,7 +749,7 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved, returnT
 
   const switchOption = key => {
     if (key === activeOptionKey) { setPreviewMode(key); return; }
-    const current = captureCurrentOptionPayload();
+    const current = captureActiveOptionDraft();
     const drafts = { ...optionDraftsRef.current, [activeOptionKey]: current };
     const target = drafts[key];
     if (!target) return;
@@ -750,7 +761,7 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved, returnT
   const addOptionB = async () => {
     if (optionBusy || hasOptionB || optionCreateLockRef.current) return;
     optionCreateLockRef.current = true;
-    const current = captureCurrentOptionPayload();
+    const current = captureActiveOptionDraft();
     if (!quote?.id) {
       const emptyOptionB = createEmptyQuoteOption("B");
       replaceOptionDrafts({ A: current, B: emptyOptionB }); setHasOptionB(true); setActiveOptionKey("B"); setPreviewMode("B"); applyOptionDraft(emptyOptionB);
@@ -772,7 +783,7 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved, returnT
   const deleteOptionB = async () => {
     if (!window.confirm("האם למחוק את אפשרות ב׳?\nהנתונים של אפשרות א׳ לא יושפעו.")) return;
     if (!quote?.id) {
-      const optionA = activeOptionKey === "A" ? captureCurrentOptionPayload() : optionDraftsRef.current.A;
+      const optionA = activeOptionKey === "A" ? captureActiveOptionDraft() : optionDraftsRef.current.A;
       applyOptionDraft(optionA); replaceOptionDrafts({ A: optionA }); setActiveOptionKey("A"); setPreviewMode("A"); setHasOptionB(false);
       return;
     }
@@ -780,7 +791,7 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved, returnT
     try {
       const res = await base44.functions.invoke("manageQuoteOptions", { action: "delete_b", quote_id: quote.id });
       if (!res.data?.success) { setOptionBusy(false); return toast.error(res.data?.error === "APPROVED_OPTION_CANNOT_BE_DELETED" ? "לא ניתן למחוק אפשרות ב׳ שאושרה" : "מחיקת אפשרות ב׳ נכשלה"); }
-      const optionA = activeOptionKey === "A" ? captureCurrentOptionPayload() : optionDraftsRef.current.A;
+      const optionA = activeOptionKey === "A" ? captureActiveOptionDraft() : optionDraftsRef.current.A;
       applyOptionDraft(optionA); replaceOptionDrafts({ A: optionA }); setActiveOptionKey("A"); setPreviewMode("A"); setHasOptionB(false);
     } catch { toast.error("מחיקת אפשרות ב׳ נכשלה"); }
     setOptionBusy(false);
@@ -828,7 +839,7 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved, returnT
         });
         resolvedGroupId = newGroup.id;
       }
-      const activeOptionPayload = captureCurrentOptionPayload();
+      const activeOptionPayload = captureActiveOptionDraft();
       const draftsToSave = { ...optionDraftsRef.current, [activeOptionKey]: activeOptionPayload };
       let quotePayload = {
         ...form,
@@ -1080,11 +1091,11 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved, returnT
                 <div className="border-t border-slate-100 pt-3 grid grid-cols-3 gap-3">
                   <div className="space-y-1">
                     <Label className="text-xs text-slate-500">סה״כ משתתפים</Label>
-                    <Input type="number" min="0" value={form.estimated_pax} onChange={e => set("estimated_pax", e.target.value)} />
+                    <Input type="number" min="0" value={form.estimated_pax} onChange={e => set("estimated_pax", e.target.value)} disabled={optionLoading} />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs text-slate-500">צוות / מלווים</Label>
-                    <Input type="number" min="0" value={form.staff_count} onChange={e => set("staff_count", e.target.value)} />
+                    <Input type="number" min="0" value={form.staff_count} onChange={e => set("staff_count", e.target.value)} disabled={optionLoading} />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs text-slate-500">חניכים / תלמידים (מחושב)</Label>
@@ -1103,6 +1114,8 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved, returnT
                 )}
               </SectionCard>
 
+              {optionLoading && <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm text-primary">טוען את אפשרויות ההצעה — העריכה תיפתח מיד כשהטעינה תושלם.</div>}
+              <fieldset disabled={optionLoading || Boolean(optionLoadError)} className="contents">
               {multiOptionFeatureEnabled && (
                 <QuoteOptionTabs
                   active={activeOptionKey}
@@ -1171,7 +1184,7 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved, returnT
               {(coffeeEnabled || (isEdit && quote?.coffee_corner_pax > 0)) && (
                 <SectionCard icon={Coffee} title="פינת קפה" subtitle={`₪${COFFEE_CORNER_RATE} לאיש צוות`} defaultOpen={coffeeEnabled}>
                   <label className="flex items-center gap-2 cursor-pointer select-none">
-                    <input type="checkbox" checked={coffeeEnabled} onChange={e => setCoffeeEnabled(e.target.checked)} className="w-4 h-4 accent-primary" />
+                    <input type="checkbox" checked={coffeeEnabled} onChange={e => { setCoffeeEnabled(e.target.checked); setCoffeeCornerPax(e.target.checked ? staffCount : 0); }} className="w-4 h-4 accent-primary" />
                     <span className="text-sm">כלול פינת קפה</span>
                   </label>
                   {coffeeEnabled && staffCount > 0 && (
@@ -1228,6 +1241,7 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved, returnT
               </div>
 
               {multiOptionFeatureEnabled && hasOptionB && <div className={`${CARD} px-5 py-4`}><Label className="text-xs text-slate-500 mb-1 block">הערות לאפשרות {activeOptionKey === "A" ? "א׳" : "ב׳"}</Label><Textarea rows={2} value={optionNotes} onChange={e => setOptionNotes(e.target.value)} className="text-sm" /></div>}
+              </fieldset>
 
               {/* Client-visible shared notes */}
               <div className={`${CARD} px-5 py-4`}>

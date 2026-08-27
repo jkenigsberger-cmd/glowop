@@ -30,3 +30,22 @@ export function createEmptyQuoteOption() {
     payment_terms: "", option_notes: "",
   };
 }
+
+const DERIVED_OPTION_FIELDS = new Set(["subtotal", "discount_amount", "total_price", "advance_payment", "balance_payment"]);
+const JSON_OPTION_FIELDS = new Set(QUOTE_OPTION_FIELDS.filter(field => field.endsWith("_lines")));
+const NUMERIC_OPTION_FIELDS = new Set(["coffee_corner_pax", "discount_percent"]);
+const BOOLEAN_OPTION_FIELDS = new Set(["includes_prisa"]);
+const comparableValue = (field, value) => {
+  if (JSON_OPTION_FIELDS.has(field)) {
+    try { return JSON.stringify(JSON.parse(value || "[]")); } catch { return value || "[]"; }
+  }
+  if (NUMERIC_OPTION_FIELDS.has(field)) return Number(value || 0);
+  if (BOOLEAN_OPTION_FIELDS.has(field)) return value === true;
+  return value || "";
+};
+
+export function isOptionDraftSemanticallyEqual(left = {}, right = {}) {
+  return QUOTE_OPTION_FIELDS
+    .filter(field => !DERIVED_OPTION_FIELDS.has(field))
+    .every(field => comparableValue(field, left[field]) === comparableValue(field, right[field]));
+}
