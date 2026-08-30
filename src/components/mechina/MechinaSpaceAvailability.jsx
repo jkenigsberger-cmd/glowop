@@ -12,7 +12,7 @@
  *   rightmost space column is never hidden under the labels.
  */
 
-import { BLOCK_REASON_LABELS } from "@/lib/activitySpaceBlocks";
+import { BLOCK_REASON_LABELS, blockAppliesOnDate } from "@/lib/activitySpaceBlocks";
 import AdminSpaceStatusControl from "@/components/mechina/AdminSpaceStatusControl";
 
 const HOUR_START   = 6;
@@ -212,16 +212,17 @@ export default function MechinaSpaceAvailability({
                 style={{ height: headerHeight }}
                 className="flex flex-col items-center justify-center px-1 border-b border-r border-slate-200 bg-slate-50"
               >
-                <p className="text-[10px] text-slate-400" dir="ltr">{space.code}</p>
                 <p className="text-xs font-semibold text-slate-700 text-center leading-tight">{space.name}</p>
                 {space.capacity && <p className="text-[10px] text-slate-400">{space.capacity} איש</p>}
-                {canManageAvailability && (
-                  <AdminSpaceStatusControl
+                {canManageAvailability && (() => {
+                  const applicableBlocks = blocks.filter(block => block.activity_space_id === space.id && blockAppliesOnDate(block, selectedDate));
+                  return <AdminSpaceStatusControl
                     space={space}
+                    active={applicableBlocks.length === 0}
                     saving={togglingSpaceId === space.id}
-                    onToggle={onToggleAvailability}
-                  />
-                )}
+                    onToggle={() => onToggleAvailability(space, applicableBlocks)}
+                  />;
+                })()}
               </div>
             ))}
           </div>

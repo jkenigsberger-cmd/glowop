@@ -24,7 +24,7 @@ async function findConflicts(base44, input) {
     base44.asServiceRole.entities.GroupScheduleItem.filter({ activity_space_id: input.activity_space_id, status: 'ACTIVE' }, '-date', 500),
     base44.asServiceRole.entities.CommonSpaceBookingRequest.filter({ space_id: input.activity_space_id }, '-date', 500),
   ]);
-  const conflictEndDate = input.is_open_ended ? addDays(input.start_date, 30) : input.end_date;
+  const conflictEndDate = input.is_open_ended ? '9999-12-31' : input.end_date;
   const activeRequests = requests.filter(r => ['PENDING', 'APPROVED', 'CHANGE_REQUESTED', 'CANCELLATION_REQUESTED'].includes(r.status));
   const matchingItems = items.filter(i => i.date >= input.start_date && i.date <= conflictEndDate && reservationOverlapsBlock(input, i.date, i.start_time, i.end_time));
   const matchingRequests = activeRequests.filter(r => r.date >= input.start_date && r.date <= conflictEndDate && reservationOverlapsBlock(input, r.date, r.start_time, r.end_time));
@@ -34,7 +34,7 @@ async function findConflicts(base44, input) {
   const syncRows = await Promise.all(matchingItems.map(i => base44.asServiceRole.entities.CalendarSync.filter({ group_schedule_item_id: i.id }).catch(() => [])));
   return [
     ...matchingItems.map((i, index) => ({ type: 'GROUP_ACTIVITY', group_name: groupMap[i.group_id] || '—', activity_name: i.activity_name, date: i.date, start_time: i.start_time, end_time: i.end_time, space_name: input.activity_space_name, group_schedule_item_id: i.id, calendar_sync_id: syncRows[index]?.[0]?.id || null })),
-    ...matchingRequests.map(r => ({ type: 'BOOKING_REQUEST', group_name: r.requested_by_name || r.requested_by_email || '—', activity_name: r.activity_title, date: r.date, start_time: r.start_time, end_time: r.end_time, space_name: r.space_name || input.activity_space_name, common_space_booking_request_id: r.id, group_schedule_item_id: r.approved_schedule_item_id || null })),
+    ...matchingRequests.map(r => ({ type: 'BOOKING_REQUEST', request_status: r.status, group_name: r.requested_by_name || r.requested_by_email || '—', activity_name: r.activity_title, date: r.date, start_time: r.start_time, end_time: r.end_time, space_name: r.space_name || input.activity_space_name, common_space_booking_request_id: r.id, group_schedule_item_id: r.approved_schedule_item_id || null })),
   ];
 }
 

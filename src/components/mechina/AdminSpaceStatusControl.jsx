@@ -1,8 +1,6 @@
 import { Button } from "@/components/ui/button";
 
-export default function AdminSpaceStatusControl({ space, saving, onToggle }) {
-  const active = space.is_bookable !== false;
-
+export default function AdminSpaceStatusControl({ space, active, saving, onToggle }) {
   return (
     <div className="mt-1 flex flex-col items-center gap-1">
       <span className={`text-[10px] font-semibold ${active ? "text-emerald-700" : "text-slate-500"}`}>
