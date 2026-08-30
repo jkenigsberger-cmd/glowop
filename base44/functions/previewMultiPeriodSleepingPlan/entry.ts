@@ -1,6 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { addSleepingPlanConflicts, buildMultiPeriodSleepingPlan, findLegacyEnvelopeAllocations, normalizeSharedNeighborhoodIntent, validateSleepingAssignments } from '../../shared/multiPeriodSleepingPlan.js';
 import { resolveAssignmentEffectivePeriods } from '../../shared/effectiveSleepingSeries.js';
+import '../../shared/logicalSleepingSeries.js';
 
 export default async function(req) {
   try {
@@ -58,6 +59,10 @@ export default async function(req) {
       read_only: true,
       group_id: groupId,
       operational_group_profile_id: profiles[0].id,
+      runtime_build: 'MULTI_PERIOD_EFFECTIVE_20260830_V3',
+      today_il: effectiveResolution.todayIL,
+      first_actionable_period_id: effectiveResolution.firstActionablePeriodId,
+      resolved_effective_period_ids: effectiveResolution.effectivePeriodIds,
       legacy_envelope_allocations: legacyEnvelopeAllocations.map(row => ({ id: row.id, tent_id: row.tent_id, arrival_date: row.arrival_date, departure_date: row.departure_date, status: row.status })),
       legacy_envelope_requires_conversion: legacyEnvelopeAllocations.length > 0,
       ...preview,

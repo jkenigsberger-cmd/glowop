@@ -1,6 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { addSleepingPlanConflicts, buildMultiPeriodSleepingPlan, findLegacyEnvelopeAllocations, normalizeSharedNeighborhoodIntent, validateSleepingAssignments } from '../../shared/multiPeriodSleepingPlan.js';
 import { expectedPeriodsForSeries, readSeriesEffectivePeriod, resolveAssignmentEffectivePeriods } from '../../shared/effectiveSleepingSeries.js';
+import '../../shared/logicalSleepingSeries.js';
 
 function equivalentAssignment(row, assignment) {
   return row.tent_id === assignment.tent_id &&
@@ -150,8 +151,8 @@ export default async function(req) {
     if (legacyReservations.length > 0) return Response.json({ success: false, error: 'LEGACY_ENVELOPE_NEIGHBORHOOD_RESERVATION_REQUIRES_CONVERSION', reservation_ids: legacyReservations.map(row => row.id) }, { status: 409 });
 
     const existingState = inspectExistingState({ allocations: myAllocations, reservations: myReservations, assignments, periods, plan });
-    if (existingState.state === 'COMPLETE') return Response.json({ success: true, already_committed: true, read_only_retry: true, ...existingState });
-    if (existingState.state === 'INCONSISTENT') return Response.json({ success: false, error: 'INCONSISTENT_PERIODIZED_SLEEPING_STATE', details: existingState }, { status: 409 });
+    if (existingState.state === 'COMPLETE') return Response.json({ success: true, runtime_build: 'MULTI_PERIOD_EFFECTIVE_20260830_V3', already_committed: true, read_only_retry: true, ...existingState });
+    if (existingState.state === 'INCONSISTENT') return Response.json({ success: false, runtime_build: 'MULTI_PERIOD_EFFECTIVE_20260830_V3', error: 'INCONSISTENT_PERIODIZED_SLEEPING_STATE', details: existingState }, { status: 409 });
 
     const sharedNeighborhoodIds = [...new Set([
       ...myReservations.filter(row => row.shared_neighborhood_allowed === true).map(row => row.neighborhood_id),
@@ -159,7 +160,7 @@ export default async function(req) {
     ])];
     const todayIL = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem' }).format(new Date());
     const preview = addSleepingPlanConflicts({ plan, existingAllocations: activeAllocations, existingNeighborhoodReservations: activeReservations, sharedNeighborhoodIds, todayDate: todayIL });
-    if (!preview.allowed) return Response.json({ success: false, error: 'SLEEPING_PLAN_CONFLICT', exact_tent_conflicts: preview.exact_tent_conflicts, neighborhood_conflicts: preview.neighborhood_conflicts }, { status: 409 });
+    if (!preview.allowed) return Response.json({ success: false, runtime_build: 'MULTI_PERIOD_EFFECTIVE_20260830_V3', error: 'SLEEPING_PLAN_CONFLICT', exact_tent_conflicts: preview.exact_tent_conflicts, neighborhood_conflicts: preview.neighborhood_conflicts }, { status: 409 });
 
     const isAllocationAppend = ['APPEND_VIP', 'APPEND_ALT', 'APPEND_STUDENT', 'APPEND_RESERVATIONS'].includes(existingState.state);
     const indexesToCreate = isAllocationAppend
@@ -199,6 +200,7 @@ export default async function(req) {
 
     return Response.json({
       success: true,
+      runtime_build: 'MULTI_PERIOD_EFFECTIVE_20260830_V3',
       already_committed: false,
       group_id: groupId,
       operational_group_profile_id: profile.id,
