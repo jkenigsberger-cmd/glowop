@@ -291,7 +291,7 @@ export default function TentDistributionEditor({
           notes: a.notes,
         }));
         // ── END DIAGNOSTIC ──
-        const previewRes = await base44.functions.invoke("previewMultiPeriodSleepingPlan", {
+        const previewRes = await base44.functions.invoke("previewMultiPeriodSleepingPlanV3", {
           group_id: groupId,
           assignments,
           shared_neighborhoods: sharedNeighborhoods,
@@ -325,7 +325,7 @@ export default function TentDistributionEditor({
           return;
         }
         setPeriodErrors([]);
-        const commitRes = await base44.functions.invoke("commitMultiPeriodSleepingPlan", {
+        const commitRes = await base44.functions.invoke("commitMultiPeriodSleepingPlanV3", {
           group_id: groupId,
           assignments,
           shared_neighborhoods: sharedNeighborhoods,
