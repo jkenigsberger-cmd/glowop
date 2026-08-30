@@ -45,5 +45,13 @@
     "code",
     "name",
     "space_type"
-  ]
+  ],
+  "rls": {
+    "read": {},
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
 }

@@ -11,6 +11,7 @@ import { filterRelevantMechinaAssignments } from "@/lib/mechinaGroups";
 import { isBlockVisibleOnCalendarDate } from "@/lib/activitySpaceBlocks";
 
 const ADMIN_ROLES = ["SUPER_ADMIN", "ADMIN", "OPERATIONS"];
+const SPACE_ADMIN_ROLES = ["SUPER_ADMIN", "ADMIN"];
 
 const STATUS_LABELS = {
   PENDING:                { label: "ממתין לאישור",    cls: "bg-amber-50 text-amber-700 border-amber-200" },
@@ -21,7 +22,8 @@ const STATUS_LABELS = {
   CANCELLATION_REQUESTED: { label: "בקשת ביטול",      cls: "bg-orange-50 text-orange-700 border-orange-200" },
 };
 
-function todayStr() { return new Date().toISOString().split("T")[0]; }
+function todayStr() { return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem" }).format(new Date()); }
+function currentRequests(requests) { return requests.filter(request => request.date >= todayStr()); }
 function addDays(dateStr, n) {
   const d = new Date(dateStr);
   d.setDate(d.getDate() + n);
@@ -134,6 +136,7 @@ function ResolveCancellationModal({ request, onClose, onResolved }) {
 export default function MechinaSpaces() {
   const { role, internalUser } = useRoleContext();
   const isAdmin = ADMIN_ROLES.includes(role);
+  const canManageAvailability = SPACE_ADMIN_ROLES.includes(role);
   const isMechinaUser = role === "MECHINA_USER";
 
   const [selectedDate, setSelectedDate] = useState(todayStr());
@@ -153,6 +156,7 @@ export default function MechinaSpaces() {
   const [decisionModal, setDecisionModal] = useState(null);  // { mode: "approve"|"reject", request }
   const [actionModal, setActionModal] = useState(null);      // { type: "cancel"|"request_cancel", request }
   const [resolveCancellationModal, setResolveCancellationModal] = useState(null); // request
+  const [togglingSpaceId, setTogglingSpaceId] = useState("");
 
   const groupMap = Object.fromEntries(groups.map(g => [g.id, g]));
   // Only assignments pointing to real, relevant groups are selectable (old/cancelled/deleted groups excluded)
@@ -184,7 +188,7 @@ export default function MechinaSpaces() {
       base44.entities.ActivitySpaceBlock.filter({ status: "ACTIVE" }),
     ]).then(([bookings, requests, blocks]) => {
       setActiveBookings(bookings.filter(b => b.activity_space_id));
-      setPendingRequests(requests);
+      setPendingRequests(selectedDate >= todayStr() ? requests : []);
       setSpaceBlocks(blocks.filter(block => isBlockVisibleOnCalendarDate(block, selectedDate)));
       setLoading(false);
     }).catch(() => setLoading(false));
@@ -193,7 +197,7 @@ export default function MechinaSpaces() {
   useEffect(() => {
     if (!isMechinaUser || !mechinaGroupId) return;
     base44.entities.CommonSpaceBookingRequest.filter({ mechina_group_id: mechinaGroupId })
-      .then(reqs => setMyRequests(sortChron(reqs)));
+      .then(reqs => setMyRequests(sortChron(currentRequests(reqs))));
   }, [isMechinaUser, mechinaGroupId]);
 
   useEffect(() => {
@@ -216,10 +220,10 @@ export default function MechinaSpaces() {
       base44.entities.CommonSpaceBookingRequest.filter({ status: "CANCELLATION_REQUESTED" }),
     ]);
     setActiveBookings(bookings.filter(b => b.activity_space_id));
-    setPendingRequests(pending);
-    setMyRequests(sortChron(allPending));
-    setApprovedRequests(sortChron(approved));
-    setCancellationRequests(sortChron(cancellationReqs));
+    setPendingRequests(selectedDate >= todayStr() ? pending : []);
+    setMyRequests(sortChron(currentRequests(allPending)));
+    setApprovedRequests(sortChron(currentRequests(approved)));
+    setCancellationRequests(sortChron(currentRequests(cancellationReqs)));
   };
 
   const reloadMechinaData = async () => {
@@ -229,8 +233,8 @@ export default function MechinaSpaces() {
       base44.entities.CommonSpaceBookingRequest.filter({ mechina_group_id: mechinaGroupId }),
     ]);
     setActiveBookings(bookings.filter(b => b.activity_space_id));
-    setPendingRequests(pending);
-    setMyRequests(sortChron(requests));
+    setPendingRequests(selectedDate >= todayStr() ? pending : []);
+    setMyRequests(sortChron(currentRequests(requests)));
   };
 
   const handleDecision = async (adminNotes) => {
@@ -270,6 +274,33 @@ export default function MechinaSpaces() {
     }
   };
 
+  const handleToggleAvailability = async (space) => {
+    const nextBookable = space.is_bookable === false;
+    setTogglingSpaceId(space.id);
+    try {
+      let res = await base44.functions.invoke("setActivitySpaceBookable", {
+        space_id: space.id,
+        is_bookable: nextBookable,
+      });
+      if (res.data?.requires_confirmation) {
+        const confirmed = window.confirm("למרחב זה קיימות בקשות עתידיות מאושרות. להשבית את המרחב לבקשות חדשות בכל זאת?");
+        if (!confirmed) return;
+        res = await base44.functions.invoke("setActivitySpaceBookable", {
+          space_id: space.id,
+          is_bookable: false,
+          confirm_future_approved: true,
+        });
+      }
+      if (!res.data?.success) throw new Error(res.data?.error || "עדכון המרחב נכשל");
+      setSpaces(current => current.map(item => item.id === space.id ? { ...item, is_bookable: nextBookable } : item));
+      toast.success(nextBookable ? "המרחב הופעל" : "המרחב הושבת לבקשות חדשות");
+    } catch (error) {
+      toast.error(error?.message || "עדכון המרחב נכשל");
+    } finally {
+      setTogglingSpaceId("");
+    }
+  };
+
   const handleRequestNew = (spaceId = "") => { setPreselectedSpaceId(spaceId); setModalOpen(true); };
 
   const handleSubmitted = () => {
@@ -299,13 +330,14 @@ export default function MechinaSpaces() {
   // Spaces never lent to Mechinot — excluded from Mechina selectable spaces only.
   // (ActivitySpace records, general activity scheduling, calendars and reports are unaffected.)
   const MECHINA_EXCLUDED_CODES = ["bunker_5", "bunker_4", "bunker_2", "bunker_3", "dining_hall"];
-  const bookableSpaces = spaces
-    .filter(s => s.is_bookable !== false && !MECHINA_EXCLUDED_CODES.includes(s.code))
+  const mechinaSpaces = spaces
+    .filter(s => !MECHINA_EXCLUDED_CODES.includes(s.code))
     .sort((a, b) => {
       const ai = SPACE_SORT_ORDER.indexOf(a.code);
       const bi = SPACE_SORT_ORDER.indexOf(b.code);
       return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
     });
+  const bookableSpaces = mechinaSpaces.filter(s => s.is_bookable !== false);
 
   // ── MECHINA USER VIEW ────────────────────────────────────────────────────
   if (isMechinaUser) {
@@ -448,8 +480,9 @@ export default function MechinaSpaces() {
         {loading ? (
           <div className="text-center py-10 text-slate-400 text-sm">טוען...</div>
         ) : (
-          <MechinaSpaceAvailability spaces={bookableSpaces} activeBookings={activeBookings}
-            pendingRequests={pendingRequests} blocks={spaceBlocks} selectedDate={selectedDate} isAdmin={true} allowCreateRequest={false} onRequestNew={handleRequestNew} groupMap={groupMap} />
+          <MechinaSpaceAvailability spaces={mechinaSpaces} activeBookings={activeBookings}
+            pendingRequests={pendingRequests} blocks={spaceBlocks} selectedDate={selectedDate} isAdmin={true} allowCreateRequest={false} onRequestNew={handleRequestNew} groupMap={groupMap}
+            canManageAvailability={canManageAvailability} onToggleAvailability={handleToggleAvailability} togglingSpaceId={togglingSpaceId} />
         )}
       </section>
 

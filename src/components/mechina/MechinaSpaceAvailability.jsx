@@ -13,6 +13,7 @@
  */
 
 import { BLOCK_REASON_LABELS } from "@/lib/activitySpaceBlocks";
+import AdminSpaceStatusControl from "@/components/mechina/AdminSpaceStatusControl";
 
 const HOUR_START   = 6;
 const HOUR_END     = 23;
@@ -106,9 +107,11 @@ function SpaceBlockTime({ block, selectedDate }) {
 export default function MechinaSpaceAvailability({
   spaces, activeBookings, pendingRequests, blocks = [], selectedDate,
   isAdmin, onRequestNew, allowCreateRequest,
+  canManageAvailability = false, onToggleAvailability, togglingSpaceId,
   groupMap = {},
 }) {
   const gridWidth = COL_WIDTH * spaces.length;
+  const headerHeight = canManageAvailability ? 88 : HEADER_H;
 
   // Legend: groups visible on this date
   const legendGroups = (() => {
@@ -153,7 +156,7 @@ export default function MechinaSpaceAvailability({
             right: 0,
             top: 0,
             width: AXIS_WIDTH,
-            height: HEADER_H + TOTAL_HEIGHT,
+            height: headerHeight + TOTAL_HEIGHT,
             zIndex: 20,
             float: "right",           // keeps it in flow so the grid doesn't overlap
             backgroundColor: "rgba(255,255,255,0.92)",
@@ -163,7 +166,7 @@ export default function MechinaSpaceAvailability({
           }}
         >
           {/* Header placeholder — aligns with space name headers */}
-          <div style={{ height: HEADER_H, borderBottom: "1px solid #e2e8f0", background: "rgba(248,250,252,0.95)" }} />
+          <div style={{ height: headerHeight, borderBottom: "1px solid #e2e8f0", background: "rgba(248,250,252,0.95)" }} />
 
           {/* Hour labels */}
           <div style={{ position: "relative", height: TOTAL_HEIGHT }}>
@@ -206,11 +209,19 @@ export default function MechinaSpaceAvailability({
             {spaces.map(space => (
               <div
                 key={space.id}
-                style={{ height: HEADER_H }}
+                style={{ height: headerHeight }}
                 className="flex flex-col items-center justify-center px-1 border-b border-r border-slate-200 bg-slate-50"
               >
+                <p className="text-[10px] text-slate-400" dir="ltr">{space.code}</p>
                 <p className="text-xs font-semibold text-slate-700 text-center leading-tight">{space.name}</p>
                 {space.capacity && <p className="text-[10px] text-slate-400">{space.capacity} איש</p>}
+                {canManageAvailability && (
+                  <AdminSpaceStatusControl
+                    space={space}
+                    saving={togglingSpaceId === space.id}
+                    onToggle={onToggleAvailability}
+                  />
+                )}
               </div>
             ))}
           </div>
