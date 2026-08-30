@@ -18,6 +18,26 @@ export function readSeriesEffectivePeriod(rows = []) {
   return { value: values[0] || null, error: null };
 }
 
+export function preserveHistoricalPaxInPlan({ plan, existingAllocations = [], todayIL = todayInJerusalem() }) {
+  const activeExisting = existingAllocations.filter(row => row.status !== 'CANCELLED');
+  return {
+    ...plan,
+    planned_rows: plan.planned_rows.map(planned => {
+      const row = planned.sleeping_allocation;
+      if (row.departure_date > todayIL) return planned;
+      const historical = activeExisting.find(existing =>
+        existing.tent_id === row.tent_id &&
+        existing.stay_period_id === planned.source_stay_period_id
+      );
+      if (!historical) return planned;
+      return {
+        ...planned,
+        sleeping_allocation: { ...row, allocated_pax: Number(historical.allocated_pax) },
+      };
+    }),
+  };
+}
+
 export function resolveAssignmentEffectivePeriods({ periods, assignments = [], existingAllocations = [], todayIL = todayInJerusalem() }) {
   const active = normalizeStayPeriods(periods).filter(period => period.status !== 'CANCELLED');
   const firstActionable = active.find(period => period.end_date > todayIL) || null;

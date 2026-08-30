@@ -1,21 +1,19 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { addSleepingPlanConflicts, buildMultiPeriodSleepingPlan, findLegacyEnvelopeAllocations, normalizeSharedNeighborhoodIntent, validateSleepingAssignments } from '../../shared/multiPeriodSleepingPlan.js';
-import { expectedPeriodsForSeries, readSeriesEffectivePeriod, resolveAssignmentEffectivePeriods } from '../../shared/effectiveSleepingSeries.js';
+import { expectedPeriodsForSeries, preserveHistoricalPaxInPlan, readSeriesEffectivePeriod, resolveAssignmentEffectivePeriods } from '../../shared/effectiveSleepingSeries.js';
 import '../../shared/logicalSleepingSeries.js';
 
 const RUNTIME_BUILD = 'MULTI_PERIOD_EFFECTIVE_20260830_V3_NEW_ENDPOINT';
 const versionedResponse = (payload, init) => globalThis.Response.json({ ...payload, runtime_build: RUNTIME_BUILD }, init);
 
-function equivalentAssignment(row, assignment) {
+function sameAssignmentIdentity(row, assignment) {
   return row.tent_id === assignment.tent_id &&
     row.neighborhood_id === assignment.neighborhood_id &&
-    Number(row.allocated_pax) === Number(assignment.allocated_pax) &&
     row.allocation_type === assignment.allocation_type &&
-    row.gender_group === assignment.gender_group &&
-    (row.notes || '') === (assignment.notes || '');
+    row.gender_group === assignment.gender_group;
 }
 
-function inspectExistingState({ allocations, reservations, assignments, periods, plan }) {
+function inspectExistingState({ allocations, reservations, assignments, periods, plan, todayIL }) {
   const linkedAllocations = allocations.filter(row => row.status !== 'CANCELLED' && (row.stay_period_id || row.allocation_series_id));
   const linkedReservations = reservations.filter(row => row.status === 'ACTIVE' && row.stay_period_id);
   if (linkedAllocations.length === 0 && linkedReservations.length === 0) return { state: 'NEW' };
@@ -29,6 +27,7 @@ function inspectExistingState({ allocations, reservations, assignments, periods,
 
   const matchedTentIds = new Set();
   const matchedAssignmentIndexes = new Set();
+  const paxEdits = [];
   for (const [seriesId, rows] of seriesGroups) {
     const marker = readSeriesEffectivePeriod(rows);
     if (marker.error) return { state: 'INCONSISTENT', reason: 'SERIES_EFFECTIVE_MARKER_MISMATCH', allocation_series_id: seriesId };
@@ -44,8 +43,17 @@ function inspectExistingState({ allocations, reservations, assignments, periods,
     const periodIds = new Set();
     for (const row of rows) {
       const period = periodById[row.stay_period_id];
-      if (!period || !expectedIds.has(row.stay_period_id) || periodIds.has(row.stay_period_id) || !equivalentAssignment(row, assignment) || row.arrival_date !== period.start_date || row.departure_date !== period.end_date) {
+      if (!period || !expectedIds.has(row.stay_period_id) || periodIds.has(row.stay_period_id) || row.arrival_date !== period.start_date || row.departure_date !== period.end_date) {
         return { state: 'INCONSISTENT', reason: 'SERIES_ROW_MISMATCH', allocation_series_id: seriesId, allocation_id: row.id };
+      }
+      if (!sameAssignmentIdentity(row, assignment)) {
+        return { state: 'INCONSISTENT', reason: 'SERIES_IDENTITY_MISMATCH', allocation_series_id: seriesId, allocation_id: row.id };
+      }
+      if ((row.notes || '') !== (assignment.notes || '')) {
+        return { state: 'INCONSISTENT', reason: 'SERIES_NOTES_MISMATCH', allocation_series_id: seriesId, allocation_id: row.id };
+      }
+      if (period.end_date > todayIL && Number(row.allocated_pax) !== Number(assignment.allocated_pax)) {
+        paxEdits.push({ id: row.id, allocation_series_id: seriesId, stay_period_id: row.stay_period_id, from_pax: Number(row.allocated_pax), to_pax: Number(assignment.allocated_pax) });
       }
       periodIds.add(row.stay_period_id);
     }
@@ -71,10 +79,13 @@ function inspectExistingState({ allocations, reservations, assignments, periods,
   }
   if (seriesGroups.length === assignments.length) {
     if (linkedReservations.length === expectedNeighborhoods.length) {
+      if (paxEdits.length > 0) return { state: 'PAX_EDIT', pax_edits: paxEdits, allocation_series_ids: Object.keys(bySeries) };
       return { state: 'COMPLETE', allocation_series_ids: Object.keys(bySeries), allocation_ids: linkedAllocations.map(row => row.id), neighborhood_reservation_ids: linkedReservations.map(row => row.id) };
     }
+    if (paxEdits.length > 0) return { state: 'INCONSISTENT', reason: 'PAX_EDIT_WITH_INCOMPLETE_RESERVATIONS' };
     return { state: 'APPEND_RESERVATIONS', missing_assignment_indexes: [] };
   }
+  if (paxEdits.length > 0) return { state: 'INCONSISTENT', reason: 'PAX_EDIT_WITH_SERIES_APPEND' };
   const missingAssignmentIndexes = assignments.map((_, index) => index).filter(index => !matchedAssignmentIndexes.has(index));
   const appendIsVipOnly = missingAssignmentIndexes.every(index =>
     assignments[index].allocation_type === 'STAFF' && /__vip_req_\d+__/.test(assignments[index].notes || '')
@@ -137,14 +148,15 @@ export default async function(req) {
     const myAllocations = activeAllocations.filter(row => row.group_id === groupId);
     const effectiveResolution = resolveAssignmentEffectivePeriods({ periods, assignments, existingAllocations: myAllocations });
     if (!effectiveResolution.valid) return versionedResponse({ success: false, error: 'INVALID_SERIES_EFFECTIVE_PERIODS', errors: effectiveResolution.errors }, { status: 409 });
-    const plan = buildMultiPeriodSleepingPlan({
+    const builtPlan = buildMultiPeriodSleepingPlan({
       groupId,
       profileId: profile.id,
       periods,
       assignments,
       assignmentEffectivePeriodIds: effectiveResolution.effectivePeriodIds,
     });
-    if (!plan.valid) return versionedResponse({ success: false, error: 'INVALID_ACTIVE_PERIODS', errors: plan.errors }, { status: 409 });
+    if (!builtPlan.valid) return versionedResponse({ success: false, error: 'INVALID_ACTIVE_PERIODS', errors: builtPlan.errors }, { status: 409 });
+    const plan = preserveHistoricalPaxInPlan({ plan: builtPlan, existingAllocations: myAllocations, todayIL: effectiveResolution.todayIL });
     const myReservations = activeReservations.filter(row => row.group_id === groupId);
     const legacyEnvelope = findLegacyEnvelopeAllocations(groupId, periods, activeAllocations);
     if (legacyEnvelope.length > 0) return versionedResponse({ success: false, error: 'LEGACY_ENVELOPE_ALLOCATION_REQUIRES_CONVERSION', legacy_allocations: legacyEnvelope.map(row => ({ id: row.id, tent_id: row.tent_id, arrival_date: row.arrival_date, departure_date: row.departure_date, status: row.status })) }, { status: 409 });
@@ -153,7 +165,7 @@ export default async function(req) {
     const legacyReservations = myReservations.filter(row => !row.stay_period_id);
     if (legacyReservations.length > 0) return versionedResponse({ success: false, error: 'LEGACY_ENVELOPE_NEIGHBORHOOD_RESERVATION_REQUIRES_CONVERSION', reservation_ids: legacyReservations.map(row => row.id) }, { status: 409 });
 
-    const existingState = inspectExistingState({ allocations: myAllocations, reservations: myReservations, assignments, periods, plan });
+    const existingState = inspectExistingState({ allocations: myAllocations, reservations: myReservations, assignments, periods, plan, todayIL: effectiveResolution.todayIL });
     if (existingState.state === 'COMPLETE') return versionedResponse({ success: true, runtime_build: 'MULTI_PERIOD_EFFECTIVE_20260830_V3_NEW_ENDPOINT', already_committed: true, read_only_retry: true, ...existingState });
     if (existingState.state === 'INCONSISTENT') return versionedResponse({ success: false, runtime_build: 'MULTI_PERIOD_EFFECTIVE_20260830_V3_NEW_ENDPOINT', error: 'INCONSISTENT_PERIODIZED_SLEEPING_STATE', details: existingState }, { status: 409 });
 
@@ -164,6 +176,21 @@ export default async function(req) {
     const todayIL = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem' }).format(new Date());
     const preview = addSleepingPlanConflicts({ plan, existingAllocations: activeAllocations, existingNeighborhoodReservations: activeReservations, sharedNeighborhoodIds, todayDate: todayIL });
     if (!preview.allowed) return versionedResponse({ success: false, runtime_build: 'MULTI_PERIOD_EFFECTIVE_20260830_V3_NEW_ENDPOINT', error: 'SLEEPING_PLAN_CONFLICT', exact_tent_conflicts: preview.exact_tent_conflicts, neighborhood_conflicts: preview.neighborhood_conflicts }, { status: 409 });
+
+    if (existingState.state === 'PAX_EDIT') {
+      const updates = existingState.pax_edits.map(edit => ({ id: edit.id, allocated_pax: edit.to_pax }));
+      await base44.asServiceRole.entities.SleepingAllocation.bulkUpdate(updates);
+      return versionedResponse({
+        success: true,
+        already_committed: false,
+        pax_edit: true,
+        group_id: groupId,
+        allocation_series_ids: existingState.allocation_series_ids,
+        sleeping_rows_created: 0,
+        sleeping_rows_updated: updates.length,
+        pax_edits: existingState.pax_edits,
+      });
+    }
 
     const isAllocationAppend = ['APPEND_VIP', 'APPEND_ALT', 'APPEND_STUDENT', 'APPEND_RESERVATIONS'].includes(existingState.state);
     const indexesToCreate = isAllocationAppend

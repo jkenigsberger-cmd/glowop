@@ -16,10 +16,8 @@ const Counter = ({ label, required, allocated, sub = false }) => {
 
   const containerColor = isComplete
     ? "bg-green-50 border-green-200"
-    : isOver
-    ? "bg-red-50 border-red-200"
     : "bg-amber-50 border-amber-200";
-  const mainColor = isComplete ? "text-green-700" : isOver ? "text-red-700" : "text-amber-700";
+  const mainColor = isComplete ? "text-green-700" : "text-amber-700";
 
   return (
     <div className={`rounded-xl border px-3 py-3 flex flex-col gap-1.5 ${containerColor} ${sub ? "opacity-80" : ""}`} dir="rtl">
@@ -86,7 +84,7 @@ export default function SleepingRequirementsSummary({ profile, allocations, nhoo
       {hasAny && (
         <div className={`rounded-xl border px-4 py-3 space-y-1 ${
           overAllocated
-            ? "bg-red-50 border-red-300"
+            ? "bg-amber-50 border-amber-300"
             : counts.isComplete
             ? "bg-emerald-50 border-emerald-300"
             : counts.totalAllocated > 0
@@ -94,13 +92,13 @@ export default function SleepingRequirementsSummary({ profile, allocations, nhoo
             : "bg-slate-50 border-slate-200"
         }`}>
           <p className={`text-xs font-bold ${
-            overAllocated ? "text-red-800"
+            overAllocated ? "text-amber-800"
             : counts.isComplete ? "text-emerald-800"
             : counts.totalAllocated > 0 ? "text-amber-800"
             : "text-slate-600"
           }`}>
             {overAllocated
-              ? `⚠️ שובצו ${overCount} אנשים מעבר לנדרש — יש לשחרר / לערוך אוהלים`
+              ? `שובצו יותר מקומות לינה מהדרישה הנוכחית — נדרש: ${counts.totalRequired}, שובץ: ${counts.totalAllocated} (עודף ${overCount})`
               : counts.isComplete
               ? "✓ כל האנשים שובצו"
               : counts.totalAllocated > 0

@@ -6,6 +6,7 @@ function unique(rows, field, normalize = value => value) {
 
 export function groupLogicalSleepingAssignments(rows = []) {
   const activeRows = rows.filter(row => row.status !== 'CANCELLED');
+  const todayIL = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem' }).format(new Date());
   const buckets = new Map();
   activeRows.forEach((row, index) => {
     const linked = !!row.allocation_series_id;
@@ -19,13 +20,15 @@ export function groupLogicalSleepingAssignments(rows = []) {
     const errors = [];
     if (linked && periodRows.some(row => !row.stay_period_id || !row.allocation_series_id)) errors.push('MISSING_LINKAGE');
     if (unique(periodRows, 'tent_id').length !== 1) errors.push('TENT_MISMATCH');
-    if (unique(periodRows, 'allocated_pax', Number).length !== 1) errors.push('PAX_MISMATCH');
+    const actionableRows = periodRows.filter(row => row.departure_date > todayIL);
+    if (unique(actionableRows, 'allocated_pax', Number).length > 1) errors.push('PAX_MISMATCH');
     if (unique(periodRows, 'allocation_type').length !== 1) errors.push('ALLOCATION_TYPE_MISMATCH');
     if (unique(periodRows, 'gender_group').length !== 1) errors.push('GENDER_MISMATCH');
     const effectiveMarker = readSeriesEffectivePeriod(periodRows);
     if (linked && effectiveMarker.error) errors.push('SERIES_EFFECTIVE_MARKER_MISMATCH');
     const statuses = unique(periodRows, 'status');
     const first = periodRows[0];
+    const representative = actionableRows[0] || [...periodRows].sort((a, b) => String(b.departure_date).localeCompare(String(a.departure_date)))[0];
     return {
       logical_key: logicalKey,
       linked,
@@ -33,12 +36,12 @@ export function groupLogicalSleepingAssignments(rows = []) {
       series_effective_from_period_id: effectiveMarker.value,
       period_rows: periodRows,
       physical_row_count: periodRows.length,
-      logical_allocated_pax: errors.includes('PAX_MISMATCH') ? null : Number(first.allocated_pax || 0),
+      logical_allocated_pax: errors.includes('PAX_MISMATCH') ? null : Number(representative.allocated_pax || 0),
       tent_id: errors.includes('TENT_MISMATCH') ? null : first.tent_id,
       neighborhood_id: first.neighborhood_id,
       allocation_type: errors.includes('ALLOCATION_TYPE_MISMATCH') ? null : first.allocation_type,
       gender_group: errors.includes('GENDER_MISMATCH') ? null : first.gender_group,
-      notes: first.notes || '',
+      notes: representative.notes || '',
       statuses,
       status_summary: statuses.length === 1 ? statuses[0] : 'MIXED',
       all_confirmed: periodRows.every(row => row.status === 'CONFIRMED'),

@@ -45,6 +45,7 @@ export default function TentDistributionEditor({
   reservation,
   groupId,
   profileId,
+  profile = null,
   arrivalDate,
   departureDate,
   allConfirmedAllocs = [],
@@ -193,9 +194,21 @@ export default function TentDistributionEditor({
     [tents, paxMap]
   );
 
-  const requestedPax = reservation?.planned_tents
-    ? null // we don't know total pax from planned_tents, use open ended
-    : null;
+  const requiredSleepingPax = (Number(profile?.boys_beds_needed ?? profile?.boys_count ?? 0) || 0) +
+    (Number(profile?.girls_beds_needed ?? profile?.girls_count ?? 0) || 0) +
+    (Number(profile?.staff_count ?? 0) || 0);
+  const otherLogicalPax = logicalAssignments
+    .filter(a => !a.inconsistent && (a.allocation_type !== "STUDENT" || a.neighborhood_id !== neighborhood?.id))
+    .reduce((sum, assignment) => sum + (Number(assignment.logical_allocated_pax) || 0), 0);
+  const intendedTotalPax = otherLogicalPax + totalAssigned;
+  const isOverRequirement = requiredSleepingPax > 0 && intendedTotalPax > requiredSleepingPax;
+
+  const invalidPaxErrors = useMemo(() => tents.flatMap(t => {
+    const raw = paxMap[t.id];
+    if (raw == null || raw === "") return [];
+    const pax = Number(raw);
+    return !Number.isFinite(pax) || pax < 0 ? [`אוהל ${t.code}: מספר האנשים חייב להיות אפס או מספר חיובי`] : [];
+  }), [tents, paxMap]);
 
   // Capacity violations
   const capacityErrors = useMemo(() => {
@@ -221,7 +234,7 @@ export default function TentDistributionEditor({
     return errors;
   }, [tents, paxMap, overbookedTentIds]);
 
-  const hasBlockingErrors = capacityErrors.length > 0 || overbookingErrors.length > 0 ||
+  const hasBlockingErrors = invalidPaxErrors.length > 0 || capacityErrors.length > 0 || overbookingErrors.length > 0 ||
     (isMultiPeriod && (!canUseMultiPeriod || seriesValidation?.valid === false));
 
   const formatPreviewConflict = (preview) => {
@@ -359,7 +372,9 @@ export default function TentDistributionEditor({
         // ── END DIAGNOSTIC ──
         toast.success(commitRes.data.already_committed
           ? "השיבוץ הרב־תקופתי כבר שמור ✓"
-          : `נוצרו ${commitRes.data.sleeping_rows_created} שורות תקופתיות כשיבוץ לוגי אחד לכל אוהל ✓`);
+          : commitRes.data.pax_edit
+            ? `עודכנו ${commitRes.data.sleeping_rows_updated} שורות בתקופות הפעילות והעתידיות ✓`
+            : `נוצרו ${commitRes.data.sleeping_rows_created} שורות תקופתיות כשיבוץ לוגי אחד לכל אוהל ✓`);
         queryClient.invalidateQueries({ queryKey: ["sleepingAllocations", groupId] });
         onSaved?.();
         onClose();
@@ -422,7 +437,9 @@ export default function TentDistributionEditor({
     } catch (err) {
       console.error("[TentDistributionEditor] save error:", err);
       if (isMultiPeriod) {
-        setPeriodErrors([err?.message || "שגיאה בשמירה — נסה שוב"]);
+        const catchDetail = err?.response?.data || err?.message || String(err);
+        const catchMessage = catchDetail?.error || catchDetail?.message || err?.message || "שגיאה בשמירה — נסה שוב";
+        setPeriodErrors([catchMessage]);
         // ── TEMPORARY DIAGNOSTIC — CATCH ──
         setDebugDiagnostic({
           timestamp: new Date().toISOString(),
@@ -430,8 +447,8 @@ export default function TentDistributionEditor({
           assignments_sent: null,
           preview_response: null,
           commit_response: null,
-          catch_error: err?.message || String(err),
-          period_errors_after: [err?.message || "שגיאה בשמירה — נסה שוב"],
+          catch_error: catchDetail,
+          period_errors_after: [catchMessage],
         });
         // ── END DIAGNOSTIC ──
       } else {
@@ -614,10 +631,17 @@ export default function TentDistributionEditor({
           </span>
         </div>
 
+        {isOverRequirement && (
+          <div className="flex items-start gap-1.5 text-xs text-amber-800 bg-amber-50 border border-amber-300 rounded-lg px-3 py-2">
+            <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+            שובצו יותר מקומות לינה מהדרישה הנוכחית — נדרש: {requiredSleepingPax}, שובץ: {intendedTotalPax}
+          </div>
+        )}
+
         {/* Validation errors */}
-        {(capacityErrors.length > 0 || overbookingErrors.length > 0 || periodErrors.length > 0 || (isMultiPeriod && seriesValidation?.valid === false)) && (
+        {(invalidPaxErrors.length > 0 || capacityErrors.length > 0 || overbookingErrors.length > 0 || periodErrors.length > 0 || (isMultiPeriod && seriesValidation?.valid === false)) && (
           <div className="space-y-1">
-            {[...capacityErrors, ...overbookingErrors, ...periodErrors, ...(isMultiPeriod && seriesValidation?.valid === false ? ["השיבוץ הרב־תקופתי הקיים חלקי או לא עקבי — השמירה חסומה."] : [])].map((e, i) => (
+            {[...invalidPaxErrors, ...capacityErrors, ...overbookingErrors, ...periodErrors, ...(isMultiPeriod && seriesValidation?.valid === false ? ["השיבוץ הרב־תקופתי הקיים חלקי או לא עקבי — השמירה חסומה."] : [])].map((e, i) => (
               <div key={i} className="flex items-start gap-1.5 text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
                 <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                 {e}

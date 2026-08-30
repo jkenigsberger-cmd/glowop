@@ -323,6 +323,7 @@ export default function StudentNeighborhoodPanel({
         reservation={effectiveReservation}
         groupId={groupId}
         profileId={profileId}
+        profile={profile}
         arrivalDate={arrivalDate}
         departureDate={departureDate}
         allConfirmedAllocs={allConfirmedAllocs}
