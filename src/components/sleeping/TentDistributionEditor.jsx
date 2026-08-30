@@ -77,6 +77,7 @@ export default function TentDistributionEditor({
   const [releasingTentId, setReleasingTentId] = useState(null);
   const [overrideMismatch, setOverrideMismatch] = useState(false);
   const [periodErrors, setPeriodErrors] = useState([]);
+  const [debugDiagnostic, setDebugDiagnostic] = useState(null);
 
   // A preview error belongs only to the exact draft that produced it.
   const draftSignature = useMemo(() => JSON.stringify({
@@ -160,6 +161,7 @@ export default function TentDistributionEditor({
     setGenderMap(gm);
     setOverrideMismatch(false);
     setPeriodErrors([]);
+    setDebugDiagnostic(null);
   }, [open, displayedNeighborhoodAllocs, isMultiPeriod]);
 
   // Exact tent availability remains authoritative even when neighborhood sharing is approved.
@@ -276,17 +278,50 @@ export default function TentDistributionEditor({
             notes: a.notes || "",
           }));
         const assignments = [...otherNeighborhoodAssignments, ...currentNeighborhoodAssignments];
+        // ── TEMPORARY DIAGNOSTIC — capture exact runtime payload ──
+        const tentByIdForDebug = Object.fromEntries(tents.map(t => [t.id, t]));
+        const debugAssignments = assignments.map((a, i) => ({
+          index: i,
+          tent_id: a.tent_id,
+          tent_code: tentByIdForDebug[a.tent_id]?.code || null,
+          neighborhood_id: a.neighborhood_id,
+          allocated_pax: a.allocated_pax,
+          allocation_type: a.allocation_type,
+          gender_group: a.gender_group,
+          notes: a.notes,
+        }));
+        // ── END DIAGNOSTIC ──
         const previewRes = await base44.functions.invoke("previewMultiPeriodSleepingPlan", {
           group_id: groupId,
           assignments,
           shared_neighborhoods: sharedNeighborhoods,
         });
         const preview = previewRes.data;
+        // ── TEMPORARY DIAGNOSTIC — capture exact preview response ──
+        setDebugDiagnostic({
+          timestamp: new Date().toISOString(),
+          error_stage: null,
+          assignments_sent: debugAssignments,
+          preview_response: preview,
+          commit_response: null,
+          period_errors_after: [],
+        });
+        // ── END DIAGNOSTIC ──
         if (!preview?.success || preview.legacy_envelope_requires_conversion || !preview.allowed) {
           const message = preview?.legacy_envelope_requires_conversion
             ? "קיים שיבוץ מעטפת ישן הדורש המרה לפני שמירה."
             : formatPreviewConflict(preview);
           setPeriodErrors([message]);
+          // ── TEMPORARY DIAGNOSTIC — PREVIEW failure ──
+          setDebugDiagnostic({
+            timestamp: new Date().toISOString(),
+            error_stage: "PREVIEW",
+            assignments_sent: debugAssignments,
+            preview_response: preview,
+            commit_response: null,
+            period_errors_after: [message],
+          });
+          // ── END DIAGNOSTIC ──
           return;
         }
         setPeriodErrors([]);
@@ -300,8 +335,28 @@ export default function TentDistributionEditor({
             ? "השיבוץ הקיים אינו תואם לתכנית. יש לשחרר את כל השיבוץ לפני שינוי אוהלים."
             : (commitRes.data?.error || "שמירת התכנית הרב־תקופתית נכשלה");
           setPeriodErrors([message]);
+          // ── TEMPORARY DIAGNOSTIC — COMMIT failure ──
+          setDebugDiagnostic({
+            timestamp: new Date().toISOString(),
+            error_stage: "COMMIT",
+            assignments_sent: debugAssignments,
+            preview_response: preview,
+            commit_response: commitRes.data,
+            period_errors_after: [message],
+          });
+          // ── END DIAGNOSTIC ──
           return;
         }
+        // ── TEMPORARY DIAGNOSTIC — COMMIT success ──
+        setDebugDiagnostic({
+          timestamp: new Date().toISOString(),
+          error_stage: null,
+          assignments_sent: debugAssignments,
+          preview_response: preview,
+          commit_response: commitRes.data,
+          period_errors_after: [],
+        });
+        // ── END DIAGNOSTIC ──
         toast.success(commitRes.data.already_committed
           ? "השיבוץ הרב־תקופתי כבר שמור ✓"
           : `נוצרו ${commitRes.data.sleeping_rows_created} שורות תקופתיות כשיבוץ לוגי אחד לכל אוהל ✓`);
@@ -366,8 +421,22 @@ export default function TentDistributionEditor({
       onClose();
     } catch (err) {
       console.error("[TentDistributionEditor] save error:", err);
-      if (isMultiPeriod) setPeriodErrors([err?.message || "שגיאה בשמירה — נסה שוב"]);
-      else toast.error(err?.message || "שגיאה בשמירה — נסה שוב");
+      if (isMultiPeriod) {
+        setPeriodErrors([err?.message || "שגיאה בשמירה — נסה שוב"]);
+        // ── TEMPORARY DIAGNOSTIC — CATCH ──
+        setDebugDiagnostic({
+          timestamp: new Date().toISOString(),
+          error_stage: "CATCH",
+          assignments_sent: null,
+          preview_response: null,
+          commit_response: null,
+          catch_error: err?.message || String(err),
+          period_errors_after: [err?.message || "שגיאה בשמירה — נסה שוב"],
+        });
+        // ── END DIAGNOSTIC ──
+      } else {
+        toast.error(err?.message || "שגיאה בשמירה — נסה שוב");
+      }
     } finally {
       setSaving(false);
     }
@@ -561,6 +630,15 @@ export default function TentDistributionEditor({
           <div className="flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
             <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
             מוכן לשמירה — {totalAssigned} אנשים ב-{tents.filter(t => Number(paxMap[t.id]) > 0).length} אוהלים
+          </div>
+        )}
+
+        {isMultiPeriod && debugDiagnostic && (
+          <div className="border border-dashed border-slate-400 rounded-lg p-2 bg-slate-50">
+            <div className="text-[10px] font-bold text-slate-500 mb-1">אבחון זמני</div>
+            <pre className="text-[9px] leading-tight text-slate-700 bg-white border border-slate-200 rounded p-2 overflow-x-auto max-h-56 whitespace-pre-wrap break-all" dir="ltr">
+{JSON.stringify(debugDiagnostic, null, 2)}
+            </pre>
           </div>
         )}
 
