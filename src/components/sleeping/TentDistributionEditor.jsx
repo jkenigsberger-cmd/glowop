@@ -132,6 +132,7 @@ export default function TentDistributionEditor({
     const source = isMultiPeriod ? allActiveAllocs : allConfirmedAllocs;
     source.forEach(allocation => {
       if (allocation.group_id === groupId || allocation.status === "CANCELLED") return;
+      if (allocation.departure_date <= todayIL) return;
       const conflictingPeriods = isMultiPeriod
         ? activeStayPeriods.filter(period => period.end_date > todayIL && period.start_date < allocation.departure_date && allocation.arrival_date < period.end_date)
         : (arrivalDate && departureDate && arrivalDate < allocation.departure_date && allocation.arrival_date < departureDate
