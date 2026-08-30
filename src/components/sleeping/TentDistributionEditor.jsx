@@ -78,6 +78,42 @@ export default function TentDistributionEditor({
   const [overrideMismatch, setOverrideMismatch] = useState(false);
   const [periodErrors, setPeriodErrors] = useState([]);
 
+  // A preview error belongs only to the exact draft that produced it.
+  const draftSignature = useMemo(() => JSON.stringify({
+    open: !!open,
+    neighborhood_id: neighborhood?.id || null,
+    reservation_id: reservation?.id || null,
+    reservation_gender_group: reservation?.gender_group || null,
+    pax: Object.entries(paxMap).sort(([a], [b]) => a.localeCompare(b)),
+    genders: Object.entries(genderMap).sort(([a], [b]) => a.localeCompare(b)),
+    notes: Object.entries(notesMap).sort(([a], [b]) => a.localeCompare(b)),
+    active_periods: activeStayPeriods.map(period => ({
+      id: period.id,
+      start_date: period.start_date,
+      end_date: period.end_date,
+      status: period.status,
+    })),
+    shared_neighborhoods: sharedNeighborhoods.map(item => ({
+      neighborhood_id: item.neighborhood_id,
+      shared_neighborhood_allowed: item.shared_neighborhood_allowed,
+      reason: item.reason,
+    })),
+  }), [
+    open,
+    neighborhood?.id,
+    reservation?.id,
+    reservation?.gender_group,
+    paxMap,
+    genderMap,
+    notesMap,
+    activeStayPeriods,
+    sharedNeighborhoods,
+  ]);
+
+  useEffect(() => {
+    if (open) setPeriodErrors([]);
+  }, [open, draftSignature]);
+
   // Active student allocs for this group in this neighborhood
   const myNeighborhoodAllocs = useMemo(
     () => existingAllocs.filter(
@@ -253,6 +289,7 @@ export default function TentDistributionEditor({
           setPeriodErrors([message]);
           return;
         }
+        setPeriodErrors([]);
         const commitRes = await base44.functions.invoke("commitMultiPeriodSleepingPlan", {
           group_id: groupId,
           assignments,
