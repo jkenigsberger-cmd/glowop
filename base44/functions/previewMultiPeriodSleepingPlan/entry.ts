@@ -50,7 +50,8 @@ export default async function(req) {
         .map(reservation => reservation.neighborhood_id),
       ...sharedIntent.sharedNeighborhoodIds,
     ])];
-    const preview = addSleepingPlanConflicts({ plan, existingAllocations, existingNeighborhoodReservations: neighborhoodReservations, sharedNeighborhoodIds });
+    const todayIL = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem' }).format(new Date());
+    const preview = addSleepingPlanConflicts({ plan, existingAllocations, existingNeighborhoodReservations: neighborhoodReservations, sharedNeighborhoodIds, todayDate: todayIL });
     const legacyEnvelopeAllocations = findLegacyEnvelopeAllocations(groupId, periods, existingAllocations);
     return Response.json({
       success: true,

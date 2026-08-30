@@ -123,6 +123,7 @@ export default function TentDistributionEditor({
     setNotesMap(nm);
     setGenderMap(gm);
     setOverrideMismatch(false);
+    setPeriodErrors([]);
   }, [open, displayedNeighborhoodAllocs, isMultiPeriod]);
 
   // Exact tent availability remains authoritative even when neighborhood sharing is approved.

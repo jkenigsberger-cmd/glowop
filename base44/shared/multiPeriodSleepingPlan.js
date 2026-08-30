@@ -169,12 +169,13 @@ export function buildMultiPeriodSleepingPlan({ groupId, profileId, periods, assi
   return { valid: true, errors: [], planned_rows: plannedRows, planned_neighborhood_intervals: plannedNeighborhoodIntervals, assignment_effective_period_ids: assignmentEffectivePeriodIds, same_tent_preserved: sameTentPreserved };
 }
 
-export function addSleepingPlanConflicts({ plan, existingAllocations = [], existingNeighborhoodReservations = [], sharedNeighborhoodIds = [] }) {
+export function addSleepingPlanConflicts({ plan, existingAllocations = [], existingNeighborhoodReservations = [], sharedNeighborhoodIds = [], todayDate = null }) {
   const exactTentConflicts = [];
   plan.planned_rows.forEach(planned => {
     const row = planned.sleeping_allocation;
     existingAllocations.filter(existing =>
       existing.status !== 'CANCELLED' &&
+      (!todayDate || existing.departure_date > todayDate) &&
       existing.group_id !== row.group_id &&
       existing.tent_id === row.tent_id &&
       sleepingIntervalsOverlap(row.arrival_date, row.departure_date, existing.arrival_date, existing.departure_date)
@@ -195,6 +196,7 @@ export function addSleepingPlanConflicts({ plan, existingAllocations = [], exist
     const row = planned.neighborhood_reservation;
     existingNeighborhoodReservations.filter(existing =>
       existing.status === 'ACTIVE' &&
+      (!todayDate || existing.departure_date > todayDate) &&
       existing.group_id !== row.group_id &&
       existing.neighborhood_id === row.neighborhood_id &&
       sleepingIntervalsOverlap(row.arrival_date, row.departure_date, existing.arrival_date, existing.departure_date)

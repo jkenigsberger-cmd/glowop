@@ -157,7 +157,8 @@ export default async function(req) {
       ...myReservations.filter(row => row.shared_neighborhood_allowed === true).map(row => row.neighborhood_id),
       ...sharedIntent.sharedNeighborhoodIds,
     ])];
-    const preview = addSleepingPlanConflicts({ plan, existingAllocations: activeAllocations, existingNeighborhoodReservations: activeReservations, sharedNeighborhoodIds });
+    const todayIL = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem' }).format(new Date());
+    const preview = addSleepingPlanConflicts({ plan, existingAllocations: activeAllocations, existingNeighborhoodReservations: activeReservations, sharedNeighborhoodIds, todayDate: todayIL });
     if (!preview.allowed) return Response.json({ success: false, error: 'SLEEPING_PLAN_CONFLICT', exact_tent_conflicts: preview.exact_tent_conflicts, neighborhood_conflicts: preview.neighborhood_conflicts }, { status: 409 });
 
     const isAllocationAppend = ['APPEND_VIP', 'APPEND_ALT', 'APPEND_STUDENT', 'APPEND_RESERVATIONS'].includes(existingState.state);
