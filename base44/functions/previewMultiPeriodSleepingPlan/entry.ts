@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { addSleepingPlanConflicts, buildMultiPeriodSleepingPlan, findLegacyEnvelopeAllocations, normalizeSharedNeighborhoodIntent, validateSleepingAssignments } from '../../shared/multiPeriodSleepingPlan.js';
+import { resolveAssignmentEffectivePeriods } from '../../shared/effectiveSleepingSeries.js';
 
 export default async function(req) {
   try {
@@ -31,7 +32,16 @@ export default async function(req) {
     const sharedIntent = normalizeSharedNeighborhoodIntent(sharedNeighborhoods, assignments);
     if (sharedIntent.errors.length > 0) return Response.json({ success: false, error: 'INVALID_SHARED_NEIGHBORHOODS', errors: sharedIntent.errors }, { status: 400 });
 
-    const plan = buildMultiPeriodSleepingPlan({ groupId, profileId: profiles[0].id, periods, assignments });
+    const myAllocations = existingAllocations.filter(row => row.group_id === groupId);
+    const effectiveResolution = resolveAssignmentEffectivePeriods({ periods, assignments, existingAllocations: myAllocations });
+    if (!effectiveResolution.valid) return Response.json({ success: false, error: 'INVALID_SERIES_EFFECTIVE_PERIODS', errors: effectiveResolution.errors }, { status: 409 });
+    const plan = buildMultiPeriodSleepingPlan({
+      groupId,
+      profileId: profiles[0].id,
+      periods,
+      assignments,
+      assignmentEffectivePeriodIds: effectiveResolution.effectivePeriodIds,
+    });
     if (!plan.valid) return Response.json({ success: false, error: 'INVALID_ACTIVE_PERIODS', errors: plan.errors }, { status: 409 });
 
     const sharedNeighborhoodIds = [...new Set([

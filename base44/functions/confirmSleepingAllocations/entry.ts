@@ -13,7 +13,7 @@ function getOperationalMaxPax(tent) {
     : (tent.capacity || 8);
 }
 
-Deno.serve(async (req) => {
+export default async function(req) {
   try {
     const base44 = createClientFromRequest(req);
 
@@ -161,6 +161,7 @@ Deno.serve(async (req) => {
       // A different linked series in this group may not overlap on the same exact tent.
       const sameGroupTentConflicts = allGroupAllocations.filter(other =>
         other.status !== 'CANCELLED' &&
+        other.departure_date > today &&
         other.id !== draft.id &&
         other.tent_id === draft.tent_id &&
         datesOverlap(draft.arrival_date, draft.departure_date, other.arrival_date, other.departure_date) &&
@@ -195,6 +196,7 @@ Deno.serve(async (req) => {
       // Rule 4: no mixed-gender occupancy in the same tent during overlapping dates
       const genderConflict = allGroupAllocations.some(other =>
         other.status !== 'CANCELLED' &&
+        other.departure_date > today &&
         other.id !== draft.id &&
         other.tent_id === draft.tent_id &&
         other.gender_group !== draft.gender_group &&
@@ -277,4 +279,4 @@ Deno.serve(async (req) => {
       debug: { reasonCode: 'UNEXPECTED_EXCEPTION', message: err?.message }
     }, { status: 500 });
   }
-});
+}

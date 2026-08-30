@@ -1,0 +1,46 @@
+import { normalizeStayPeriods } from './groupStayPeriods.js';
+
+export function todayInJerusalem(now = new Date()) {
+  return now.toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
+}
+
+export function expectedPeriodsForSeries(periods, effectivePeriodId) {
+  const active = normalizeStayPeriods(periods).filter(period => period.status !== 'CANCELLED');
+  if (!effectivePeriodId) return { periods: active, error: null };
+  const startIndex = active.findIndex(period => period.id === effectivePeriodId);
+  if (startIndex < 0) return { periods: [], error: { code: 'INVALID_SERIES_EFFECTIVE_PERIOD', stay_period_id: effectivePeriodId } };
+  return { periods: active.slice(startIndex), error: null };
+}
+
+export function readSeriesEffectivePeriod(rows = []) {
+  const values = [...new Set(rows.map(row => row.series_effective_from_period_id || null))];
+  if (values.length > 1) return { value: null, error: { code: 'SERIES_EFFECTIVE_MARKER_MISMATCH' } };
+  return { value: values[0] || null, error: null };
+}
+
+export function resolveAssignmentEffectivePeriods({ periods, assignments = [], existingAllocations = [], todayIL = todayInJerusalem() }) {
+  const active = normalizeStayPeriods(periods).filter(period => period.status !== 'CANCELLED');
+  const firstActionable = active.find(period => period.end_date > todayIL) || null;
+  const activeRows = existingAllocations.filter(row => row.status !== 'CANCELLED' && row.allocation_series_id);
+  const errors = [];
+  const effectivePeriodIds = assignments.map((assignment, index) => {
+    const rows = activeRows.filter(row => row.tent_id === assignment.tent_id);
+    const seriesIds = [...new Set(rows.map(row => row.allocation_series_id))];
+    if (seriesIds.length > 1) {
+      errors.push({ code: 'AMBIGUOUS_EXISTING_TENT_SERIES', index, tent_id: assignment.tent_id });
+      return null;
+    }
+    if (seriesIds.length === 1) {
+      const marker = readSeriesEffectivePeriod(rows);
+      if (marker.error) errors.push({ ...marker.error, index, allocation_series_id: seriesIds[0] });
+      else if (marker.value && !active.some(period => period.id === marker.value)) errors.push({ code: 'INVALID_SERIES_EFFECTIVE_PERIOD', index, allocation_series_id: seriesIds[0], stay_period_id: marker.value });
+      return marker.value;
+    }
+    if (!firstActionable) {
+      errors.push({ code: 'NO_ACTIONABLE_STAY_PERIOD', index, tent_id: assignment.tent_id });
+      return null;
+    }
+    return firstActionable.id;
+  });
+  return { valid: errors.length === 0, errors, effectivePeriodIds, firstActionablePeriodId: firstActionable?.id || null, todayIL };
+}

@@ -85,7 +85,7 @@ export function validateSleepingAssignments(assignments, tents = [], neighborhoo
   return errors;
 }
 
-export function buildMultiPeriodSleepingPlan({ groupId, profileId, periods, assignments }) {
+export function buildMultiPeriodSleepingPlan({ groupId, profileId, periods, assignments, assignmentEffectivePeriodIds = [] }) {
   const periodValidation = validateStayPeriods(periods);
   const activePeriods = normalizeStayPeriods(periods).filter(period => period.status !== 'CANCELLED');
   const periodErrors = [...periodValidation.errors];
@@ -93,15 +93,28 @@ export function buildMultiPeriodSleepingPlan({ groupId, profileId, periods, assi
     if (period.end_date <= period.start_date) periodErrors.push({ code: 'SLEEPING_PERIOD_MUST_HAVE_NIGHT', index });
   });
   if (activePeriods.length === 0) periodErrors.push({ code: 'ACTIVE_PERIODS_REQUIRED' });
+  const periodIndexById = Object.fromEntries(activePeriods.map((period, index) => [period.id, index]));
+  const periodsByAssignment = assignments.map((assignment, index) => {
+    const effectivePeriodId = assignmentEffectivePeriodIds[index] || null;
+    if (!effectivePeriodId) return activePeriods;
+    const startIndex = periodIndexById[effectivePeriodId];
+    if (startIndex == null) {
+      periodErrors.push({ code: 'INVALID_SERIES_EFFECTIVE_PERIOD', index, stay_period_id: effectivePeriodId });
+      return [];
+    }
+    return activePeriods.slice(startIndex);
+  });
   if (periodErrors.length > 0) return { valid: false, errors: periodErrors, planned_rows: [], planned_neighborhood_intervals: [] };
 
   const plannedRows = [];
   assignments.forEach((assignment, assignmentIndex) => {
-    activePeriods.forEach(period => {
+    const effectivePeriodId = assignmentEffectivePeriodIds[assignmentIndex] || null;
+    periodsByAssignment[assignmentIndex].forEach(period => {
       plannedRows.push({
         plan_key: `${assignmentIndex}:${period.id || period.start_date}`,
         source_stay_period_id: period.id || null,
         logical_assignment_index: assignmentIndex,
+        series_effective_from_period_id: effectivePeriodId,
         sleeping_allocation: {
           operational_group_profile_id: profileId,
           group_id: groupId,
@@ -115,6 +128,7 @@ export function buildMultiPeriodSleepingPlan({ groupId, profileId, periods, assi
           notes: assignment.notes || '',
           status: 'DRAFT',
           housekeeping_status: 'PENDING',
+          ...(effectivePeriodId ? { series_effective_from_period_id: effectivePeriodId } : {}),
         },
       });
     });
@@ -123,7 +137,8 @@ export function buildMultiPeriodSleepingPlan({ groupId, profileId, periods, assi
   const plannedNeighborhoodIntervals = [];
   activePeriods.forEach(period => {
     const byNeighborhood = {};
-    assignments.filter(a => a.allocation_type === 'STUDENT').forEach(assignment => {
+    assignments.forEach((assignment, assignmentIndex) => {
+      if (assignment.allocation_type !== 'STUDENT' || !periodsByAssignment[assignmentIndex].some(item => item.id === period.id)) return;
       const entry = byNeighborhood[assignment.neighborhood_id] ||= { tentIds: new Set(), genders: new Set() };
       entry.tentIds.add(assignment.tent_id);
       entry.genders.add(assignment.gender_group);
@@ -151,7 +166,7 @@ export function buildMultiPeriodSleepingPlan({ groupId, profileId, periods, assi
   const sameTentPreserved = assignments.every((assignment, index) =>
     plannedRows.filter(row => row.logical_assignment_index === index).every(row => row.sleeping_allocation.tent_id === assignment.tent_id)
   );
-  return { valid: true, errors: [], planned_rows: plannedRows, planned_neighborhood_intervals: plannedNeighborhoodIntervals, same_tent_preserved: sameTentPreserved };
+  return { valid: true, errors: [], planned_rows: plannedRows, planned_neighborhood_intervals: plannedNeighborhoodIntervals, assignment_effective_period_ids: assignmentEffectivePeriodIds, same_tent_preserved: sameTentPreserved };
 }
 
 export function addSleepingPlanConflicts({ plan, existingAllocations = [], existingNeighborhoodReservations = [], sharedNeighborhoodIds = [] }) {

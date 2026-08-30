@@ -128,11 +128,12 @@ export default function TentDistributionEditor({
   // Exact tent availability remains authoritative even when neighborhood sharing is approved.
   const tentConflictMap = useMemo(() => {
     const map = {};
+    const todayIL = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem" }).format(new Date());
     const source = isMultiPeriod ? allActiveAllocs : allConfirmedAllocs;
     source.forEach(allocation => {
       if (allocation.group_id === groupId || allocation.status === "CANCELLED") return;
       const conflictingPeriods = isMultiPeriod
-        ? activeStayPeriods.filter(period => period.start_date < allocation.departure_date && allocation.arrival_date < period.end_date)
+        ? activeStayPeriods.filter(period => period.end_date > todayIL && period.start_date < allocation.departure_date && allocation.arrival_date < period.end_date)
         : (arrivalDate && departureDate && arrivalDate < allocation.departure_date && allocation.arrival_date < departureDate
           ? [{ start_date: arrivalDate, end_date: departureDate }]
           : []);
@@ -232,7 +233,7 @@ export default function TentDistributionEditor({
             tent_id: a.tent_id,
             neighborhood_id: a.neighborhood_id,
             allocated_pax: a.logical_allocated_pax,
-            allocation_type: "STUDENT",
+            allocation_type: a.allocation_type,
             gender_group: a.gender_group,
             notes: a.notes || "",
           }));

@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { addSleepingPlanConflicts, buildMultiPeriodSleepingPlan, findLegacyEnvelopeAllocations, normalizeSharedNeighborhoodIntent, validateSleepingAssignments } from '../../shared/multiPeriodSleepingPlan.js';
+import { expectedPeriodsForSeries, readSeriesEffectivePeriod, resolveAssignmentEffectivePeriods } from '../../shared/effectiveSleepingSeries.js';
 
 function equivalentAssignment(row, assignment) {
   return row.tent_id === assignment.tent_id &&
@@ -25,20 +26,26 @@ function inspectExistingState({ allocations, reservations, assignments, periods,
   const matchedTentIds = new Set();
   const matchedAssignmentIndexes = new Set();
   for (const [seriesId, rows] of seriesGroups) {
-    if (rows.length !== periods.length) return { state: 'INCONSISTENT', reason: 'PARTIAL_SERIES', allocation_series_id: seriesId };
+    const marker = readSeriesEffectivePeriod(rows);
+    if (marker.error) return { state: 'INCONSISTENT', reason: 'SERIES_EFFECTIVE_MARKER_MISMATCH', allocation_series_id: seriesId };
+    const expected = expectedPeriodsForSeries(periods, marker.value);
+    if (expected.error) return { state: 'INCONSISTENT', reason: expected.error.code, allocation_series_id: seriesId, stay_period_id: marker.value };
+    if (rows.length !== expected.periods.length) return { state: 'INCONSISTENT', reason: 'PARTIAL_SERIES', allocation_series_id: seriesId };
     const assignmentIndex = assignments.findIndex(item => item.tent_id === rows[0].tent_id);
     const assignment = assignments[assignmentIndex];
     if (!assignment || matchedTentIds.has(assignment.tent_id)) return { state: 'INCONSISTENT', reason: 'SERIES_ASSIGNMENT_MISMATCH', allocation_series_id: seriesId };
     matchedTentIds.add(assignment.tent_id);
     matchedAssignmentIndexes.add(assignmentIndex);
+    const expectedIds = new Set(expected.periods.map(period => period.id));
     const periodIds = new Set();
     for (const row of rows) {
       const period = periodById[row.stay_period_id];
-      if (!period || periodIds.has(row.stay_period_id) || !equivalentAssignment(row, assignment) || row.arrival_date !== period.start_date || row.departure_date !== period.end_date) {
+      if (!period || !expectedIds.has(row.stay_period_id) || periodIds.has(row.stay_period_id) || !equivalentAssignment(row, assignment) || row.arrival_date !== period.start_date || row.departure_date !== period.end_date) {
         return { state: 'INCONSISTENT', reason: 'SERIES_ROW_MISMATCH', allocation_series_id: seriesId, allocation_id: row.id };
       }
       periodIds.add(row.stay_period_id);
     }
+    if ([...expectedIds].some(periodId => !periodIds.has(periodId))) return { state: 'INCONSISTENT', reason: 'PARTIAL_SERIES', allocation_series_id: seriesId };
   }
 
   const expectedNeighborhoods = plan.planned_neighborhood_intervals;
@@ -123,10 +130,17 @@ export default async function(req) {
     if (sharedIntent.errors.length > 0) return Response.json({ success: false, error: 'INVALID_SHARED_NEIGHBORHOODS', errors: sharedIntent.errors }, { status: 400 });
 
     const profile = profiles[0];
-    const plan = buildMultiPeriodSleepingPlan({ groupId, profileId: profile.id, periods, assignments });
-    if (!plan.valid) return Response.json({ success: false, error: 'INVALID_ACTIVE_PERIODS', errors: plan.errors }, { status: 409 });
-
     const myAllocations = activeAllocations.filter(row => row.group_id === groupId);
+    const effectiveResolution = resolveAssignmentEffectivePeriods({ periods, assignments, existingAllocations: myAllocations });
+    if (!effectiveResolution.valid) return Response.json({ success: false, error: 'INVALID_SERIES_EFFECTIVE_PERIODS', errors: effectiveResolution.errors }, { status: 409 });
+    const plan = buildMultiPeriodSleepingPlan({
+      groupId,
+      profileId: profile.id,
+      periods,
+      assignments,
+      assignmentEffectivePeriodIds: effectiveResolution.effectivePeriodIds,
+    });
+    if (!plan.valid) return Response.json({ success: false, error: 'INVALID_ACTIVE_PERIODS', errors: plan.errors }, { status: 409 });
     const myReservations = activeReservations.filter(row => row.group_id === groupId);
     const legacyEnvelope = findLegacyEnvelopeAllocations(groupId, periods, activeAllocations);
     if (legacyEnvelope.length > 0) return Response.json({ success: false, error: 'LEGACY_ENVELOPE_ALLOCATION_REQUIRES_CONVERSION', legacy_allocations: legacyEnvelope.map(row => ({ id: row.id, tent_id: row.tent_id, arrival_date: row.arrival_date, departure_date: row.departure_date, status: row.status })) }, { status: 409 });
@@ -151,7 +165,7 @@ export default async function(req) {
       ? new Set(existingState.missing_assignment_indexes || [])
       : new Set(assignments.map((_, index) => index));
     const seriesByAssignmentIndex = assignments.map((assignment, index) => indexesToCreate.has(index)
-      ? { logical_assignment_index: index, tent_id: assignment.tent_id, allocation_series_id: crypto.randomUUID() }
+      ? { logical_assignment_index: index, tent_id: assignment.tent_id, allocation_series_id: crypto.randomUUID(), series_effective_from_period_id: effectiveResolution.effectivePeriodIds[index] || null }
       : null);
     for (const planned of plan.planned_rows.filter(row => indexesToCreate.has(row.logical_assignment_index))) {
       const series = seriesByAssignmentIndex[planned.logical_assignment_index];
@@ -159,6 +173,7 @@ export default async function(req) {
         ...planned.sleeping_allocation,
         stay_period_id: planned.source_stay_period_id,
         allocation_series_id: series.allocation_series_id,
+        ...(series.series_effective_from_period_id ? { series_effective_from_period_id: series.series_effective_from_period_id } : {}),
       });
       createdAllocationIds.push(created.id);
     }

@@ -26,6 +26,10 @@
       "type": "string",
       "description": "Optional stable identifier linking one logical tent assignment across MULTI_PERIOD returns"
     },
+    "series_effective_from_period_id": {
+      "type": "string",
+      "description": "Optional FK to GroupStayPeriod. When set, this logical series begins at that ACTIVE period; absent preserves legacy all-period behavior."
+    },
     "arrival_date": {
       "type": "string",
       "format": "date",

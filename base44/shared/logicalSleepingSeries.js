@@ -1,3 +1,5 @@
+import { expectedPeriodsForSeries, readSeriesEffectivePeriod } from './effectiveSleepingSeries.js';
+
 function unique(rows, field, normalize = value => value) {
   return [...new Set(rows.map(row => normalize(row[field])))];
 }
@@ -20,12 +22,15 @@ export function groupLogicalSleepingAssignments(rows = []) {
     if (unique(periodRows, 'allocated_pax', Number).length !== 1) errors.push('PAX_MISMATCH');
     if (unique(periodRows, 'allocation_type').length !== 1) errors.push('ALLOCATION_TYPE_MISMATCH');
     if (unique(periodRows, 'gender_group').length !== 1) errors.push('GENDER_MISMATCH');
+    const effectiveMarker = readSeriesEffectivePeriod(periodRows);
+    if (linked && effectiveMarker.error) errors.push('SERIES_EFFECTIVE_MARKER_MISMATCH');
     const statuses = unique(periodRows, 'status');
     const first = periodRows[0];
     return {
       logical_key: logicalKey,
       linked,
       allocation_series_id: linked ? first.allocation_series_id : null,
+      series_effective_from_period_id: effectiveMarker.value,
       period_rows: periodRows,
       physical_row_count: periodRows.length,
       logical_allocated_pax: errors.includes('PAX_MISMATCH') ? null : Number(first.allocated_pax || 0),
@@ -61,9 +66,14 @@ export function validateLinkedSeriesCompleteness(rows = [], activePeriods = [], 
   const grouped = groupLogicalSleepingAssignments(linkedRows);
   grouped.inconsistent_series.forEach(series => errors.push({ code: 'INCONSISTENT_LOGICAL_SERIES', allocation_series_id: series.allocation_series_id, details: series.consistency_errors }));
   const periodById = Object.fromEntries(activePeriods.map(period => [period.id, period]));
-  const expectedIds = new Set(activePeriods.map(period => period.id));
 
   grouped.logical_assignments.forEach(series => {
+    if (series.consistency_errors.includes('SERIES_EFFECTIVE_MARKER_MISMATCH')) {
+      errors.push({ code: 'SERIES_EFFECTIVE_MARKER_MISMATCH', allocation_series_id: series.allocation_series_id });
+    }
+    const expected = expectedPeriodsForSeries(activePeriods, series.series_effective_from_period_id);
+    if (expected.error) errors.push({ ...expected.error, allocation_series_id: series.allocation_series_id });
+    const expectedIds = new Set(expected.periods.map(period => period.id));
     const seen = new Set();
     series.period_rows.forEach(row => {
       const period = periodById[row.stay_period_id];
