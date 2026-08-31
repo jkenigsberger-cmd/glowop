@@ -5,6 +5,14 @@ import '../../shared/logicalSleepingSeries.js';
 
 const RUNTIME_BUILD = 'MULTI_PERIOD_EFFECTIVE_20260830_V3_NEW_ENDPOINT';
 const versionedResponse = (payload, init) => globalThis.Response.json({ ...payload, runtime_build: RUNTIME_BUILD }, init);
+const businessDiagnosticResponse = (payload, { stage, existingState = null, details = null, todayIL = null } = {}) => versionedResponse({
+  ...payload,
+  diagnostic_stage: stage,
+  existing_state: existingState?.state || null,
+  existing_state_reason: existingState?.reason || null,
+  details: details ?? existingState,
+  today_il: todayIL,
+});
 
 function sameAssignmentIdentity(row, assignment) {
   return row.tent_id === assignment.tent_id &&
@@ -126,9 +134,9 @@ export default async function(req) {
 
     const group = await base44.asServiceRole.entities.Group.get(groupId).catch(() => null);
     if (!group) return versionedResponse({ success: false, error: 'GROUP_NOT_FOUND' }, { status: 404 });
-    if (group.stay_mode !== 'MULTI_PERIOD') return versionedResponse({ success: false, error: 'GROUP_NOT_MULTI_PERIOD' }, { status: 409 });
-    if (group.operationally_active !== true) return versionedResponse({ success: false, error: 'GROUP_NOT_OPERATIONALLY_ACTIVE' }, { status: 409 });
-    if (group.status !== 'CONFIRMED') return versionedResponse({ success: false, error: 'GROUP_NOT_CONFIRMED' }, { status: 409 });
+    if (group.stay_mode !== 'MULTI_PERIOD') return businessDiagnosticResponse({ success: false, error: 'GROUP_NOT_MULTI_PERIOD' }, { stage: 'VALIDATE_GROUP', details: { stay_mode: group.stay_mode } });
+    if (group.operationally_active !== true) return businessDiagnosticResponse({ success: false, error: 'GROUP_NOT_OPERATIONALLY_ACTIVE' }, { stage: 'VALIDATE_GROUP', details: { operationally_active: group.operationally_active } });
+    if (group.status !== 'CONFIRMED') return businessDiagnosticResponse({ success: false, error: 'GROUP_NOT_CONFIRMED' }, { stage: 'VALIDATE_GROUP', details: { group_status: group.status } });
 
     const [profiles, periods, tents, inventoryNeighborhoods, activeAllocations, activeReservations] = await Promise.all([
       base44.asServiceRole.entities.OperationalGroupProfile.filter({ group_id: groupId }),
@@ -138,7 +146,7 @@ export default async function(req) {
       base44.asServiceRole.entities.SleepingAllocation.filter({ status: { $in: ['DRAFT', 'CONFIRMED'] } }),
       base44.asServiceRole.entities.NeighborhoodReservation.filter({ status: 'ACTIVE' }),
     ]);
-    if (profiles.length !== 1) return versionedResponse({ success: false, error: 'EXACTLY_ONE_OGP_REQUIRED', profile_count: profiles.length }, { status: 409 });
+    if (profiles.length !== 1) return businessDiagnosticResponse({ success: false, error: 'EXACTLY_ONE_OGP_REQUIRED', profile_count: profiles.length }, { stage: 'VALIDATE_OPERATIONAL_PROFILE', details: { profile_count: profiles.length } });
     const assignmentErrors = validateSleepingAssignments(assignments, tents, inventoryNeighborhoods);
     if (assignmentErrors.length > 0) return versionedResponse({ success: false, error: 'INVALID_ASSIGNMENTS', errors: assignmentErrors }, { status: 400 });
     const sharedIntent = normalizeSharedNeighborhoodIntent(sharedNeighborhoods, assignments);
@@ -147,7 +155,7 @@ export default async function(req) {
     const profile = profiles[0];
     const myAllocations = activeAllocations.filter(row => row.group_id === groupId);
     const effectiveResolution = resolveAssignmentEffectivePeriods({ periods, assignments, existingAllocations: myAllocations });
-    if (!effectiveResolution.valid) return versionedResponse({ success: false, error: 'INVALID_SERIES_EFFECTIVE_PERIODS', errors: effectiveResolution.errors }, { status: 409 });
+    if (!effectiveResolution.valid) return businessDiagnosticResponse({ success: false, error: 'INVALID_SERIES_EFFECTIVE_PERIODS', errors: effectiveResolution.errors }, { stage: 'RESOLVE_EFFECTIVE_PERIODS', details: effectiveResolution.errors, todayIL: effectiveResolution.todayIL });
     const builtPlan = buildMultiPeriodSleepingPlan({
       groupId,
       profileId: profile.id,
@@ -155,19 +163,24 @@ export default async function(req) {
       assignments,
       assignmentEffectivePeriodIds: effectiveResolution.effectivePeriodIds,
     });
-    if (!builtPlan.valid) return versionedResponse({ success: false, error: 'INVALID_ACTIVE_PERIODS', errors: builtPlan.errors }, { status: 409 });
+    if (!builtPlan.valid) return businessDiagnosticResponse({ success: false, error: 'INVALID_ACTIVE_PERIODS', errors: builtPlan.errors }, { stage: 'BUILD_SLEEPING_PLAN', details: builtPlan.errors, todayIL: effectiveResolution.todayIL });
     const plan = preserveHistoricalPaxInPlan({ plan: builtPlan, existingAllocations: myAllocations, todayIL: effectiveResolution.todayIL });
     const myReservations = activeReservations.filter(row => row.group_id === groupId);
     const legacyEnvelope = findLegacyEnvelopeAllocations(groupId, periods, activeAllocations);
-    if (legacyEnvelope.length > 0) return versionedResponse({ success: false, error: 'LEGACY_ENVELOPE_ALLOCATION_REQUIRES_CONVERSION', legacy_allocations: legacyEnvelope.map(row => ({ id: row.id, tent_id: row.tent_id, arrival_date: row.arrival_date, departure_date: row.departure_date, status: row.status })) }, { status: 409 });
+    if (legacyEnvelope.length > 0) return businessDiagnosticResponse({ success: false, error: 'LEGACY_ENVELOPE_ALLOCATION_REQUIRES_CONVERSION', legacy_allocations: legacyEnvelope.map(row => ({ id: row.id, tent_id: row.tent_id, arrival_date: row.arrival_date, departure_date: row.departure_date, status: row.status })) }, { stage: 'VALIDATE_LEGACY_ALLOCATIONS', details: { legacy_allocations: legacyEnvelope }, todayIL: effectiveResolution.todayIL });
     const otherUnlinked = myAllocations.filter(row => !row.stay_period_id || !row.allocation_series_id);
-    if (otherUnlinked.length > 0) return versionedResponse({ success: false, error: 'LEGACY_SLEEPING_ALLOCATION_REQUIRES_CONVERSION', allocation_ids: otherUnlinked.map(row => row.id) }, { status: 409 });
+    if (otherUnlinked.length > 0) return businessDiagnosticResponse({ success: false, error: 'LEGACY_SLEEPING_ALLOCATION_REQUIRES_CONVERSION', allocation_ids: otherUnlinked.map(row => row.id) }, { stage: 'VALIDATE_ALLOCATION_LINKAGE', details: { allocation_ids: otherUnlinked.map(row => row.id) }, todayIL: effectiveResolution.todayIL });
     const legacyReservations = myReservations.filter(row => !row.stay_period_id);
-    if (legacyReservations.length > 0) return versionedResponse({ success: false, error: 'LEGACY_ENVELOPE_NEIGHBORHOOD_RESERVATION_REQUIRES_CONVERSION', reservation_ids: legacyReservations.map(row => row.id) }, { status: 409 });
+    if (legacyReservations.length > 0) return businessDiagnosticResponse({ success: false, error: 'LEGACY_ENVELOPE_NEIGHBORHOOD_RESERVATION_REQUIRES_CONVERSION', reservation_ids: legacyReservations.map(row => row.id) }, { stage: 'VALIDATE_RESERVATION_LINKAGE', details: { reservation_ids: legacyReservations.map(row => row.id) }, todayIL: effectiveResolution.todayIL });
 
     const existingState = inspectExistingState({ allocations: myAllocations, reservations: myReservations, assignments, periods, plan, todayIL: effectiveResolution.todayIL });
     if (existingState.state === 'COMPLETE') return versionedResponse({ success: true, runtime_build: 'MULTI_PERIOD_EFFECTIVE_20260830_V3_NEW_ENDPOINT', already_committed: true, read_only_retry: true, ...existingState });
-    if (existingState.state === 'INCONSISTENT') return versionedResponse({ success: false, runtime_build: 'MULTI_PERIOD_EFFECTIVE_20260830_V3_NEW_ENDPOINT', error: 'INCONSISTENT_PERIODIZED_SLEEPING_STATE', details: existingState }, { status: 409 });
+    if (existingState.state === 'INCONSISTENT') return businessDiagnosticResponse({ success: false, error: 'INCONSISTENT_PERIODIZED_SLEEPING_STATE' }, {
+      stage: 'INSPECT_EXISTING_STATE',
+      existingState,
+      details: existingState,
+      todayIL: effectiveResolution.todayIL,
+    });
 
     const sharedNeighborhoodIds = [...new Set([
       ...myReservations.filter(row => row.shared_neighborhood_allowed === true).map(row => row.neighborhood_id),
@@ -175,7 +188,12 @@ export default async function(req) {
     ])];
     const todayIL = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem' }).format(new Date());
     const preview = addSleepingPlanConflicts({ plan, existingAllocations: activeAllocations, existingNeighborhoodReservations: activeReservations, sharedNeighborhoodIds, todayDate: todayIL });
-    if (!preview.allowed) return versionedResponse({ success: false, runtime_build: 'MULTI_PERIOD_EFFECTIVE_20260830_V3_NEW_ENDPOINT', error: 'SLEEPING_PLAN_CONFLICT', exact_tent_conflicts: preview.exact_tent_conflicts, neighborhood_conflicts: preview.neighborhood_conflicts }, { status: 409 });
+    if (!preview.allowed) return businessDiagnosticResponse({ success: false, error: 'SLEEPING_PLAN_CONFLICT', exact_tent_conflicts: preview.exact_tent_conflicts, neighborhood_conflicts: preview.neighborhood_conflicts }, {
+      stage: 'CHECK_SLEEPING_PLAN_CONFLICTS',
+      existingState,
+      details: preview,
+      todayIL: effectiveResolution.todayIL,
+    });
 
     if (existingState.state === 'PAX_EDIT') {
       const updates = existingState.pax_edits.map(edit => ({ id: edit.id, allocated_pax: edit.to_pax }));
