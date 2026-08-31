@@ -1,43 +1,8 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
-import { buildOperationalDaySnapshot } from '../../shared/operationalDaySnapshot.js';
+import { dateInJerusalem, finalizeOperationalSnapshotForDate, previousDate } from '../../shared/operationalDaySnapshot.js';
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const normalize = (value) => String(value || '').trim().toLowerCase();
-const MAX_CHUNK_BYTES = 12000;
-const MAX_CHUNKS = 16;
-
-function splitUtf8(value) {
-  const encoder = new TextEncoder();
-  const chunks = [];
-  let chunk = '';
-  let chunkBytes = 0;
-  for (const character of value) {
-    const characterBytes = encoder.encode(character).length;
-    if (chunk && chunkBytes + characterBytes > MAX_CHUNK_BYTES) {
-      chunks.push(chunk);
-      chunk = '';
-      chunkBytes = 0;
-    }
-    chunk += character;
-    chunkBytes += characterBytes;
-  }
-  if (chunk || chunks.length === 0) chunks.push(chunk);
-  return chunks;
-}
-
-function dateInJerusalem(reference = new Date()) {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Jerusalem', year: 'numeric', month: '2-digit', day: '2-digit',
-  }).formatToParts(reference);
-  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return `${values.year}-${values.month}-${values.day}`;
-}
-
-function previousDate(value) {
-  const date = new Date(`${value}T12:00:00Z`);
-  date.setUTCDate(date.getUTCDate() - 1);
-  return date.toISOString().slice(0, 10);
-}
 
 function validDate(value) {
   if (!DATE_PATTERN.test(value)) return false;
@@ -67,31 +32,8 @@ export default async function(req) {
     if (!validDate(date)) return Response.json({ error: 'Invalid date; expected YYYY-MM-DD' }, { status: 400 });
     if (date >= today) return Response.json({ error: 'Only past operational dates can be finalized' }, { status: 400 });
 
-    const existing = await base44.asServiceRole.entities.OperationalDaySnapshot.filter({ date }, 'created_date', 10);
-    if (existing.length > 0) {
-      return Response.json({ ok: true, date, already_finalized: true, snapshot_id: existing[0].id, snapshot_version: existing[0].snapshot_version });
-    }
-
-    const payload = await buildOperationalDaySnapshot(base44, date);
-    const snapshotJson = JSON.stringify(payload);
-    const snapshotChunks = splitUtf8(snapshotJson);
-    if (snapshotChunks.length > MAX_CHUNKS) {
-      throw new Error(`Snapshot requires ${snapshotChunks.length} chunks; maximum supported is ${MAX_CHUNKS}`);
-    }
-    const snapshotFields = Object.fromEntries(snapshotChunks.map((chunk, index) => [index === 0 ? 'snapshot_json' : `snapshot_json_part_${index + 1}`, chunk]));
-    const created = await base44.asServiceRole.entities.OperationalDaySnapshot.create({
-      date,
-      ...snapshotFields,
-      finalized_at: new Date().toISOString(),
-      snapshot_version: 1,
-    });
-
-    const afterCreate = await base44.asServiceRole.entities.OperationalDaySnapshot.filter({ date }, 'created_date', 10);
-    const keep = afterCreate[0] || created;
-    const duplicates = afterCreate.filter((item) => item.id !== keep.id);
-    for (const duplicate of duplicates) await base44.asServiceRole.entities.OperationalDaySnapshot.delete(duplicate.id);
-
-    return Response.json({ ok: true, date, already_finalized: keep.id !== created.id, snapshot_id: keep.id, snapshot_version: keep.snapshot_version || 1 });
+    const result = await finalizeOperationalSnapshotForDate(base44, date);
+    return Response.json(result);
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
   }

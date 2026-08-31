@@ -164,3 +164,66 @@ export async function buildOperationalDaySnapshot(base44, date) {
     },
   };
 }
+
+const MAX_CHUNK_BYTES = 12000;
+const MAX_CHUNKS = 16;
+
+export function dateInJerusalem(reference = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Jerusalem', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(reference);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+export function previousDate(value) {
+  const date = new Date(`${value}T12:00:00Z`);
+  date.setUTCDate(date.getUTCDate() - 1);
+  return date.toISOString().slice(0, 10);
+}
+
+function splitUtf8(value) {
+  const encoder = new TextEncoder();
+  const chunks = [];
+  let chunk = '';
+  let chunkBytes = 0;
+  for (const character of value) {
+    const characterBytes = encoder.encode(character).length;
+    if (chunk && chunkBytes + characterBytes > MAX_CHUNK_BYTES) {
+      chunks.push(chunk);
+      chunk = '';
+      chunkBytes = 0;
+    }
+    chunk += character;
+    chunkBytes += characterBytes;
+  }
+  if (chunk || chunks.length === 0) chunks.push(chunk);
+  return chunks;
+}
+
+export async function finalizeOperationalSnapshotForDate(base44, date) {
+  const existing = await base44.asServiceRole.entities.OperationalDaySnapshot.filter({ date }, 'created_date', 10);
+  if (existing.length > 0) {
+    return { ok: true, date, already_finalized: true, snapshot_id: existing[0].id, snapshot_version: existing[0].snapshot_version };
+  }
+
+  const payload = await buildOperationalDaySnapshot(base44, date);
+  const snapshotChunks = splitUtf8(JSON.stringify(payload));
+  if (snapshotChunks.length > MAX_CHUNKS) {
+    throw new Error(`Snapshot requires ${snapshotChunks.length} chunks; maximum supported is ${MAX_CHUNKS}`);
+  }
+  const snapshotFields = Object.fromEntries(snapshotChunks.map((chunk, index) => [index === 0 ? 'snapshot_json' : `snapshot_json_part_${index + 1}`, chunk]));
+  const created = await base44.asServiceRole.entities.OperationalDaySnapshot.create({
+    date,
+    ...snapshotFields,
+    finalized_at: new Date().toISOString(),
+    snapshot_version: 1,
+  });
+
+  const afterCreate = await base44.asServiceRole.entities.OperationalDaySnapshot.filter({ date }, 'created_date', 10);
+  const keep = afterCreate[0] || created;
+  const duplicates = afterCreate.filter((item) => item.id !== keep.id);
+  for (const duplicate of duplicates) await base44.asServiceRole.entities.OperationalDaySnapshot.delete(duplicate.id);
+
+  return { ok: true, date, already_finalized: keep.id !== created.id, snapshot_id: keep.id, snapshot_version: keep.snapshot_version || 1 };
+}
