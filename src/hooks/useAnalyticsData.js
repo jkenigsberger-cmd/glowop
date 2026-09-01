@@ -14,8 +14,8 @@ export default function useAnalyticsData(config, role) {
           const start = monthPayload(config.rangeStart), end = monthPayload(config.rangeEnd);
           payload = { startYear: start.year, startMonth: start.month, endYear: end.year, endMonth: end.month };
         }
-        const requests = [base44.functions.invoke("getAnalyticsData", payload)];
-        if (config.mode === "compare") requests.push(base44.functions.invoke("getAnalyticsData", monthPayload(config.monthB)));
+        const requests = [base44.functions.invoke("getAnalyticsDataV2", payload)];
+        if (config.mode === "compare") requests.push(base44.functions.invoke("getAnalyticsDataV2", monthPayload(config.monthB)));
         const results = await Promise.all(requests);
         setState({ data: results[0].data, comparison: results[1]?.data || null, loading: false, error: "" });
       } catch (err) { setState({ data: null, comparison: null, loading: false, error: err?.response?.data?.error || err.message }); }
