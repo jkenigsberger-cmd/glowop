@@ -1,0 +1,48 @@
+{
+  "name": "DashboardStaffNote",
+  "type": "object",
+  "properties": {
+    "date": {
+      "type": "string",
+      "format": "date",
+      "description": "Asia/Jerusalem date the note becomes visible (YYYY-MM-DD)"
+    },
+    "end_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Optional inclusive end date for multi-day notes. Empty = single-day."
+    },
+    "message": {
+      "type": "string",
+      "description": "Free-text informational message for internal staff"
+    },
+    "active": {
+      "type": "boolean",
+      "default": true,
+      "description": "When false the note is hidden from the Dashboard"
+    }
+  },
+  "required": [
+    "date",
+    "message",
+    "active"
+  ],
+  "rls": {
+    "read": {},
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

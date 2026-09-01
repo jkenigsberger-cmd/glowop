@@ -20,6 +20,7 @@ import { isGroupOperationallyEnabled } from "@/lib/groupOperationalIsolation";
 import { isGroupArrivalOnDate, isGroupDepartureOnDate, isGroupOnDashboardDate, isGroupSleepingNightOnDate } from "@/lib/groupDateReaders";
 import useGroupStayPeriods from "@/hooks/useGroupStayPeriods";
 import YesterdaySnapshotWarning from "@/components/dashboard/YesterdaySnapshotWarning";
+import StaffNotesSection from "@/components/dashboard/StaffNotesSection";
 
 const toDateStr = (date) => format(date, "yyyy-MM-dd");
 const TODAY = toDateStr(new Date());
@@ -469,6 +470,7 @@ export default function Dashboard() {
         )}
 
         {!isSnapshotLoading && <>
+        <StaffNotesSection selectedDate={selectedDate} />
         {canViewSpaceBlocks && upcomingSpaceBlocks.length > 0 && (
           <DashboardSpaceBlocksAlert blocks={upcomingSpaceBlocks} activities={activitiesForSpaceBlockAlert} />
         )}
