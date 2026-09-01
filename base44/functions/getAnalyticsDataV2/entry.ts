@@ -114,7 +114,10 @@ function aggregateRange(bounds, dailyMap, validStatuses) {
     for (const group of groups) {
       const profile = profiles[group.id], facts = groupFacts(group, profile, periods[group.id] || [], date); factsById[group.id] = facts;
       const pax = groupPax(group, profile), type = normalizeType(group, profile);
-      if (facts.present && !firstGroups.has(group.id)) firstGroups.set(group.id, { id: group.id, group_name: group.group_name || "ללא שם", arrival_date: group.arrival_date, departure_date: group.departure_date || group.arrival_date, group_type: type, total_pax: pax.total, students_count: pax.students, staff_count: pax.staff, vip_count: pax.vip, nights_inside_period: 0, nights_inside_month: 0, person_nights: 0, active_days_inside_period: 0 });
+      if (facts.present && !firstGroups.has(group.id)) {
+        const stayPeriods = (periods[group.id] || []).filter(p => p.status !== "CANCELLED").map(p => ({ start_date: p.start_date, end_date: p.end_date })).sort((a, b) => a.start_date.localeCompare(b.start_date));
+        firstGroups.set(group.id, { id: group.id, group_name: group.group_name || "ללא שם", arrival_date: group.arrival_date, departure_date: group.departure_date || group.arrival_date, group_type: type, stay_mode: group.stay_mode || "CONTINUOUS", stay_periods: stayPeriods, total_pax: pax.total, students_count: pax.students, staff_count: pax.staff, vip_count: pax.vip, nights_inside_period: 0, nights_inside_month: 0, person_nights: 0, active_days_inside_period: 0 });
+      }
       const row = firstGroups.get(group.id);
       if (facts.present && row) { row.active_days_inside_period += 1; if (type === "DAY_USE") dayUseVisits += pax.total; }
       if (facts.sleeping) { personNights += pax.total; if (row) { row.nights_inside_period += 1; row.nights_inside_month += 1; row.person_nights += pax.total; } }
