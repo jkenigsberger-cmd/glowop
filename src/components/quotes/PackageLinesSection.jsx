@@ -30,7 +30,7 @@ function RowTotal({ amount }) {
 }
 
 // ── Single package line row ───────────────────────────────────────────────────
-function PackageLineRow({ line, index, onUpdate, onRemove, defaultPax }) {
+function PackageLineRow({ line, index, onUpdate, onRemove, defaultPax, nights }) {
   const pkg = PACKAGE_CATALOG.find(p => p.id === line.package_id);
   if (!pkg) return null;
 
@@ -59,7 +59,7 @@ function PackageLineRow({ line, index, onUpdate, onRemove, defaultPax }) {
     onUpdate(index, { ...line, unit_price: Number(val) || 0, price_overridden: true });
   };
 
-  const lineTotal = calcPackageLine(line);
+  const lineTotal = calcPackageLine(line, nights);
   const shirleyAddonTotal = (pkg.addon_shirley && line.shirley_addon) ? pkg.addon_shirley.fixed_price : 0;
 
   return (
@@ -74,7 +74,7 @@ function PackageLineRow({ line, index, onUpdate, onRemove, defaultPax }) {
           <Trash2 className="w-3.5 h-3.5" />
         </button>
       </div>
-      <p className="text-[11px] text-slate-400">{pkg.description}</p>
+      <p className="text-[11px] text-slate-400">{pkg.description}{pkg.billing_period === "per_night" && nights > 0 ? ` · ${nights} לילות` : ""}</p>
 
       {/* Row 2: controls */}
       <div className="grid grid-cols-12 gap-2 items-end">
@@ -253,11 +253,11 @@ function AddPackageDropdown({ onAdd, quoteType }) {
 }
 
 // ── Addon line row ────────────────────────────────────────────────────────────
-function AddonLineRow({ line, index, onUpdate, onRemove, defaultPax }) {
+function AddonLineRow({ line, index, onUpdate, onRemove, defaultPax, nights }) {
   const allAddons = [...MEAL_ADDON_CATALOG, ...OPERATOR_ADDON_CATALOG, ...CONTENT_ADDON_CATALOG];
   const item = allAddons.find(a => a.id === line.addon_id);
   const isContent = CONTENT_ADDON_CATALOG.find(a => a.id === line.addon_id);
-  const total = calcAddonLine(line);
+  const total = calcAddonLine(line, nights);
   const showMaxWarning = isContent?.max_pax && Number(defaultPax) > isContent.max_pax;
 
   return (
@@ -266,7 +266,7 @@ function AddonLineRow({ line, index, onUpdate, onRemove, defaultPax }) {
         <div className="flex items-center gap-1.5">
           <span className="text-xs font-semibold text-slate-700">{item?.label || line.addon_id}</span>
           {item?.group && (
-            <span className="text-[10px] text-slate-400 bg-slate-100 rounded px-1.5 py-0.5">{item.group}</span>
+            <span className="text-[10px] text-slate-400 bg-slate-100 rounded px-1.5 py-0.5">{item.group}{item.billing_period === "per_night" && nights > 0 ? ` · ${nights} לילות` : ""}</span>
           )}
           {isContent && (
             <ProductInfoPopover pkg={{
@@ -400,6 +400,7 @@ export default function PackageLinesSection({
   setAddonLines,
   defaultPax,
   quoteType = "custom",
+  nights = 1,
 }) {
   const handleAddPackage = (pkg) => {
     const defaultOptionId = pkg.pricing_options?.[0]?.id || null;
@@ -467,6 +468,7 @@ export default function PackageLinesSection({
           onUpdate={updatePackageLine}
           onRemove={removePackageLine}
           defaultPax={defaultPax}
+          nights={nights}
         />
       ))}
 
@@ -482,7 +484,7 @@ export default function PackageLinesSection({
                 <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wide px-1 pt-1 border-t border-slate-200">כרמלים / אגד</div>
                 {operatorLines.map(line => {
                   const i = addonLines.indexOf(line);
-                  return <AddonLineRow key={i} line={line} index={i} onUpdate={updateAddonLine} onRemove={removeAddonLine} defaultPax={defaultPax} />;
+                  return <AddonLineRow key={i} line={line} index={i} onUpdate={updateAddonLine} onRemove={removeAddonLine} defaultPax={defaultPax} nights={nights} />;
                 })}
               </div>
             )}
@@ -493,7 +495,7 @@ export default function PackageLinesSection({
                 )}
                 {otherLines.map(line => {
                   const i = addonLines.indexOf(line);
-                  return <AddonLineRow key={i} line={line} index={i} onUpdate={updateAddonLine} onRemove={removeAddonLine} defaultPax={defaultPax} />;
+                  return <AddonLineRow key={i} line={line} index={i} onUpdate={updateAddonLine} onRemove={removeAddonLine} defaultPax={defaultPax} nights={nights} />;
                 })}
               </div>
             )}

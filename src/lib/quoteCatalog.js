@@ -30,6 +30,7 @@ export const PACKAGE_CATALOG = [
     ],
     default_quantity_source: "participant_count",
     allow_unit_price_override: true,
+    billing_period: "per_night",
   },
   {
     id: "chavila_2",
@@ -127,6 +128,7 @@ export const OPERATOR_ADDON_CATALOG = [
     rate: 280,
     pricing_type: "per_person_fixed",
     default_quantity_source: "participant_count",
+    billing_period: "per_night",
   },
   {
     id: "agad",
@@ -137,6 +139,7 @@ export const OPERATOR_ADDON_CATALOG = [
     rate: 206,
     pricing_type: "per_person_fixed",
     default_quantity_source: "participant_count",
+    billing_period: "per_night",
   },
 ];
 
@@ -174,7 +177,7 @@ export const CONTENT_ADDON_CATALOG = [
  * @param {object} line — { package_id, quantity, unit_price, option_id, shirley_addon, fixed_price }
  * @returns {number}
  */
-export function calcPackageLine(line) {
+export function calcPackageLine(line, nights = 1) {
   if (!line) return 0;
   const pkg = PACKAGE_CATALOG.find(p => p.id === line.package_id);
   if (!pkg) return 0;
@@ -186,7 +189,7 @@ export function calcPackageLine(line) {
 
   const unitPrice = Number(line.unit_price || 0);
   const qty = Number(line.quantity || 0);
-  let total = qty * unitPrice;
+  let total = qty * unitPrice * (pkg.billing_period === "per_night" ? Number(nights || 0) : 1);
 
   // חבילה 3 Shirley add-on
   if (pkg.addon_shirley && line.shirley_addon) {
@@ -216,7 +219,7 @@ export function resolvePackageUnitPrice(packageId, optionId, pax) {
  * Compute line total for a content/operator addon.
  * @param {object} line — { addon_id, quantity, unit_price }
  */
-export function calcAddonLine(line) {
+export function calcAddonLine(line, nights = 1) {
   if (!line) return 0;
 
   // Content items (fixed per unit)
@@ -234,7 +237,7 @@ export function calcAddonLine(line) {
   if (item) {
     const qty = Number(line.quantity || 0);
     const rate = Number(line.unit_price || item.rate);
-    return qty * rate;
+    return qty * rate * (item.billing_period === "per_night" ? Number(nights || 0) : 1);
   }
 
   return Number(line.quantity || 0) * Number(line.unit_price || 0);

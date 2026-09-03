@@ -3,6 +3,8 @@
  * Printable RTL Hebrew via window.print().
  */
 import { getQuoteAudienceContent } from "@/lib/quoteAudience";
+import { PACKAGE_CATALOG, OPERATOR_ADDON_CATALOG, calcAddonLine, calcPackageLine } from "@/lib/quoteCatalog";
+import { calcAdultLodgingLine, calcStudentLodgingLine, getQuoteNights } from "@/lib/quotePricing";
 
 const fmt = (n) => Math.round(Number(n) || 0).toLocaleString("he-IL");
 // Unit price: preserve decimals (e.g. 2.5) instead of rounding to a whole number.
@@ -66,9 +68,7 @@ export function resolveQuotePdfData(quote, group) {
 
   const arrival   = quote?.arrival_date   || snap?.startDate   || group?.arrival_date   || "";
   const departure = isDayUse ? arrival : (quote?.departure_date || snap?.endDate || group?.departure_date || "");
-  const nights    = isDayUse ? 0 : (arrival && departure)
-    ? Math.max(0, Math.round((new Date(departure) - new Date(arrival)) / 86400000))
-    : (quote?.nights ?? 0);
+  const nights = getQuoteNights(arrival, departure, isDayUse ? "day_use" : "lodging");
 
   const STUDENT_RATES = {
     day_activity:    { label: "יום פעילות",        rate: 125 },
@@ -86,10 +86,11 @@ export function resolveQuotePdfData(quote, group) {
   packageLines.forEach(r => {
     const pkg = PACKAGE_CATALOG_PDF[r.package_id];
     if (!pkg) return;
-    const qty = Number(r.quantity || 0);
+    const baseQty = Number(r.quantity || 0);
     const unitPrice = Number(r.unit_price || 0);
-    let total = qty * unitPrice;
-    if (r.shirley_addon) total += 5000;
+    const catalogPackage = PACKAGE_CATALOG.find(item => item.id === r.package_id);
+    const qty = baseQty * (catalogPackage?.billing_period === "per_night" ? nights : 1);
+    const total = calcPackageLine({ ...r, shirley_addon: false }, nights);
     lineItems.push({ name: pkg.name, description: pkg.description, qty, unitPrice, total, vatAmount: null });
     if (r.shirley_addon) {
       lineItems.push({ name: "תוספת הרצאה של שירלי", qty: 1, unitPrice: 5000, total: 5000, vatAmount: null });
@@ -100,9 +101,11 @@ export function resolveQuotePdfData(quote, group) {
   const operatorAddonIds = new Set(["karmelim", "agad"]);
   newAddonLines.forEach(r => {
     const item = ADDON_CATALOG_PDF[r.addon_id];
-    const qty = Number(r.quantity || 0);
+    const baseQty = Number(r.quantity || 0);
     const unitPrice = Number(r.unit_price || 0);
-    const total = qty * unitPrice;
+    const catalogItem = OPERATOR_ADDON_CATALOG.find(entry => entry.id === r.addon_id);
+    const qty = baseQty * (catalogItem?.billing_period === "per_night" ? nights : 1);
+    const total = calcAddonLine(r, nights);
     const isOperator = operatorAddonIds.has(r.addon_id);
     lineItems.push({ name: item?.label || r.addon_id, qty, unitPrice, total, vatAmount: null, isOperator });
   });
@@ -111,8 +114,8 @@ export function resolveQuotePdfData(quote, group) {
     const rateInfo = STUDENT_RATES[r.rate_type];
     const isDay = r.rate_type === "day_activity";
     const unitRate = rateInfo?.rate ?? Number(r.rate ?? 0);
-    const qty = isDay ? Number(r.pax) : Number(r.pax) * Number(r.nights);
-    const total = qty * unitRate;
+    const qty = isDay ? Number(r.pax) : Number(r.pax) * nights;
+    const total = calcStudentLodgingLine(r, nights);
     const label = (rateInfo?.label || r.rate_type) + " - אירוח";
     lineItems.push({ name: label, qty, unitPrice: unitRate, total, vatAmount: null });
   });
@@ -120,9 +123,9 @@ export function resolveQuotePdfData(quote, group) {
   adultLines.forEach(r => {
     const rateInfo = ADULT_RATES[r.tent_type];
     const rate = rateInfo?.rate ?? Number(r.rate_per_tent_per_night ?? 0);
-    const qty = Number(r.tent_count) * Number(r.nights);
-    const total = qty * rate;
-    lineItems.push({ name: rateInfo?.label || r.tent_type, qty: r.tent_count, unitPrice: rate, total, vatAmount: null });
+    const qty = Number(r.tent_count) * nights;
+    const total = calcAdultLodgingLine(r, nights);
+    lineItems.push({ name: rateInfo?.label || r.tent_type, qty, unitPrice: rate, total, vatAmount: null });
   });
 
   workshopLines.forEach(r => {

@@ -11,8 +11,8 @@ import { Plus, Trash2, CalendarDays, Users, Coffee, BookOpen, Mic2, Tag, Sliders
 import CapacityWarningBanner from "./CapacityWarningBanner";
 import PackageLinesSection from "./PackageLinesSection";
 import AdjustmentsSection, { calcAdjustmentLine, normalizeAdjustmentRow } from "./AdjustmentsSection";
-import { calcPackageLine, calcAddonLine } from "@/lib/quoteCatalog";
 import { useRoleContext } from "@/lib/RoleContext";
+import { calcAdultLodgingLine, calcStudentLodgingLine, getQuoteNights, priceQuoteParts, repriceOptionPayload } from "@/lib/quotePricing";
 import { isQuotePreparationEnabled } from "@/lib/quotePreparationFlow";
 import { getEffectiveQuoteGroupName } from "@/lib/quoteAudience";
 import { isQuoteMultiOptionEnabled } from "@/lib/quoteMultiOption";
@@ -54,6 +54,7 @@ const LECTURE_CATALOG = [
 ];
 const VAT_RATE = 0.18;
 const COFFEE_CORNER_RATE = 15;
+const PRISA_RATE = 2.5;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const parse = (str, fallback) => { try { const r = JSON.parse(str); return Array.isArray(r) ? r : fallback; } catch { return fallback; } };
@@ -61,24 +62,11 @@ const parseOptionPayload = str => { try { return JSON.parse(str || "{}"); } catc
 const fmtMoney = (n) => `₪${Math.round(Number(n) || 0).toLocaleString("he-IL")}`;
 const fmtDate  = (d) => { if (!d) return null; try { return new Date(d).toLocaleDateString("he-IL"); } catch { return d; } };
 
-const calcNights = (arrival, departure) => {
-  if (!arrival || !departure) return 0;
-  return Math.max(0, Math.round((new Date(departure) - new Date(arrival)) / 86400000));
-};
 const suggestLodgingRateType = (arrivalDate, groupType) => {
   if (groupType === "DAY_USE") return "day_activity";
   if (!arrivalDate) return "midweek_lodging";
   const day = new Date(arrivalDate).getDay();
   return (day === 4 || day === 5) ? "weekend_lodging" : "midweek_lodging";
-};
-const calcStudentLodging = (r) => {
-  const rate = STUDENT_LODGING_RATES[r.rate_type]?.rate ?? Number(r.rate ?? 0);
-  const isDay = r.rate_type === "day_activity";
-  return Number(r.pax) * rate * (isDay ? 1 : Number(r.nights));
-};
-const calcAdultLodging = (r) => {
-  const rate = ADULT_TENT_RATES[r.tent_type]?.rate ?? Number(r.rate_per_tent_per_night ?? 0);
-  return Number(r.tent_count) * Number(r.nights) * rate;
 };
 const calcWorkshop = (r) => Number(r.rate ?? 0);
 const calcLecture  = (r) => { const base = Number(r.base_price ?? 0); return r.vat_included ? base * (1 + VAT_RATE) : base; };
@@ -151,12 +139,12 @@ function StudentLodgingSection({ lines, setLines, suggestedRateType, groupType, 
             {!isDay && (
               <div className="col-span-2 space-y-0.5">
                 <FieldLabel>לילות</FieldLabel>
-                <Input className="h-8 text-xs bg-white" type="number" min="1" value={r.nights} onChange={e => update(idx, "nights", e.target.value)} />
+                <div className="h-8 flex items-center rounded-md border bg-white px-3 text-xs font-semibold">{defaultNights}</div>
               </div>
             )}
             <div className={!isDay ? "col-span-3" : "col-span-5"} />
             <div className="col-span-1 flex items-center gap-1 justify-end">
-              <RowTotal amount={calcStudentLodging(r)} />
+              <RowTotal amount={calcStudentLodgingLine(r, defaultNights)} />
               <button type="button" onClick={() => setLines(p => p.filter((_, i) => i !== idx))} className="text-slate-300 hover:text-red-400">
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
@@ -220,11 +208,11 @@ function AdultLodgingSection({ lines, setLines, defaultNights, adultsCount }) {
           )}
           <div className="col-span-2 space-y-0.5">
             <FieldLabel>לילות</FieldLabel>
-            <Input className="h-8 text-xs bg-white" type="number" min="1" value={r.nights} onChange={e => update(idx, "nights", e.target.value)} />
+            <div className="h-8 flex items-center rounded-md border bg-white px-3 text-xs font-semibold">{defaultNights}</div>
           </div>
           <div className={r.tent_type === "BED68" ? "col-span-1" : "col-span-3"} />
           <div className="col-span-1 flex items-center gap-1 justify-end">
-            <RowTotal amount={calcAdultLodging(r)} />
+            <RowTotal amount={calcAdultLodgingLine(r, defaultNights)} />
             <button type="button" onClick={() => setLines(p => p.filter((_, i) => i !== idx))} className="text-slate-300 hover:text-red-400">
               <Trash2 className="w-3.5 h-3.5" />
             </button>
@@ -381,8 +369,7 @@ function CalendarCard({ arrival, departure, nights, isDayUse }) {
             </>
           )}
           <div className="mt-2 bg-primary/5 border border-primary/15 rounded-xl py-2 text-center">
-            <div className="text-2xl font-bold text-primary">{isDayUse ? "יום" : (nights > 0 ? nights : "יום")}</div>
-            <div className="text-xs text-slate-400">{isDayUse ? "פעילות" : (nights > 0 ? "לילות" : "פעילות")}</div>
+            <div className="text-lg font-bold text-primary">{isDayUse ? "יום פעילות" : `לילות: ${nights}`}</div>
           </div>
         </div>
       ) : (
@@ -536,8 +523,6 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved, returnT
   const [coffeeEnabled, setCoffeeEnabled] = useState(quote ? (quote.coffee_corner_pax > 0) : false);
   const [coffeeCornerPax, setCoffeeCornerPax] = useState(Number(quote?.coffee_corner_pax || 0));
   const [prisaEnabled, setPrisaEnabled] = useState(quote ? (quote.includes_prisa === true) : false);
-  const PRISA_RATE = 2.5;
-
   // ── Quote type (for catalog organization) ────────────────────────────────────
   const deriveQuoteType = () => {
     if (quote?.quote_type) return quote.quote_type;
@@ -550,7 +535,7 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved, returnT
 
   const initArrival    = quote?.arrival_date    || group?.arrival_date    || "";
   const initDeparture  = quote?.departure_date  || group?.departure_date  || "";
-  const initNights     = calcNights(initArrival, initDeparture) || 1; // default 1 for row init
+  const initNights     = getQuoteNights(initArrival, initDeparture, deriveQuoteType()) || 1; // default 1 for row init
   const initEstPax     = Number(quote?.estimated_pax ?? group?.total_pax    ?? 0);
   const initStaff      = Number(quote?.staff_count   ?? group?.staff_count  ?? 0);
   const initParticipants = Math.max(0, initEstPax - initStaff);
@@ -609,10 +594,10 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved, returnT
   const staffCount       = Number(form.staff_count   || 0);
   // A. participantCount is always calculated — never editable
   const participantCount = Math.max(0, estimatedPax - staffCount);
-  const nights = calcNights(form.arrival_date, form.departure_date);
+  const nights = getQuoteNights(form.arrival_date, form.departure_date, quoteType);
   const staffExceedsTotal = staffCount > estimatedPax && estimatedPax > 0;
-  const datesReversed = quoteType !== "day_use" && form.arrival_date && form.departure_date &&
-    new Date(form.departure_date) < new Date(form.arrival_date);
+  const datesReversed = quoteType !== "day_use" && isValidDateString(form.arrival_date) && isValidDateString(form.departure_date) &&
+    form.departure_date < form.arrival_date;
   // B. Default pax for catalog lines: always use estimated_pax (total participants)
   const catalogDefaultPax = estimatedPax || 0;
 
@@ -658,20 +643,21 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved, returnT
   }, [form.arrival_date]);
 
   const suggestedRateType = suggestLodgingRateType(form.arrival_date, groupType);
-  const coffeeTotal      = coffeeEnabled && staffCount > 0 ? staffCount * COFFEE_CORNER_RATE : 0;
-
-  const studentLodgingTotal = quoteType === "day_use" ? 0 : studentLodging.reduce((s, r) => s + calcStudentLodging(r), 0);
-  const adultLodgingTotal   = quoteType === "day_use" ? 0 : adultLodging.reduce((s, r) => s + calcAdultLodging(r), 0);
-  const workshopTotal       = workshops.reduce((s, r) => s + calcWorkshop(r), 0);
-  const lectureTotal        = lectures.reduce((s, r) => s + calcLecture(r), 0);
-  const addonTotal          = addons.reduce((s, r) => s + calcAddon(r), 0);
-  const adjustmentTotal     = adjustments.reduce((s, r) => s + calcAdjustmentLine(r), 0);
-  const surchargeTotal      = 0; // unified into adjustments
-  // New catalog totals
-  const packageLinesTotal   = packageLines.reduce((s, r) => s + calcPackageLine(r), 0);
-  const newAddonLinesTotal  = newAddonLines.reduce((s, r) => s + calcAddonLine(r), 0);
-  const prisaTotal          = prisaEnabled ? Math.round(estimatedPax * PRISA_RATE) : 0;
-  const subtotal            = studentLodgingTotal + adultLodgingTotal + workshopTotal + lectureTotal + coffeeTotal + addonTotal + adjustmentTotal + surchargeTotal + packageLinesTotal + newAddonLinesTotal + prisaTotal;
+  const priced = priceQuoteParts({
+    studentLodging, adultLodging, workshops, lectures, addons, adjustments,
+    packageLines, newAddonLines, coffeeEnabled, staffCount, prisaEnabled, estimatedPax,
+  }, nights, quoteType === "day_use");
+  const studentLodgingTotal = priced.student;
+  const adultLodgingTotal = priced.adult;
+  const workshopTotal = priced.workshops;
+  const lectureTotal = priced.lectures;
+  const coffeeTotal = priced.coffee;
+  const addonTotal = priced.addons;
+  const adjustmentTotal = priced.adjustments;
+  const packageLinesTotal = priced.packages;
+  const newAddonLinesTotal = priced.catalogAddons;
+  const prisaTotal = priced.prisa;
+  const subtotal = priced.subtotal;
   const discountAmount      = Math.round(subtotal * Number(form.discount_percent || 0) / 100);
   const total_price         = subtotal - discountAmount;
   const advance             = Math.round(total_price * 0.3);
@@ -716,7 +702,7 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved, returnT
     const current = captureCurrentOptionPayload();
     const prisaDelta = current.includes_prisa ? (estimatedPax - previousPax) * PRISA_RATE : 0;
     const drafts = { ...optionDraftsRef.current, [activeOptionKey]: { ...current, subtotal: Number(current.subtotal || 0) - prisaDelta } };
-    const syncedDrafts = Object.fromEntries(Object.entries(drafts).map(([key, payload]) => [key, syncOptionPayloadPax(payload, estimatedPax, previousPax)]));
+    const syncedDrafts = Object.fromEntries(Object.entries(drafts).map(([key, payload]) => [key, syncOptionPayloadPax(payload, estimatedPax, previousPax, nights, quoteType === "day_use")]));
     replaceOptionDrafts(syncedDrafts);
     applyOptionDraft(syncedDrafts[activeOptionKey]);
   // An explicit shared pax change synchronizes each draft once; tab navigation never does.
@@ -840,15 +826,16 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved, returnT
         resolvedGroupId = newGroup.id;
       }
       const activeOptionPayload = captureActiveOptionDraft();
-      const draftsToSave = { ...optionDraftsRef.current, [activeOptionKey]: activeOptionPayload };
+      const rawDraftsToSave = { ...optionDraftsRef.current, [activeOptionKey]: activeOptionPayload };
+      const draftsToSave = Object.fromEntries(Object.entries(rawDraftsToSave).map(([key, payload]) => [key, repriceOptionPayload(payload, nights, quoteType === "day_use", estimatedPax)]));
       let quotePayload = {
         ...form,
         client_name: form.client_name.trim(),
         group_name: form.group_name.trim(),
         ...(resolvedGroupId ? { group_id: resolvedGroupId } : {}),
         ...(usePreparationFlow ? { preparation_flow_enabled: true, status: "DRAFT" } : {}),
-        student_lodging_lines: isDayUse ? JSON.stringify([]) : JSON.stringify(studentLodging),
-        adult_lodging_lines: isDayUse ? JSON.stringify([]) : JSON.stringify(adultLodging),
+        student_lodging_lines: quoteType === "day_use" ? JSON.stringify([]) : JSON.stringify(studentLodging.map(line => line.rate_type === "day_activity" ? line : { ...line, nights })),
+        adult_lodging_lines: quoteType === "day_use" ? JSON.stringify([]) : JSON.stringify(adultLodging.map(line => ({ ...line, nights }))),
         workshop_lines: JSON.stringify(workshops), lecture_lines: JSON.stringify(lectures),
         addon_lines: JSON.stringify(addons), adjustment_lines: JSON.stringify(adjustments), surcharge_lines: JSON.stringify([]),
         package_lines: JSON.stringify(packageLines), new_addon_lines: JSON.stringify(newAddonLines),
@@ -857,7 +844,7 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved, returnT
         subtotal, discount_amount: discountAmount, total_price, advance_payment: advance, balance_payment: balance,
         version: Number(form.version), estimated_pax: estimatedPax || undefined, staff_count: staffCount || undefined,
         participant_count: participantCount || undefined, coffee_corner_pax: coffeeEnabled ? staffCount : 0,
-        includes_prisa: prisaEnabled, discount_percent: Number(form.discount_percent || 0),
+        nights, includes_prisa: prisaEnabled, discount_percent: Number(form.discount_percent || 0),
       };
       if (hasOptionB) { const legacyOptionA = { ...draftsToSave.A }; delete legacyOptionA.option_notes; quotePayload = applyOptionPayloadToQuote(quotePayload, legacyOptionA); }
       const savedQuote = isEdit
@@ -888,6 +875,7 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved, returnT
   };
 
   const groupNameDisplay = form.group_name.trim() || form.client_name.trim() || group?.group_name;
+  const repricedOptionDrafts = Object.fromEntries(Object.entries(optionDrafts).map(([key, payload]) => [key, repriceOptionPayload(payload, nights, quoteType === "day_use", estimatedPax)]));
 
   return (
     <Dialog open onOpenChange={onClose}>
@@ -1120,7 +1108,7 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved, returnT
                 <QuoteOptionTabs
                   active={activeOptionKey}
                   hasB={hasOptionB}
-                  totals={{ A: activeOptionKey === "A" ? total_price : optionDrafts.A?.total_price, B: activeOptionKey === "B" ? total_price : optionDrafts.B?.total_price }}
+                  totals={{ A: activeOptionKey === "A" ? total_price : repricedOptionDrafts.A?.total_price, B: activeOptionKey === "B" ? total_price : repricedOptionDrafts.B?.total_price }}
                   onSelect={switchOption}
                   onAdd={addOptionB}
                   onDelete={deleteOptionB}
@@ -1139,6 +1127,7 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved, returnT
                   setAddonLines={setNewAddonLines}
                   defaultPax={catalogDefaultPax}
                   quoteType={quoteType}
+                  nights={quoteType === "day_use" ? 1 : nights}
                 />
               </SectionCard>
 
@@ -1261,7 +1250,7 @@ export default function QuoteFormModal({ quote, group, onClose, onSaved, returnT
           {/* ── Sidebar — right on desktop, bottom section on mobile ── */}
           <div className="w-full sm:w-72 sm:flex-shrink-0 bg-slate-50 sm:border-r border-t sm:border-t-0 border-slate-200 sm:overflow-y-auto px-4 py-5 space-y-4">
 
-            {multiOptionFeatureEnabled && <QuoteOptionPreviewSelector mode={previewMode} hasB={hasOptionB} totals={{ A: activeOptionKey === "A" ? total_price : optionDrafts.A?.total_price, B: activeOptionKey === "B" ? total_price : optionDrafts.B?.total_price }} onChange={key => key === "COMBINED" ? setPreviewMode(key) : switchOption(key)} />}
+            {multiOptionFeatureEnabled && <QuoteOptionPreviewSelector mode={previewMode} hasB={hasOptionB} totals={{ A: activeOptionKey === "A" ? total_price : repricedOptionDrafts.A?.total_price, B: activeOptionKey === "B" ? total_price : repricedOptionDrafts.B?.total_price }} onChange={key => key === "COMBINED" ? setPreviewMode(key) : switchOption(key)} />}
 
             <CalendarCard arrival={form.arrival_date} departure={form.departure_date} nights={nights} isDayUse={quoteType === "day_use"} />
 

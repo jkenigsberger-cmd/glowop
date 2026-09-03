@@ -30,11 +30,12 @@ export function normalizeOptionPayload(payload, savedPax) {
   return { ...payload, package_lines: JSON.stringify(normalized.packageLines), new_addon_lines: JSON.stringify(normalized.addonLines) };
 }
 
-export function syncOptionPayloadPax(payload, pax, previousPax = pax) {
+export function syncOptionPayloadPax(payload, pax, previousPax = pax, nights = 1, isDayUse = false) {
   const oldPackages = parseLines(payload.package_lines), oldAddons = parseLines(payload.new_addon_lines);
   const synced = syncAutoCatalogLines(oldPackages, oldAddons, pax);
-  const oldTotal = oldPackages.reduce((sum, line) => sum + calcPackageLine(line), 0) + oldAddons.reduce((sum, line) => sum + calcAddonLine(line), 0);
-  const newTotal = synced.packageLines.reduce((sum, line) => sum + calcPackageLine(line), 0) + synced.addonLines.reduce((sum, line) => sum + calcAddonLine(line), 0);
+  const pricingNights = isDayUse ? 1 : nights;
+  const oldTotal = oldPackages.reduce((sum, line) => sum + calcPackageLine(line, pricingNights), 0) + oldAddons.reduce((sum, line) => sum + calcAddonLine(line, pricingNights), 0);
+  const newTotal = synced.packageLines.reduce((sum, line) => sum + calcPackageLine(line, pricingNights), 0) + synced.addonLines.reduce((sum, line) => sum + calcAddonLine(line, pricingNights), 0);
   const prisaDelta = payload.includes_prisa === true ? (Number(pax) - Number(previousPax)) * 2.5 : 0;
   const subtotal = Number(payload.subtotal || 0) + newTotal - oldTotal + prisaDelta;
   const discount_amount = Math.round(subtotal * Number(payload.discount_percent || 0) / 100);
