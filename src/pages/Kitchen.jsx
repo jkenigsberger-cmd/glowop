@@ -8,6 +8,7 @@ import { PRISA_TYPE_LABELS, PRISA_SLOT_LABELS, PRISA_SLOT_ORDER } from "@/lib/pr
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import KitchenMealCard from "@/components/kitchen/KitchenMealCard";
+import KitchenMealTypeDietSummary from "@/components/kitchen/KitchenMealTypeDietSummary";
 import KitchenCoffeeCard from "@/components/kitchen/KitchenCoffeeCard";
 import KitchenSandwichSection from "@/components/kitchen/KitchenSandwichSection";
 import ReviewAlertsBanner from "@/components/alerts/ReviewAlertsBanner";
@@ -443,12 +444,13 @@ export default function Kitchen() {
                 const totalPaxForType = mealsInGroup.reduce((s, m) => s + (Number(m.pax) || 0), 0);
                 return (
                   <section key={mealType} className="space-y-3">
-                    <div className={`flex items-center justify-between rounded-xl border px-4 py-2.5 ${MEAL_TYPE_COLORS[mealType] || MEAL_TYPE_COLORS.OTHER}`}>
+                    <div className={`flex flex-wrap items-center justify-between gap-2 rounded-xl border px-4 py-2.5 ${MEAL_TYPE_COLORS[mealType] || MEAL_TYPE_COLORS.OTHER}`}>
                       <h2 className="font-bold text-base">{MEAL_TYPE_HEB[mealType] || mealType}</h2>
-                      <div className="flex items-center gap-3 text-sm font-medium">
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm font-medium">
                         <span>{mealsInGroup.length} קבוצות</span>
                         <span className="opacity-60">·</span>
                         <span>{totalPaxForType} מנות</span>
+                        <KitchenMealTypeDietSummary meals={mealsInGroup} profileMap={profileMap} />
                       </div>
                     </div>
                     <div className="grid gap-4 sm:grid-cols-2">

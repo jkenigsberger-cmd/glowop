@@ -1,26 +1,8 @@
 /**
  * Parses and displays dietary/allergy summary for a meal card.
- * Priority: meal special_diets_summary > profile special_diets > null
+ * Priority: current profile special_diets > stale meal special_diets_summary > null
  */
-
-const DIET_FIELDS = [
-  { key: "vegetarian_count",     label: "צמחונים" },
-  { key: "vegan_count",          label: "טבעונים" },
-  { key: "glutenFree_count",     label: "ללא גלוטן" },
-  { key: "lactoseFree_count",    label: "ללא לקטוז" },
-  { key: "eggFree_count",        label: "ללא ביצים" },
-  { key: "nutFree_count",        label: "ללא אגוזים" },
-  { key: "mehadrinKosher_count", label: "מהדרין / כשרות מיוחדת" },
-];
-
-function parseDiets(raw) {
-  if (!raw) return null;
-  try {
-    return typeof raw === "string" ? JSON.parse(raw) : raw;
-  } catch {
-    return null;
-  }
-}
+import { DIET_FIELDS, parseDiets } from "@/lib/kitchenDiets";
 
 export default function KitchenDietaryBadge({ meal, profile }) {
   // Priority: current profile diet > stale meal snapshot
