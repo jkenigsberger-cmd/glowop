@@ -26,19 +26,19 @@ export default function DashboardOperationsShifts({ selectedDate }) {
         <UsersRound className="h-4 w-4 text-slate-500" />
         צוות תפעול בבית (מסידור עבודה)
       </h2>
-      <div className="grid gap-2 sm:grid-cols-3">
+      <div className="flex flex-wrap gap-2">
         {SHIFT_TYPES.map(type => {
-          const shift = relevantShifts.find(item => item.row_type === type);
+          const typeShifts = relevantShifts.filter(item => item.row_type === type);
           const meta = ROW_BY_TYPE[type];
-          const workerName = shift?.worker_name || workerById[shift?.worker_id]?.full_name || "לא שובץ";
-          const time = shift ? fmtShiftTime(shift.start_time, shift.end_time) : "";
+          const workerNames = typeShifts.map(shift =>
+            shift.worker_name || workerById[shift.worker_id]?.full_name
+          ).filter(Boolean);
+          const times = [...new Set(typeShifts.map(shift => fmtShiftTime(shift.start_time, shift.end_time)).filter(Boolean))];
           return (
-            <div key={type} className={`rounded-xl border px-3 py-2.5 ${meta.chip}`}>
-              <div className="text-xs font-semibold opacity-75">{meta.label}</div>
-              <div className="mt-1 flex items-baseline justify-between gap-2">
-                <span className="font-bold">{workerName}</span>
-                {time && <span className="text-xs opacity-70" dir="ltr">{time}</span>}
-              </div>
+            <div key={type} className={`flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs ${meta.chip}`}>
+              <span className="font-semibold opacity-75">{meta.label}</span>
+              <span className="font-bold">{workerNames.length ? workerNames.join(" · ") : "לא שובץ"}</span>
+              {times.length > 0 && <span className="opacity-65" dir="ltr">{times.join(" / ")}</span>}
             </div>
           );
         })}
