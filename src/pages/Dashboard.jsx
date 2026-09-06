@@ -21,6 +21,7 @@ import { isGroupArrivalOnDate, isGroupDepartureOnDate, isGroupOnDashboardDate, i
 import useGroupStayPeriods from "@/hooks/useGroupStayPeriods";
 import YesterdaySnapshotWarning from "@/components/dashboard/YesterdaySnapshotWarning";
 import StaffNotesSection from "@/components/dashboard/StaffNotesSection";
+import DashboardOperationsShifts from "@/components/dashboard/DashboardOperationsShifts";
 
 const toDateStr = (date) => format(date, "yyyy-MM-dd");
 const TODAY = toDateStr(new Date());
@@ -477,6 +478,8 @@ export default function Dashboard() {
 
         {/* ── Daily staff brief (generate-and-copy) ────────────────────── */}
         {!isPast && <DailyStaffBrief selectedDate={selectedDate} />}
+
+        <DashboardOperationsShifts selectedDate={selectedDate} />
 
         {/* ── Summary cards (clickable) ────────────────────────────────── */}
         <DashboardSummaryCards
